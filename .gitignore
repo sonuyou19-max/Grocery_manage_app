@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# expo / native builds
+.expo/
+dist/
+web-build/
+ios/
+android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# supabase local dev
+supabase/.temp/
+supabase/.branches/
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
