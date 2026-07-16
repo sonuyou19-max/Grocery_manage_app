@@ -1,16 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
-  LinearTransition,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import type { List } from '@/store/groceries';
@@ -21,34 +21,46 @@ const ROW_HEIGHT = 64;
 const ROW_GAP = spacing.md;
 const STEP = ROW_HEIGHT + ROW_GAP;
 
+type Positions = Record<string, number>;
+
 interface EditListProps {
   lists: List[];
   onDelete: (id: string) => void;
-  onMove: (fromIndex: number, toIndex: number) => void;
+  onReorder: (orderedIds: string[]) => void;
 }
 
+const toPositions = (lists: List[]): Positions =>
+  Object.fromEntries(lists.map((l, i) => [l.id, i]));
+
 /**
- * Edit mode for Your Lists. Keeps the normal rectangular row layout — rows
- * breathe gently (slow, subtle zoom in/out) instead of shaking, each has a
- * (−) badge to delete, and the handle drags a row up/down to reorder.
+ * Edit mode for Your Lists. Rows keep the normal rectangular layout and
+ * breathe gently. Dragging a row's handle moves it up/down and the row it
+ * passes over slides into the vacated slot immediately (live swap), so the
+ * exchange is always visible — nothing waits for the drop.
  */
-export function EditList({ lists, onDelete, onMove }: EditListProps) {
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+export function EditList({ lists, onDelete, onReorder }: EditListProps) {
+  const positions = useSharedValue<Positions>(toPositions(lists));
+
+  // Keep the animated position map in sync when lists change (add/delete/commit).
+  const ids = lists.map((l) => l.id).join(',');
+  useEffect(() => {
+    positions.value = toPositions(lists);
+  }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const commit = (current: Positions) => {
+    const ordered = [...lists].sort((a, b) => (current[a.id] ?? 0) - (current[b.id] ?? 0));
+    onReorder(ordered.map((l) => l.id));
+  };
 
   return (
-    <View style={styles.column}>
-      {lists.map((list, index) => (
+    <View style={{ height: lists.length * STEP - ROW_GAP }}>
+      {lists.map((list) => (
         <Row
           key={list.id}
           list={list}
-          index={index}
+          positions={positions}
           count={lists.length}
-          isDragging={draggingId === list.id}
-          onDragStart={() => setDraggingId(list.id)}
-          onDrop={(from, to) => {
-            setDraggingId(null);
-            onMove(from, to);
-          }}
+          onCommit={commit}
           onDelete={onDelete}
         />
       ))}
@@ -58,17 +70,19 @@ export function EditList({ lists, onDelete, onMove }: EditListProps) {
 
 interface RowProps {
   list: List;
-  index: number;
+  positions: SharedValue<Positions>;
   count: number;
-  isDragging: boolean;
-  onDragStart: () => void;
-  onDrop: (fromIndex: number, toIndex: number) => void;
+  onCommit: (positions: Positions) => void;
   onDelete: (id: string) => void;
 }
 
-function Row({ list, index, count, isDragging, onDragStart, onDrop, onDelete }: RowProps) {
+function Row({ list, positions, count, onCommit, onDelete }: RowProps) {
   const { colors } = useTheme();
-  const ty = useSharedValue(0);
+  const id = list.id;
+
+  const dragging = useSharedValue(false);
+  const dragY = useSharedValue(0);
+  const startY = useSharedValue(0);
   const breathe = useSharedValue(1);
 
   useEffect(() => {
@@ -88,25 +102,50 @@ function Row({ list, index, count, isDragging, onDragStart, onDrop, onDelete }: 
   }, [breathe]);
 
   const pan = Gesture.Pan()
-    .activateAfterLongPress(120)
+    .activateAfterLongPress(100)
     .onStart(() => {
-      runOnJS(onDragStart)();
+      dragging.value = true;
+      startY.value = (positions.value[id] ?? 0) * STEP;
+      dragY.value = startY.value;
     })
     .onUpdate((e) => {
-      ty.value = e.translationY;
+      dragY.value = startY.value + e.translationY;
+
+      // Live swap: when the dragged row crosses a slot boundary, move the
+      // occupant of that slot into our old slot right away.
+      const newIndex = Math.min(
+        Math.max(Math.round(dragY.value / STEP), 0),
+        count - 1,
+      );
+      const oldIndex = positions.value[id] ?? 0;
+      if (newIndex !== oldIndex) {
+        const next: Positions = { ...positions.value };
+        for (const key in next) {
+          if (key !== id && next[key] === newIndex) {
+            next[key] = oldIndex;
+            break;
+          }
+        }
+        next[id] = newIndex;
+        positions.value = next;
+      }
     })
-    .onEnd((e) => {
-      const target = Math.min(Math.max(index + Math.round(e.translationY / STEP), 0), count - 1);
-      ty.value = withTiming(0, { duration: 150 });
-      runOnJS(onDrop)(index, target);
+    .onEnd(() => {
+      dragging.value = false;
+      runOnJS(onCommit)(positions.value);
     })
     .onFinalize(() => {
-      ty.value = withTiming(0, { duration: 150 });
+      dragging.value = false;
     });
 
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: ty.value }, { scale: breathe.value }],
-  }));
+  const animStyle = useAnimatedStyle(() => {
+    const slotY = (positions.value[id] ?? 0) * STEP;
+    return {
+      top: dragging.value ? dragY.value : withTiming(slotY, { duration: 200 }),
+      zIndex: dragging.value ? 10 : 0,
+      transform: [{ scale: dragging.value ? 1.03 : breathe.value }],
+    };
+  });
 
   const confirmDelete = () => {
     Alert.alert('Delete list', `Delete “${list.name}” and its items?`, [
@@ -116,10 +155,7 @@ function Row({ list, index, count, isDragging, onDragStart, onDrop, onDelete }: 
   };
 
   return (
-    <Animated.View
-      layout={LinearTransition.duration(220)}
-      style={[styles.rowWrap, isDragging && styles.raised, animStyle]}
-    >
+    <Animated.View style={[styles.rowWrap, animStyle]}>
       <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.line }]}>
         <Pressable
           onPress={confirmDelete}
@@ -149,15 +185,11 @@ function Row({ list, index, count, isDragging, onDragStart, onDrop, onDelete }: 
 }
 
 const styles = StyleSheet.create({
-  column: { gap: ROW_GAP },
-  rowWrap: { height: ROW_HEIGHT },
-  raised: {
-    zIndex: 10,
-    elevation: 8,
-    shadowColor: '#0A2A14',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+  rowWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: ROW_HEIGHT,
   },
   row: {
     flex: 1,

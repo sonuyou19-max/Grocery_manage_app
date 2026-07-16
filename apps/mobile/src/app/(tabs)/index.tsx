@@ -41,7 +41,7 @@ const INITIAL_SUGGESTIONS: Suggestion[] = [
 
 export default function ListsScreen() {
   const { colors } = useTheme();
-  const { lists, addList, addItem, deleteList, moveList } = useGroceries();
+  const { lists, addList, addItem, deleteList, reorderLists } = useGroceries();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>(INITIAL_SUGGESTIONS);
@@ -98,7 +98,7 @@ export default function ListsScreen() {
         </View>
 
         {editing ? (
-          <EditList lists={lists} onDelete={deleteList} onMove={moveList} />
+          <EditList lists={lists} onDelete={deleteList} onReorder={reorderLists} />
         ) : (
           lists.map((l) => (
             <ListCard key={l.id} list={l} onLongPress={() => setEditing(true)} />

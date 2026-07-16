@@ -52,7 +52,7 @@ interface GroceriesContext {
   pantry: PantryItem[];
   addList: (name: string) => string;
   deleteList: (listId: string) => void;
-  moveList: (fromIndex: number, toIndex: number) => void;
+  reorderLists: (orderedIds: string[]) => void;
   addItem: (listId: string, name: string) => string;
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
@@ -136,21 +136,13 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
         // Deleting a list removes it and all its items everywhere.
         setLists((prev) => prev.filter((l) => l.id !== listId));
       },
-      moveList: (fromIndex, toIndex) => {
+      reorderLists: (orderedIds) => {
         setLists((prev) => {
-          if (
-            fromIndex < 0 ||
-            toIndex < 0 ||
-            fromIndex >= prev.length ||
-            toIndex >= prev.length ||
-            fromIndex === toIndex
-          ) {
-            return prev;
-          }
-          const next = [...prev];
-          const [moved] = next.splice(fromIndex, 1);
-          next.splice(toIndex, 0, moved);
-          return next;
+          const rank = new Map(orderedIds.map((id, i) => [id, i]));
+          // Unknown ids keep their relative order at the end.
+          return [...prev].sort(
+            (a, b) => (rank.get(a.id) ?? prev.length) - (rank.get(b.id) ?? prev.length),
+          );
         });
       },
       addItem: (listId, name) => {
