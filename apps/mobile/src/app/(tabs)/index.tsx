@@ -1,7 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  Animated,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from 'react-native';
 
 import { Card } from '@/components/card';
 import { Fab } from '@/components/fab';
@@ -12,20 +22,37 @@ import { euros } from '@/lib/money';
 import { useGroceries, type List } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-const SUGGESTIONS = [
-  { name: 'Semi-skimmed milk', eta: '~1 day left', tone: 'crit' as const },
-  { name: 'Espresso beans', eta: '~3 days', tone: 'warn' as const },
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+interface Suggestion {
+  name: string;
+  eta: string;
+  tone: 'crit' | 'warn';
+}
+
+const INITIAL_SUGGESTIONS: Suggestion[] = [
+  { name: 'Semi-skimmed milk', eta: '~1 day left', tone: 'crit' },
+  { name: 'Espresso beans', eta: '~3 days', tone: 'warn' },
+  { name: 'Toilet paper', eta: '~4 days', tone: 'warn' },
 ];
 
 export default function ListsScreen() {
   const { colors } = useTheme();
   const { lists, addList, addItem } = useGroceries();
   const [creating, setCreating] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>(INITIAL_SUGGESTIONS);
 
   const openNewList = (name: string) => {
     const id = addList(name);
     setCreating(false);
     router.push({ pathname: '/list/[id]', params: { id } });
+  };
+
+  const removeSuggestion = (name: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSuggestions((prev) => prev.filter((s) => s.name !== name));
   };
 
   return (
@@ -37,28 +64,24 @@ export default function ListsScreen() {
             <Pill label="✦ Running low" />
             <Text style={[type.sub, { color: colors.muted }]}>from your usage</Text>
           </View>
-          {SUGGESTIONS.map((s) => (
-            <View key={s.name} style={styles.suggestion}>
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: s.tone === 'crit' ? colors.crit : colors.warn },
-                ]}
-              />
-              <Text style={[type.body, styles.grow, { color: colors.ink }]}>{s.name}</Text>
-              <Text style={[type.sub, { color: colors.muted }]}>{s.eta}</Text>
-              <Pressable
-                onPress={() => {
+          {suggestions.length === 0 ? (
+            <View style={styles.caughtUp}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+              <Text style={[type.sub, { color: colors.muted }]}>All caught up — nothing running low.</Text>
+            </View>
+          ) : (
+            suggestions.map((s) => (
+              <SuggestionRow
+                key={s.name}
+                suggestion={s}
+                onAdd={() => {
                   const target = lists[0];
                   if (target) addItem(target.id, s.name);
                 }}
-                style={[styles.addChip, { borderColor: colors.accent }]}
-                hitSlop={6}
-              >
-                <Text style={[styles.addChipText, { color: colors.accent }]}>Add</Text>
-              </Pressable>
-            </View>
-          ))}
+                onDone={() => removeSuggestion(s.name)}
+              />
+            ))
+          )}
         </Card>
 
         <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Your lists</Text>
@@ -77,6 +100,88 @@ export default function ListsScreen() {
         onSubmit={openNewList}
       />
     </>
+  );
+}
+
+/**
+ * A running-low suggestion. Tapping Add strikes the item through, flips the
+ * chip to "Added", then fades and collapses the row away.
+ */
+function SuggestionRow({
+  suggestion,
+  onAdd,
+  onDone,
+}: {
+  suggestion: Suggestion;
+  onAdd: () => void;
+  onDone: () => void;
+}) {
+  const { colors } = useTheme();
+  const [added, setAdded] = useState(false);
+  const opacity = useRef(new Animated.Value(1)).current;
+  const reduceMotion = useRef(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      reduceMotion.current = v;
+    });
+  }, []);
+
+  const handleAdd = () => {
+    if (added) return;
+    setAdded(true);
+    onAdd();
+
+    const finish = () => onDone();
+    if (reduceMotion.current) {
+      setTimeout(finish, 500);
+      return;
+    }
+    Animated.sequence([
+      Animated.delay(650),
+      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+    ]).start(finish);
+  };
+
+  return (
+    <Animated.View style={[styles.suggestion, { opacity }]}>
+      <View
+        style={[
+          styles.dot,
+          { backgroundColor: suggestion.tone === 'crit' ? colors.crit : colors.warn },
+          added && { backgroundColor: colors.accent },
+        ]}
+      />
+      <Text
+        style={[
+          type.body,
+          styles.grow,
+          { color: added ? colors.muted : colors.ink },
+          added && styles.struck,
+        ]}
+      >
+        {suggestion.name}
+      </Text>
+      {!added && <Text style={[type.sub, { color: colors.muted }]}>{suggestion.eta}</Text>}
+      <Pressable
+        onPress={handleAdd}
+        style={[
+          styles.addChip,
+          { borderColor: colors.accent },
+          added && { backgroundColor: colors.accent },
+        ]}
+        hitSlop={6}
+      >
+        {added ? (
+          <View style={styles.addedRow}>
+            <Ionicons name="checkmark" size={13} color={colors.accentInk} />
+            <Text style={[styles.addChipText, { color: colors.accentInk }]}>Added</Text>
+          </View>
+        ) : (
+          <Text style={[styles.addChipText, { color: colors.accent }]}>Add</Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -119,10 +224,20 @@ function ListCard({ list }: { list: List }) {
 const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  caughtUp: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   grow: { flex: 1, minWidth: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  addChip: { borderWidth: 1.5, borderRadius: radii.pill, paddingVertical: 3, paddingHorizontal: spacing.md },
+  struck: { textDecorationLine: 'line-through' },
+  addChip: {
+    borderWidth: 1.5,
+    borderRadius: radii.pill,
+    paddingVertical: 3,
+    paddingHorizontal: spacing.md,
+    minWidth: 58,
+    alignItems: 'center',
+  },
   addChipText: { fontSize: 12, fontWeight: '800' },
+  addedRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   listHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   track: { height: 5, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
