@@ -40,3 +40,14 @@ export const quickAddRequestSchema = z.object({
   list_id: z.string().uuid(),
 });
 export type QuickAddRequest = z.infer<typeof quickAddRequestSchema>;
+
+/** Single-item categorization: request + response for the categorize function. */
+export const categorizeRequestSchema = z.object({
+  name: z.string().min(1).max(120),
+});
+export type CategorizeRequest = z.infer<typeof categorizeRequestSchema>;
+
+export const categorizeResultSchema = z.object({
+  category: itemCategorySchema.catch('other'),
+});
+export type CategorizeResult = z.infer<typeof categorizeResultSchema>;

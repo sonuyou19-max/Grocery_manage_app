@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ItemSheet } from '@/components/item-sheet';
+import { SupermarketBadge } from '@/components/supermarket-badge';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
-import { euros, parsePriceToCents } from '@/lib/money';
+import { euros } from '@/lib/money';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -23,8 +25,10 @@ export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const list = useList(id);
-  const { addItem, toggleItem, setItemPrice } = useGroceries();
+  const { addItem, toggleItem } = useGroceries();
   const [draft, setDraft] = useState('');
+  const [sheetItemId, setSheetItemId] = useState<string | null>(null);
+  const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
 
   const grouped = useMemo(() => {
     if (!list) return [];
@@ -63,26 +67,18 @@ export default function ListDetailScreen() {
   const checkedCount = list.items.filter((it) => it.checked).length;
   const progress = list.items.length ? checkedCount / list.items.length : 0;
 
-  const promptPrice = (it: Item) => {
-    if (Platform.OS === 'ios') {
-      Alert.prompt(
-        it.name,
-        'Enter a price (optional)',
-        (value) => setItemPrice(list.id, it.id, parsePriceToCents(value ?? '')),
-        'plain-text',
-        it.priceCents != null ? (it.priceCents / 100).toFixed(2) : '',
-        'decimal-pad',
-      );
-    } else {
-      // Android has no Alert.prompt; a small inline price modal comes with the
-      // full item editor. For now, seed a demo price so the flow is visible.
-      setItemPrice(list.id, it.id, it.priceCents == null ? 199 : null);
-    }
+  const submit = () => {
+    const name = draft.trim();
+    if (!name) return;
+    const newId = addItem(list.id, name);
+    setDraft('');
+    setSheetMode('added');
+    setSheetItemId(newId);
   };
 
-  const submit = () => {
-    addItem(list.id, draft);
-    setDraft('');
+  const openEdit = (item: Item) => {
+    setSheetMode('edit');
+    setSheetItemId(item.id);
   };
 
   const comingSoon = () =>
@@ -103,7 +99,10 @@ export default function ListDetailScreen() {
             {list.store ?? 'Any store'} · {checkedCount}/{list.items.length} in cart
           </Text>
         </View>
-        <Pressable onPress={() => Alert.alert('Share', 'Household sharing arrives with sign-in.')} hitSlop={12}>
+        <Pressable
+          onPress={() => Alert.alert('Share', 'Household sharing arrives with sign-in.')}
+          hitSlop={12}
+        >
           <Ionicons name="person-add-outline" size={22} color={colors.accent} />
         </Pressable>
       </View>
@@ -129,7 +128,7 @@ export default function ListDetailScreen() {
           </>
         ) : (
           <Text style={[type.sub, { color: colors.muted, textAlign: 'center', flex: 1 }]}>
-            Tap the price on an item to track spend — optional.
+            Add a price to any item to track spend — optional.
           </Text>
         )}
       </View>
@@ -157,7 +156,8 @@ export default function ListDetailScreen() {
                     {it.checked && <Ionicons name="checkmark" size={14} color={colors.accentInk} />}
                   </View>
                 </Pressable>
-                <View style={styles.grow}>
+
+                <Pressable style={styles.grow} onPress={() => openEdit(it)}>
                   <Text
                     style={[
                       type.body,
@@ -167,14 +167,20 @@ export default function ListDetailScreen() {
                   >
                     {it.name}
                   </Text>
-                </View>
-                {it.quantity != null && (
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {it.quantity}
-                    {it.unit ? ` ${it.unit}` : ''}
-                  </Text>
-                )}
-                <Pressable onPress={() => promptPrice(it)} hitSlop={8}>
+                  {(it.quantity != null || it.store != null) && (
+                    <View style={styles.meta}>
+                      {it.store != null && <SupermarketBadge store={it.store} size={16} />}
+                      {it.quantity != null && (
+                        <Text style={[type.sub, { color: colors.muted }]}>
+                          {it.quantity}
+                          {it.unit ? ` ${it.unit}` : ''}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable onPress={() => openEdit(it)} hitSlop={8}>
                   {it.priceCents != null ? (
                     <Text style={[type.price, { color: colors.ink }]}>{euros(it.priceCents)}</Text>
                   ) : (
@@ -217,6 +223,13 @@ export default function ListDetailScreen() {
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      <ItemSheet
+        listId={list.id}
+        itemId={sheetItemId}
+        mode={sheetMode}
+        onClose={() => setSheetItemId(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -262,7 +275,13 @@ const styles = StyleSheet.create({
   },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   list: { padding: spacing.lg, gap: spacing.xs, paddingBottom: spacing.xxl },
-  catRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
+  catRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
   catLine: { flex: 1, height: 1 },
   itemRow: {
     flexDirection: 'row',
@@ -271,6 +290,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
   },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
   tick: {
     width: 22,
     height: 22,

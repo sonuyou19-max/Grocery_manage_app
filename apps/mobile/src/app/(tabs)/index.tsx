@@ -15,6 +15,7 @@ import {
 
 import { Card } from '@/components/card';
 import { Fab } from '@/components/fab';
+import { JiggleGrid } from '@/components/jiggle-grid';
 import { Pill } from '@/components/pill';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
@@ -40,8 +41,9 @@ const INITIAL_SUGGESTIONS: Suggestion[] = [
 
 export default function ListsScreen() {
   const { colors } = useTheme();
-  const { lists, addList, addItem } = useGroceries();
+  const { lists, addList, addItem, deleteList, moveList } = useGroceries();
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>(INITIAL_SUGGESTIONS);
 
   const openNewList = (name: string) => {
@@ -84,13 +86,27 @@ export default function ListsScreen() {
           )}
         </Card>
 
-        <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Your lists</Text>
-        {lists.map((l) => (
-          <ListCard key={l.id} list={l} />
-        ))}
+        <View style={styles.listsHead}>
+          <Text style={[type.label, { color: colors.muted }]}>Your lists</Text>
+          {editing ? (
+            <Pressable onPress={() => setEditing(false)} hitSlop={8}>
+              <Text style={[type.body, { color: colors.accent }]}>Done</Text>
+            </Pressable>
+          ) : (
+            <Text style={[type.sub, { color: colors.muted }]}>hold to edit</Text>
+          )}
+        </View>
+
+        {editing ? (
+          <JiggleGrid lists={lists} onDelete={deleteList} onMove={moveList} />
+        ) : (
+          lists.map((l) => (
+            <ListCard key={l.id} list={l} onLongPress={() => setEditing(true)} />
+          ))
+        )}
       </Screen>
 
-      <Fab label="New list" onPress={() => setCreating(true)} />
+      {!editing && <Fab label="New list" onPress={() => setCreating(true)} />}
       <TextPromptModal
         visible={creating}
         title="New list"
@@ -185,7 +201,7 @@ function SuggestionRow({
   );
 }
 
-function ListCard({ list }: { list: List }) {
+function ListCard({ list, onLongPress }: { list: List; onLongPress: () => void }) {
   const { colors } = useTheme();
   const checked = list.items.filter((it) => it.checked).length;
   const priced = list.items.filter((it) => it.priceCents != null);
@@ -193,7 +209,11 @@ function ListCard({ list }: { list: List }) {
   const progress = list.items.length ? checked / list.items.length : 0;
 
   return (
-    <Pressable onPress={() => router.push({ pathname: '/list/[id]', params: { id: list.id } })}>
+    <Pressable
+      onPress={() => router.push({ pathname: '/list/[id]', params: { id: list.id } })}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+    >
       <Card>
         <View style={styles.listHead}>
           <View style={styles.grow}>
@@ -223,6 +243,12 @@ function ListCard({ list }: { list: List }) {
 
 const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  listsHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   caughtUp: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   grow: { flex: 1, minWidth: 0 },

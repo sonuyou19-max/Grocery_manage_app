@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import type { ItemCategory } from '@korb/shared';
 
 /** Display labels + store-aisle ordering for categories. */
@@ -87,14 +89,75 @@ const KEYWORDS: Record<string, ItemCategory> = {
 };
 
 /**
- * Naive keyword categorization for manually-typed items. This is the
- * placeholder for the AI quick-add parser — same output shape, so the screen
- * doesn't change when the real model lands.
+ * Learned categories — words the AI (or the user) has already resolved. This
+ * cache is why we don't re-ask the model for the same item and burn tokens.
+ * Hydrated from AsyncStorage at startup, kept in memory for sync lookups.
  */
-export function categorize(name: string): ItemCategory {
-  const words = name.toLowerCase().split(/\s+/);
-  for (const word of words) {
+const CACHE_KEY = 'korb.categoryCache.v1';
+let learned: Record<string, ItemCategory> = {};
+
+const norm = (name: string) => name.trim().toLowerCase();
+
+export async function hydrateCategoryCache(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    if (raw) learned = JSON.parse(raw);
+  } catch {
+    // ignore corrupt cache
+  }
+}
+
+/** Remember a resolved category so future adds skip both keywords and AI. */
+export async function learnCategory(name: string, category: ItemCategory): Promise<void> {
+  learned[norm(name)] = category;
+  try {
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(learned));
+  } catch {
+    // best-effort persistence
+  }
+}
+
+function keywordMatch(name: string): ItemCategory | null {
+  for (const word of norm(name).split(/\s+/)) {
     if (KEYWORDS[word]) return KEYWORDS[word];
   }
-  return 'other';
+  return null;
+}
+
+/** True when we can categorize without asking the AI. */
+export function isKnown(name: string): boolean {
+  return Boolean(learned[norm(name)]) || keywordMatch(name) != null;
+}
+
+/**
+ * Instant, synchronous best guess: learned cache first, then keywords,
+ * else 'other'. Unknown items show under 'Other' immediately while the AI
+ * resolves the real category in the background.
+ */
+export function categorizeSync(name: string): ItemCategory {
+  return learned[norm(name)] ?? keywordMatch(name) ?? 'other';
+}
+
+/**
+ * Ask the categorize edge function to classify an unknown item. Returns null
+ * when the backend isn't configured yet (scaffold phase) or on any error, so
+ * the caller simply leaves the item under 'Other'.
+ */
+export async function resolveCategoryAsync(name: string): Promise<ItemCategory | null> {
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) return null;
+
+  try {
+    const res = await fetch(`${url}/functions/v1/categorize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}` },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { category?: ItemCategory };
+    return data.category ?? null;
+  } catch {
+    return null;
+  }
 }

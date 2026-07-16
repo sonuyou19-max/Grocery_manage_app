@@ -8,7 +8,7 @@ import {
 
 import type { ItemCategory } from '@korb/shared';
 
-import { categorize } from '@/lib/categorize';
+import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
 
 /**
  * In-memory grocery store. Holds the app's lists, items and pantry so the UI
@@ -24,8 +24,12 @@ export interface Item {
   unit: string | null;
   /** null = user chose not to log a price (pricing is always optional). */
   priceCents: number | null;
+  /** Supermarket id (see lib/supermarkets) or a custom store name; optional. */
+  store: string | null;
   checked: boolean;
 }
+
+export type ItemPatch = Partial<Pick<Item, 'name' | 'category' | 'quantity' | 'unit' | 'priceCents' | 'store'>>;
 
 export interface List {
   id: string;
@@ -47,26 +51,26 @@ interface GroceriesContext {
   lists: List[];
   pantry: PantryItem[];
   addList: (name: string) => string;
-  addItem: (listId: string, name: string) => void;
+  deleteList: (listId: string) => void;
+  moveList: (fromIndex: number, toIndex: number) => void;
+  addItem: (listId: string, name: string) => string;
   toggleItem: (listId: string, itemId: string) => void;
-  setItemPrice: (listId: string, itemId: string, priceCents: number | null) => void;
+  updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
+  deleteItem: (listId: string, itemId: string) => void;
   addPantryItem: (name: string) => void;
 }
 
 let counter = 0;
 const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${counter++}`;
 
-const item = (
-  name: string,
-  category: ItemCategory,
-  opts: Partial<Item> = {},
-): Item => ({
+const item = (name: string, category: ItemCategory, opts: Partial<Item> = {}): Item => ({
   id: uid('i'),
   name,
   category,
   quantity: null,
   unit: null,
   priceCents: null,
+  store: null,
   checked: false,
   ...opts,
 });
@@ -109,6 +113,16 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
   const [lists, setLists] = useState<List[]>(SEED_LISTS);
   const [pantry, setPantry] = useState<PantryItem[]>(SEED_PANTRY);
 
+  const patchItem = (listId: string, itemId: string, patch: ItemPatch) => {
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId
+          ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)) }
+          : l,
+      ),
+    );
+  };
+
   const value = useMemo<GroceriesContext>(
     () => ({
       lists,
@@ -118,16 +132,52 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
         return id;
       },
+      deleteList: (listId) => {
+        // Deleting a list removes it and all its items everywhere.
+        setLists((prev) => prev.filter((l) => l.id !== listId));
+      },
+      moveList: (fromIndex, toIndex) => {
+        setLists((prev) => {
+          if (
+            fromIndex < 0 ||
+            toIndex < 0 ||
+            fromIndex >= prev.length ||
+            toIndex >= prev.length ||
+            fromIndex === toIndex
+          ) {
+            return prev;
+          }
+          const next = [...prev];
+          const [moved] = next.splice(fromIndex, 1);
+          next.splice(toIndex, 0, moved);
+          return next;
+        });
+      },
       addItem: (listId, name) => {
         const clean = name.trim();
-        if (!clean) return;
+        const id = uid('i');
+        if (!clean) return id;
+
+        const category = categorizeSync(clean);
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
-              ? { ...l, items: [...l.items, item(clean, categorize(clean))] }
+              ? { ...l, items: [...l.items, { ...item(clean, category), id }] }
               : l,
           ),
         );
+
+        // Unknown item: ask the AI in the background, then update + cache so we
+        // never ask again for this word. No-ops until the backend is connected.
+        if (category === 'other' && !isKnown(clean)) {
+          resolveCategoryAsync(clean).then((resolved) => {
+            if (resolved && resolved !== 'other') {
+              patchItem(listId, id, { category: resolved });
+              void learnCategory(clean, resolved);
+            }
+          });
+        }
+        return id;
       },
       toggleItem: (listId, itemId) => {
         setLists((prev) =>
@@ -143,17 +193,20 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
           ),
         );
       },
-      setItemPrice: (listId, itemId, priceCents) => {
+      updateItem: (listId, itemId, patch) => {
+        patchItem(listId, itemId, patch);
+        // A manual category choice teaches the cache too.
+        if (patch.category) {
+          const target = lists
+            .find((l) => l.id === listId)
+            ?.items.find((it) => it.id === itemId);
+          if (target) void learnCategory(target.name, patch.category);
+        }
+      },
+      deleteItem: (listId, itemId) => {
         setLists((prev) =>
           prev.map((l) =>
-            l.id === listId
-              ? {
-                  ...l,
-                  items: l.items.map((it) =>
-                    it.id === itemId ? { ...it, priceCents } : it,
-                  ),
-                }
-              : l,
+            l.id === listId ? { ...l, items: l.items.filter((it) => it.id !== itemId) } : l,
           ),
         );
       },
@@ -182,4 +235,10 @@ export function useGroceries(): GroceriesContext {
 export function useList(listId: string | undefined): List | undefined {
   const { lists } = useGroceries();
   return lists.find((l) => l.id === listId);
+}
+
+/** Convenience selector for a single item. */
+export function useItem(listId: string | undefined, itemId: string | undefined): Item | undefined {
+  const list = useList(listId);
+  return list?.items.find((it) => it.id === itemId);
 }

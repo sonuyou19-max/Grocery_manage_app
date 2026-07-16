@@ -6,8 +6,11 @@ import {
 } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { hydrateCategoryCache } from '@/lib/categorize';
 import { GroceriesProvider } from '@/store/groceries';
 import { palette } from '@/theme';
 
@@ -38,15 +41,23 @@ const navDark: NavTheme = {
 export default function RootLayout() {
   const scheme = useColorScheme();
 
+  useEffect(() => {
+    // Load learned item→category mappings so we never re-ask the AI for a
+    // word we've already resolved.
+    void hydrateCategoryCache();
+  }, []);
+
   return (
-    <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
-      <GroceriesProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="list/[id]" />
-        </Stack>
-        <StatusBar style="auto" />
-      </GroceriesProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
+        <GroceriesProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="list/[id]" />
+          </Stack>
+          <StatusBar style="auto" />
+        </GroceriesProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
