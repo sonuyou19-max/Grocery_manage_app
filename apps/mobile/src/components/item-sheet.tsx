@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
@@ -42,6 +42,7 @@ const parseQuantity = (text: string): number | null => {
  */
 export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { updateItem } = useGroceries();
   const itemObj = useItem(listId, itemId ?? undefined);
 
@@ -71,14 +72,18 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.anchor}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.fill}
       >
+        <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
           <View style={[styles.grab, { backgroundColor: colors.line }]} />
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+          <ScrollView
+            style={styles.scrollArea}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scroll}
+          >
             {/* Header */}
             <View style={styles.header}>
               {mode === 'added' ? (
@@ -240,11 +245,19 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                 </StoreOption>
               </ScrollView>
             </Field>
+          </ScrollView>
 
+          {/* Pinned footer — always reachable, above the keyboard */}
+          <View
+            style={[
+              styles.footer,
+              { borderTopColor: colors.line, paddingBottom: Math.max(insets.bottom, spacing.md) },
+            ]}
+          >
             <Pressable onPress={onClose} style={[styles.done, { backgroundColor: colors.accent }]}>
               <Text style={[type.body, { color: colors.accentInk }]}>Done</Text>
             </Pressable>
-          </ScrollView>
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -305,16 +318,23 @@ const inputColors = (colors: ReturnType<typeof useTheme>['colors']) => ({
 });
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(12,18,10,0.45)' },
-  anchor: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '88%',
     paddingTop: spacing.sm,
+    maxHeight: '85%',
+    overflow: 'hidden',
   },
   grab: { width: 44, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: spacing.sm },
-  scroll: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
+  scrollArea: { flexShrink: 1 },
+  scroll: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.lg },
+  footer: {
+    borderTopWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   field: { gap: spacing.sm },
   input: {
