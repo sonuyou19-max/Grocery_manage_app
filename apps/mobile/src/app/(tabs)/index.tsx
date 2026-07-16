@@ -15,7 +15,7 @@ import {
 
 import { Card } from '@/components/card';
 import { Fab } from '@/components/fab';
-import { JiggleGrid } from '@/components/jiggle-grid';
+import { EditList } from '@/components/edit-list';
 import { Pill } from '@/components/pill';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
@@ -98,7 +98,7 @@ export default function ListsScreen() {
         </View>
 
         {editing ? (
-          <JiggleGrid lists={lists} onDelete={deleteList} onMove={moveList} />
+          <EditList lists={lists} onDelete={deleteList} onMove={moveList} />
         ) : (
           lists.map((l) => (
             <ListCard key={l.id} list={l} onLongPress={() => setEditing(true)} />
