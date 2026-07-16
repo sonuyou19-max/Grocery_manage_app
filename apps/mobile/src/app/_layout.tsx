@@ -8,6 +8,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 
+import { GroceriesProvider } from '@/store/groceries';
 import { palette } from '@/theme';
 
 const navLight: NavTheme = {
@@ -39,10 +40,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-      <StatusBar style="auto" />
+      <GroceriesProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="list/[id]" />
+        </Stack>
+        <StatusBar style="auto" />
+      </GroceriesProvider>
     </ThemeProvider>
   );
 }

@@ -30,6 +30,11 @@ export function Screen({ title, subtitle, children }: ScreenProps) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: spacing.lg, gap: spacing.md },
+  content: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl * 2, // clearance for the floating action button
+    gap: spacing.md,
+    flexGrow: 1,
+  },
   header: { gap: spacing.xs, marginBottom: spacing.sm },
 });

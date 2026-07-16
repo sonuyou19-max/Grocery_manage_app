@@ -1,28 +1,19 @@
-import { Text } from 'react-native';
-
-import { Card } from '@/components/card';
-import { Pill } from '@/components/pill';
+import { EmptyState } from '@/components/empty-state';
 import { Screen } from '@/components/screen';
-import { type, useTheme } from '@/theme';
 
 /**
  * Insights: budget control appears only for households that log prices.
- * With no prices logged, this tab shows shopping-habit insights instead —
- * pricing is always optional, never a nag.
+ * With no prices logged, this tab shows a clear explanation rather than empty
+ * charts — pricing is always optional, never a nag.
  */
 export default function InsightsScreen() {
-  const { colors } = useTheme();
-
   return (
     <Screen title="Insights" subtitle="Spending & habits">
-      <Card>
-        <Pill label="No prices logged yet" tone="warn" />
-        <Text style={[type.bodyRegular, { color: colors.ink }]}>
-          Korb shows weekly spend, price history per store, and saving tips here — but only
-          if you choose to log prices. Until then, this tab will show your shopping habits:
-          most-bought items and trip frequency.
-        </Text>
-      </Card>
+      <EmptyState
+        icon="trending-up-outline"
+        title="Log a price to unlock spending"
+        body="Add prices to items as you shop and Korb shows weekly spend, price history per store, and saving tips here. Prices are always optional — until you add some, this stays out of your way."
+      />
     </Screen>
   );
 }
