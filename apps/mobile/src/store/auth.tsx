@@ -11,9 +11,13 @@ import {
 import { supabase } from '@/lib/supabase';
 
 /**
- * Authentication via email one-time code (no passwords). Sign-in is optional —
- * the app works fully logged-out with local data; signing in unlocks household
- * sharing and sync. Session is persisted by the Supabase client (AsyncStorage).
+ * Authentication. Sign-in is optional — the app works fully logged-out with
+ * local data; signing in unlocks household sharing and sync. Session is
+ * persisted by the Supabase client (AsyncStorage).
+ *
+ * Password methods are the temporary login while transactional email
+ * deliverability is being set up; the OTP-code methods stay ready for when a
+ * real sending domain is in place.
  */
 
 interface AuthContext {
@@ -24,6 +28,10 @@ interface AuthContext {
   sendCode: (email: string) => Promise<{ error?: string }>;
   /** Verify the code and start a session. */
   verifyCode: (email: string, token: string) => Promise<{ error?: string }>;
+  /** Create an account with email + password. */
+  signUpPassword: (email: string, password: string) => Promise<{ error?: string }>;
+  /** Sign in with email + password. */
+  signInPassword: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -87,6 +95,36 @@ export function AuthProvider({ children }: PropsWithChildren) {
           if (error) {
             return { error: cleanError(error, 'That code didn’t work. Check it and try again.') };
           }
+          return {};
+        } catch (e) {
+          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+        }
+      },
+      signUpPassword: async (email, password) => {
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+          });
+          if (error) return { error: cleanError(error, 'Couldn’t create the account.') };
+          if (!data.session) {
+            return {
+              error:
+                'Account made, but email confirmation is on. Turn off “Confirm email” in Supabase → Authentication → Providers → Email, then try again.',
+            };
+          }
+          return {};
+        } catch (e) {
+          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+        }
+      },
+      signInPassword: async (email, password) => {
+        try {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+          if (error) return { error: cleanError(error, 'Couldn’t sign in. Check your email and password.') };
           return {};
         } catch (e) {
           return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };

@@ -4,38 +4,39 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { FormField, GhostButton, PrimaryButton } from '@/components/form';
+import { FormField, PrimaryButton } from '@/components/form';
 import { useAuth } from '@/store/auth';
-import { spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useTheme } from '@/theme';
 
-/** Passwordless sign-in: email → 6-digit code → session. */
+/**
+ * Temporary email + password sign-in. (Passwordless email codes return once a
+ * real sending domain is configured — see auth store.)
+ */
 export default function SignInScreen() {
   const { colors } = useTheme();
-  const { sendCode, verifyCode } = useAuth();
+  const { signInPassword, signUpPassword } = useAuth();
 
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onSend = async () => {
+  const submit = async () => {
     if (!email.includes('@')) {
       setError('Enter a valid email address.');
       return;
     }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
     setBusy(true);
     setError(null);
-    const { error: err } = await sendCode(email);
-    setBusy(false);
-    if (err) setError(err);
-    else setStep('code');
-  };
-
-  const onVerify = async () => {
-    setBusy(true);
-    setError(null);
-    const { error: err } = await verifyCode(email, code);
+    const { error: err } =
+      mode === 'signup'
+        ? await signUpPassword(email, password)
+        : await signInPassword(email, password);
     setBusy(false);
     if (err) setError(err);
     else router.back(); // back to Settings, now signed in
@@ -55,58 +56,61 @@ export default function SignInScreen() {
 
         <View style={styles.body}>
           <Text style={[type.h1, { color: colors.ink }]}>
-            {step === 'email' ? 'Sign in' : 'Enter your code'}
+            {mode === 'signin' ? 'Sign in' : 'Create account'}
           </Text>
           <Text style={[type.bodyRegular, { color: colors.muted }]}>
-            {step === 'email'
-              ? 'We’ll email you a 6-digit code — no password to remember.'
-              : `We sent a code to ${email}. Enter it below.`}
+            Sign in to sync your lists and share them with your household.
           </Text>
 
-          {step === 'email' ? (
-            <FormField
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              autoFocus
-              onSubmitEditing={onSend}
-              returnKeyType="send"
-            />
-          ) : (
-            <FormField
-              label="6-digit code"
-              value={code}
-              onChangeText={setCode}
-              placeholder="123456"
-              keyboardType="number-pad"
-              autoFocus
-              maxLength={6}
-              onSubmitEditing={onVerify}
-              returnKeyType="done"
-            />
-          )}
+          {/* Mode toggle */}
+          <View style={[styles.toggle, { borderColor: colors.line }]}>
+            {(['signin', 'signup'] as const).map((m) => {
+              const active = mode === m;
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => {
+                    setMode(m);
+                    setError(null);
+                  }}
+                  style={[styles.toggleBtn, active && { backgroundColor: colors.accentSoft }]}
+                >
+                  <Text style={[type.body, { color: active ? colors.accent : colors.muted }]}>
+                    {m === 'signin' ? 'Sign in' : 'Create account'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <FormField
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+          />
+          <FormField
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="At least 6 characters"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={submit}
+            returnKeyType="done"
+          />
 
           {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
 
-          {step === 'email' ? (
-            <PrimaryButton label="Send code" onPress={onSend} loading={busy} />
-          ) : (
-            <>
-              <PrimaryButton label="Verify & sign in" onPress={onVerify} loading={busy} />
-              <GhostButton
-                label="Use a different email"
-                onPress={() => {
-                  setStep('email');
-                  setCode('');
-                  setError(null);
-                }}
-              />
-            </>
-          )}
+          <PrimaryButton
+            label={mode === 'signin' ? 'Sign in' : 'Create account'}
+            onPress={submit}
+            loading={busy}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -118,4 +122,12 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   body: { padding: spacing.lg, gap: spacing.lg, marginTop: spacing.md },
+  toggle: { flexDirection: 'row', borderWidth: 1, borderRadius: radii.md, padding: 3, gap: 3 },
+  toggleBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
