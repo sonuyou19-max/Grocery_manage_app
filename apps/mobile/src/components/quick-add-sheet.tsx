@@ -183,18 +183,30 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 autoFocus
                 editable={phase !== 'loading'}
               />
+              {/* Button sits directly under the field so the keyboard never hides it. */}
+              <Pressable
+                onPress={runParse}
+                disabled={!canParse}
+                style={[styles.primary, { backgroundColor: colors.accent, opacity: canParse ? 1 : 0.4 }]}
+              >
+                {phase === 'loading' ? (
+                  <ActivityIndicator color={colors.accentInk} />
+                ) : (
+                  <Text style={[type.body, { color: colors.accentInk }]}>Add with AI</Text>
+                )}
+              </Pressable>
+              {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
               <View style={styles.hint}>
                 <Ionicons name="mic-outline" size={15} color={colors.muted} />
                 <Text style={[type.sub, { color: colors.muted, flex: 1 }]}>
                   Prefer to speak? Tap the microphone key on your keyboard.
                 </Text>
               </View>
-              {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
             </View>
           )}
 
-          <View style={[styles.footer, { borderTopColor: colors.line }]}>
-            {phase === 'review' ? (
+          {phase === 'review' && (
+            <View style={[styles.footer, { borderTopColor: colors.line }]}>
               <View style={styles.footerRow}>
                 <Pressable onPress={() => setPhase('input')} style={styles.back}>
                   <Text style={[type.body, { color: colors.muted }]}>Back</Text>
@@ -209,20 +221,8 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                   </Text>
                 </Pressable>
               </View>
-            ) : (
-              <Pressable
-                onPress={runParse}
-                disabled={!canParse}
-                style={[styles.primary, { backgroundColor: colors.accent, opacity: canParse ? 1 : 0.4 }]}
-              >
-                {phase === 'loading' ? (
-                  <ActivityIndicator color={colors.accentInk} />
-                ) : (
-                  <Text style={[type.body, { color: colors.accentInk }]}>Add with AI</Text>
-                )}
-              </Pressable>
-            )}
-          </View>
+            </View>
+          )}
         </Animated.View>
       </View>
     </Modal>
