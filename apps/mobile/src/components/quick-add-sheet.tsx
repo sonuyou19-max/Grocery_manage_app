@@ -118,7 +118,8 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   };
 
   const selectedCount = selected.filter(Boolean).length;
-  const canParse = text.trim().length > 0 && phase !== 'loading';
+  const hasText = text.trim().length > 0;
+  const canParse = hasText && phase !== 'loading';
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
@@ -187,12 +188,14 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               <Pressable
                 onPress={runParse}
                 disabled={!canParse}
-                style={[styles.primaryBlock, { backgroundColor: colors.accent, opacity: canParse ? 1 : 0.4 }]}
+                style={[styles.primaryBlock, { backgroundColor: hasText ? colors.accent : colors.line }]}
               >
                 {phase === 'loading' ? (
                   <ActivityIndicator color={colors.accentInk} />
                 ) : (
-                  <Text style={[type.body, { color: colors.accentInk }]}>Add with AI</Text>
+                  <Text style={[type.body, { color: hasText ? colors.accentInk : colors.muted }]}>
+                    Add with AI
+                  </Text>
                 )}
               </Pressable>
               {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
@@ -214,9 +217,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 <Pressable
                   onPress={confirmAdd}
                   disabled={selectedCount === 0}
-                  style={[styles.primary, { backgroundColor: colors.accent, opacity: selectedCount ? 1 : 0.4 }]}
+                  style={[styles.primary, { backgroundColor: selectedCount ? colors.accent : colors.line }]}
                 >
-                  <Text style={[type.body, { color: colors.accentInk }]}>
+                  <Text style={[type.body, { color: selectedCount ? colors.accentInk : colors.muted }]}>
                     Add {selectedCount} item{selectedCount === 1 ? '' : 's'}
                   </Text>
                 </Pressable>

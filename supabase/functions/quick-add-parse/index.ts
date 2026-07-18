@@ -68,19 +68,12 @@ Deno.serve(async (req) => {
   });
 
   const rawText = message.content[0]?.type === 'text' ? message.content[0].text : '';
-  console.log('quick-add raw model output:', rawText);
-
   const jsonStr = extractJson(rawText);
 
   try {
     const parsed = quickAddResultSchema.parse(JSON.parse(jsonStr));
     return Response.json(parsed);
-  } catch (err) {
-    console.error('quick-add parse failure:', err, 'jsonStr:', jsonStr);
-    // Temporary debug fields (raw/detail) so we can see what the model returned.
-    return Response.json(
-      { error: 'Could not parse items from that input', raw: rawText, detail: String(err) },
-      { status: 422 },
-    );
+  } catch (_err) {
+    return Response.json({ error: 'Could not parse items from that input' }, { status: 422 });
   }
 });
