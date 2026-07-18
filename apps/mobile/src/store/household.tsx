@@ -38,6 +38,8 @@ interface HouseholdContext {
   refresh: () => Promise<void>;
   createHousehold: (name: string, displayName: string) => Promise<{ error?: string }>;
   joinHousehold: (code: string, displayName: string) => Promise<{ error?: string }>;
+  leaveHousehold: () => Promise<{ error?: string }>;
+  removeMember: (userId: string) => Promise<{ error?: string }>;
 }
 
 const Ctx = createContext<HouseholdContext | null>(null);
@@ -45,6 +47,8 @@ const Ctx = createContext<HouseholdContext | null>(null);
 const friendlyError = (message: string): string => {
   if (message.includes('invalid_code')) return 'That invite code didn’t match any household.';
   if (message.includes('not_authenticated')) return 'Please sign in first.';
+  if (message.includes('not_owner')) return 'Only the owner can remove members.';
+  if (message.includes('use_leave')) return 'Use “Leave household” to remove yourself.';
   return message;
 };
 
@@ -109,6 +113,23 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         const { error } = await supabase.rpc('join_household', {
           p_code: code,
           p_display_name: displayName,
+        });
+        if (error) return { error: friendlyError(error.message) };
+        await refresh();
+        return {};
+      },
+      leaveHousehold: async () => {
+        if (!household) return {};
+        const { error } = await supabase.rpc('leave_household', { p_household: household.id });
+        if (error) return { error: friendlyError(error.message) };
+        await refresh();
+        return {};
+      },
+      removeMember: async (userId) => {
+        if (!household) return {};
+        const { error } = await supabase.rpc('remove_member', {
+          p_household: household.id,
+          p_user: userId,
         });
         if (error) return { error: friendlyError(error.message) };
         await refresh();

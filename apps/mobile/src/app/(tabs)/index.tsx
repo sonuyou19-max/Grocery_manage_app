@@ -22,6 +22,7 @@ import { StoreGroups } from '@/components/store-groups';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { euros } from '@/lib/money';
 import { useGroceries, type List } from '@/store/groceries';
+import { useHousehold } from '@/store/household';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -43,9 +44,15 @@ const INITIAL_SUGGESTIONS: Suggestion[] = [
 export default function ListsScreen() {
   const { colors } = useTheme();
   const { lists, addList, addItem, deleteList, reorderLists } = useGroceries();
+  const { household } = useHousehold();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>(INITIAL_SUGGESTIONS);
+
+  // "Running low" is a demo of the upcoming prediction feature (needs real
+  // usage history). Show it only in the logged-out demo state — never with
+  // fake data in a real household.
+  const showSuggestions = !household;
 
   const openNewList = (name: string) => {
     const id = addList(name);
@@ -61,31 +68,33 @@ export default function ListsScreen() {
   return (
     <>
       <Screen title="Good evening" subtitle="Your household · lists & suggestions">
-        {/* AI restock suggestions lead the screen */}
-        <Card accented>
-          <View style={styles.cardHead}>
-            <Pill label="✦ Running low" />
-            <Text style={[type.sub, { color: colors.muted }]}>from your usage</Text>
-          </View>
-          {suggestions.length === 0 ? (
-            <View style={styles.caughtUp}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-              <Text style={[type.sub, { color: colors.muted }]}>All caught up — nothing running low.</Text>
+        {/* AI restock suggestions (demo only until real predictions exist) */}
+        {showSuggestions && (
+          <Card accented>
+            <View style={styles.cardHead}>
+              <Pill label="✦ Running low" />
+              <Text style={[type.sub, { color: colors.muted }]}>from your usage</Text>
             </View>
-          ) : (
-            suggestions.map((s) => (
-              <SuggestionRow
-                key={s.name}
-                suggestion={s}
-                onAdd={() => {
-                  const target = lists[0];
-                  if (target) addItem(target.id, s.name);
-                }}
-                onDone={() => removeSuggestion(s.name)}
-              />
-            ))
-          )}
-        </Card>
+            {suggestions.length === 0 ? (
+              <View style={styles.caughtUp}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                <Text style={[type.sub, { color: colors.muted }]}>All caught up — nothing running low.</Text>
+              </View>
+            ) : (
+              suggestions.map((s) => (
+                <SuggestionRow
+                  key={s.name}
+                  suggestion={s}
+                  onAdd={() => {
+                    const target = lists[0];
+                    if (target) addItem(target.id, s.name);
+                  }}
+                  onDone={() => removeSuggestion(s.name)}
+                />
+              ))
+            )}
+          </Card>
+        )}
 
         <View style={styles.listsHead}>
           <Text style={[type.label, { color: colors.muted }]}>Your lists</Text>

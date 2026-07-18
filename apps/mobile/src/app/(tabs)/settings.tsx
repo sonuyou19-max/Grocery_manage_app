@@ -13,7 +13,9 @@ const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const { user, signOut } = useAuth();
-  const { household, members } = useHousehold();
+  const { household, members, leaveHousehold, removeMember } = useHousehold();
+
+  const iAmOwner = members.find((m) => m.user_id === user?.id)?.role === 'owner';
 
   const confirmSignOut = () =>
     Alert.alert('Sign out', 'Your local lists stay on this device.', [
@@ -26,6 +28,40 @@ export default function SettingsScreen() {
     void Share.share({
       message: `Join our "${household.name}" grocery list on Korb. Invite code: ${household.invite_code}`,
     });
+  };
+
+  const confirmRemove = (member: Member) =>
+    Alert.alert('Remove member', `Remove ${member.display_name} from ${household?.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await removeMember(member.user_id);
+          if (error) Alert.alert('Couldn’t remove', error);
+        },
+      },
+    ]);
+
+  const confirmLeave = () => {
+    const soleOwner = iAmOwner && members.filter((m) => m.role === 'owner').length === 1;
+    const others = members.length > 1;
+    const message = !others
+      ? 'You’re the only member — the household and its shared lists will be deleted.'
+      : soleOwner
+        ? 'You’re the owner. Ownership will pass to another member. Your household lists stay with them.'
+        : 'You’ll lose access to this household’s shared lists.';
+    Alert.alert('Leave household', message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await leaveHousehold();
+          if (error) Alert.alert('Couldn’t leave', error);
+        },
+      },
+    ]);
   };
 
   return (
@@ -82,7 +118,14 @@ export default function SettingsScreen() {
               <View style={[styles.divider, { backgroundColor: colors.line }]} />
 
               {members.map((m, i) => (
-                <MemberRow key={m.user_id} member={m} index={i} isMe={m.user_id === user.id} />
+                <MemberRow
+                  key={m.user_id}
+                  member={m}
+                  index={i}
+                  isMe={m.user_id === user.id}
+                  canRemove={iAmOwner && m.user_id !== user.id && m.role !== 'owner'}
+                  onRemove={() => confirmRemove(m)}
+                />
               ))}
 
               <View style={[styles.divider, { backgroundColor: colors.line }]} />
@@ -96,6 +139,13 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+              </Pressable>
+
+              <View style={[styles.divider, { backgroundColor: colors.line }]} />
+
+              <Pressable onPress={confirmLeave} style={styles.row}>
+                <Ionicons name="exit-outline" size={20} color={colors.crit} />
+                <Text style={[type.body, styles.grow, { color: colors.crit }]}>Leave household</Text>
               </Pressable>
             </Card>
           ) : (
@@ -127,7 +177,19 @@ export default function SettingsScreen() {
   );
 }
 
-function MemberRow({ member, index, isMe }: { member: Member; index: number; isMe: boolean }) {
+function MemberRow({
+  member,
+  index,
+  isMe,
+  canRemove,
+  onRemove,
+}: {
+  member: Member;
+  index: number;
+  isMe: boolean;
+  canRemove: boolean;
+  onRemove: () => void;
+}) {
   const { colors } = useTheme();
   const initials = member.display_name.slice(0, 2).toUpperCase();
   return (
@@ -139,8 +201,11 @@ function MemberRow({ member, index, isMe }: { member: Member; index: number; isM
         {member.display_name}
         {isMe ? ' (you)' : ''}
       </Text>
-      {member.role === 'owner' && (
-        <Text style={[type.sub, { color: colors.muted }]}>Owner</Text>
+      {member.role === 'owner' && <Text style={[type.sub, { color: colors.muted }]}>Owner</Text>}
+      {canRemove && (
+        <Pressable onPress={onRemove} hitSlop={8}>
+          <Ionicons name="remove-circle-outline" size={22} color={colors.crit} />
+        </Pressable>
       )}
     </View>
   );
