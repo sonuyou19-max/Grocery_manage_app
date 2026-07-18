@@ -15,6 +15,7 @@ import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
 import { HouseholdProvider } from '@/store/household';
+import { PantryProvider } from '@/store/pantry';
 import { palette } from '@/theme';
 
 const navLight: NavTheme = {
@@ -55,15 +56,17 @@ export default function RootLayout() {
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
         <AuthProvider>
           <HouseholdProvider>
-            <GroceriesProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="list/[id]" />
-                <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
-                <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />
-              </Stack>
-              <StatusBar style="auto" />
-            </GroceriesProvider>
+            <PantryProvider>
+              <GroceriesProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="list/[id]" />
+                  <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
+                  <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />
+                </Stack>
+                <StatusBar style="auto" />
+              </GroceriesProvider>
+            </PantryProvider>
           </HouseholdProvider>
         </AuthProvider>
       </ThemeProvider>

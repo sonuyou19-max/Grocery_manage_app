@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -12,11 +13,24 @@ import {
 import type { ItemCategory } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
+import { supabase } from '@/lib/supabase';
+import { uuidv4 } from '@/lib/uuid';
+import { useAuth } from '@/store/auth';
+import { useHousehold } from '@/store/household';
 
 /**
- * Local grocery store. Holds the app's lists, items and pantry, persisted to
- * AsyncStorage so data survives app restarts. Becomes the offline cache once
- * Supabase household sync lands — the API surface won't change.
+ * Grocery lists store with two interchangeable backends behind one identical
+ * API (useGroceries / useList / useItem):
+ *
+ *  - Logged out (or signed in without a household): LOCAL — AsyncStorage,
+ *    exactly as before. Works fully offline.
+ *  - Signed in with a household: CLOUD — Supabase, scoped to the household,
+ *    with optimistic UI, realtime "something changed → refetch", and a local
+ *    cache for instant startup.
+ *
+ * Client-generated UUIDs mean an optimistic insert already carries the id the
+ * server row will have, so no id reconciliation is needed. Pantry lives in its
+ * own always-local provider (see store/pantry).
  */
 
 export interface Item {
@@ -32,7 +46,9 @@ export interface Item {
   checked: boolean;
 }
 
-export type ItemPatch = Partial<Pick<Item, 'name' | 'category' | 'quantity' | 'unit' | 'priceCents' | 'store'>>;
+export type ItemPatch = Partial<
+  Pick<Item, 'name' | 'category' | 'quantity' | 'unit' | 'priceCents' | 'store'>
+>;
 
 export interface List {
   id: string;
@@ -41,18 +57,8 @@ export interface List {
   items: Item[];
 }
 
-export interface PantryItem {
-  id: string;
-  name: string;
-  note: string;
-  /** 0..1 estimated stock remaining. */
-  left: number;
-  eta: string;
-}
-
 interface GroceriesContext {
   lists: List[];
-  pantry: PantryItem[];
   addList: (name: string) => string;
   deleteList: (listId: string) => void;
   reorderLists: (orderedIds: string[]) => void;
@@ -60,14 +66,12 @@ interface GroceriesContext {
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
   deleteItem: (listId: string, itemId: string) => void;
-  addPantryItem: (name: string) => void;
 }
 
-let counter = 0;
-const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${counter++}`;
+const Ctx = createContext<GroceriesContext | null>(null);
 
-const item = (name: string, category: ItemCategory, opts: Partial<Item> = {}): Item => ({
-  id: uid('i'),
+const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {}): Item => ({
+  id: uuidv4(),
   name,
   category,
   quantity: null,
@@ -78,82 +82,87 @@ const item = (name: string, category: ItemCategory, opts: Partial<Item> = {}): I
   ...opts,
 });
 
+// ---------------------------------------------------------------------------
+// Provider selector: pick LOCAL or CLOUD by auth + household state.
+// ---------------------------------------------------------------------------
+
+export function GroceriesProvider({ children }: PropsWithChildren) {
+  const { user } = useAuth();
+  const { household } = useHousehold();
+
+  if (user && household) {
+    return (
+      <CloudGroceriesProvider householdId={household.id} key={household.id}>
+        {children}
+      </CloudGroceriesProvider>
+    );
+  }
+  return <LocalGroceriesProvider>{children}</LocalGroceriesProvider>;
+}
+
+// ---------------------------------------------------------------------------
+// LOCAL backend (offline, AsyncStorage) — the logged-out experience.
+// ---------------------------------------------------------------------------
+
+const LOCAL_KEY = 'korb.lists.v1';
+
 const SEED_LISTS: List[] = [
   {
-    id: uid('l'),
+    id: uuidv4(),
     name: 'Weekly groceries',
     store: 'Lidl',
     items: [
-      item('Potatoes', 'fruit_veg', { quantity: 2, unit: 'kg', priceCents: 229, store: 'carrefour' }),
-      item('Tomatoes', 'fruit_veg', { quantity: 500, unit: 'g', priceCents: 179, store: 'carrefour' }),
-      item('Semi-skimmed milk', 'dairy_eggs', { quantity: 2, unit: 'L', priceCents: 218, checked: true, store: 'lidl' }),
-      item('Gouda, young', 'dairy_eggs', { quantity: 400, unit: 'g', priceCents: 428 }),
-      item('Eggs, free-range', 'dairy_eggs', { quantity: 10, unit: 'pcs', checked: true }),
-      item('Sourdough loaf', 'bakery', { quantity: 1 }),
+      newItem('Potatoes', 'fruit_veg', { quantity: 2, unit: 'kg', priceCents: 229, store: 'carrefour' }),
+      newItem('Tomatoes', 'fruit_veg', { quantity: 500, unit: 'g', priceCents: 179, store: 'carrefour' }),
+      newItem('Semi-skimmed milk', 'dairy_eggs', { quantity: 2, unit: 'L', priceCents: 218, checked: true, store: 'lidl' }),
+      newItem('Gouda, young', 'dairy_eggs', { quantity: 400, unit: 'g', priceCents: 428 }),
+      newItem('Eggs, free-range', 'dairy_eggs', { quantity: 10, unit: 'pcs', checked: true }),
+      newItem('Sourdough loaf', 'bakery', { quantity: 1 }),
     ],
   },
   {
-    id: uid('l'),
+    id: uuidv4(),
     name: 'Saturday market',
     store: null,
     items: [
-      item('Apples', 'fruit_veg', { quantity: 1, unit: 'kg' }),
-      item('Basil', 'fruit_veg'),
-      item('Sourdough loaf', 'bakery'),
+      newItem('Apples', 'fruit_veg', { quantity: 1, unit: 'kg' }),
+      newItem('Basil', 'fruit_veg'),
+      newItem('Sourdough loaf', 'bakery'),
     ],
   },
 ];
 
-const SEED_PANTRY: PantryItem[] = [
-  { id: uid('p'), name: 'Semi-skimmed milk', note: 'usually lasts 5 days', left: 0.12, eta: '~1 day left' },
-  { id: uid('p'), name: 'Espresso beans', note: 'usually lasts 18 days', left: 0.26, eta: '~3 days left' },
-  { id: uid('p'), name: 'Olive oil', note: '1 L · usually lasts 2 months', left: 0.7, eta: '~5 weeks left' },
-];
-
-const Ctx = createContext<GroceriesContext | null>(null);
-
-const DATA_KEY = 'korb.groceries.v1';
-
-export function GroceriesProvider({ children }: PropsWithChildren) {
+function LocalGroceriesProvider({ children }: PropsWithChildren) {
   const [lists, setLists] = useState<List[]>(SEED_LISTS);
-  const [pantry, setPantry] = useState<PantryItem[]>(SEED_PANTRY);
   const hydrated = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load persisted data once on startup; keep seeds only for a fresh install.
   useEffect(() => {
-    AsyncStorage.getItem(DATA_KEY)
+    AsyncStorage.getItem(LOCAL_KEY)
       .then((raw) => {
         if (raw) {
-          const parsed = JSON.parse(raw) as { lists?: List[]; pantry?: PantryItem[] };
-          if (Array.isArray(parsed.lists)) setLists(parsed.lists);
-          if (Array.isArray(parsed.pantry)) setPantry(parsed.pantry);
+          const parsed = JSON.parse(raw) as List[];
+          if (Array.isArray(parsed)) setLists(parsed);
         }
       })
-      .catch(() => {
-        // Corrupt/missing data: keep seeds.
-      })
+      .catch(() => {})
       .finally(() => {
         hydrated.current = true;
       });
   }, []);
 
-  // Persist on every change (debounced), but never before hydration finishes —
-  // that would overwrite saved data with the seeds.
   useEffect(() => {
     if (!hydrated.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(DATA_KEY, JSON.stringify({ lists, pantry })).catch(() => {
-        // best-effort persistence
-      });
+      AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(lists)).catch(() => {});
     }, 300);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [lists, pantry]);
+  }, [lists]);
 
-  const patchItem = (listId: string, itemId: string, patch: ItemPatch) => {
+  const patchItem = useCallback((listId: string, itemId: string, patch: ItemPatch) => {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
@@ -161,25 +170,20 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
           : l,
       ),
     );
-  };
+  }, []);
 
   const value = useMemo<GroceriesContext>(
     () => ({
       lists,
-      pantry,
       addList: (name) => {
-        const id = uid('l');
+        const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
         return id;
       },
-      deleteList: (listId) => {
-        // Deleting a list removes it and all its items everywhere.
-        setLists((prev) => prev.filter((l) => l.id !== listId));
-      },
+      deleteList: (listId) => setLists((prev) => prev.filter((l) => l.id !== listId)),
       reorderLists: (orderedIds) => {
         setLists((prev) => {
           const rank = new Map(orderedIds.map((id, i) => [id, i]));
-          // Unknown ids keep their relative order at the end.
           return [...prev].sort(
             (a, b) => (rank.get(a.id) ?? prev.length) - (rank.get(b.id) ?? prev.length),
           );
@@ -187,20 +191,14 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
       },
       addItem: (listId, name) => {
         const clean = name.trim();
-        const id = uid('i');
+        const id = uuidv4();
         if (!clean) return id;
-
         const category = categorizeSync(clean);
         setLists((prev) =>
           prev.map((l) =>
-            l.id === listId
-              ? { ...l, items: [...l.items, { ...item(clean, category), id }] }
-              : l,
+            l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category), id }] } : l,
           ),
         );
-
-        // Unknown item: ask the AI in the background, then update + cache so we
-        // never ask again for this word. No-ops until the backend is connected.
         if (category === 'other' && !isKnown(clean)) {
           resolveCategoryAsync(clean).then((resolved) => {
             if (resolved && resolved !== 'other') {
@@ -211,51 +209,265 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
         }
         return id;
       },
-      toggleItem: (listId, itemId) => {
+      toggleItem: (listId, itemId) =>
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
-              ? {
-                  ...l,
-                  items: l.items.map((it) =>
-                    it.id === itemId ? { ...it, checked: !it.checked } : it,
-                  ),
-                }
+              ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, checked: !it.checked } : it)) }
               : l,
           ),
-        );
-      },
+        ),
       updateItem: (listId, itemId, patch) => {
         patchItem(listId, itemId, patch);
-        // A manual category choice teaches the cache too.
         if (patch.category) {
-          const target = lists
-            .find((l) => l.id === listId)
-            ?.items.find((it) => it.id === itemId);
+          const target = lists.find((l) => l.id === listId)?.items.find((it) => it.id === itemId);
+          if (target) void learnCategory(target.name, patch.category);
+        }
+      },
+      deleteItem: (listId, itemId) =>
+        setLists((prev) =>
+          prev.map((l) => (l.id === listId ? { ...l, items: l.items.filter((it) => it.id !== itemId) } : l)),
+        ),
+    }),
+    [lists, patchItem],
+  );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+// ---------------------------------------------------------------------------
+// CLOUD backend (Supabase, household-scoped) — optimistic + realtime refetch.
+// ---------------------------------------------------------------------------
+
+interface DbItem {
+  id: string;
+  name: string;
+  category: ItemCategory;
+  quantity: number | null;
+  unit: string | null;
+  price_cents: number | null;
+  store: string | null;
+  checked: boolean;
+  created_at: string;
+}
+interface DbList {
+  id: string;
+  name: string;
+  store: string | null;
+  position: number;
+  list_items: DbItem[] | null;
+}
+
+const mapItem = (r: DbItem): Item => ({
+  id: r.id,
+  name: r.name,
+  category: r.category,
+  quantity: r.quantity,
+  unit: r.unit,
+  priceCents: r.price_cents,
+  store: r.store,
+  checked: r.checked,
+});
+
+const mapList = (r: DbList): List => ({
+  id: r.id,
+  name: r.name,
+  store: r.store,
+  items: [...(r.list_items ?? [])]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map(mapItem),
+});
+
+function CloudGroceriesProvider({
+  householdId,
+  children,
+}: PropsWithChildren<{ householdId: string }>) {
+  const { user } = useAuth();
+  const [lists, setLists] = useState<List[]>([]);
+  const cacheKey = `korb.lists.cloud.${householdId}`;
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyServer = useCallback(
+    (rows: DbList[]) => {
+      const mapped = rows.map(mapList);
+      setLists(mapped);
+      AsyncStorage.setItem(cacheKey, JSON.stringify(mapped)).catch(() => {});
+    },
+    [cacheKey],
+  );
+
+  const fetchLists = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('shopping_lists')
+      .select(
+        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, created_at)',
+      )
+      .eq('household_id', householdId)
+      .eq('archived', false)
+      .order('position');
+    if (!error && data) applyServer(data as unknown as DbList[]);
+  }, [householdId, applyServer]);
+
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => void fetchLists(), 300);
+  }, [fetchLists]);
+
+  // Initial load (cache first for instant paint), then live subscription.
+  useEffect(() => {
+    let alive = true;
+    AsyncStorage.getItem(cacheKey)
+      .then((raw) => {
+        if (alive && raw) setLists(JSON.parse(raw) as List[]);
+      })
+      .catch(() => {});
+    void fetchLists();
+
+    const channel = supabase
+      .channel(`lists-${householdId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' }, scheduleRefetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_lists' }, scheduleRefetch)
+      .subscribe();
+
+    return () => {
+      alive = false;
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [householdId, cacheKey, fetchLists, scheduleRefetch]);
+
+  const patchLocalItem = useCallback((listId: string, itemId: string, patch: ItemPatch) => {
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId
+          ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)) }
+          : l,
+      ),
+    );
+  }, []);
+
+  const value = useMemo<GroceriesContext>(() => {
+    const dbPatch = (patch: ItemPatch): Record<string, unknown> => {
+      const db: Record<string, unknown> = {};
+      if (patch.name !== undefined) db.name = patch.name;
+      if (patch.category !== undefined) db.category = patch.category;
+      if (patch.quantity !== undefined) db.quantity = patch.quantity;
+      if (patch.unit !== undefined) db.unit = patch.unit;
+      if (patch.priceCents !== undefined) db.price_cents = patch.priceCents;
+      if (patch.store !== undefined) db.store = patch.store;
+      return db;
+    };
+
+    return {
+      lists,
+      addList: (name) => {
+        const id = uuidv4();
+        setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
+        supabase
+          .from('shopping_lists')
+          .insert({ id, household_id: householdId, name, position: lists.length })
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
+        return id;
+      },
+      deleteList: (listId) => {
+        setLists((prev) => prev.filter((l) => l.id !== listId));
+        supabase
+          .from('shopping_lists')
+          .delete()
+          .eq('id', listId)
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
+      },
+      reorderLists: (orderedIds) => {
+        setLists((prev) => {
+          const rank = new Map(orderedIds.map((id, i) => [id, i]));
+          return [...prev].sort(
+            (a, b) => (rank.get(a.id) ?? prev.length) - (rank.get(b.id) ?? prev.length),
+          );
+        });
+        orderedIds.forEach((id, i) => {
+          void supabase.from('shopping_lists').update({ position: i }).eq('id', id);
+        });
+      },
+      addItem: (listId, name) => {
+        const clean = name.trim();
+        const id = uuidv4();
+        if (!clean) return id;
+        const category = categorizeSync(clean);
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category), id }] } : l,
+          ),
+        );
+        supabase
+          .from('list_items')
+          .insert({ id, list_id: listId, name: clean, category, added_by: user?.id ?? null })
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
+        if (category === 'other' && !isKnown(clean)) {
+          resolveCategoryAsync(clean).then((resolved) => {
+            if (resolved && resolved !== 'other') {
+              patchLocalItem(listId, id, { category: resolved });
+              void supabase.from('list_items').update({ category: resolved }).eq('id', id);
+              void learnCategory(clean, resolved);
+            }
+          });
+        }
+        return id;
+      },
+      toggleItem: (listId, itemId) => {
+        const current = lists
+          .find((l) => l.id === listId)
+          ?.items.find((it) => it.id === itemId);
+        const next = !(current?.checked ?? false);
+        patchLocalItem(listId, itemId, { checked: next } as ItemPatch);
+        supabase
+          .from('list_items')
+          .update({ checked: next })
+          .eq('id', itemId)
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
+      },
+      updateItem: (listId, itemId, patch) => {
+        patchLocalItem(listId, itemId, patch);
+        supabase
+          .from('list_items')
+          .update(dbPatch(patch))
+          .eq('id', itemId)
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
+        if (patch.category) {
+          const target = lists.find((l) => l.id === listId)?.items.find((it) => it.id === itemId);
           if (target) void learnCategory(target.name, patch.category);
         }
       },
       deleteItem: (listId, itemId) => {
         setLists((prev) =>
-          prev.map((l) =>
-            l.id === listId ? { ...l, items: l.items.filter((it) => it.id !== itemId) } : l,
-          ),
+          prev.map((l) => (l.id === listId ? { ...l, items: l.items.filter((it) => it.id !== itemId) } : l)),
         );
+        supabase
+          .from('list_items')
+          .delete()
+          .eq('id', itemId)
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
       },
-      addPantryItem: (name) => {
-        const clean = name.trim();
-        if (!clean) return;
-        setPantry((prev) => [
-          ...prev,
-          { id: uid('p'), name: clean, note: 'learning your usage…', left: 1, eta: 'just added' },
-        ]);
-      },
-    }),
-    [lists, pantry],
-  );
+    };
+  }, [lists, householdId, user, patchLocalItem, scheduleRefetch]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
 
 export function useGroceries(): GroceriesContext {
   const ctx = useContext(Ctx);
@@ -263,13 +475,11 @@ export function useGroceries(): GroceriesContext {
   return ctx;
 }
 
-/** Convenience selector for a single list. */
 export function useList(listId: string | undefined): List | undefined {
   const { lists } = useGroceries();
   return lists.find((l) => l.id === listId);
 }
 
-/** Convenience selector for a single item. */
 export function useItem(listId: string | undefined, itemId: string | undefined): Item | undefined {
   const list = useList(listId);
   return list?.items.find((it) => it.id === itemId);

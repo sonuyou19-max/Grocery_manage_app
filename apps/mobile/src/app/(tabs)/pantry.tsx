@@ -5,7 +5,7 @@ import { Card } from '@/components/card';
 import { Fab } from '@/components/fab';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
-import { useGroceries } from '@/store/groceries';
+import { usePantry } from '@/store/pantry';
 import { spacing, type, useTheme } from '@/theme';
 
 /**
@@ -15,7 +15,7 @@ import { spacing, type, useTheme } from '@/theme';
  */
 export default function PantryScreen() {
   const { colors } = useTheme();
-  const { pantry, addPantryItem } = useGroceries();
+  const { pantry, addPantryItem } = usePantry();
   const [adding, setAdding] = useState(false);
 
   const lowCount = pantry.filter((p) => p.left < 0.35).length;
