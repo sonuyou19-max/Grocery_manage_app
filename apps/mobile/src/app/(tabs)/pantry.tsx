@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
@@ -9,9 +10,8 @@ import { usePantry } from '@/store/pantry';
 import { spacing, type, useTheme } from '@/theme';
 
 /**
- * Pantry: learned consumption rates per item — stock bar + days-left estimate.
- * Estimates come from consumption events once the backend lands; for now the
- * store seeds a few and lets you add your own.
+ * Pantry: track items you keep stocked. Days-left estimates become real once
+ * the consumption-prediction engine lands; for now you add your own.
  */
 export default function PantryScreen() {
   const { colors } = useTheme();
@@ -27,9 +27,20 @@ export default function PantryScreen() {
     <>
       <Screen
         title="Pantry"
-        subtitle={`${pantry.length} tracked · ${lowCount} running low`}
+        subtitle={
+          pantry.length === 0
+            ? 'Track what you keep stocked'
+            : `${pantry.length} tracked · ${lowCount} running low`
+        }
       >
-        <Card>
+        {pantry.length === 0 ? (
+          <EmptyState
+            icon="file-tray-full-outline"
+            title="Nothing tracked yet"
+            body="Track staples you always keep at home — Korb will learn how fast you get through them and flag when you’re running low. Tap “Track item” to add your first."
+          />
+        ) : (
+          <Card>
           {pantry.map((item, i) => (
             <View
               key={item.id}
@@ -55,7 +66,8 @@ export default function PantryScreen() {
               </View>
             </View>
           ))}
-        </Card>
+          </Card>
+        )}
       </Screen>
 
       <Fab label="Track item" onPress={() => setAdding(true)} />

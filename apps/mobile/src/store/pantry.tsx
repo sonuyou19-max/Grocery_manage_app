@@ -32,17 +32,12 @@ interface PantryContext {
 let counter = 0;
 const uid = () => `p_${Date.now().toString(36)}_${counter++}`;
 
-const SEED_PANTRY: PantryItem[] = [
-  { id: uid(), name: 'Semi-skimmed milk', note: 'usually lasts 5 days', left: 0.12, eta: '~1 day left' },
-  { id: uid(), name: 'Espresso beans', note: 'usually lasts 18 days', left: 0.26, eta: '~3 days left' },
-  { id: uid(), name: 'Olive oil', note: '1 L · usually lasts 2 months', left: 0.7, eta: '~5 weeks left' },
-];
-
-const DATA_KEY = 'korb.pantry.v1';
+// v2: start empty (no demo seeds).
+const DATA_KEY = 'korb.pantry.v2';
 const Ctx = createContext<PantryContext | null>(null);
 
 export function PantryProvider({ children }: PropsWithChildren) {
-  const [pantry, setPantry] = useState<PantryItem[]>(SEED_PANTRY);
+  const [pantry, setPantry] = useState<PantryItem[]>([]);
   const hydrated = useRef(false);
 
   useEffect(() => {

@@ -104,36 +104,12 @@ export function GroceriesProvider({ children }: PropsWithChildren) {
 // LOCAL backend (offline, AsyncStorage) — the logged-out experience.
 // ---------------------------------------------------------------------------
 
-const LOCAL_KEY = 'korb.lists.v1';
-
-const SEED_LISTS: List[] = [
-  {
-    id: uuidv4(),
-    name: 'Weekly groceries',
-    store: 'Lidl',
-    items: [
-      newItem('Potatoes', 'fruit_veg', { quantity: 2, unit: 'kg', priceCents: 229, store: 'carrefour' }),
-      newItem('Tomatoes', 'fruit_veg', { quantity: 500, unit: 'g', priceCents: 179, store: 'carrefour' }),
-      newItem('Semi-skimmed milk', 'dairy_eggs', { quantity: 2, unit: 'L', priceCents: 218, checked: true, store: 'lidl' }),
-      newItem('Gouda, young', 'dairy_eggs', { quantity: 400, unit: 'g', priceCents: 428 }),
-      newItem('Eggs, free-range', 'dairy_eggs', { quantity: 10, unit: 'pcs', checked: true }),
-      newItem('Sourdough loaf', 'bakery', { quantity: 1 }),
-    ],
-  },
-  {
-    id: uuidv4(),
-    name: 'Saturday market',
-    store: null,
-    items: [
-      newItem('Apples', 'fruit_veg', { quantity: 1, unit: 'kg' }),
-      newItem('Basil', 'fruit_veg'),
-      newItem('Sourdough loaf', 'bakery'),
-    ],
-  },
-];
+// v2: start empty. New users (and anyone upgrading past the demo seeds) begin
+// with no lists instead of prepopulated sample data.
+const LOCAL_KEY = 'korb.lists.v2';
 
 function LocalGroceriesProvider({ children }: PropsWithChildren) {
-  const [lists, setLists] = useState<List[]>(SEED_LISTS);
+  const [lists, setLists] = useState<List[]>([]);
   const hydrated = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
