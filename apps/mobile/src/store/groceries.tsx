@@ -10,7 +10,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 
-import type { ItemCategory } from '@korb/shared';
+import type { ItemCategory, ParsedItem } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +63,8 @@ interface GroceriesContext {
   deleteList: (listId: string) => void;
   reorderLists: (orderedIds: string[]) => void;
   addItem: (listId: string, name: string) => string;
+  /** Add an already-structured item (from AI quick-add) without re-categorizing. */
+  addParsedItem: (listId: string, item: ParsedItem) => void;
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
   deleteItem: (listId: string, itemId: string) => void;
@@ -184,6 +186,21 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
           });
         }
         return id;
+      },
+      addParsedItem: (listId, p) => {
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId
+              ? {
+                  ...l,
+                  items: [
+                    ...l.items,
+                    newItem(p.name, p.category, { quantity: p.quantity, unit: p.unit }),
+                  ],
+                }
+              : l,
+          ),
+        );
       },
       toggleItem: (listId, itemId) =>
         setLists((prev) =>
@@ -394,6 +411,36 @@ function CloudGroceriesProvider({
           });
         }
         return id;
+      },
+      addParsedItem: (listId, p) => {
+        const id = uuidv4();
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId
+              ? {
+                  ...l,
+                  items: [
+                    ...l.items,
+                    { ...newItem(p.name, p.category, { quantity: p.quantity, unit: p.unit }), id },
+                  ],
+                }
+              : l,
+          ),
+        );
+        supabase
+          .from('list_items')
+          .insert({
+            id,
+            list_id: listId,
+            name: p.name,
+            category: p.category,
+            quantity: p.quantity,
+            unit: p.unit,
+            added_by: user?.id ?? null,
+          })
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
       },
       toggleItem: (listId, itemId) => {
         const current = lists

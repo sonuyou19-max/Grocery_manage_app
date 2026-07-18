@@ -18,6 +18,7 @@ import ReanimatedSwipeable, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ItemSheet } from '@/components/item-sheet';
+import { QuickAddSheet } from '@/components/quick-add-sheet';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { euros } from '@/lib/money';
@@ -32,6 +33,7 @@ export default function ListDetailScreen() {
   const [draft, setDraft] = useState('');
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
+  const [quickAdd, setQuickAdd] = useState(false);
 
   const grouped = useMemo(() => {
     if (!list) return [];
@@ -102,9 +104,6 @@ export default function ListDetailScreen() {
     setSheetMode('edit');
     setSheetItemId(item.id);
   };
-
-  const comingSoon = () =>
-    Alert.alert('Voice add', 'Speaking your list arrives with the AI step — coming next.');
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top']}>
@@ -196,8 +195,8 @@ export default function ListDetailScreen() {
               returnKeyType="done"
               onSubmitEditing={submit}
             />
-            <Pressable onPress={comingSoon} hitSlop={8} style={styles.mic}>
-              <Ionicons name="mic-outline" size={22} color={colors.accent} />
+            <Pressable onPress={() => setQuickAdd(true)} hitSlop={8} style={styles.mic}>
+              <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
             </Pressable>
             <Pressable
               onPress={submit}
@@ -215,6 +214,7 @@ export default function ListDetailScreen() {
         mode={sheetMode}
         onClose={() => setSheetItemId(null)}
       />
+      <QuickAddSheet visible={quickAdd} listId={list.id} onClose={() => setQuickAdd(false)} />
     </SafeAreaView>
   );
 }
