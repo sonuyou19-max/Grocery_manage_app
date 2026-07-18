@@ -81,9 +81,9 @@ const SEED_LISTS: List[] = [
     name: 'Weekly groceries',
     store: 'Lidl',
     items: [
-      item('Potatoes', 'fruit_veg', { quantity: 2, unit: 'kg', priceCents: 229 }),
-      item('Tomatoes', 'fruit_veg', { quantity: 500, unit: 'g', priceCents: 179 }),
-      item('Semi-skimmed milk', 'dairy_eggs', { quantity: 2, unit: 'L', priceCents: 218, checked: true }),
+      item('Potatoes', 'fruit_veg', { quantity: 2, unit: 'kg', priceCents: 229, store: 'carrefour' }),
+      item('Tomatoes', 'fruit_veg', { quantity: 500, unit: 'g', priceCents: 179, store: 'carrefour' }),
+      item('Semi-skimmed milk', 'dairy_eggs', { quantity: 2, unit: 'L', priceCents: 218, checked: true, store: 'lidl' }),
       item('Gouda, young', 'dairy_eggs', { quantity: 400, unit: 'g', priceCents: 428 }),
       item('Eggs, free-range', 'dairy_eggs', { quantity: 10, unit: 'pcs', checked: true }),
       item('Sourdough loaf', 'bakery', { quantity: 1 }),
