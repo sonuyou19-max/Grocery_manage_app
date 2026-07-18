@@ -17,7 +17,7 @@ import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { parsePriceToCents } from '@/lib/money';
-import { SUPERMARKETS } from '@/lib/supermarkets';
+import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -45,6 +45,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const insets = useSafeAreaInsets();
   const { updateItem } = useGroceries();
   const itemObj = useItem(listId, itemId ?? undefined);
+  const storePrefs = useStorePrefs();
 
   const [name, setName] = useState('');
   const [qtyText, setQtyText] = useState('');
@@ -213,34 +214,29 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                   <Text style={[styles.storeLabel, { color: colors.muted }]}>None</Text>
                 </StoreOption>
 
-                {SUPERMARKETS.map((s) => (
+                {orderedStoreOptions(storePrefs).map((entry) => (
                   <StoreOption
-                    key={s.id}
-                    active={itemObj.store === s.id}
-                    onPress={() => patch({ store: s.id })}
+                    key={entry.id}
+                    active={itemObj.store === entry.id}
+                    onPress={() => {
+                      patch({ store: entry.id });
+                      recordStoreUse(entry.id);
+                    }}
                     colors={colors}
                   >
-                    <SupermarketBadge store={s.id} />
+                    <SupermarketBadge store={entry.id} />
                     <Text style={[styles.storeLabel, { color: colors.ink }]} numberOfLines={1}>
-                      {s.name}
+                      {entry.kind === 'chain' ? entry.chain.name : entry.id}
                     </Text>
                   </StoreOption>
                 ))}
 
-                <StoreOption
-                  active={
-                    itemObj.store != null && !SUPERMARKETS.some((s) => s.id === itemObj.store)
-                  }
-                  onPress={() => setCustomStore(true)}
-                  colors={colors}
-                >
+                <StoreOption active={false} onPress={() => setCustomStore(true)} colors={colors}>
                   <View style={[styles.customBadge, { borderColor: colors.accent }]}>
                     <Ionicons name="add" size={16} color={colors.accent} />
                   </View>
                   <Text style={[styles.storeLabel, { color: colors.accent }]} numberOfLines={1}>
-                    {itemObj.store != null && !SUPERMARKETS.some((s) => s.id === itemObj.store)
-                      ? itemObj.store
-                      : 'Other'}
+                    Other
                   </Text>
                 </StoreOption>
               </ScrollView>
@@ -269,6 +265,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
         onCancel={() => setCustomStore(false)}
         onSubmit={(value) => {
           patch({ store: value });
+          recordStoreUse(value);
           setCustomStore(false);
         }}
       />

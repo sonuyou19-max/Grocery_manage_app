@@ -11,6 +11,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { hydrateCategoryCache } from '@/lib/categorize';
+import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { GroceriesProvider } from '@/store/groceries';
 import { palette } from '@/theme';
 
@@ -42,9 +43,9 @@ export default function RootLayout() {
   const scheme = useColorScheme();
 
   useEffect(() => {
-    // Load learned item→category mappings so we never re-ask the AI for a
-    // word we've already resolved.
+    // Load learned item→category mappings and remembered store preferences.
     void hydrateCategoryCache();
+    void hydrateStorePrefs();
   }, []);
 
   return (
