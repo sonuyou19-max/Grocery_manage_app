@@ -1,7 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -11,9 +14,9 @@ import type { ItemCategory } from '@korb/shared';
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
 
 /**
- * In-memory grocery store. Holds the app's lists, items and pantry so the UI
- * is fully interactive on-device before the Supabase backend is wired in.
- * State lives for the session only — replaced by realtime queries next phase.
+ * Local grocery store. Holds the app's lists, items and pantry, persisted to
+ * AsyncStorage so data survives app restarts. Becomes the offline cache once
+ * Supabase household sync lands — the API surface won't change.
  */
 
 export interface Item {
@@ -109,9 +112,46 @@ const SEED_PANTRY: PantryItem[] = [
 
 const Ctx = createContext<GroceriesContext | null>(null);
 
+const DATA_KEY = 'korb.groceries.v1';
+
 export function GroceriesProvider({ children }: PropsWithChildren) {
   const [lists, setLists] = useState<List[]>(SEED_LISTS);
   const [pantry, setPantry] = useState<PantryItem[]>(SEED_PANTRY);
+  const hydrated = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load persisted data once on startup; keep seeds only for a fresh install.
+  useEffect(() => {
+    AsyncStorage.getItem(DATA_KEY)
+      .then((raw) => {
+        if (raw) {
+          const parsed = JSON.parse(raw) as { lists?: List[]; pantry?: PantryItem[] };
+          if (Array.isArray(parsed.lists)) setLists(parsed.lists);
+          if (Array.isArray(parsed.pantry)) setPantry(parsed.pantry);
+        }
+      })
+      .catch(() => {
+        // Corrupt/missing data: keep seeds.
+      })
+      .finally(() => {
+        hydrated.current = true;
+      });
+  }, []);
+
+  // Persist on every change (debounced), but never before hydration finishes —
+  // that would overwrite saved data with the seeds.
+  useEffect(() => {
+    if (!hydrated.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      AsyncStorage.setItem(DATA_KEY, JSON.stringify({ lists, pantry })).catch(() => {
+        // best-effort persistence
+      });
+    }, 300);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [lists, pantry]);
 
   const patchItem = (listId: string, itemId: string, patch: ItemPatch) => {
     setLists((prev) =>
