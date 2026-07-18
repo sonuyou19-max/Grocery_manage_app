@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -51,8 +51,14 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { updateItem } = useGroceries();
-  const itemObj = useItem(listId, itemId ?? undefined);
+  const liveItem = useItem(listId, itemId ?? undefined);
   const storePrefs = useStorePrefs();
+
+  // Keep the last-open item rendered while the modal animates out, so the
+  // sheet doesn't blank/flicker the moment itemId goes null on close.
+  const lastItemRef = useRef(liveItem ?? null);
+  if (liveItem) lastItemRef.current = liveItem;
+  const itemObj = liveItem ?? lastItemRef.current;
 
   const [name, setName] = useState('');
   const [qtyText, setQtyText] = useState('');
@@ -60,12 +66,13 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const [customStore, setCustomStore] = useState(false);
   const dragY = useSharedValue(0);
 
-  // Seed local fields whenever a different item opens.
+  // Seed local fields whenever a different item opens (not on close, so the
+  // outgoing sheet keeps its dragged position while animating away).
   useEffect(() => {
-    if (!itemObj) return;
-    setName(itemObj.name);
-    setQtyText(itemObj.quantity != null ? String(itemObj.quantity) : '');
-    setPriceText(itemObj.priceCents != null ? (itemObj.priceCents / 100).toFixed(2) : '');
+    if (!liveItem) return;
+    setName(liveItem.name);
+    setQtyText(liveItem.quantity != null ? String(liveItem.quantity) : '');
+    setPriceText(liveItem.priceCents != null ? (liveItem.priceCents / 100).toFixed(2) : '');
     dragY.value = 0;
   }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -88,18 +95,21 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   }));
 
   const visible = itemId != null;
-  if (!visible || !itemObj) {
+  if (!itemObj) {
+    // Never opened yet — nothing to render.
     return (
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Modal visible={false} transparent animationType="slide" onRequestClose={onClose}>
         <Pressable style={styles.backdrop} onPress={onClose} />
       </Modal>
     );
   }
 
-  const patch = (p: Parameters<typeof updateItem>[2]) => updateItem(listId, itemObj.id, p);
+  const patch = (p: Parameters<typeof updateItem>[2]) => {
+    if (liveItem) updateItem(listId, liveItem.id, p);
+  };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.fill}
