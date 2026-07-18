@@ -9,10 +9,14 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
+  Extrapolation,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -64,44 +68,60 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const [qtyText, setQtyText] = useState('');
   const [priceText, setPriceText] = useState('');
   const [customStore, setCustomStore] = useState(false);
-  const dragY = useSharedValue(0);
 
-  // Seed local fields whenever a different item opens (not on close, so the
-  // outgoing sheet keeps its dragged position while animating away).
+  // We drive enter/exit ourselves (Modal animationType="none"): sheetY is the
+  // sheet's offset from its resting place — screen height when hidden, 0 when
+  // open. The full-screen backdrop fades in lockstep, so dragging never
+  // reveals an undimmed strip and closing is one continuous motion.
+  const { height: screenH } = useWindowDimensions();
+  const sheetY = useSharedValue(screenH);
+
+  // Seed local fields and play the enter animation when an item opens.
   useEffect(() => {
     if (!liveItem) return;
     setName(liveItem.name);
     setQtyText(liveItem.quantity != null ? String(liveItem.quantity) : '');
     setPriceText(liveItem.priceCents != null ? (liveItem.priceCents / 100).toFixed(2) : '');
-    dragY.value = 0;
+    cancelAnimation(sheetY);
+    sheetY.value = withTiming(0, { duration: 260 });
   }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Animate the sheet off-screen, then tell the parent to unmount. */
+  const requestClose = () => {
+    cancelAnimation(sheetY);
+    sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
+      if (finished) runOnJS(onClose)();
+    });
+  };
 
   // Pull-down on the grab handle / header dismisses the sheet.
   const dragGesture = Gesture.Pan()
     .activeOffsetY(8)
     .onUpdate((e) => {
-      dragY.value = Math.max(0, e.translationY);
+      sheetY.value = Math.max(0, e.translationY);
     })
     .onEnd((e) => {
-      if (dragY.value > 110 || e.velocityY > 800) {
-        runOnJS(onClose)();
+      if (sheetY.value > 110 || e.velocityY > 800) {
+        sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
+          if (finished) runOnJS(onClose)();
+        });
       } else {
-        dragY.value = withTiming(0, { duration: 160 });
+        sheetY.value = withTiming(0, { duration: 160 });
       }
     });
 
-  const sheetDragStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetY.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(sheetY.value, [0, screenH * 0.7], [1, 0], Extrapolation.CLAMP),
   }));
 
   const visible = itemId != null;
   if (!itemObj) {
     // Never opened yet — nothing to render.
-    return (
-      <Modal visible={false} transparent animationType="slide" onRequestClose={onClose}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-      </Modal>
-    );
+    return null;
   }
 
   const patch = (p: Parameters<typeof updateItem>[2]) => {
@@ -109,13 +129,15 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.fill}
       >
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <Animated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetDragStyle]}>
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable style={styles.fillPlain} onPress={requestClose} />
+        </Animated.View>
+        <Animated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
           {/* Drag zone: grab handle + header — pull down to dismiss */}
           <GestureDetector gesture={dragGesture}>
             <View collapsable={false}>
@@ -131,7 +153,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                 ) : (
                   <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>Edit item</Text>
                 )}
-                <Pressable onPress={onClose} hitSlop={10}>
+                <Pressable onPress={requestClose} hitSlop={10}>
                   <Ionicons name="close" size={24} color={colors.muted} />
                 </Pressable>
               </View>
@@ -290,7 +312,10 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
               { borderTopColor: colors.line, paddingBottom: Math.max(insets.bottom, spacing.md) },
             ]}
           >
-            <Pressable onPress={onClose} style={[styles.done, { backgroundColor: colors.accent }]}>
+            <Pressable
+              onPress={requestClose}
+              style={[styles.done, { backgroundColor: colors.accent }]}
+            >
               <Text style={[type.body, { color: colors.accentInk }]}>Done</Text>
             </Pressable>
           </View>
@@ -355,8 +380,12 @@ const inputColors = (colors: ReturnType<typeof useTheme>['colors']) => ({
 });
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(12,18,10,0.45)' },
+  fill: { flex: 1, justifyContent: 'flex-end' },
+  fillPlain: { flex: 1 },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(12,18,10,0.45)',
+  },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
