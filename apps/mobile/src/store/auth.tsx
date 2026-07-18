@@ -29,6 +29,18 @@ interface AuthContext {
 
 const Ctx = createContext<AuthContext | null>(null);
 
+/** Turn raw/verbose auth errors into a short, human message. */
+function cleanError(raw: unknown, fallback: string): string {
+  const msg = raw instanceof Error ? raw.message : typeof raw === 'string' ? raw : '';
+  if (!msg) return fallback;
+  // A JSON blob or a huge string means an unexpected server/transport failure.
+  if (msg.trim().startsWith('{') || msg.length > 140) return fallback;
+  if (/otp|magic link|email/i.test(msg) && /send|deliver|smtp|500/i.test(msg)) {
+    return 'Couldn’t send the code — email delivery failed. Check your SMTP settings and try again.';
+  }
+  return msg;
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -52,19 +64,33 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user: session?.user ?? null,
       initializing,
       sendCode: async (email) => {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: { shouldCreateUser: true },
-        });
-        return error ? { error: error.message } : {};
+        try {
+          const { error } = await supabase.auth.signInWithOtp({
+            email: email.trim(),
+            options: { shouldCreateUser: true },
+          });
+          if (error) {
+            return { error: cleanError(error, 'Couldn’t send the code — email delivery failed. Check your SMTP settings and try again.') };
+          }
+          return {};
+        } catch (e) {
+          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+        }
       },
       verifyCode: async (email, token) => {
-        const { error } = await supabase.auth.verifyOtp({
-          email: email.trim(),
-          token: token.trim(),
-          type: 'email',
-        });
-        return error ? { error: error.message } : {};
+        try {
+          const { error } = await supabase.auth.verifyOtp({
+            email: email.trim(),
+            token: token.trim(),
+            type: 'email',
+          });
+          if (error) {
+            return { error: cleanError(error, 'That code didn’t work. Check it and try again.') };
+          }
+          return {};
+        } catch (e) {
+          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+        }
       },
       signOut: async () => {
         await supabase.auth.signOut();
