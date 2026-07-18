@@ -4,9 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
+import { AppState } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
@@ -57,9 +59,13 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   const [household, setHousehold] = useState<Household | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
+  // Signature of the last-applied membership, so background polling only
+  // re-renders when something actually changed.
+  const sigRef = useRef<string>('');
 
   const refresh = useCallback(async () => {
     if (!user) {
+      sigRef.current = '';
       setHousehold(null);
       setMembers([]);
       return;
@@ -74,16 +80,23 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         .maybeSingle();
 
       const h = (membership?.households as unknown as Household) ?? null;
-      setHousehold(h);
-
+      let rows: Member[] = [];
       if (h) {
-        const { data: rows } = await supabase
+        const { data } = await supabase
           .from('household_members')
           .select('user_id, role, display_name')
           .eq('household_id', h.id);
-        setMembers((rows as Member[] | null) ?? []);
-      } else {
-        setMembers([]);
+        rows = (data as Member[] | null) ?? [];
+      }
+
+      const sig = JSON.stringify({
+        h: h?.id ?? null,
+        m: rows.map((r) => `${r.user_id}:${r.role}:${r.display_name}`).sort(),
+      });
+      if (sig !== sigRef.current) {
+        sigRef.current = sig;
+        setHousehold(h);
+        setMembers(rows);
       }
     } finally {
       setLoading(false);
@@ -93,6 +106,21 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Membership changes (e.g. being removed by the owner) have no realtime
+  // path that reaches the removed member, so keep it fresh by re-checking when
+  // the app returns to the foreground and on a slow interval while open.
+  useEffect(() => {
+    if (!user) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refresh();
+    });
+    const interval = setInterval(() => void refresh(), 25000);
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
+  }, [user, refresh]);
 
   const value = useMemo<HouseholdContext>(
     () => ({
