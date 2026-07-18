@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ItemSheet } from '@/components/item-sheet';
@@ -25,7 +26,7 @@ export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const list = useList(id);
-  const { addItem, toggleItem } = useGroceries();
+  const { addItem, toggleItem, deleteItem } = useGroceries();
   const [draft, setDraft] = useState('');
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
@@ -67,13 +68,32 @@ export default function ListDetailScreen() {
   const checkedCount = list.items.filter((it) => it.checked).length;
   const progress = list.items.length ? checkedCount / list.items.length : 0;
 
-  const submit = () => {
-    const name = draft.trim();
-    if (!name) return;
+  const doAdd = (name: string) => {
     const newId = addItem(list.id, name);
     setDraft('');
     setSheetMode('added');
     setSheetItemId(newId);
+  };
+
+  const submit = () => {
+    const name = draft.trim();
+    if (!name) return;
+
+    const duplicate = list.items.find(
+      (it) => it.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (duplicate) {
+      Alert.alert(
+        'Already on the list',
+        `“${duplicate.name}” is already here${duplicate.checked ? ' (in your cart)' : ''}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Add anyway', onPress: () => doAdd(name) },
+        ],
+      );
+      return;
+    }
+    doAdd(name);
   };
 
   const openEdit = (item: Item) => {
@@ -144,7 +164,22 @@ export default function ListDetailScreen() {
               <View style={[styles.catLine, { backgroundColor: colors.line }]} />
             </View>
             {group.items.map((it) => (
-              <View key={it.id} style={[styles.itemRow, { borderBottomColor: colors.line }]}>
+              <ReanimatedSwipeable
+                key={it.id}
+                friction={2}
+                rightThreshold={40}
+                overshootRight={false}
+                renderRightActions={() => (
+                  <Pressable
+                    onPress={() => deleteItem(list.id, it.id)}
+                    style={[styles.deleteAction, { backgroundColor: colors.crit }]}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.deleteText}>Delete</Text>
+                  </Pressable>
+                )}
+              >
+              <View style={[styles.itemRow, { borderBottomColor: colors.line, backgroundColor: colors.bg }]}>
                 <Pressable onPress={() => toggleItem(list.id, it.id)} hitSlop={8}>
                   <View
                     style={[
@@ -188,6 +223,7 @@ export default function ListDetailScreen() {
                   )}
                 </Pressable>
               </View>
+              </ReanimatedSwipeable>
             ))}
           </View>
         ))}
@@ -300,6 +336,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   struck: { textDecorationLine: 'line-through' },
+  deleteAction: {
+    width: 84,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  deleteText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   addBar: {
     flexDirection: 'row',
     alignItems: 'center',
