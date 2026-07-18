@@ -187,7 +187,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               <Pressable
                 onPress={runParse}
                 disabled={!canParse}
-                style={[styles.primary, { backgroundColor: colors.accent, opacity: canParse ? 1 : 0.4 }]}
+                style={[styles.primaryBlock, { backgroundColor: colors.accent, opacity: canParse ? 1 : 0.4 }]}
               >
                 {phase === 'loading' ? (
                   <ActivityIndicator color={colors.accentInk} />
@@ -277,4 +277,8 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   back: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
   primary: { flex: 1, height: 50, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  // Same as primary but for a vertical (column) context — no flex, so its
+  // height isn't collapsed to zero. Stretches full width via the column's
+  // default align-items: stretch.
+  primaryBlock: { height: 50, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
 });
