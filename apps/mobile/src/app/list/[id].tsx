@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,7 +12,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ItemSheet } from '@/components/item-sheet';
@@ -164,66 +166,13 @@ export default function ListDetailScreen() {
               <View style={[styles.catLine, { backgroundColor: colors.line }]} />
             </View>
             {group.items.map((it) => (
-              <ReanimatedSwipeable
+              <SwipeableItemRow
                 key={it.id}
-                friction={2}
-                rightThreshold={40}
-                overshootRight={false}
-                renderRightActions={() => (
-                  <Pressable
-                    onPress={() => deleteItem(list.id, it.id)}
-                    style={[styles.deleteAction, { backgroundColor: colors.crit }]}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </Pressable>
-                )}
-              >
-              <View style={[styles.itemRow, { borderBottomColor: colors.line, backgroundColor: colors.bg }]}>
-                <Pressable onPress={() => toggleItem(list.id, it.id)} hitSlop={8}>
-                  <View
-                    style={[
-                      styles.tick,
-                      { borderColor: it.checked ? colors.accent : colors.muted },
-                      it.checked && { backgroundColor: colors.accent },
-                    ]}
-                  >
-                    {it.checked && <Ionicons name="checkmark" size={14} color={colors.accentInk} />}
-                  </View>
-                </Pressable>
-
-                <Pressable style={styles.grow} onPress={() => openEdit(it)}>
-                  <Text
-                    style={[
-                      type.body,
-                      { color: it.checked ? colors.muted : colors.ink },
-                      it.checked && styles.struck,
-                    ]}
-                  >
-                    {it.name}
-                  </Text>
-                  {(it.quantity != null || it.store != null) && (
-                    <View style={styles.meta}>
-                      {it.store != null && <SupermarketBadge store={it.store} size={16} />}
-                      {it.quantity != null && (
-                        <Text style={[type.sub, { color: colors.muted }]}>
-                          {it.quantity}
-                          {it.unit ? ` ${it.unit}` : ''}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </Pressable>
-
-                <Pressable onPress={() => openEdit(it)} hitSlop={8}>
-                  {it.priceCents != null ? (
-                    <Text style={[type.price, { color: colors.ink }]}>{euros(it.priceCents)}</Text>
-                  ) : (
-                    <Text style={[type.price, { color: colors.muted, opacity: 0.5 }]}>＋ €</Text>
-                  )}
-                </Pressable>
-              </View>
-              </ReanimatedSwipeable>
+                item={it}
+                onToggle={() => toggleItem(list.id, it.id)}
+                onEdit={() => openEdit(it)}
+                onDelete={() => deleteItem(list.id, it.id)}
+              />
             ))}
           </View>
         ))}
@@ -267,6 +216,121 @@ export default function ListDetailScreen() {
         onClose={() => setSheetItemId(null)}
       />
     </SafeAreaView>
+  );
+}
+
+/**
+ * One list item row inside a left-swipe-to-delete container. Taps are guarded
+ * so a swipe never opens the edit sheet: any drag sets a flag that swallows
+ * presses until shortly after the swipeable settles, and a tap while the
+ * delete action is open just closes it.
+ */
+function SwipeableItemRow({
+  item: it,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  item: Item;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { colors } = useTheme();
+  const swipeRef = useRef<SwipeableMethods>(null);
+  const openRef = useRef(false);
+  const swipingRef = useRef(false);
+
+  const guard = (fn: () => void) => () => {
+    if (swipingRef.current) return;
+    if (openRef.current) {
+      swipeRef.current?.close();
+      return;
+    }
+    fn();
+  };
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      friction={2}
+      rightThreshold={40}
+      overshootRight={false}
+      onSwipeableOpenStartDrag={() => {
+        swipingRef.current = true;
+      }}
+      onSwipeableCloseStartDrag={() => {
+        swipingRef.current = true;
+      }}
+      onSwipeableOpen={() => {
+        openRef.current = true;
+        swipingRef.current = false;
+      }}
+      onSwipeableClose={() => {
+        openRef.current = false;
+        // Swallow the tap that ends the closing drag.
+        setTimeout(() => {
+          swipingRef.current = false;
+        }, 150);
+      }}
+      renderRightActions={() => (
+        <Pressable
+          onPress={() => {
+            swipeRef.current?.close();
+            onDelete();
+          }}
+          style={[styles.deleteAction, { backgroundColor: colors.crit }]}
+        >
+          <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+          <Text style={styles.deleteText}>Delete</Text>
+        </Pressable>
+      )}
+    >
+      <View style={[styles.itemRow, { borderBottomColor: colors.line, backgroundColor: colors.bg }]}>
+        <Pressable onPress={guard(onToggle)} hitSlop={8}>
+          <View
+            style={[
+              styles.tick,
+              { borderColor: it.checked ? colors.accent : colors.muted },
+              it.checked && { backgroundColor: colors.accent },
+            ]}
+          >
+            {it.checked && <Ionicons name="checkmark" size={14} color={colors.accentInk} />}
+          </View>
+        </Pressable>
+
+        <Pressable style={styles.grow} onPress={guard(onEdit)}>
+          <Text
+            style={[
+              type.body,
+              { color: it.checked ? colors.muted : colors.ink },
+              it.checked && styles.struck,
+            ]}
+          >
+            {it.name}
+          </Text>
+          {(it.quantity != null || it.store != null) && (
+            <View style={styles.meta}>
+              {it.store != null && <SupermarketBadge store={it.store} size={16} />}
+              {it.quantity != null && (
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {it.quantity}
+                  {it.unit ? ` ${it.unit}` : ''}
+                </Text>
+              )}
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable onPress={guard(onEdit)} hitSlop={8}>
+          {it.priceCents != null ? (
+            <Text style={[type.price, { color: colors.ink }]}>{euros(it.priceCents)}</Text>
+          ) : (
+            <Text style={[type.price, { color: colors.muted, opacity: 0.5 }]}>＋ €</Text>
+          )}
+        </Pressable>
+      </View>
+    </ReanimatedSwipeable>
   );
 }
 
@@ -337,11 +401,14 @@ const styles = StyleSheet.create({
   },
   struck: { textDecorationLine: 'line-through' },
   deleteAction: {
-    width: 84,
+    width: 96,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
+    marginLeft: spacing.md,
+    marginVertical: spacing.xs,
+    borderRadius: radii.md,
   },
   deleteText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   addBar: {
