@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { ItemCategory } from '@korb/shared';
 
+import { supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
+
 /** Display labels + store-aisle ordering for categories. */
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   fruit_veg: 'Fruit & Veg',
@@ -144,14 +146,10 @@ export function categorizeSync(name: string): ItemCategory {
  * the caller simply leaves the item under 'Other'.
  */
 export async function resolveCategoryAsync(name: string): Promise<ItemCategory | null> {
-  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return null;
-
   try {
-    const res = await fetch(`${url}/functions/v1/categorize`, {
+    const res = await fetch(`${supabaseUrl}/functions/v1/categorize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
       body: JSON.stringify({ name }),
     });
     if (!res.ok) return null;
