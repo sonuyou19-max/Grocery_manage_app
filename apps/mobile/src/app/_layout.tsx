@@ -12,7 +12,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { hydrateCategoryCache } from '@/lib/categorize';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
+import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
+import { HouseholdProvider } from '@/store/household';
 import { palette } from '@/theme';
 
 const navLight: NavTheme = {
@@ -51,13 +53,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
-        <GroceriesProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="list/[id]" />
-          </Stack>
-          <StatusBar style="auto" />
-        </GroceriesProvider>
+        <AuthProvider>
+          <HouseholdProvider>
+            <GroceriesProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="list/[id]" />
+                <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
+                <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />
+              </Stack>
+              <StatusBar style="auto" />
+            </GroceriesProvider>
+          </HouseholdProvider>
+        </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );
