@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -53,8 +53,22 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [selected, setSelected] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [kbHeight, setKbHeight] = useState(0);
 
   const sheetY = useSharedValue(screenH);
+
+  // Measure the keyboard ourselves and lift the sheet by its height —
+  // KeyboardAvoidingView doesn't reliably push content up inside a Modal.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -108,15 +122,18 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.fill}
-      >
+      <View style={styles.fill}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable style={styles.fillPlain} onPress={requestClose} />
         </Animated.View>
 
-        <Animated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { backgroundColor: colors.surface, marginBottom: kbHeight > 0 ? kbHeight : insets.bottom },
+            sheetStyle,
+          ]}
+        >
           <View style={[styles.grab, { backgroundColor: colors.line }]} />
 
           <View style={styles.header}>
@@ -176,7 +193,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
             </View>
           )}
 
-          <View style={[styles.footer, { borderTopColor: colors.line, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+          <View style={[styles.footer, { borderTopColor: colors.line }]}>
             {phase === 'review' ? (
               <View style={styles.footerRow}>
                 <Pressable onPress={() => setPhase('input')} style={styles.back}>
@@ -207,7 +224,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
             )}
           </View>
         </Animated.View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -251,7 +268,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
   },
-  footer: { borderTopWidth: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  footer: {
+    borderTopWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   back: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
   primary: { flex: 1, height: 50, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
