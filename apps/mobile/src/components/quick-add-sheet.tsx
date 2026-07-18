@@ -10,8 +10,18 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ParsedItem } from '@korb/shared';
@@ -36,12 +46,15 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { addParsedItem } = useGroceries();
+  const { height: screenH } = useWindowDimensions();
 
   const [text, setText] = useState('');
   const [phase, setPhase] = useState<'input' | 'loading' | 'review'>('input');
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [selected, setSelected] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const sheetY = useSharedValue(screenH);
 
   useEffect(() => {
     if (visible) {
@@ -50,8 +63,22 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
       setItems([]);
       setSelected([]);
       setError(null);
+      cancelAnimation(sheetY);
+      sheetY.value = withTiming(0, { duration: 260 });
     }
-  }, [visible]);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const requestClose = () => {
+    cancelAnimation(sheetY);
+    sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
+      if (finished) runOnJS(onClose)();
+    });
+  };
+
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(sheetY.value, [0, screenH * 0.7], [1, 0], Extrapolation.CLAMP),
+  }));
 
   const runParse = async () => {
     const trimmed = text.trim();
@@ -73,42 +100,42 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
     items.forEach((item, i) => {
       if (selected[i]) addParsedItem(listId, item);
     });
-    onClose();
+    requestClose();
   };
 
   const selectedCount = selected.filter(Boolean).length;
+  const canParse = text.trim().length > 0 && phase !== 'loading';
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.fill}
       >
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable style={styles.fillPlain} onPress={requestClose} />
+        </Animated.View>
+
+        <Animated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
           <View style={[styles.grab, { backgroundColor: colors.line }]} />
 
           <View style={styles.header}>
             <Ionicons name="sparkles" size={20} color={colors.accent} />
             <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>Quick add with AI</Text>
-            <Pressable onPress={onClose} hitSlop={10}>
+            <Pressable onPress={requestClose} hitSlop={10}>
               <Ionicons name="close" size={24} color={colors.muted} />
             </Pressable>
           </View>
 
           {phase === 'review' ? (
-            <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-              <Text style={[type.sub, { color: colors.muted }]}>
-                Tap to include or skip, then add them.
-              </Text>
+            <ScrollView style={styles.scrollArea} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+              <Text style={[type.sub, { color: colors.muted }]}>Tap to include or skip, then add.</Text>
               {items.map((item, i) => {
                 const on = selected[i];
                 return (
                   <Pressable
                     key={`${item.name}-${i}`}
-                    onPress={() =>
-                      setSelected((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
-                    }
+                    onPress={() => setSelected((prev) => prev.map((v, idx) => (idx === i ? !v : v)))}
                     style={[styles.itemRow, { borderColor: on ? colors.accent : colors.line }]}
                   >
                     <Ionicons
@@ -120,9 +147,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                       <Text style={[type.body, { color: colors.ink }]}>{item.name}</Text>
                       <Text style={[type.sub, { color: colors.muted }]}>
                         {CATEGORY_LABELS[item.category]}
-                        {item.quantity != null
-                          ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
-                          : ''}
+                        {item.quantity != null ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}
                       </Text>
                     </View>
                   </Pressable>
@@ -144,7 +169,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               <View style={styles.hint}>
                 <Ionicons name="mic-outline" size={15} color={colors.muted} />
                 <Text style={[type.sub, { color: colors.muted, flex: 1 }]}>
-                  Tip: tap the microphone on your keyboard to speak instead of typing.
+                  Prefer to speak? Tap the microphone key on your keyboard.
                 </Text>
               </View>
               {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
@@ -160,12 +185,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 <Pressable
                   onPress={confirmAdd}
                   disabled={selectedCount === 0}
-                  style={[
-                    styles.primary,
-                    { backgroundColor: selectedCount ? colors.accent : colors.line },
-                  ]}
+                  style={[styles.primary, { backgroundColor: colors.accent, opacity: selectedCount ? 1 : 0.4 }]}
                 >
-                  <Text style={[type.body, { color: selectedCount ? colors.accentInk : colors.muted }]}>
+                  <Text style={[type.body, { color: colors.accentInk }]}>
                     Add {selectedCount} item{selectedCount === 1 ? '' : 's'}
                   </Text>
                 </Pressable>
@@ -173,25 +195,18 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
             ) : (
               <Pressable
                 onPress={runParse}
-                disabled={phase === 'loading' || !text.trim()}
-                style={[
-                  styles.primary,
-                  { backgroundColor: text.trim() && phase !== 'loading' ? colors.accent : colors.line },
-                ]}
+                disabled={!canParse}
+                style={[styles.primary, { backgroundColor: colors.accent, opacity: canParse ? 1 : 0.4 }]}
               >
                 {phase === 'loading' ? (
                   <ActivityIndicator color={colors.accentInk} />
                 ) : (
-                  <Text
-                    style={[type.body, { color: text.trim() ? colors.accentInk : colors.muted }]}
-                  >
-                    Add with AI
-                  </Text>
+                  <Text style={[type.body, { color: colors.accentInk }]}>Add with AI</Text>
                 )}
               </Pressable>
             )}
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -199,12 +214,13 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
 const styles = StyleSheet.create({
   fill: { flex: 1, justifyContent: 'flex-end' },
+  fillPlain: { flex: 1 },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,18,10,0.45)' },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: spacing.sm,
-    maxHeight: '85%',
+    maxHeight: '88%',
     overflow: 'hidden',
   },
   grab: { width: 44, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: spacing.sm },
@@ -215,10 +231,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
-  body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md },
+  scrollArea: { flexShrink: 1 },
+  body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.md },
   grow: { flex: 1, minWidth: 0 },
   input: {
-    minHeight: 90,
+    minHeight: 96,
     borderWidth: 1,
     borderRadius: radii.md,
     padding: spacing.md,
