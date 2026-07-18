@@ -11,6 +11,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SupermarketBadge } from '@/components/supermarket-badge';
@@ -51,6 +58,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const [qtyText, setQtyText] = useState('');
   const [priceText, setPriceText] = useState('');
   const [customStore, setCustomStore] = useState(false);
+  const dragY = useSharedValue(0);
 
   // Seed local fields whenever a different item opens.
   useEffect(() => {
@@ -58,7 +66,26 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     setName(itemObj.name);
     setQtyText(itemObj.quantity != null ? String(itemObj.quantity) : '');
     setPriceText(itemObj.priceCents != null ? (itemObj.priceCents / 100).toFixed(2) : '');
+    dragY.value = 0;
   }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pull-down on the grab handle / header dismisses the sheet.
+  const dragGesture = Gesture.Pan()
+    .activeOffsetY(8)
+    .onUpdate((e) => {
+      dragY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (dragY.value > 110 || e.velocityY > 800) {
+        runOnJS(onClose)();
+      } else {
+        dragY.value = withTiming(0, { duration: 160 });
+      }
+    });
+
+  const sheetDragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
 
   const visible = itemId != null;
   if (!visible || !itemObj) {
@@ -78,30 +105,33 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
         style={styles.fill}
       >
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={[styles.grab, { backgroundColor: colors.line }]} />
+        <Animated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetDragStyle]}>
+          {/* Drag zone: grab handle + header — pull down to dismiss */}
+          <GestureDetector gesture={dragGesture}>
+            <View collapsable={false}>
+              <View style={[styles.grab, { backgroundColor: colors.line }]} />
+              <View style={[styles.header, styles.headerZone]}>
+                {mode === 'added' ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
+                    <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
+                      Added to {CATEGORY_LABELS[itemObj.category]}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>Edit item</Text>
+                )}
+                <Pressable onPress={onClose} hitSlop={10}>
+                  <Ionicons name="close" size={24} color={colors.muted} />
+                </Pressable>
+              </View>
+            </View>
+          </GestureDetector>
           <ScrollView
             style={styles.scrollArea}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scroll}
           >
-            {/* Header */}
-            <View style={styles.header}>
-              {mode === 'added' ? (
-                <>
-                  <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-                  <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
-                    Added to {CATEGORY_LABELS[itemObj.category]}
-                  </Text>
-                </>
-              ) : (
-                <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>Edit item</Text>
-              )}
-              <Pressable onPress={onClose} hitSlop={10}>
-                <Ionicons name="close" size={24} color={colors.muted} />
-              </Pressable>
-            </View>
-
             {/* Name */}
             <Field label="Item">
               <TextInput
@@ -254,7 +284,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
               <Text style={[type.body, { color: colors.accentInk }]}>Done</Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
 
       <TextPromptModal
@@ -333,6 +363,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerZone: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
   field: { gap: spacing.sm },
   input: {
     minHeight: 44,
