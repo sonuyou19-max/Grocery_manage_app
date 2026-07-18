@@ -42,7 +42,7 @@ Never invent items that were not mentioned.`;
 
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
-  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '');
+  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   return start !== -1 && end !== -1 ? cleaned.slice(start, end + 1) : cleaned;
@@ -64,22 +64,23 @@ Deno.serve(async (req) => {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
-    messages: [
-      { role: 'user', content: text },
-      // Prefill the assistant turn so the model emits raw JSON from the '{'.
-      { role: 'assistant', content: '{' },
-    ],
+    messages: [{ role: 'user', content: text }],
   });
 
   const rawText = message.content[0]?.type === 'text' ? message.content[0].text : '';
-  const jsonStr = extractJson('{' + rawText);
+  console.log('quick-add raw model output:', rawText);
 
-  let parsed;
+  const jsonStr = extractJson(rawText);
+
   try {
-    parsed = quickAddResultSchema.parse(JSON.parse(jsonStr));
-  } catch (_err) {
-    return Response.json({ error: 'Could not parse items from that input' }, { status: 422 });
+    const parsed = quickAddResultSchema.parse(JSON.parse(jsonStr));
+    return Response.json(parsed);
+  } catch (err) {
+    console.error('quick-add parse failure:', err, 'jsonStr:', jsonStr);
+    // Temporary debug fields (raw/detail) so we can see what the model returned.
+    return Response.json(
+      { error: 'Could not parse items from that input', raw: rawText, detail: String(err) },
+      { status: 422 },
+    );
   }
-
-  return Response.json(parsed);
 });
