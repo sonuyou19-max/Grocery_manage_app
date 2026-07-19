@@ -5,8 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
-import { EmptyState } from '@/components/empty-state';
 import { Screen } from '@/components/screen';
+import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { euros } from '@/lib/money';
 import { basketBalance, GROUP_COLORS, GROUP_LABELS, type BalanceSlice } from '@/lib/nutrition';
@@ -57,71 +57,61 @@ export default function InsightsScreen() {
       .sort((a, b) => b.cents - a.cents);
   }, [priced]);
 
-  const nothingYet = cart.total === 0 && pantry.total === 0 && staples.length === 0;
-
   return (
     <Screen title="Insights" subtitle="Your shopping, understood">
-      {nothingYet ? (
-        <EmptyState
-          icon="sparkles-outline"
-          title="Learning your habits"
-          body="As you build lists and tick items off, Korb spots your patterns — your basket balance, the staples you always buy, and (if you log prices) where your money goes. Check back in a few shops."
-        />
-      ) : (
-        <>
-          {cart.total > 0 && (
-            <Card>
-              <CardHead icon="nutrition-outline" title="In your basket" hint={`${cart.total} food item${cart.total === 1 ? '' : 's'}`} />
-              <BalanceBar slices={cart.slices} />
-              <Text style={[type.sub, { color: colors.muted }]}>A rough guide by item — not a nutrition tracker.</Text>
-            </Card>
-          )}
+      <WeeklyRecapCard />
 
-          {pantry.total > 0 && (
-            <Card>
-              <CardHead icon="file-tray-full-outline" title="Your pantry mix" hint={`${pantry.total} tracked`} />
-              <BalanceBar slices={pantry.slices} />
-            </Card>
-          )}
+      {cart.total > 0 && (
+        <Card>
+          <CardHead icon="nutrition-outline" title="In your basket" hint={`${cart.total} food item${cart.total === 1 ? '' : 's'}`} />
+          <BalanceBar slices={cart.slices} />
+          <Text style={[type.sub, { color: colors.muted }]}>A rough guide by item — not a nutrition tracker.</Text>
+        </Card>
+      )}
 
-          {staples.length > 0 && (
-            <Card>
-              <CardHead icon="repeat-outline" title="Your staples" hint="Bought most often" />
-              {staples.map((s) => (
-                <View key={s.key} style={styles.row}>
-                  <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
-                    {s.display}
-                  </Text>
-                  <Text style={[type.sub, { color: colors.muted }]}>{s.sampleCount + 1}× bought</Text>
-                </View>
-              ))}
-            </Card>
-          )}
+      {pantry.total > 0 && (
+        <Card>
+          <CardHead icon="file-tray-full-outline" title="Your pantry mix" hint={`${pantry.total} tracked`} />
+          <BalanceBar slices={pantry.slices} />
+        </Card>
+      )}
 
-          {priced.length > 0 ? (
-            <Card>
-              <CardHead icon="cash-outline" title="Spending" hint={`${priced.length} priced`} />
-              <View style={styles.spendTotal}>
-                <Text style={[type.sub, { color: colors.muted }]}>Total logged</Text>
-                <Text style={[type.h2, { color: colors.ink }]}>{euros(spendTotal)}</Text>
-              </View>
-              {spendByCat.map((x) => (
-                <View key={x.category} style={styles.row}>
-                  <Text style={[type.sub, styles.grow, { color: colors.ink }]}>{CATEGORY_LABELS[x.category]}</Text>
-                  <Text style={[type.sub, { color: colors.muted }]}>{euros(x.cents)}</Text>
-                </View>
-              ))}
-            </Card>
-          ) : (
-            <Card>
-              <CardHead icon="pricetag-outline" title="Spending" hint="Optional" />
-              <Text style={[type.sub, { color: colors.muted }]}>
-                Add a price to items as you shop and Korb shows weekly spend and where your money goes.
-                Always optional — until then this stays out of your way.
+      {staples.length > 0 && (
+        <Card>
+          <CardHead icon="repeat-outline" title="Your staples" hint="Bought most often" />
+          {staples.map((s) => (
+            <View key={s.key} style={styles.row}>
+              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
+                {s.display}
               </Text>
-            </Card>
-          )}
-        </>
+              <Text style={[type.sub, { color: colors.muted }]}>{s.sampleCount + 1}× bought</Text>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      {priced.length > 0 ? (
+        <Card>
+          <CardHead icon="cash-outline" title="Spending" hint={`${priced.length} priced`} />
+          <View style={styles.spendTotal}>
+            <Text style={[type.sub, { color: colors.muted }]}>Total logged</Text>
+            <Text style={[type.h2, { color: colors.ink }]}>{euros(spendTotal)}</Text>
+          </View>
+          {spendByCat.map((x) => (
+            <View key={x.category} style={styles.row}>
+              <Text style={[type.sub, styles.grow, { color: colors.ink }]}>{CATEGORY_LABELS[x.category]}</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{euros(x.cents)}</Text>
+            </View>
+          ))}
+        </Card>
+      ) : (
+        <Card>
+          <CardHead icon="pricetag-outline" title="Spending" hint="Optional" />
+          <Text style={[type.sub, { color: colors.muted }]}>
+            Add a price to items as you shop and Korb shows weekly spend and where your money goes.
+            Always optional — until then this stays out of your way.
+          </Text>
+        </Card>
       )}
     </Screen>
   );
