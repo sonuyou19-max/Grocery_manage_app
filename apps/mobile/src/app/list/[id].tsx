@@ -5,9 +5,11 @@ import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -34,13 +36,19 @@ import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { euros } from '@/lib/money';
 import { useGroceries, useList, type Item } from '@/store/groceries';
+import { useHousehold } from '@/store/household';
 import { radii, spacing, type, useTheme } from '@/theme';
+
+// Set this to the store/app link at launch. While empty, the invite tells the
+// recipient how to join by code inside the app.
+const APP_DOWNLOAD_URL = '';
 
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useTheme();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem } = useGroceries();
+  const { household } = useHousehold();
   const [draft, setDraft] = useState('');
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
@@ -129,6 +137,48 @@ export default function ListDetailScreen() {
     setSheetItemId(item.id);
   };
 
+  // Invite a family member: open WhatsApp pre-filled with the household join
+  // code (falls back to the system share sheet if WhatsApp isn't available).
+  const inviteFamily = async () => {
+    if (!household) {
+      Alert.alert(
+        'Share this list',
+        'Set up a household first, then you can invite family with a join code.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Set up household', onPress: () => router.push('/auth/household') },
+        ],
+      );
+      return;
+    }
+
+    const lines = [
+      `Join our grocery household “${household.name}” on Korb 🧺`,
+      '',
+      `Invite code: ${household.invite_code}`,
+      '',
+      APP_DOWNLOAD_URL
+        ? `Get the app: ${APP_DOWNLOAD_URL}`
+        : 'In the app: Settings → Household → Join, then enter the code.',
+    ];
+    const message = lines.join('\n');
+
+    const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    try {
+      if (await Linking.canOpenURL(whatsappUrl)) {
+        await Linking.openURL(whatsappUrl);
+        return;
+      }
+    } catch {
+      // fall through to the system share sheet
+    }
+    try {
+      await Share.share({ message });
+    } catch {
+      // dismissed — nothing to do
+    }
+  };
+
   return (
     <View style={styles.root}>
       <MeshBackground />
@@ -146,10 +196,7 @@ export default function ListDetailScreen() {
             {list.store ?? 'Any store'} · {checkedCount}/{list.items.length} in cart
           </Text>
         </View>
-        <Pressable
-          onPress={() => Alert.alert('Share', 'Household sharing arrives with sign-in.')}
-          hitSlop={12}
-        >
+        <Pressable onPress={inviteFamily} hitSlop={12}>
           <Ionicons name="person-add-outline" size={22} color={colors.accent} />
         </Pressable>
       </View>
