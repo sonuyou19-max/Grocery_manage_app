@@ -56,6 +56,13 @@ export default function VibeCheckScreen() {
     return s;
   }, [stats, lists]);
 
+  // Every item currently on any list, so we never queue a duplicate.
+  const listedKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const list of lists) for (const it of list.items) s.add(normalizeKey(it.name));
+    return s;
+  }, [lists]);
+
   // The live stack: frozen order, minus what anyone has resolved.
   const remaining = useMemo(
     () => cards.filter((c) => validKeys.has(c.key) && !handled.has(c.key)),
@@ -80,8 +87,8 @@ export default function VibeCheckScreen() {
   topRef.current = top;
   const destRef = useRef<string | null>(destListId);
   destRef.current = destList?.id ?? null;
-  const validRef = useRef(validKeys);
-  validRef.current = validKeys;
+  const listedRef = useRef(listedKeys);
+  listedRef.current = listedKeys;
 
   // Reset the drag whenever the visible top card changes.
   useEffect(() => {
@@ -104,6 +111,8 @@ export default function VibeCheckScreen() {
   }, [remaining.length, cards.length]);
 
   const addToList = (card: DeckCard) => {
+    // Never queue a duplicate: if it's already on any list, don't write it.
+    if (listedRef.current.has(card.key)) return;
     let listId = destRef.current;
     if (!listId) {
       listId = addList('Shopping list');
@@ -116,8 +125,7 @@ export default function VibeCheckScreen() {
     const card = topRef.current;
     if (!card) return;
     if (dir === 'left') {
-      // Skip the list-add if another member already handled it meanwhile.
-      if (validRef.current.has(card.key)) addToList(card);
+      addToList(card); // self-guards against duplicates across all lists
       markAlmostOut(card.key);
     } else {
       markStillGood(card.key);
