@@ -7,6 +7,7 @@ import { CATEGORY_LABELS } from '@/lib/categorize';
 import { basketBalance } from '@/lib/nutrition';
 import { dueAt } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
+import { useAppActive } from '@/lib/use-app-active';
 import {
   generateRecap,
   getCachedRecap,
@@ -33,6 +34,7 @@ type Phase = 'empty' | 'loading' | 'ready' | 'error';
  */
 export function WeeklyRecapCard() {
   const { colors } = useTheme();
+  const appActive = useAppActive();
   const { lists } = useGroceries();
   const { stats } = usePantryIntel();
   const { household, members } = useHousehold();
@@ -126,27 +128,33 @@ export function WeeklyRecapCard() {
     void run(false);
   }, [scope, weekKey(), enoughData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live-update when another member generates this week's recap.
+  // Live-update when another member generates this week's recap. While
+  // backgrounded we hold no socket; on return we fetch once to catch up on a
+  // recap written while we were away, then re-subscribe (see useAppActive).
   useEffect(() => {
-    if (!household) return;
+    if (!household || !appActive) return;
+    let alive = true;
+    const syncShared = async () => {
+      const shared = await getSharedRecap(household.id);
+      if (alive && shared && shared.week === weekKey()) {
+        setText(shared.text);
+        setPhase('ready');
+      }
+    };
+    void syncShared();
     const channel = supabase
       .channel(`recap-${household.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'household_recaps', filter: `household_id=eq.${household.id}` },
-        async () => {
-          const shared = await getSharedRecap(household.id);
-          if (shared && shared.week === weekKey()) {
-            setText(shared.text);
-            setPhase('ready');
-          }
-        },
+        syncShared,
       )
       .subscribe();
     return () => {
+      alive = false;
       supabase.removeChannel(channel);
     };
-  }, [household?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household?.id, appActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card accented>

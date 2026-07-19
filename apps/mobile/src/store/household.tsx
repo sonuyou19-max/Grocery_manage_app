@@ -11,6 +11,7 @@ import {
 import { AppState } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
+import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
 
 /**
@@ -57,6 +58,7 @@ const friendlyError = (message: string): string => {
 
 export function HouseholdProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
+  const appActive = useAppActive();
   const [household, setHousehold] = useState<Household | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
@@ -190,8 +192,10 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
 
   // Live household updates (e.g. a rename by another member) reach everyone via
   // the realtime channel; the membership poll/foreground refresh is the backstop.
+  // While backgrounded we hold no socket — the foreground refresh above catches
+  // any rename that landed while we were away, then this re-subscribes.
   useEffect(() => {
-    if (!household) return;
+    if (!household || !appActive) return;
     const channel = supabase
       .channel(`household-${household.id}`)
       .on(
@@ -206,7 +210,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [household?.id, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household?.id, refresh, appActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

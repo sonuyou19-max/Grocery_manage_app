@@ -14,6 +14,7 @@ import type { ItemCategory, ParsedItem } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
 import { supabase } from '@/lib/supabase';
+import { useAppActive } from '@/lib/use-app-active';
 import { uuidv4 } from '@/lib/uuid';
 import { useAuth } from '@/store/auth';
 import { useHousehold } from '@/store/household';
@@ -275,6 +276,7 @@ function CloudGroceriesProvider({
   children,
 }: PropsWithChildren<{ householdId: string }>) {
   const { user } = useAuth();
+  const appActive = useAppActive();
   const [lists, setLists] = useState<List[]>([]);
   const cacheKey = `korb.lists.cloud.${householdId}`;
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -306,6 +308,8 @@ function CloudGroceriesProvider({
   }, [fetchLists]);
 
   // Initial load (cache first for instant paint), then live subscription.
+  // While backgrounded we drop the socket; on return we refetch to catch up and
+  // re-open it (see useAppActive).
   useEffect(() => {
     let alive = true;
     AsyncStorage.getItem(cacheKey)
@@ -313,6 +317,8 @@ function CloudGroceriesProvider({
         if (alive && raw) setLists(JSON.parse(raw) as List[]);
       })
       .catch(() => {});
+    if (!appActive) return () => { alive = false; };
+
     void fetchLists();
 
     const channel = supabase
@@ -326,7 +332,7 @@ function CloudGroceriesProvider({
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
       supabase.removeChannel(channel);
     };
-  }, [householdId, cacheKey, fetchLists, scheduleRefetch]);
+  }, [householdId, cacheKey, fetchLists, scheduleRefetch, appActive]);
 
   const patchLocalItem = useCallback((listId: string, itemId: string, patch: ItemPatch) => {
     setLists((prev) =>

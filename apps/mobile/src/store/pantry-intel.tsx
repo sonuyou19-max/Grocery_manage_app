@@ -13,6 +13,7 @@ import {
 import type { ItemCategory } from '@korb/shared';
 
 import { supabase } from '@/lib/supabase';
+import { useAppActive } from '@/lib/use-app-active';
 import {
   applyAlmostOut,
   applyStillGood,
@@ -197,6 +198,7 @@ function CloudPantryIntelProvider({
   householdId,
   children,
 }: PropsWithChildren<{ householdId: string }>) {
+  const appActive = useAppActive();
   const [stats, setStats] = useState<StatMap>({});
   const statsRef = useRef<StatMap>({});
   statsRef.current = stats;
@@ -233,6 +235,8 @@ function CloudPantryIntelProvider({
     refetchTimer.current = setTimeout(() => void fetchStats(), 300);
   }, [fetchStats]);
 
+  // While backgrounded we drop the socket; on return we refetch to catch up and
+  // re-open it (see useAppActive).
   useEffect(() => {
     let alive = true;
     AsyncStorage.getItem(cacheKey)
@@ -240,6 +244,8 @@ function CloudPantryIntelProvider({
         if (alive && raw) setStats(JSON.parse(raw) as StatMap);
       })
       .catch(() => {});
+    if (!appActive) return () => { alive = false; };
+
     void fetchStats();
 
     const channel = supabase
@@ -256,7 +262,7 @@ function CloudPantryIntelProvider({
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
       supabase.removeChannel(channel);
     };
-  }, [householdId, cacheKey, fetchStats, scheduleRefetch]);
+  }, [householdId, cacheKey, fetchStats, scheduleRefetch, appActive]);
 
   const value = useMemo<PantryIntelContext>(() => {
     const upsert = (keys: string[], map: StatMap) => {
