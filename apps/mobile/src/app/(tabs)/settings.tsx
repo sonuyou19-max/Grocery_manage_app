@@ -16,9 +16,11 @@ import {
 
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
+import { normalizeKey } from '@/lib/pantry-intel';
 import { useAuth } from '@/store/auth';
+import { useGroceries } from '@/store/groceries';
 import { useHousehold, type Member } from '@/store/household';
-import { usePantryIntel } from '@/store/pantry-intel';
+import { DEMO_KEYS, usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
@@ -28,6 +30,19 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const { household, members, renameHousehold, leaveHousehold, removeMember } = useHousehold();
   const { seedDemo } = usePantryIntel();
+  const { lists, deleteItem } = useGroceries();
+
+  // Dev preview: clear any prior sample items off lists so the deck refills,
+  // then reseed and open the Vibe Check. (No-op cost in production — hidden.)
+  const previewVibeCheck = () => {
+    for (const list of lists) {
+      for (const it of list.items) {
+        if (DEMO_KEYS.includes(normalizeKey(it.name))) deleteItem(list.id, it.id);
+      }
+    }
+    seedDemo();
+    router.push('/vibe-check');
+  };
 
   const iAmOwner = members.find((m) => m.user_id === user?.id)?.role === 'owner';
 
@@ -216,12 +231,7 @@ export default function SettingsScreen() {
       {__DEV__ && (
         <>
           <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Developer</Text>
-          <Pressable
-            onPress={() => {
-              seedDemo();
-              router.push('/vibe-check');
-            }}
-          >
+          <Pressable onPress={previewVibeCheck}>
             <Card>
               <View style={styles.row}>
                 <Ionicons name="flask-outline" size={22} color={colors.accent} />

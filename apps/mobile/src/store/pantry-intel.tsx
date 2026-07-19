@@ -64,6 +64,9 @@ const DEMO: Array<[string, ItemCategory, number]> = [
   ['Sourdough', 'bakery', 7],
 ];
 
+/** Normalized keys of the dev sample items (for repeatable previews). */
+export const DEMO_KEYS = DEMO.map(([name]) => normalizeKey(name));
+
 const seededDemoStats = (base: StatMap): StatMap => {
   const now = Date.now();
   const next = { ...base };
