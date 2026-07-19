@@ -25,12 +25,48 @@ function timeGreeting(date = new Date()): string {
   return 'Good evening';
 }
 
+/**
+ * "All set" copy for the Vibe Check card when nothing's due. Rotates daily so it
+ * feels alive — first-person, casual, a little fun.
+ */
+const VIBE_EMPTY_MESSAGES: Array<{ title: string; body: string }> = [
+  {
+    title: 'All good in the pantry 🧺',
+    body: "Nothing running low yet. Shop like you normally would — I'll get a feel for your rhythm and give you a heads-up before stuff runs out.",
+  },
+  {
+    title: 'Nothing to swipe… yet 😌',
+    body: "Your shelves are looking healthy. The more you shop, the more I learn your habits — then I'll nudge you before the milk betrays you.",
+  },
+  {
+    title: "You're all stocked up",
+    body: 'Nothing to review right now. As you shop, I get a feel for how fast things disappear and pop them here before you’re caught short.',
+  },
+  {
+    title: 'All clear ✨',
+    body: "No low items today. Keep shopping — I'm quietly learning your pace so nothing sneaks up on you.",
+  },
+  {
+    title: "Pantry's happy 🥑",
+    body: "Nothing to check off yet. Shop as usual and I'll learn what you burn through fastest — then flag it here before you run dry.",
+  },
+  {
+    title: "Nice — nothing's low",
+    body: "Do your thing at the shops. I'll learn your pace and drop a reminder here right before you run out.",
+  },
+];
+
+/** Deterministic pick that advances once per day and cycles through them all. */
+const vibeEmptyMessage = () =>
+  VIBE_EMPTY_MESSAGES[Math.floor(Date.now() / 86_400_000) % VIBE_EMPTY_MESSAGES.length];
+
 export default function ListsScreen() {
   const { colors } = useTheme();
   const { lists, addList, deleteList, reorderLists } = useGroceries();
   const { household, members } = useHousehold();
   const { user } = useAuth();
   const { count: vibeCount } = useVibeDeck();
+  const vibeEmpty = vibeEmptyMessage();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -71,11 +107,11 @@ export default function ListsScreen() {
               <View style={[styles.vibeRow, { alignItems: 'flex-start' }]}>
                 <Ionicons name="checkmark-circle" size={26} color={colors.accent} />
                 <View style={styles.grow}>
-                  <Text style={[type.body, { color: colors.ink }]}>Pantry Vibe Check · All set</Text>
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    Nothing to review right now. As you shop, Korb learns how fast you get through
-                    things and surfaces them here — a quick swipe — before you run out.
+                  <Text style={[type.label, { color: colors.muted, marginBottom: 3 }]}>
+                    Pantry Vibe Check
                   </Text>
+                  <Text style={[type.body, { color: colors.ink }]}>{vibeEmpty.title}</Text>
+                  <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>{vibeEmpty.body}</Text>
                 </View>
               </View>
             </Card>
