@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -12,7 +13,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/glass';
 import { MeshBackground } from '@/components/mesh-background';
@@ -30,6 +31,7 @@ import { radii, spacing, type, useTheme } from '@/theme';
  */
 export default function VibeCheckScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { deck } = useVibeDeck();
   const { markAlmostOut, markStillGood } = usePantryIntel();
@@ -147,10 +149,10 @@ export default function VibeCheckScreen() {
   }));
 
   const leftGlow = useAnimatedStyle(() => ({
-    opacity: interpolate(tx.value, [-THRESHOLD, 0], [0.9, 0], Extrapolation.CLAMP),
+    opacity: interpolate(tx.value, [-THRESHOLD, 0], [0.7, 0], Extrapolation.CLAMP),
   }));
   const rightGlow = useAnimatedStyle(() => ({
-    opacity: interpolate(tx.value, [0, THRESHOLD], [0, 0.9], Extrapolation.CLAMP),
+    opacity: interpolate(tx.value, [0, THRESHOLD], [0, 0.7], Extrapolation.CLAMP),
   }));
   const leftIcon = useAnimatedStyle(() => ({
     opacity: interpolate(tx.value, [-THRESHOLD, -THRESHOLD * 0.2, 0], [1, 0.2, 0], Extrapolation.CLAMP),
@@ -167,17 +169,31 @@ export default function VibeCheckScreen() {
     <View style={styles.root}>
       <MeshBackground dim />
 
-      {/* Soft directional glow behind the card */}
+      {/* Soft directional wash behind the card — fades to transparent, no hard edge */}
       {!done && (
         <>
-          <Animated.View style={[styles.glow, styles.glowLeft, { backgroundColor: colors.warn }, leftGlow]} />
-          <Animated.View style={[styles.glow, styles.glowRight, { backgroundColor: colors.accent }, rightGlow]} />
+          <Animated.View style={[StyleSheet.absoluteFill, leftGlow]} pointerEvents="none">
+            <LinearGradient
+              colors={[colors.warn, 'transparent']}
+              start={{ x: 0, y: 0.35 }}
+              end={{ x: 0.95, y: 0.55 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+          <Animated.View style={[StyleSheet.absoluteFill, rightGlow]} pointerEvents="none">
+            <LinearGradient
+              colors={['transparent', colors.accent]}
+              start={{ x: 0.05, y: 0.45 }}
+              end={{ x: 1, y: 0.65 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
         </>
       )}
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <View style={styles.safe}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.xs }]}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="close" size={26} color="rgba(255,255,255,0.7)" />
           </Pressable>
@@ -223,7 +239,7 @@ export default function VibeCheckScreen() {
             </View>
 
             {/* Destination + hint */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
               <Pressable onPress={() => setPickerOpen(true)} style={styles.destPill}>
                 <Ionicons name="cart-outline" size={16} color="rgba(255,255,255,0.85)" />
                 <Text style={styles.destText} numberOfLines={1}>
@@ -238,7 +254,7 @@ export default function VibeCheckScreen() {
             </View>
           </>
         )}
-      </SafeAreaView>
+      </View>
 
       {/* Destination picker */}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
@@ -435,13 +451,10 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 46, fontWeight: '800', letterSpacing: -1.4, textAlign: 'center' },
   itemSub: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
 
-  glow: { position: 'absolute', width: 460, height: 460, borderRadius: 230, top: '22%' },
-  glowLeft: { left: -200 },
-  glowRight: { right: -200 },
   revealIcon: { position: 'absolute', alignItems: 'center', gap: spacing.xs },
   revealLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
 
-  footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, alignItems: 'center', gap: spacing.sm },
+  footer: { paddingHorizontal: spacing.lg, alignItems: 'center', gap: spacing.sm },
   destPill: {
     flexDirection: 'row',
     alignItems: 'center',
