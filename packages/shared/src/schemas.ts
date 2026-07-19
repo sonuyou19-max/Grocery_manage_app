@@ -41,6 +41,13 @@ export const quickAddRequestSchema = z.object({
 });
 export type QuickAddRequest = z.infer<typeof quickAddRequestSchema>;
 
+/**
+ * Coarse nutritional food group for the "basket balance" insight. `nonfood`
+ * covers household/personal-care items so they're excluded from the mix.
+ */
+export const foodGroupSchema = z.enum(['protein', 'carbs', 'produce', 'fats', 'other', 'nonfood']);
+export type FoodGroup = z.infer<typeof foodGroupSchema>;
+
 /** Single-item categorization: request + response for the categorize function. */
 export const categorizeRequestSchema = z.object({
   name: z.string().min(1).max(120),
@@ -49,5 +56,7 @@ export type CategorizeRequest = z.infer<typeof categorizeRequestSchema>;
 
 export const categorizeResultSchema = z.object({
   category: itemCategorySchema.catch('other'),
+  /** Optional: added alongside category so the balance insight is ~free. */
+  group: foodGroupSchema.nullable().catch(null).optional(),
 });
 export type CategorizeResult = z.infer<typeof categorizeResultSchema>;

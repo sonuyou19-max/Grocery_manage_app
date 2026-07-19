@@ -11,6 +11,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { hydrateCategoryCache } from '@/lib/categorize';
+import { hydrateGroupCache } from '@/lib/nutrition';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
@@ -46,8 +47,9 @@ export default function RootLayout() {
   const scheme = useColorScheme();
 
   useEffect(() => {
-    // Load learned item→category mappings and remembered store preferences.
+    // Load learned item→category / food-group mappings and store preferences.
     void hydrateCategoryCache();
+    void hydrateGroupCache();
     void hydrateStorePrefs();
   }, []);
 

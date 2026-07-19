@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { ItemCategory } from '@korb/shared';
+import type { FoodGroup, ItemCategory } from '@korb/shared';
 
 import { supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
@@ -141,11 +141,14 @@ export function categorizeSync(name: string): ItemCategory {
 }
 
 /**
- * Ask the categorize edge function to classify an unknown item. Returns null
- * when the backend isn't configured yet (scaffold phase) or on any error, so
- * the caller simply leaves the item under 'Other'.
+ * Ask the categorize edge function to classify an unknown item. Returns the
+ * category plus a coarse food group (for the basket-balance insight) in one
+ * call, or null when the backend isn't reachable so the caller leaves the item
+ * under 'Other'. Older deployments return only a category — group is optional.
  */
-export async function resolveCategoryAsync(name: string): Promise<ItemCategory | null> {
+export async function resolveCategoryAsync(
+  name: string,
+): Promise<{ category: ItemCategory; group: FoodGroup | null } | null> {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/categorize`, {
       method: 'POST',
@@ -153,8 +156,9 @@ export async function resolveCategoryAsync(name: string): Promise<ItemCategory |
       body: JSON.stringify({ name }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { category?: ItemCategory };
-    return data.category ?? null;
+    const data = (await res.json()) as { category?: ItemCategory; group?: FoodGroup | null };
+    if (!data.category) return null;
+    return { category: data.category, group: data.group ?? null };
   } catch {
     return null;
   }
