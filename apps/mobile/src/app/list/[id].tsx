@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -56,6 +56,23 @@ export default function ListDetailScreen() {
   const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
   const [quickAdd, setQuickAdd] = useState(false);
 
+  // Pending purchase logs, keyed by item id. Checking an item schedules a log a
+  // few seconds out; unchecking cancels it — so a mistaken tick never reaches
+  // the burn-rate engine. Anything still pending is flushed on leaving.
+  const purchaseTimers = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; name: string; category: Item['category'] }>>(
+    new Map(),
+  );
+  useEffect(() => {
+    const timers = purchaseTimers.current;
+    return () => {
+      for (const { timer, name, category } of timers.values()) {
+        clearTimeout(timer);
+        logPurchase(name, category); // flush: they left it checked
+      }
+      timers.clear();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const grouped = useMemo(() => {
     if (!list) return [];
     return CATEGORY_ORDER.map((cat) => ({
@@ -98,14 +115,35 @@ export default function ListDetailScreen() {
 
   // Light tick on every check; a success chime the moment the last item goes
   // in the cart — the shopping trip is done.
+  const PURCHASE_DEBOUNCE = 3500;
+
   const handleToggle = (item: Item) => {
     const wasComplete = list.items.length > 0 && checkedCount === list.items.length;
     const completing = !item.checked && !wasComplete && checkedCount + 1 === list.items.length;
     if (completing) haptics.success();
     else haptics.tick();
-    // Checking an item off = you bought it. Feed the Vibe Check burn-rate model.
-    if (!item.checked) logPurchase(item.name, item.category);
+
+    const willCheck = !item.checked;
     toggleItem(list.id, item.id);
+
+    // Checking an item = you bought it → feed the burn-rate model, but only if
+    // it stays checked; a quick untick (mistap) cancels the log.
+    const timers = purchaseTimers.current;
+    const pending = timers.get(item.id);
+    if (pending) clearTimeout(pending.timer);
+    if (willCheck) {
+      const { name, category } = item;
+      timers.set(item.id, {
+        name,
+        category,
+        timer: setTimeout(() => {
+          logPurchase(name, category);
+          timers.delete(item.id);
+        }, PURCHASE_DEBOUNCE),
+      });
+    } else {
+      timers.delete(item.id);
+    }
   };
 
   const doAdd = (name: string) => {
