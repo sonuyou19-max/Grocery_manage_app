@@ -1,7 +1,8 @@
 import type { PropsWithChildren } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/floating-tab-bar';
 import { MeshBackground } from '@/components/mesh-background';
 import { spacing, type, useTheme } from '@/theme';
 
@@ -13,12 +14,18 @@ interface ScreenProps extends PropsWithChildren {
 /** Standard page shell: mesh background, safe area, big display title. */
 export function Screen({ title, subtitle, children }: ScreenProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Clear the floating tab bar so the last card is never hidden behind it.
+  const bottomClearance = insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + spacing.lg;
 
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
             <Text style={[type.display, { color: colors.ink }]}>{title}</Text>
             {subtitle ? (
@@ -37,7 +44,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
   content: {
     padding: spacing.lg,
-    paddingBottom: spacing.xxl * 2, // clearance for the floating action button
     gap: spacing.md,
     flexGrow: 1,
   },
