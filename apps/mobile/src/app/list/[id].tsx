@@ -37,6 +37,7 @@ import { haptics } from '@/lib/haptics';
 import { euros } from '@/lib/money';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
+import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 // Set this to the store/app link at launch. While empty, the invite tells the
@@ -49,6 +50,7 @@ export default function ListDetailScreen() {
   const list = useList(id);
   const { addItem, toggleItem, deleteItem } = useGroceries();
   const { household } = useHousehold();
+  const { logPurchase } = usePantryIntel();
   const [draft, setDraft] = useState('');
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
@@ -101,6 +103,8 @@ export default function ListDetailScreen() {
     const completing = !item.checked && !wasComplete && checkedCount + 1 === list.items.length;
     if (completing) haptics.success();
     else haptics.tick();
+    // Checking an item off = you bought it. Feed the Vibe Check burn-rate model.
+    if (!item.checked) logPurchase(item.name, item.category);
     toggleItem(list.id, item.id);
   };
 

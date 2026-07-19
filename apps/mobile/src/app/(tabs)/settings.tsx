@@ -18,6 +18,7 @@ import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/store/auth';
 import { useHousehold, type Member } from '@/store/household';
+import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
@@ -26,6 +27,7 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const { user, signOut } = useAuth();
   const { household, members, renameHousehold, leaveHousehold, removeMember } = useHousehold();
+  const { seedDemo } = usePantryIntel();
 
   const iAmOwner = members.find((m) => m.user_id === user?.id)?.role === 'owner';
 
@@ -209,6 +211,27 @@ export default function SettingsScreen() {
           Switch your phone to dark mode to see the dark theme.
         </Text>
       </Card>
+
+      {/* Dev-only: load sample data to preview the Vibe Check without waiting days. */}
+      {__DEV__ && (
+        <>
+          <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Developer</Text>
+          <Pressable
+            onPress={() => {
+              seedDemo();
+              router.push('/vibe-check');
+            }}
+          >
+            <Card>
+              <View style={styles.row}>
+                <Ionicons name="flask-outline" size={22} color={colors.accent} />
+                <Text style={[type.body, styles.grow, { color: colors.ink }]}>Preview Vibe Check</Text>
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+              </View>
+            </Card>
+          </Pressable>
+        </>
+      )}
 
       {/* Rename household — cross-platform (Alert.prompt is iOS-only). */}
       <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>

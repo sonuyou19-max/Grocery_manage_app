@@ -50,14 +50,17 @@ function Blob({ color, size, from, to, duration }: BlobProps) {
  * blur, which smears them into a soft, premium gradient; a scrim on top keeps it
  * subtle rather than saturated. Adapts to light (bright, airy) and dark (moody).
  * Purely decorative — never intercepts touches.
+ *
+ * `dim` deepens everything into a near-black moody field for full-screen focus
+ * moments (the Vibe Check), so the foreground cards own all the attention.
  */
-export function MeshBackground() {
+export function MeshBackground({ dim = false }: { dim?: boolean }) {
   const { colors, scheme } = useTheme();
   const { width, height } = useWindowDimensions();
 
   return (
     <View
-      style={[StyleSheet.absoluteFill, styles.clip, { backgroundColor: colors.meshBase }]}
+      style={[StyleSheet.absoluteFill, styles.clip, { backgroundColor: dim ? '#050704' : colors.meshBase }]}
       pointerEvents="none"
     >
       <Blob
@@ -82,12 +85,14 @@ export function MeshBackground() {
         duration={19000}
       />
       <BlurView
-        intensity={scheme === 'dark' ? 90 : 68}
-        tint={colors.blurTint}
+        intensity={dim ? 100 : scheme === 'dark' ? 90 : 68}
+        tint={dim ? 'dark' : colors.blurTint}
         experimentalBlurMethod="dimezisBlurView"
         style={StyleSheet.absoluteFill}
       />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.meshScrim }]} />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: dim ? 'rgba(5,7,4,0.62)' : colors.meshScrim }]}
+      />
     </View>
   );
 }

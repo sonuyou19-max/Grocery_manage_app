@@ -14,6 +14,7 @@ import { euros } from '@/lib/money';
 import { useAuth } from '@/store/auth';
 import { useGroceries, type List } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
+import { useVibeDeck } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /** Time-of-day greeting based on the device's local clock. */
@@ -29,6 +30,7 @@ export default function ListsScreen() {
   const { lists, addList, deleteList, reorderLists } = useGroceries();
   const { household, members } = useHousehold();
   const { user } = useAuth();
+  const { count: vibeCount } = useVibeDeck();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -48,6 +50,22 @@ export default function ListsScreen() {
   return (
     <>
       <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'}>
+        {!editing && vibeCount > 0 && (
+          <Pressable onPress={() => router.push('/vibe-check')}>
+            <Card accented>
+              <View style={styles.vibeRow}>
+                <Text style={styles.vibeEmoji}>☕️</Text>
+                <View style={styles.grow}>
+                  <Text style={[type.body, { color: colors.ink }]}>Pantry Vibe Check</Text>
+                  <Text style={[type.sub, { color: colors.muted }]}>
+                    {vibeCount} item{vibeCount === 1 ? '' : 's'} to review · 10 seconds
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+              </View>
+            </Card>
+          </Pressable>
+        )}
         {empty ? (
           <EmptyState
             icon="basket-outline"
@@ -141,6 +159,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   grow: { flex: 1, minWidth: 0 },
+  vibeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  vibeEmoji: { fontSize: 26 },
   listHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   track: { height: 5, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },

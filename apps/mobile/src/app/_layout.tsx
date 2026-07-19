@@ -16,6 +16,7 @@ import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
 import { HouseholdProvider } from '@/store/household';
 import { PantryProvider } from '@/store/pantry';
+import { PantryIntelProvider } from '@/store/pantry-intel';
 import { palette } from '@/theme';
 
 const navLight: NavTheme = {
@@ -58,13 +59,19 @@ export default function RootLayout() {
           <HouseholdProvider>
             <PantryProvider>
               <GroceriesProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="list/[id]" />
-                  <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
-                  <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />
-                </Stack>
-                <StatusBar style="auto" />
+                <PantryIntelProvider>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="list/[id]" />
+                    <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
+                    <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />
+                    <Stack.Screen
+                      name="vibe-check"
+                      options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+                    />
+                  </Stack>
+                  <StatusBar style="auto" />
+                </PantryIntelProvider>
               </GroceriesProvider>
             </PantryProvider>
           </HouseholdProvider>

@@ -1,0 +1,191 @@
+import type { ItemCategory } from '@korb/shared';
+
+/**
+ * Pantry Vibe Check — the silent learning engine.
+ *
+ * The app never asks for data: every time an item is checked off a list we log
+ * a purchase, and the gap between purchases becomes that item's "burn rate".
+ * When an item passes 90% of its expected lifespan it becomes "due" and joins
+ * the Vibe Check deck. Swiping teaches the model (see applyStillGood / applyAlmostOut).
+ *
+ * v1 is device-local (persisted to AsyncStorage by the store). Shared-household
+ * stats via the cloud `pantry_items` table are the natural next phase.
+ */
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/** When an item reaches this fraction of its lifespan it's flagged as due. */
+const DUE_FRACTION = 0.9;
+
+/** Fun stays fast: the deck is capped so it's always a 10-second ritual. */
+export const DECK_CAP = 10;
+
+/**
+ * Sensible restock intervals (days) per category, so a brand-new user gets a
+ * useful Vibe Check on day one. Personal history overrides these as it accrues.
+ */
+export const DEFAULT_INTERVALS: Record<ItemCategory, number> = {
+  fruit_veg: 7,
+  dairy_eggs: 7,
+  meat_fish: 6,
+  bakery: 4,
+  pantry: 45,
+  frozen: 30,
+  drinks: 10,
+  household: 45,
+  personal_care: 45,
+  other: 21,
+};
+
+export interface ItemStat {
+  /** Normalized name — the stable identity across spellings/casing. */
+  key: string;
+  /** Most recent display spelling. */
+  display: string;
+  category: ItemCategory;
+  /** Epoch ms of the last logged purchase; 0 before any purchase. */
+  lastPurchasedAt: number;
+  /** Learned interval in days (EMA of observed gaps); 0 until first sample. */
+  intervalDays: number;
+  /** How many gaps we've observed — 0 means we're still on the category default. */
+  sampleCount: number;
+  /** "Still good" pushes this out so the item leaves the deck for a while. */
+  snoozeUntil: number | null;
+}
+
+export type StatMap = Record<string, ItemStat>;
+
+export interface DeckCard {
+  key: string;
+  display: string;
+  category: ItemCategory;
+  /** "Last bought 3 weeks ago" — the tiny muted subtitle. */
+  subtitle: string;
+}
+
+export const normalizeKey = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Personal interval once we have samples; otherwise the category default. */
+export function effectiveInterval(stat: ItemStat): number {
+  if (stat.sampleCount > 0 && stat.intervalDays > 0) return stat.intervalDays;
+  return DEFAULT_INTERVALS[stat.category] ?? DEFAULT_INTERVALS.other;
+}
+
+/** Epoch ms at which the item becomes due (90% of lifespan, respecting snooze). */
+export function dueAt(stat: ItemStat): number {
+  const base = stat.lastPurchasedAt + DUE_FRACTION * effectiveInterval(stat) * DAY;
+  return stat.snoozeUntil ? Math.max(base, stat.snoozeUntil) : base;
+}
+
+export function isDue(stat: ItemStat, now: number): boolean {
+  return stat.lastPurchasedAt > 0 && now >= dueAt(stat);
+}
+
+/** Human "last bought" label for the card subtitle. */
+export function lastBoughtLabel(lastPurchasedAt: number, now: number): string {
+  if (!lastPurchasedAt) return 'Never bought yet';
+  const days = Math.floor((now - lastPurchasedAt) / DAY);
+  if (days <= 0) return 'Last bought today';
+  if (days === 1) return 'Last bought yesterday';
+  if (days < 7) return `Last bought ${days} days ago`;
+  if (days < 14) return 'Last bought a week ago';
+  if (days < 56) return `Last bought ${Math.round(days / 7)} weeks ago`;
+  return `Last bought ${Math.round(days / 30)} months ago`;
+}
+
+/**
+ * Build the capped, urgency-sorted deck. Items already sitting on an active
+ * shopping list are excluded — no point reminding you to buy what's queued.
+ */
+export function buildDeck(stats: StatMap, excludeKeys: Set<string>, now: number): DeckCard[] {
+  return Object.values(stats)
+    .filter((s) => isDue(s, now) && !excludeKeys.has(s.key))
+    .map((s) => ({ stat: s, overdue: now - dueAt(s) }))
+    .sort((a, b) => b.overdue - a.overdue)
+    .slice(0, DECK_CAP)
+    .map(({ stat }) => ({
+      key: stat.key,
+      display: stat.display,
+      category: stat.category,
+      subtitle: lastBoughtLabel(stat.lastPurchasedAt, now),
+    }));
+}
+
+/**
+ * Log a purchase (an item was checked off). Establishes/updates the burn rate
+ * from the gap since the previous purchase. Same-day repeats are ignored so a
+ * check/uncheck/check doesn't distort the rate.
+ */
+export function recordPurchase(
+  stats: StatMap,
+  name: string,
+  category: ItemCategory,
+  now: number = Date.now(),
+): StatMap {
+  const key = normalizeKey(name);
+  if (!key) return stats;
+  const prev = stats[key];
+  let intervalDays = prev?.intervalDays ?? 0;
+  let sampleCount = prev?.sampleCount ?? 0;
+
+  if (prev?.lastPurchasedAt) {
+    const gapDays = (now - prev.lastPurchasedAt) / DAY;
+    if (gapDays >= 1) {
+      // First real gap seeds the rate; later gaps blend in (EMA) so one odd
+      // shop doesn't swing it wildly.
+      intervalDays = sampleCount === 0 ? gapDays : intervalDays * 0.6 + gapDays * 0.4;
+      sampleCount += 1;
+    }
+  }
+
+  return {
+    ...stats,
+    [key]: {
+      key,
+      display: name.trim(),
+      category,
+      lastPurchasedAt: now,
+      intervalDays,
+      sampleCount,
+      snoozeUntil: null,
+    },
+  };
+}
+
+/**
+ * Swipe right — "Still Good". The user consumes this slower than we thought:
+ * stretch the burn rate and snooze it out of the deck for a few days.
+ */
+export function applyStillGood(stats: StatMap, key: string, now: number = Date.now()): StatMap {
+  const s = stats[key];
+  if (!s) return stats;
+  const stretched = Math.round(effectiveInterval(s) * 1.15) + 2;
+  return {
+    ...stats,
+    [key]: {
+      ...s,
+      intervalDays: stretched,
+      sampleCount: Math.max(1, s.sampleCount), // this feedback counts as learning
+      snoozeUntil: now + 3 * DAY,
+    },
+  };
+}
+
+/**
+ * Swipe left — "Almost Out". It's added to the shopping list by the caller.
+ * We tighten the rate toward the observed lifespan and snooze it until the
+ * eventual re-purchase (check-off) resets the clock.
+ */
+export function applyAlmostOut(stats: StatMap, key: string, now: number = Date.now()): StatMap {
+  const s = stats[key];
+  if (!s) return stats;
+  const observed = (now - s.lastPurchasedAt) / DAY;
+  let intervalDays = s.intervalDays;
+  let sampleCount = s.sampleCount;
+  if (observed >= 1) {
+    intervalDays =
+      sampleCount === 0 ? observed : Math.min(effectiveInterval(s), s.intervalDays * 0.6 + observed * 0.4);
+    sampleCount = Math.max(1, sampleCount);
+  }
+  return { ...stats, [key]: { ...s, intervalDays, sampleCount, snoozeUntil: now + 2 * DAY } };
+}
