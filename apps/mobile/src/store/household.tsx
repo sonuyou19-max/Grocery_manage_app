@@ -40,6 +40,7 @@ interface HouseholdContext {
   refresh: () => Promise<void>;
   createHousehold: (name: string, displayName: string) => Promise<{ error?: string }>;
   joinHousehold: (code: string, displayName: string) => Promise<{ error?: string }>;
+  renameHousehold: (name: string) => Promise<{ error?: string }>;
   leaveHousehold: () => Promise<{ error?: string }>;
   removeMember: (userId: string) => Promise<{ error?: string }>;
 }
@@ -146,6 +147,26 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         await refresh();
         return {};
       },
+      renameHousehold: async (name) => {
+        if (!household) return {};
+        const clean = name.trim();
+        if (!clean || clean === household.name) return {};
+        // Optimistic: reflect the new name immediately, then persist. RLS lets
+        // only the owner update; a failure rolls back via refresh().
+        setHousehold((prev) => (prev ? { ...prev, name: clean } : prev));
+        const { error } = await supabase
+          .from('households')
+          .update({ name: clean })
+          .eq('id', household.id);
+        if (error) {
+          await refresh();
+          return { error: friendlyError(error.message) };
+        }
+        // Keep the signature in step so the next poll/realtime tick doesn't
+        // think nothing changed and skip re-applying the server truth.
+        sigRef.current = '';
+        return {};
+      },
       leaveHousehold: async () => {
         if (!household) return {};
         const { error } = await supabase.rpc('leave_household', { p_household: household.id });
@@ -166,6 +187,26 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     }),
     [household, members, loading, refresh],
   );
+
+  // Live household updates (e.g. a rename by another member) reach everyone via
+  // the realtime channel; the membership poll/foreground refresh is the backstop.
+  useEffect(() => {
+    if (!household) return;
+    const channel = supabase
+      .channel(`household-${household.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'households', filter: `id=eq.${household.id}` },
+        () => {
+          sigRef.current = '';
+          void refresh();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [household?.id, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

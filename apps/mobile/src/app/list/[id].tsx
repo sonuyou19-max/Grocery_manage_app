@@ -12,9 +12,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  Easing,
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ItemSheet } from '@/components/item-sheet';
@@ -219,11 +226,16 @@ export default function ListDetailScreen() {
   );
 }
 
+/** How far the row opens to reveal the Delete button (px). */
+const DELETE_WIDTH = 92;
+
 /**
- * One list item row inside a left-swipe-to-delete container. Taps are guarded
- * so a swipe never opens the edit sheet: any drag sets a flag that swallows
- * presses until shortly after the swipeable settles, and a tap while the
- * delete action is open just closes it.
+ * One list item row with left-swipe-to-delete. Unlike a stock swipeable, the
+ * row content barely moves — the Delete button slides in from the right *over*
+ * the price area, so the item name always stays fully visible. The gesture only
+ * engages on a clear horizontal drag (activeOffsetX) and yields to the vertical
+ * ScrollView (failOffsetY). Taps are guarded so a swipe never opens the edit
+ * sheet, and a tap while open simply closes the row.
  */
 function SwipeableItemRow({
   item: it,
@@ -237,46 +249,124 @@ function SwipeableItemRow({
   onDelete: () => void;
 }) {
   const { colors } = useTheme();
-  const swipeRef = useRef<SwipeableMethods>(null);
+  const tx = useSharedValue(0); // 0 = closed, -DELETE_WIDTH = open
+  const startX = useSharedValue(0);
   const openRef = useRef(false);
   const swipingRef = useRef(false);
+
+  const setOpen = (v: boolean) => {
+    openRef.current = v;
+  };
+  const setSwiping = (v: boolean) => {
+    swipingRef.current = v;
+  };
+
+  // Gentle, unhurried settle — the "small and slow" the design calls for.
+  const settle = { duration: 300, easing: Easing.out(Easing.cubic) };
+
+  const close = () => {
+    'worklet';
+    tx.value = withTiming(0, settle);
+    runOnJS(setOpen)(false);
+  };
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-10, 10])
+    .onStart(() => {
+      startX.value = tx.value;
+      runOnJS(setSwiping)(true);
+    })
+    .onUpdate((e) => {
+      const next = startX.value + e.translationX;
+      tx.value = Math.min(0, Math.max(-DELETE_WIDTH, next));
+    })
+    .onEnd(() => {
+      const shouldOpen = tx.value < -DELETE_WIDTH / 2;
+      tx.value = withTiming(shouldOpen ? -DELETE_WIDTH : 0, settle);
+      runOnJS(setOpen)(shouldOpen);
+    })
+    .onFinalize(() => {
+      runOnJS(setSwiping)(false);
+    });
 
   const guard = (fn: () => void) => () => {
     if (swipingRef.current) return;
     if (openRef.current) {
-      swipeRef.current?.close();
+      tx.value = withTiming(0, settle);
+      openRef.current = false;
       return;
     }
     fn();
   };
 
+  // Content only nudges a hair so the name never leaves the screen.
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value * 0.12 }],
+  }));
+  // Delete slides in from the right edge and fades up as it arrives.
+  const deleteStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: DELETE_WIDTH + tx.value }],
+    opacity: interpolate(tx.value, [-DELETE_WIDTH, -DELETE_WIDTH * 0.15, 0], [1, 0.25, 0], Extrapolation.CLAMP),
+  }));
+
   return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      friction={2}
-      rightThreshold={40}
-      overshootRight={false}
-      onSwipeableOpenStartDrag={() => {
-        swipingRef.current = true;
-      }}
-      onSwipeableCloseStartDrag={() => {
-        swipingRef.current = true;
-      }}
-      onSwipeableOpen={() => {
-        openRef.current = true;
-        swipingRef.current = false;
-      }}
-      onSwipeableClose={() => {
-        openRef.current = false;
-        // Swallow the tap that ends the closing drag.
-        setTimeout(() => {
-          swipingRef.current = false;
-        }, 150);
-      }}
-      renderRightActions={() => (
+    <View style={styles.swipeWrap}>
+      <GestureDetector gesture={pan}>
+        <Animated.View
+          style={[styles.itemRow, { borderBottomColor: colors.line, backgroundColor: colors.bg }, rowStyle]}
+        >
+          <Pressable onPress={guard(onToggle)} hitSlop={8}>
+            <View
+              style={[
+                styles.tick,
+                { borderColor: it.checked ? colors.accent : colors.muted },
+                it.checked && { backgroundColor: colors.accent },
+              ]}
+            >
+              {it.checked && <Ionicons name="checkmark" size={14} color={colors.accentInk} />}
+            </View>
+          </Pressable>
+
+          <Pressable style={styles.grow} onPress={guard(onEdit)}>
+            <Text
+              style={[
+                type.body,
+                { color: it.checked ? colors.muted : colors.ink },
+                it.checked && styles.struck,
+              ]}
+            >
+              {it.name}
+            </Text>
+            {(it.quantity != null || it.store != null) && (
+              <View style={styles.meta}>
+                {it.store != null && <SupermarketBadge store={it.store} size={16} />}
+                {it.quantity != null && (
+                  <Text style={[type.sub, { color: colors.muted }]}>
+                    {it.quantity}
+                    {it.unit ? ` ${it.unit}` : ''}
+                  </Text>
+                )}
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable onPress={guard(onEdit)} hitSlop={8}>
+            {it.priceCents != null ? (
+              <Text style={[type.price, { color: colors.ink }]}>{euros(it.priceCents)}</Text>
+            ) : (
+              <Text style={[type.price, { color: colors.muted, opacity: 0.5 }]}>＋ €</Text>
+            )}
+          </Pressable>
+        </Animated.View>
+      </GestureDetector>
+
+      {/* Sits on top of the row's right edge; revealed as you swipe. */}
+      <Animated.View style={[styles.deleteLayer, deleteStyle]} pointerEvents="box-none">
         <Pressable
           onPress={() => {
-            swipeRef.current?.close();
+            tx.value = withTiming(0, settle);
+            openRef.current = false;
             onDelete();
           }}
           style={[styles.deleteAction, { backgroundColor: colors.crit }]}
@@ -284,53 +374,8 @@ function SwipeableItemRow({
           <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
           <Text style={styles.deleteText}>Delete</Text>
         </Pressable>
-      )}
-    >
-      <View style={[styles.itemRow, { borderBottomColor: colors.line, backgroundColor: colors.bg }]}>
-        <Pressable onPress={guard(onToggle)} hitSlop={8}>
-          <View
-            style={[
-              styles.tick,
-              { borderColor: it.checked ? colors.accent : colors.muted },
-              it.checked && { backgroundColor: colors.accent },
-            ]}
-          >
-            {it.checked && <Ionicons name="checkmark" size={14} color={colors.accentInk} />}
-          </View>
-        </Pressable>
-
-        <Pressable style={styles.grow} onPress={guard(onEdit)}>
-          <Text
-            style={[
-              type.body,
-              { color: it.checked ? colors.muted : colors.ink },
-              it.checked && styles.struck,
-            ]}
-          >
-            {it.name}
-          </Text>
-          {(it.quantity != null || it.store != null) && (
-            <View style={styles.meta}>
-              {it.store != null && <SupermarketBadge store={it.store} size={16} />}
-              {it.quantity != null && (
-                <Text style={[type.sub, { color: colors.muted }]}>
-                  {it.quantity}
-                  {it.unit ? ` ${it.unit}` : ''}
-                </Text>
-              )}
-            </View>
-          )}
-        </Pressable>
-
-        <Pressable onPress={guard(onEdit)} hitSlop={8}>
-          {it.priceCents != null ? (
-            <Text style={[type.price, { color: colors.ink }]}>{euros(it.priceCents)}</Text>
-          ) : (
-            <Text style={[type.price, { color: colors.muted, opacity: 0.5 }]}>＋ €</Text>
-          )}
-        </Pressable>
-      </View>
-    </ReanimatedSwipeable>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -401,13 +446,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   struck: { textDecorationLine: 'line-through' },
+  swipeWrap: { overflow: 'hidden' },
+  deleteLayer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: DELETE_WIDTH,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+  },
   deleteAction: {
-    width: 96,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    marginLeft: spacing.md,
     marginVertical: spacing.xs,
     borderRadius: radii.md,
   },

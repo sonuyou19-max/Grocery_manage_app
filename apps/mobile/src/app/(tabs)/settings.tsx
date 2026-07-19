@@ -1,6 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
@@ -13,9 +25,28 @@ const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const { user, signOut } = useAuth();
-  const { household, members, leaveHousehold, removeMember } = useHousehold();
+  const { household, members, renameHousehold, leaveHousehold, removeMember } = useHousehold();
 
   const iAmOwner = members.find((m) => m.user_id === user?.id)?.role === 'owner';
+
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  const openRename = () => {
+    setNameDraft(household?.name ?? '');
+    setRenaming(true);
+  };
+
+  const submitRename = async () => {
+    const next = nameDraft.trim();
+    if (!next) return;
+    setSavingName(true);
+    const { error } = await renameHousehold(next);
+    setSavingName(false);
+    setRenaming(false);
+    if (error) Alert.alert('Couldn’t rename', error);
+  };
 
   const confirmSignOut = () =>
     Alert.alert('Sign out', 'Your local lists stay on this device.', [
@@ -113,6 +144,11 @@ export default function SettingsScreen() {
                 <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
                   {household.name}
                 </Text>
+                {iAmOwner && (
+                  <Pressable onPress={openRename} hitSlop={8}>
+                    <Ionicons name="pencil-outline" size={20} color={colors.accent} />
+                  </Pressable>
+                )}
               </View>
 
               <View style={[styles.divider, { backgroundColor: colors.line }]} />
@@ -173,6 +209,51 @@ export default function SettingsScreen() {
           Switch your phone to dark mode to see the dark theme.
         </Text>
       </Card>
+
+      {/* Rename household — cross-platform (Alert.prompt is iOS-only). */}
+      <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <Pressable style={styles.modalBackdropFill} onPress={() => setRenaming(false)} />
+          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+            <Text style={[type.h2, { color: colors.ink }]}>Rename household</Text>
+            <Text style={[type.sub, { color: colors.muted }]}>
+              Everyone in the household sees the new name.
+            </Text>
+            <TextInput
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              placeholder="Household name"
+              placeholderTextColor={colors.muted}
+              style={[styles.modalInput, { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line }]}
+              autoFocus
+              maxLength={60}
+              returnKeyType="done"
+              onSubmitEditing={submitRename}
+            />
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setRenaming(false)} style={styles.modalBtn}>
+                <Text style={[type.body, { color: colors.muted }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={submitRename}
+                disabled={!nameDraft.trim() || savingName}
+                style={[
+                  styles.modalBtn,
+                  styles.modalSave,
+                  { backgroundColor: colors.accent, opacity: nameDraft.trim() && !savingName ? 1 : 0.45 },
+                ]}
+              >
+                <Text style={[type.body, { color: colors.accentInk }]}>
+                  {savingName ? 'Saving…' : 'Save'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   );
 }
@@ -223,4 +304,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(12,18,10,0.45)',
+  },
+  modalBackdropFill: { ...StyleSheet.absoluteFillObject },
+  modalCard: { borderRadius: radii.lg, padding: spacing.lg, gap: spacing.sm },
+  modalInput: {
+    height: 48,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
+    marginTop: spacing.xs,
+  },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.xs },
+  modalBtn: {
+    height: 44,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSave: { minWidth: 96 },
 });

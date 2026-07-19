@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -28,7 +28,7 @@ import type { ParsedItem } from '@korb/shared';
 
 import { CATEGORY_LABELS } from '@/lib/categorize';
 import { parseQuickAdd } from '@/lib/quick-add';
-import { useGroceries } from '@/store/groceries';
+import { useGroceries, useList } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 interface QuickAddSheetProps {
@@ -46,7 +46,15 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { addParsedItem } = useGroceries();
+  const list = useList(listId);
   const { height: screenH } = useWindowDimensions();
+
+  // Names already on this list, normalised, so quick-add doesn't silently add a
+  // second "Milk" — matches the duplicate guard on the manual add bar.
+  const existingNames = useMemo(
+    () => new Set((list?.items ?? []).map((it) => it.name.trim().toLowerCase())),
+    [list],
+  );
 
   const [text, setText] = useState('');
   const [phase, setPhase] = useState<'input' | 'loading' | 'review'>('input');
@@ -106,7 +114,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
       return;
     }
     setItems(parsed);
-    setSelected(parsed.map(() => true));
+    // Pre-tick everything except items already on the list — those default to
+    // skipped so you don't add duplicates without meaning to.
+    setSelected(parsed.map((p) => !existingNames.has(p.name.trim().toLowerCase())));
     setPhase('review');
   };
 
@@ -150,6 +160,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               <Text style={[type.sub, { color: colors.muted }]}>Tap to include or skip, then add.</Text>
               {items.map((item, i) => {
                 const on = selected[i];
+                const dup = existingNames.has(item.name.trim().toLowerCase());
                 return (
                   <Pressable
                     key={`${item.name}-${i}`}
@@ -168,6 +179,11 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                         {item.quantity != null ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}
                       </Text>
                     </View>
+                    {dup && (
+                      <View style={[styles.dupTag, { backgroundColor: colors.bg, borderColor: colors.line }]}>
+                        <Text style={[type.sub, { color: colors.muted }]}>Already on list</Text>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
@@ -188,14 +204,12 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               <Pressable
                 onPress={runParse}
                 disabled={!canParse}
-                style={[styles.primaryBlock, { backgroundColor: hasText ? colors.accent : colors.line }]}
+                style={[styles.primaryBlock, { backgroundColor: colors.accent }]}
               >
                 {phase === 'loading' ? (
                   <ActivityIndicator color={colors.accentInk} />
                 ) : (
-                  <Text style={[type.body, { color: hasText ? colors.accentInk : colors.muted }]}>
-                    Add with AI
-                  </Text>
+                  <Text style={[type.body, { color: colors.accentInk }]}>Add with AI</Text>
                 )}
               </Pressable>
               {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
@@ -217,9 +231,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 <Pressable
                   onPress={confirmAdd}
                   disabled={selectedCount === 0}
-                  style={[styles.primary, { backgroundColor: selectedCount ? colors.accent : colors.line }]}
+                  style={[styles.primary, { backgroundColor: colors.accent, opacity: selectedCount ? 1 : 0.45 }]}
                 >
-                  <Text style={[type.body, { color: selectedCount ? colors.accentInk : colors.muted }]}>
+                  <Text style={[type.body, { color: colors.accentInk }]}>
                     Add {selectedCount} item{selectedCount === 1 ? '' : 's'}
                   </Text>
                 </Pressable>
@@ -270,6 +284,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderRadius: radii.md,
     padding: spacing.md,
+  },
+  dupTag: {
+    borderWidth: 1,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
   },
   footer: {
     borderTopWidth: 1,
