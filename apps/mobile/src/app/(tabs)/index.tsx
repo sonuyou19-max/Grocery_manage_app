@@ -50,22 +50,36 @@ export default function ListsScreen() {
   return (
     <>
       <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'}>
-        {!editing && vibeCount > 0 && (
-          <Pressable onPress={() => router.push('/vibe-check')}>
-            <Card accented>
-              <View style={styles.vibeRow}>
-                <Text style={styles.vibeEmoji}>☕️</Text>
+        {!editing &&
+          (vibeCount > 0 ? (
+            <Pressable onPress={() => router.push('/vibe-check')}>
+              <Card accented>
+                <View style={styles.vibeRow}>
+                  <Text style={styles.vibeEmoji}>☕️</Text>
+                  <View style={styles.grow}>
+                    <Text style={[type.body, { color: colors.ink }]}>Pantry Vibe Check</Text>
+                    <Text style={[type.sub, { color: colors.muted }]}>
+                      {vibeCount} item{vibeCount === 1 ? '' : 's'} to review · 10 seconds
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+                </View>
+              </Card>
+            </Pressable>
+          ) : (
+            <Card>
+              <View style={[styles.vibeRow, { alignItems: 'flex-start' }]}>
+                <Ionicons name="checkmark-circle" size={26} color={colors.accent} />
                 <View style={styles.grow}>
-                  <Text style={[type.body, { color: colors.ink }]}>Pantry Vibe Check</Text>
+                  <Text style={[type.body, { color: colors.ink }]}>Pantry Vibe Check · All set</Text>
                   <Text style={[type.sub, { color: colors.muted }]}>
-                    {vibeCount} item{vibeCount === 1 ? '' : 's'} to review · 10 seconds
+                    Nothing to review right now. As you shop, Korb learns how fast you get through
+                    things and surfaces them here — a quick swipe — before you run out.
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.accent} />
               </View>
             </Card>
-          </Pressable>
-        )}
+          ))}
         {empty ? (
           <EmptyState
             icon="basket-outline"
