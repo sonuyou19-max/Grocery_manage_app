@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -19,6 +19,7 @@ import { GlassView } from '@/components/glass';
 import { MeshBackground } from '@/components/mesh-background';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { haptics } from '@/lib/haptics';
+import { isDue, normalizeKey } from '@/lib/pantry-intel';
 import { useGroceries } from '@/store/groceries';
 import { useVibeDeck, usePantryIntel, type DeckCard } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -34,13 +35,33 @@ export default function VibeCheckScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { deck } = useVibeDeck();
-  const { markAlmostOut, markStillGood } = usePantryIntel();
+  const { stats, markAlmostOut, markStillGood } = usePantryIntel();
   const { lists, addList, addParsedItem } = useGroceries();
 
-  // Freeze the deck for this session so mutating stats mid-run doesn't reshuffle.
+  // Frozen ORDER captured when the deck opens; membership stays live below so a
+  // card another household member resolves drops off this device's stack too.
   const [cards] = useState<DeckCard[]>(deck);
-  const [index, setIndex] = useState(0);
-  const [done, setDone] = useState(cards.length === 0);
+  // Keys the user has personally swiped this session.
+  const [handled, setHandled] = useState<Set<string>>(() => new Set());
+  const [done, setDone] = useState(false);
+
+  // Items still due right now, minus anything already queued on a list —
+  // recomputed from shared stats, so another member's swipe removes it here.
+  const validKeys = useMemo(() => {
+    const excluded = new Set<string>();
+    for (const list of lists) for (const it of list.items) excluded.add(normalizeKey(it.name));
+    const now = Date.now();
+    const s = new Set<string>();
+    for (const key in stats) if (isDue(stats[key], now) && !excluded.has(key)) s.add(key);
+    return s;
+  }, [stats, lists]);
+
+  // The live stack: frozen order, minus what anyone has resolved.
+  const remaining = useMemo(
+    () => cards.filter((c) => validKeys.has(c.key) && !handled.has(c.key)),
+    [cards, validKeys, handled],
+  );
+  const top = remaining[0];
 
   // Where "Almost Out" items go — defaults to the first (top) list.
   const [destListId, setDestListId] = useState<string | null>(lists[0]?.id ?? null);
@@ -54,26 +75,33 @@ export default function VibeCheckScreen() {
   const lastTickX = useSharedValue(0);
   const pastThreshold = useSharedValue(false);
 
-  // Keep the latest card/destination reachable from gesture callbacks.
-  const topRef = useRef<DeckCard | undefined>(cards[0]);
-  topRef.current = cards[index];
+  // Latest values reachable from gesture callbacks.
+  const topRef = useRef<DeckCard | undefined>(top);
+  topRef.current = top;
   const destRef = useRef<string | null>(destListId);
   destRef.current = destList?.id ?? null;
+  const validRef = useRef(validKeys);
+  validRef.current = validKeys;
 
+  // Reset the drag whenever the visible top card changes.
   useEffect(() => {
     tx.value = 0;
     ty.value = 0;
     lastTickX.value = 0;
     pastThreshold.value = false;
-  }, [index, tx, ty, lastTickX, pastThreshold]);
+  }, [top?.key, tx, ty, lastTickX, pastThreshold]);
 
-  // Opened with an empty deck — show the reassurance, then bow out.
+  // When the stack empties, celebrate once and bow out.
+  const celebratedRef = useRef(false);
   useEffect(() => {
-    if (cards.length === 0) {
-      const t = setTimeout(() => router.back(), 1600);
+    if (remaining.length === 0 && !celebratedRef.current) {
+      celebratedRef.current = true;
+      setDone(true);
+      if (cards.length > 0) haptics.success();
+      const t = setTimeout(() => router.back(), cards.length > 0 ? 1900 : 1500);
       return () => clearTimeout(t);
     }
-  }, [cards.length]);
+  }, [remaining.length, cards.length]);
 
   const addToList = (card: DeckCard) => {
     let listId = destRef.current;
@@ -86,22 +114,19 @@ export default function VibeCheckScreen() {
 
   const commit = (dir: 'left' | 'right') => {
     const card = topRef.current;
-    if (card) {
-      if (dir === 'left') {
-        markAlmostOut(card.key);
-        addToList(card);
-      } else {
-        markStillGood(card.key);
-      }
-    }
-    const next = index + 1;
-    if (next >= cards.length) {
-      haptics.success();
-      setDone(true);
-      setTimeout(() => router.back(), 1900);
+    if (!card) return;
+    if (dir === 'left') {
+      // Skip the list-add if another member already handled it meanwhile.
+      if (validRef.current.has(card.key)) addToList(card);
+      markAlmostOut(card.key);
     } else {
-      setIndex(next);
+      markStillGood(card.key);
     }
+    setHandled((prev) => {
+      const n = new Set(prev);
+      n.add(card.key);
+      return n;
+    });
   };
 
   const pan = Gesture.Pan()
@@ -163,8 +188,6 @@ export default function VibeCheckScreen() {
     transform: [{ scale: interpolate(tx.value, [0, THRESHOLD], [0.6, 1.2], Extrapolation.CLAMP) }],
   }));
 
-  const remaining = cards.length - index;
-
   return (
     <View style={styles.root}>
       <MeshBackground dim />
@@ -199,9 +222,9 @@ export default function VibeCheckScreen() {
           </Pressable>
           <View style={styles.headerMid}>
             <Text style={[type.label, styles.headerTitle]}>Pantry Vibe Check</Text>
-            {!done && cards.length > 0 && (
+            {!done && remaining.length > 0 && (
               <Text style={styles.headerCount}>
-                {index + 1} of {cards.length}
+                {remaining.length} left
               </Text>
             )}
           </View>
@@ -225,14 +248,14 @@ export default function VibeCheckScreen() {
               </Animated.View>
 
               {/* Back cards for depth */}
-              {cards[index + 2] && <BackCard depth={2} />}
-              {cards[index + 1] && <BackCard depth={1} />}
+              {remaining[2] && <BackCard depth={2} />}
+              {remaining[1] && <BackCard depth={1} />}
 
               {/* Top, draggable card */}
-              {cards[index] && (
+              {top && (
                 <GestureDetector gesture={pan}>
-                  <Animated.View style={[styles.cardWrap, topStyle]} key={cards[index].key}>
-                    <VibeCard card={cards[index]} />
+                  <Animated.View style={[styles.cardWrap, topStyle]} key={top.key}>
+                    <VibeCard card={top} />
                   </Animated.View>
                 </GestureDetector>
               )}
@@ -250,7 +273,7 @@ export default function VibeCheckScreen() {
               <Text style={styles.hint}>
                 ← Almost out{'      '}Still good →
               </Text>
-              <Text style={styles.remaining}>{remaining} to review</Text>
+              <Text style={styles.remaining}>{remaining.length} to review</Text>
             </View>
           </>
         )}
