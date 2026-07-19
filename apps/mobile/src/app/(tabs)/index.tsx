@@ -11,16 +11,31 @@ import { Screen } from '@/components/screen';
 import { StoreGroups } from '@/components/store-groups';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { euros } from '@/lib/money';
+import { useAuth } from '@/store/auth';
 import { useGroceries, type List } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { radii, spacing, type, useTheme } from '@/theme';
 
+/** Time-of-day greeting based on the device's local clock. */
+function timeGreeting(date = new Date()): string {
+  const h = date.getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function ListsScreen() {
   const { colors } = useTheme();
   const { lists, addList, deleteList, reorderLists } = useGroceries();
-  const { household } = useHousehold();
+  const { household, members } = useHousehold();
+  const { user } = useAuth();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // First name from the household display name the user chose, when available.
+  const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
+  const firstName = myName ? myName.split(/\s+/)[0] : null;
+  const greeting = firstName ? `${timeGreeting()}, ${firstName}` : timeGreeting();
 
   const openNewList = (name: string) => {
     const id = addList(name);
@@ -32,7 +47,7 @@ export default function ListsScreen() {
 
   return (
     <>
-      <Screen title="Good evening" subtitle={household ? household.name : 'Your grocery lists'}>
+      <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'}>
         {empty ? (
           <EmptyState
             icon="basket-outline"
