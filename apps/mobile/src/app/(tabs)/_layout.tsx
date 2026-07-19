@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import type { ColorValue } from 'react-native';
+import { StyleSheet, type ColorValue } from 'react-native';
 
 import { useTheme } from '@/theme';
 
@@ -13,18 +14,31 @@ function tabIcon(name: IoniconName) {
 }
 
 export default function TabsLayout() {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
+        // Frosted glass: transparent bar with a blurred background + hairline top.
+        // Kept in normal layout flow so the FAB and scroll clearance are unaffected.
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.line,
+          backgroundColor: 'transparent',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.glassBorder,
+          elevation: 0,
         },
+        tabBarBackground: () => (
+          <BlurView
+            intensity={scheme === 'dark' ? 40 : 60}
+            tint={colors.blurTint}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+        ),
       }}
     >
       <Tabs.Screen

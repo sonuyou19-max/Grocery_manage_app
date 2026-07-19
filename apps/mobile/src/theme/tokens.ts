@@ -22,14 +22,26 @@ export interface ThemeColors {
   crit: string;
   critSoft: string;
   lime: string;
+  /** Mesh-gradient background: an opaque base plus three drifting colour fields. */
+  meshBase: string;
+  meshA: string;
+  meshB: string;
+  meshC: string;
+  /** Scrim laid over the blurred mesh so it stays subtle, never saturated. */
+  meshScrim: string;
+  /** Frosted-glass surfaces: translucent fill + thin, semi-transparent border. */
+  glassFill: string;
+  glassBorder: string;
+  /** BlurView tint to use for glass/mesh in this scheme. */
+  blurTint: 'light' | 'dark';
 }
 
 export const palette: Record<'light' | 'dark', ThemeColors> = {
   light: {
     bg: '#F6F7F0',
     surface: '#FFFFFF',
-    ink: '#1B2417',
-    muted: '#6B7563',
+    ink: '#141A10',
+    muted: '#5E6857',
     line: '#E5E8DC',
     accent: '#2E7442',
     accentInk: '#FFFFFF',
@@ -39,12 +51,21 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     crit: '#C93E22',
     critSoft: '#F9E6E0',
     lime: '#8CC63F',
+    // Soft, bright daytime mesh — a pale field the frosted glass sits over.
+    meshBase: '#EEF1E6',
+    meshA: '#BBD8C0',
+    meshB: '#D8E6B8',
+    meshC: '#CFE0DE',
+    meshScrim: 'rgba(246,247,240,0.5)',
+    glassFill: 'rgba(255,255,255,0.55)',
+    glassBorder: 'rgba(255,255,255,0.7)',
+    blurTint: 'light',
   },
   dark: {
-    bg: '#141A12',
+    bg: '#0E120C',
     surface: '#1E241B',
-    ink: '#EBEFE4',
-    muted: '#94A08A',
+    ink: '#F1F4EA',
+    muted: '#96A28B',
     line: '#2B3326',
     accent: '#5FB878',
     accentInk: '#0E1A10',
@@ -54,6 +75,15 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     crit: '#E06A4C',
     critSoft: '#3A1F16',
     lime: '#8CC63F',
+    // Dark, moody mesh — deep greens with a faint amber ember, kept muted.
+    meshBase: '#0B0F09',
+    meshA: '#1C3A28',
+    meshB: '#13291E',
+    meshC: '#2A3312',
+    meshScrim: 'rgba(11,15,9,0.42)',
+    glassFill: 'rgba(30,36,27,0.55)',
+    glassBorder: 'rgba(255,255,255,0.1)',
+    blurTint: 'dark',
   },
 };
 
@@ -73,13 +103,19 @@ export const radii = {
   pill: 999,
 } as const;
 
-/** Weight-driven hierarchy on the platform system font. */
+/**
+ * Weight- and scale-driven hierarchy on the platform system font. Headers go
+ * big and boldly weighted with tight (negative) tracking so structure comes
+ * from type and space, not from boxes and borders. Body stays clean and
+ * high-contrast for effortless legibility while shopping.
+ */
 export const type: Record<
-  'h1' | 'h2' | 'body' | 'bodyRegular' | 'sub' | 'label' | 'price',
+  'display' | 'h1' | 'h2' | 'body' | 'bodyRegular' | 'sub' | 'label' | 'price',
   TextStyle
 > = {
-  h1: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  h2: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  display: { fontSize: 40, fontWeight: '800', letterSpacing: -1.4, lineHeight: 44 },
+  h1: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
+  h2: { fontSize: 21, fontWeight: '800', letterSpacing: -0.5 },
   body: { fontSize: 16, fontWeight: '600' },
   bodyRegular: { fontSize: 16, fontWeight: '400' },
   sub: { fontSize: 13, fontWeight: '400' },

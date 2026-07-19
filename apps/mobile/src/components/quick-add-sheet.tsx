@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -43,7 +44,7 @@ interface QuickAddSheetProps {
  * confirm which to add. Voice works via the keyboard's own dictation mic.
  */
 export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { addParsedItem } = useGroceries();
   const list = useList(listId);
@@ -141,10 +142,20 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
         <Animated.View
           style={[
             styles.sheet,
-            { backgroundColor: colors.surface, marginBottom: kbHeight > 0 ? kbHeight : insets.bottom },
+            { marginBottom: kbHeight > 0 ? kbHeight : insets.bottom },
             sheetStyle,
           ]}
         >
+          <BlurView
+            intensity={scheme === 'dark' ? 40 : 60}
+            tint={colors.blurTint}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]}
+            pointerEvents="none"
+          />
           <View style={[styles.grab, { backgroundColor: colors.line }]} />
 
           <View style={styles.header}>

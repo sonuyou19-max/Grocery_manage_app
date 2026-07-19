@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -27,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
+import { haptics } from '@/lib/haptics';
 import { parsePriceToCents } from '@/lib/money';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
@@ -52,7 +54,7 @@ const parseQuantity = (text: string): number | null => {
  * optional — quantity, price and the supermarket to buy it from.
  */
 export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { updateItem } = useGroceries();
   const liveItem = useItem(listId, itemId ?? undefined);
@@ -137,7 +139,17 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable style={styles.fillPlain} onPress={requestClose} />
         </Animated.View>
-        <Animated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
+        <Animated.View style={[styles.sheet, sheetStyle]}>
+          <BlurView
+            intensity={scheme === 'dark' ? 40 : 60}
+            tint={colors.blurTint}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]}
+            pointerEvents="none"
+          />
           {/* Drag zone: grab handle + header — pull down to dismiss */}
           <GestureDetector gesture={dragGesture}>
             <View collapsable={false}>
@@ -184,7 +196,10 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                   return (
                     <Pressable
                       key={cat}
-                      onPress={() => patch({ category: cat })}
+                      onPress={() => {
+                        if (itemObj.category !== cat) haptics.snap(); // moved between categories
+                        patch({ category: cat });
+                      }}
                       style={[
                         styles.chip,
                         { borderColor: active ? colors.accent : colors.line },

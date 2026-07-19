@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -24,17 +25,20 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { GlassView } from '@/components/glass';
 import { ItemSheet } from '@/components/item-sheet';
+import { MeshBackground } from '@/components/mesh-background';
 import { QuickAddSheet } from '@/components/quick-add-sheet';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
+import { haptics } from '@/lib/haptics';
 import { euros } from '@/lib/money';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem } = useGroceries();
   const [draft, setDraft] = useState('');
@@ -68,16 +72,29 @@ export default function ListDetailScreen() {
 
   if (!list) {
     return (
-      <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]}>
-        <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
-          This list no longer exists.
-        </Text>
-      </SafeAreaView>
+      <View style={styles.root}>
+        <MeshBackground />
+        <SafeAreaView style={styles.fillTransparent}>
+          <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
+            This list no longer exists.
+          </Text>
+        </SafeAreaView>
+      </View>
     );
   }
 
   const checkedCount = list.items.filter((it) => it.checked).length;
   const progress = list.items.length ? checkedCount / list.items.length : 0;
+
+  // Light tick on every check; a success chime the moment the last item goes
+  // in the cart — the shopping trip is done.
+  const handleToggle = (item: Item) => {
+    const wasComplete = list.items.length > 0 && checkedCount === list.items.length;
+    const completing = !item.checked && !wasComplete && checkedCount + 1 === list.items.length;
+    if (completing) haptics.success();
+    else haptics.tick();
+    toggleItem(list.id, item.id);
+  };
 
   const doAdd = (name: string) => {
     const newId = addItem(list.id, name);
@@ -113,7 +130,9 @@ export default function ListDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top']}>
+    <View style={styles.root}>
+      <MeshBackground />
+      <SafeAreaView style={styles.fillTransparent} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
@@ -143,7 +162,7 @@ export default function ListDetailScreen() {
       </View>
 
       {/* Budget strip — only shows money once prices are logged */}
-      <View style={[styles.budget, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+      <GlassView radius={radii.md} style={styles.budget}>
         {budget.hasPrices ? (
           <>
             <Stat label="To buy" value={euros(budget.toBuy)} colors={colors} />
@@ -159,7 +178,7 @@ export default function ListDetailScreen() {
             Add a price to any item to track spend — optional.
           </Text>
         )}
-      </View>
+      </GlassView>
 
       {/* Items */}
       <ScrollView contentContainerStyle={styles.list}>
@@ -175,7 +194,7 @@ export default function ListDetailScreen() {
               <SwipeableItemRow
                 key={it.id}
                 item={it}
-                onToggle={() => toggleItem(list.id, it.id)}
+                onToggle={() => handleToggle(it)}
                 onEdit={() => openEdit(it)}
                 onDelete={() => deleteItem(list.id, it.id)}
               />
@@ -191,28 +210,35 @@ export default function ListDetailScreen() {
 
       {/* Add bar */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.surface }}>
-          <View style={[styles.addBar, { borderTopColor: colors.line }]}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Add an item…"
-              placeholderTextColor={colors.muted}
-              style={[styles.input, { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line }]}
-              returnKeyType="done"
-              onSubmitEditing={submit}
-            />
-            <Pressable onPress={() => setQuickAdd(true)} hitSlop={8} style={styles.mic}>
-              <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
-            </Pressable>
-            <Pressable
-              onPress={submit}
-              style={[styles.addBtn, { backgroundColor: draft.trim() ? colors.accent : colors.line }]}
-            >
-              <Ionicons name="add" size={24} color={draft.trim() ? colors.accentInk : colors.muted} />
-            </Pressable>
-          </View>
-        </SafeAreaView>
+        <BlurView
+          intensity={scheme === 'dark' ? 40 : 60}
+          tint={colors.blurTint}
+          experimentalBlurMethod="dimezisBlurView"
+          style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
+        >
+          <SafeAreaView edges={['bottom']}>
+            <View style={styles.addBar}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Add an item…"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, { color: colors.ink, backgroundColor: colors.glassFill, borderColor: colors.glassBorder }]}
+                returnKeyType="done"
+                onSubmitEditing={submit}
+              />
+              <Pressable onPress={() => setQuickAdd(true)} hitSlop={8} style={styles.mic}>
+                <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
+              </Pressable>
+              <Pressable
+                onPress={submit}
+                style={[styles.addBtn, { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 }]}
+              >
+                <Ionicons name="add" size={24} color={colors.accentInk} />
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </BlurView>
       </KeyboardAvoidingView>
 
       <ItemSheet
@@ -222,7 +248,8 @@ export default function ListDetailScreen() {
         onClose={() => setSheetItemId(null)}
       />
       <QuickAddSheet visible={quickAdd} listId={list.id} onClose={() => setQuickAdd(false)} />
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -251,6 +278,7 @@ function SwipeableItemRow({
   const { colors } = useTheme();
   const tx = useSharedValue(0); // 0 = closed, -DELETE_WIDTH = open
   const startX = useSharedValue(0);
+  const pastThreshold = useSharedValue(false);
   const openRef = useRef(false);
   const swipingRef = useRef(false);
 
@@ -280,6 +308,12 @@ function SwipeableItemRow({
     .onUpdate((e) => {
       const next = startX.value + e.translationX;
       tx.value = Math.min(0, Math.max(-DELETE_WIDTH, next));
+      // Rigid snap the instant the swipe crosses the open/close threshold.
+      const beyond = tx.value < -DELETE_WIDTH / 2;
+      if (beyond !== pastThreshold.value) {
+        pastThreshold.value = beyond;
+        runOnJS(haptics.snap)();
+      }
     })
     .onEnd(() => {
       const shouldOpen = tx.value < -DELETE_WIDTH / 2;
@@ -314,7 +348,7 @@ function SwipeableItemRow({
     <View style={styles.swipeWrap}>
       <GestureDetector gesture={pan}>
         <Animated.View
-          style={[styles.itemRow, { borderBottomColor: colors.line, backgroundColor: colors.bg }, rowStyle]}
+          style={[styles.itemRow, { borderBottomColor: colors.glassBorder }, rowStyle]}
         >
           <Pressable onPress={guard(onToggle)} hitSlop={8}>
             <View
@@ -398,6 +432,7 @@ function Stat({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  fillTransparent: { flex: 1, backgroundColor: 'transparent' },
   grow: { flex: 1, minWidth: 0 },
   header: {
     flexDirection: 'row',
@@ -411,8 +446,6 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 3 },
   budget: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: radii.md,
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
@@ -466,13 +499,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
   },
   deleteText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  addBarGlass: { borderTopWidth: StyleSheet.hairlineWidth },
   addBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderTopWidth: 1,
   },
   input: {
     flex: 1,

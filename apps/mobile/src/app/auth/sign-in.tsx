@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
+import { MeshBackground } from '@/components/mesh-background';
 import { useAuth } from '@/store/auth';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -43,7 +44,9 @@ export default function SignInScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
+    <View style={styles.root}>
+      <MeshBackground />
+      <SafeAreaView style={styles.rootTransparent} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.fill}
@@ -113,12 +116,14 @@ export default function SignInScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  rootTransparent: { flex: 1, backgroundColor: 'transparent' },
   fill: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   body: { padding: spacing.lg, gap: spacing.lg, marginTop: spacing.md },

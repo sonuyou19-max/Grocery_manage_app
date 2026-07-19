@@ -13,6 +13,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { haptics } from '@/lib/haptics';
 import type { List } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -107,6 +108,7 @@ function Row({ list, positions, count, onCommit, onDelete }: RowProps) {
       dragging.value = true;
       startY.value = (positions.value[id] ?? 0) * STEP;
       dragY.value = startY.value;
+      runOnJS(haptics.tick)(); // picked up a card
     })
     .onUpdate((e) => {
       dragY.value = startY.value + e.translationY;
@@ -128,6 +130,7 @@ function Row({ list, positions, count, onCommit, onDelete }: RowProps) {
         }
         next[id] = newIndex;
         positions.value = next;
+        runOnJS(haptics.snap)(); // snapped into a new slot
       }
     })
     .onEnd(() => {
