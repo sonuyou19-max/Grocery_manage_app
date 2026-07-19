@@ -13,7 +13,6 @@ import {
 import type { ItemCategory, ParsedItem } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
-import { learnGroup } from '@/lib/nutrition';
 import { supabase } from '@/lib/supabase';
 import { uuidv4 } from '@/lib/uuid';
 import { useAuth } from '@/store/auth';
@@ -180,12 +179,9 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         );
         if (category === 'other' && !isKnown(clean)) {
           resolveCategoryAsync(clean).then((res) => {
-            if (!res) return;
-            if (res.group) void learnGroup(clean, res.group);
-            if (res.category !== 'other') {
-              patchItem(listId, id, { category: res.category });
-              void learnCategory(clean, res.category);
-            }
+            if (!res || res.category === 'other') return;
+            patchItem(listId, id, { category: res.category });
+            void learnCategory(clean, res.category);
           });
         }
         return id;
@@ -406,13 +402,10 @@ function CloudGroceriesProvider({
           });
         if (category === 'other' && !isKnown(clean)) {
           resolveCategoryAsync(clean).then((res) => {
-            if (!res) return;
-            if (res.group) void learnGroup(clean, res.group);
-            if (res.category !== 'other') {
-              patchLocalItem(listId, id, { category: res.category });
-              void supabase.from('list_items').update({ category: res.category }).eq('id', id);
-              void learnCategory(clean, res.category);
-            }
+            if (!res || res.category === 'other') return;
+            patchLocalItem(listId, id, { category: res.category });
+            void supabase.from('list_items').update({ category: res.category }).eq('id', id);
+            void learnCategory(clean, res.category);
           });
         }
         return id;

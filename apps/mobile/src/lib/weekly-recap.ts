@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
+import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
 /**
  * The AI weekly recap: the client aggregates a snapshot (no raw history, just
@@ -64,4 +64,26 @@ export async function setCachedRecap(scope: string, text: string): Promise<void>
   } catch {
     // best-effort
   }
+}
+
+// --- Shared (household) recap: one row per household, seen by every member ---
+
+/** This household's stored recap, or null (also null before the table exists). */
+export async function getSharedRecap(householdId: string): Promise<{ week: string; text: string } | null> {
+  const { data, error } = await supabase
+    .from('household_recaps')
+    .select('week, text')
+    .eq('household_id', householdId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { week: data.week as string, text: data.text as string };
+}
+
+export async function setSharedRecap(householdId: string, text: string): Promise<void> {
+  await supabase
+    .from('household_recaps')
+    .upsert(
+      { household_id: householdId, week: weekKey(), text, updated_at: new Date().toISOString() },
+      { onConflict: 'household_id' },
+    );
 }

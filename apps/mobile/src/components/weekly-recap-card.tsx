@@ -6,10 +6,13 @@ import { Card } from '@/components/card';
 import { CATEGORY_LABELS } from '@/lib/categorize';
 import { basketBalance } from '@/lib/nutrition';
 import { dueAt } from '@/lib/pantry-intel';
+import { supabase } from '@/lib/supabase';
 import {
   generateRecap,
   getCachedRecap,
+  getSharedRecap,
   setCachedRecap,
+  setSharedRecap,
   weekKey,
   type RecapPayload,
 } from '@/lib/weekly-recap';
@@ -88,12 +91,22 @@ export function WeeklyRecapCard() {
       setPhase('empty');
       return;
     }
+    // In a household the recap is shared (one per household per week, seen by
+    // everyone); logged-out / solo falls back to a per-device weekly cache.
     if (!force) {
-      const cached = await getCachedRecap(scope);
-      if (cached) {
-        setText(cached);
+      const cached = household ? await getSharedRecap(household.id) : null;
+      if (household && cached && cached.week === weekKey()) {
+        setText(cached.text);
         setPhase('ready');
         return;
+      }
+      if (!household) {
+        const local = await getCachedRecap(scope);
+        if (local) {
+          setText(local);
+          setPhase('ready');
+          return;
+        }
       }
     }
     setPhase('loading');
@@ -101,7 +114,8 @@ export function WeeklyRecapCard() {
     if (recap) {
       setText(recap);
       setPhase('ready');
-      void setCachedRecap(scope, recap);
+      if (household) void setSharedRecap(household.id, recap);
+      else void setCachedRecap(scope, recap);
     } else {
       setPhase('error');
     }
@@ -111,6 +125,28 @@ export function WeeklyRecapCard() {
   useEffect(() => {
     void run(false);
   }, [scope, weekKey(), enoughData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live-update when another member generates this week's recap.
+  useEffect(() => {
+    if (!household) return;
+    const channel = supabase
+      .channel(`recap-${household.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'household_recaps', filter: `household_id=eq.${household.id}` },
+        async () => {
+          const shared = await getSharedRecap(household.id);
+          if (shared && shared.week === weekKey()) {
+            setText(shared.text);
+            setPhase('ready');
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [household?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card accented>

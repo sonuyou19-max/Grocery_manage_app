@@ -1,5 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import type { FoodGroup, ItemCategory } from '@korb/shared';
 
 /**
@@ -8,9 +6,8 @@ import type { FoodGroup, ItemCategory } from '@korb/shared';
  * weights, so each food item counts once toward its group. Household /
  * personal-care items are excluded (nonfood).
  *
- * Groups come from three sources, cheapest first: a small keyword map, then the
- * item's category, then the AI food group cached alongside its category (so the
- * refinement costs no extra calls — it rides on the categorize request).
+ * Classification is deterministic (a shared keyword map, then the item's shared
+ * category) so every member of a household computes the exact same mix.
  */
 
 /** Groups we actually display (nonfood items are dropped from the mix). */
@@ -48,38 +45,30 @@ const CATEGORY_GROUP: Record<ItemCategory, FoodGroup> = {
   other: 'other',
 };
 
-// Cheap, free corrections for common items the category map gets wrong
-// (e.g. oil is "pantry" but nutritionally a fat).
+// Keyword overrides so the mix is accurate AND identical on every device (the
+// category is already shared; this map is the same code everywhere). Refines
+// the cases the category map alone gets wrong — oil is "pantry" but a fat, a
+// potato is a carb, etc. Kept deterministic on purpose: a per-device AI cache
+// would make the same household show different mixes.
 const GROUP_KEYWORDS: Record<string, FoodGroup> = {
-  oil: 'fats', olive: 'fats', butter: 'fats', nuts: 'fats', nut: 'fats',
-  almond: 'fats', almonds: 'fats', peanut: 'fats', avocado: 'fats', seeds: 'fats',
-  beans: 'protein', bean: 'protein', lentil: 'protein', lentils: 'protein',
-  chickpea: 'protein', chickpeas: 'protein', tofu: 'protein', hummus: 'protein',
+  // fats
+  oil: 'fats', olive: 'fats', butter: 'fats', margarine: 'fats', nuts: 'fats', nut: 'fats',
+  almond: 'fats', almonds: 'fats', peanut: 'fats', cashew: 'fats', avocado: 'fats', seeds: 'fats', tahini: 'fats',
+  // protein
+  chicken: 'protein', beef: 'protein', pork: 'protein', turkey: 'protein', lamb: 'protein',
+  fish: 'protein', salmon: 'protein', tuna: 'protein', shrimp: 'protein', ham: 'protein', bacon: 'protein', sausage: 'protein',
+  egg: 'protein', eggs: 'protein', tofu: 'protein', tempeh: 'protein', bean: 'protein', beans: 'protein',
+  lentil: 'protein', lentils: 'protein', chickpea: 'protein', chickpeas: 'protein', hummus: 'protein',
+  yogurt: 'protein', yoghurt: 'protein', cheese: 'protein', milk: 'protein',
+  // carbs
+  bread: 'carbs', rice: 'carbs', pasta: 'carbs', noodles: 'carbs', cereal: 'carbs', oats: 'carbs',
+  flour: 'carbs', sugar: 'carbs', potato: 'carbs', potatoes: 'carbs', tortilla: 'carbs',
+  // produce
+  apple: 'produce', apples: 'produce', banana: 'produce', bananas: 'produce', tomato: 'produce',
+  onion: 'produce', carrot: 'produce', lettuce: 'produce', spinach: 'produce', cucumber: 'produce', broccoli: 'produce',
 };
 
 const norm = (name: string) => name.trim().toLowerCase();
-
-// AI-refined groups keyed by normalized name, hydrated at startup.
-const CACHE_KEY = 'korb.foodGroupCache.v1';
-let learned: Record<string, FoodGroup> = {};
-
-export async function hydrateGroupCache(): Promise<void> {
-  try {
-    const raw = await AsyncStorage.getItem(CACHE_KEY);
-    if (raw) learned = JSON.parse(raw);
-  } catch {
-    // ignore corrupt cache
-  }
-}
-
-export async function learnGroup(name: string, group: FoodGroup): Promise<void> {
-  learned[norm(name)] = group;
-  try {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(learned));
-  } catch {
-    // best-effort persistence
-  }
-}
 
 function keywordGroup(name: string): FoodGroup | null {
   for (const word of norm(name).split(/\s+/)) {
@@ -88,9 +77,13 @@ function keywordGroup(name: string): FoodGroup | null {
   return null;
 }
 
-/** An item's display food group, or null when it's non-food (excluded). */
+/**
+ * An item's display food group, or null when it's non-food (excluded).
+ * Deterministic (keyword → shared category), so every household member's app
+ * computes the identical mix.
+ */
 export function foodGroupOf(name: string, category: ItemCategory): DisplayGroup | null {
-  const g = learned[norm(name)] ?? keywordGroup(name) ?? CATEGORY_GROUP[category];
+  const g = keywordGroup(name) ?? CATEGORY_GROUP[category];
   return g === 'nonfood' ? null : g;
 }
 
