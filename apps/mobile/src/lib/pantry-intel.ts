@@ -81,6 +81,23 @@ export function isDue(stat: ItemStat, now: number): boolean {
   return stat.lastPurchasedAt > 0 && now >= dueAt(stat);
 }
 
+/** Fraction of an item's lifespan still remaining (1 = just bought, 0 = out). */
+export function lifeRemaining(stat: ItemStat, now: number): number {
+  if (!stat.lastPurchasedAt) return 1;
+  const span = effectiveInterval(stat) * DAY;
+  if (span <= 0) return 1;
+  return Math.max(0, Math.min(1, 1 - (now - stat.lastPurchasedAt) / span));
+}
+
+/** Short status for a pantry row: learning / ~N days left / running low. */
+export function statusLabel(stat: ItemStat, now: number): string {
+  if (!stat.lastPurchasedAt) return 'Learning your pace';
+  const days = Math.ceil((dueAt(stat) - now) / DAY);
+  if (days <= 0) return 'Running low';
+  if (days === 1) return '~1 day left';
+  return `~${days} days left`;
+}
+
 /** Human "last bought" label for the card subtitle. */
 export function lastBoughtLabel(lastPurchasedAt: number, now: number): string {
   if (!lastPurchasedAt) return 'Never bought yet';
