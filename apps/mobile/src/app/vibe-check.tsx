@@ -346,19 +346,26 @@ function BackCard({ depth }: { depth: number }) {
 
 /** "All Set." glow + a light particle burst when the deck is cleared. */
 function Celebration({ empty }: { empty: boolean }) {
-  const { colors } = useTheme();
   const glow = useSharedValue(0);
   useEffect(() => {
     glow.value = withTiming(1, { duration: 700 });
   }, [glow]);
   const glowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glow.value, [0, 1], [0, 0.55], Extrapolation.CLAMP),
-    transform: [{ scale: interpolate(glow.value, [0, 1], [0.6, 1.4], Extrapolation.CLAMP) }],
+    opacity: interpolate(glow.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(glow.value, [0, 1], [0.6, 1.15], Extrapolation.CLAMP) }],
   }));
 
   return (
     <View style={styles.celebrate}>
-      <Animated.View style={[styles.celebrateGlow, { backgroundColor: colors.accent }, glowStyle]} />
+      {/* Soft radial bloom: concentric translucent rings, brightest at the
+          centre, fully contained so nothing clips the screen edges. */}
+      <Animated.View style={[styles.bloomWrap, glowStyle]} pointerEvents="none">
+        <View style={[styles.ring, { width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(95,184,120,0.10)' }]}>
+          <View style={[styles.ring, { width: 210, height: 210, borderRadius: 105, backgroundColor: 'rgba(95,184,120,0.14)' }]}>
+            <View style={[styles.ring, { width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(95,184,120,0.22)' }]} />
+          </View>
+        </View>
+      </Animated.View>
       {!empty && <Confetti />}
       <Text style={[styles.allSet, { color: '#FFFFFF' }]}>{empty ? 'Nothing to review' : 'All Set.'}</Text>
       <Text style={styles.allSetSub}>
@@ -472,7 +479,8 @@ const styles = StyleSheet.create({
   remaining: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '600' },
 
   celebrate: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  celebrateGlow: { position: 'absolute', width: 320, height: 320, borderRadius: 160 },
+  bloomWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  ring: { alignItems: 'center', justifyContent: 'center' },
   allSet: { fontSize: 44, fontWeight: '800', letterSpacing: -1.6 },
   allSetSub: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '500' },
   particle: { position: 'absolute', width: 8, height: 8, borderRadius: 2 },
