@@ -67,6 +67,10 @@ export default function RootLayout() {
                     name="vibe-check"
                     options={{ presentation: 'fullScreenModal', animation: 'fade' }}
                   />
+                  <Stack.Screen
+                    name="onboarding"
+                    options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }}
+                  />
                 </Stack>
                 <StatusBar style="auto" />
               </PantryIntelProvider>

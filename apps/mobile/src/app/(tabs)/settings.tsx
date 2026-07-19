@@ -240,6 +240,15 @@ export default function SettingsScreen() {
               </View>
             </Card>
           </Pressable>
+          <Pressable onPress={() => router.push('/onboarding')}>
+            <Card>
+              <View style={styles.row}>
+                <Ionicons name="book-outline" size={22} color={colors.accent} />
+                <Text style={[type.body, styles.grow, { color: colors.ink }]}>Preview tutorial</Text>
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+              </View>
+            </Card>
+          </Pressable>
         </>
       )}
 

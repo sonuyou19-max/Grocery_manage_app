@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
@@ -10,6 +10,7 @@ import { Fab } from '@/components/fab';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { euros } from '@/lib/money';
+import { hasSeenOnboarding } from '@/lib/onboarding';
 import { useAuth } from '@/store/auth';
 import { useGroceries, type List } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -68,6 +69,17 @@ export default function ListsScreen() {
   const vibeEmpty = vibeEmptyMessage();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // On first launch, show the feature tour over the home screen (once per
+  // install). The ref guards against the effect firing twice.
+  const tourChecked = useRef(false);
+  useEffect(() => {
+    if (tourChecked.current) return;
+    tourChecked.current = true;
+    void hasSeenOnboarding().then((seen) => {
+      if (!seen) router.push('/onboarding');
+    });
+  }, []);
 
   // First name from the household display name the user chose, when available.
   const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
