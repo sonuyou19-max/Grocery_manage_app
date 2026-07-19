@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import Animated, {
   cancelAnimation,
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
@@ -62,22 +63,38 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [selected, setSelected] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [kbHeight, setKbHeight] = useState(0);
 
+  const inputRef = useRef<TextInput>(null);
   const sheetY = useSharedValue(screenH);
+  // Animated bottom inset for the content: safe-area at rest, keyboard height
+  // when it's up. The sheet's background stays anchored to the screen bottom so
+  // nothing shows through; only the content rides above the keyboard.
+  const kbInset = useSharedValue(insets.bottom);
 
-  // Measure the keyboard ourselves and lift the sheet by its height —
-  // KeyboardAvoidingView doesn't reliably push content up inside a Modal.
+  const focusInput = () => inputRef.current?.focus();
+
+  // Track the keyboard and animate the content inset in lockstep with it
+  // (same duration/curve), so lifting the content never jumps.
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates.height));
-    const hide = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    const show = Keyboard.addListener(showEvt, (e) => {
+      kbInset.value = withTiming(e.endCoordinates.height, {
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+      });
+    });
+    const hide = Keyboard.addListener(hideEvt, (e) => {
+      kbInset.value = withTiming(insets.bottom, {
+        duration: (e && e.duration) || 200,
+        easing: Easing.out(Easing.cubic),
+      });
+    });
     return () => {
       show.remove();
       hide.remove();
     };
-  }, []);
+  }, [insets.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (visible) {
@@ -87,13 +104,20 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
       setSelected([]);
       setError(null);
       cancelAnimation(sheetY);
-      sheetY.value = withTiming(0, { duration: 260 });
+      kbInset.value = insets.bottom;
+      sheetY.value = screenH;
+      // Slide the sheet fully up first, THEN raise the keyboard — decoupling the
+      // two motions is what makes the entrance read as smooth.
+      sheetY.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(focusInput)();
+      });
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const requestClose = () => {
+    Keyboard.dismiss();
     cancelAnimation(sheetY);
-    sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
+    sheetY.value = withTiming(screenH, { duration: 240, easing: Easing.in(Easing.cubic) }, (finished) => {
       if (finished) runOnJS(onClose)();
     });
   };
@@ -102,6 +126,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(sheetY.value, [0, screenH * 0.7], [1, 0], Extrapolation.CLAMP),
   }));
+  const keyboardSpacerStyle = useAnimatedStyle(() => ({ height: kbInset.value }));
 
   const runParse = async () => {
     const trimmed = text.trim();
@@ -139,13 +164,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
           <Pressable style={styles.fillPlain} onPress={requestClose} />
         </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.sheet,
-            { marginBottom: kbHeight > 0 ? kbHeight : insets.bottom },
-            sheetStyle,
-          ]}
-        >
+        <Animated.View style={[styles.sheet, sheetStyle]}>
           <BlurView
             intensity={scheme === 'dark' ? 40 : 60}
             tint={colors.blurTint}
@@ -202,13 +221,13 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
           ) : (
             <View style={styles.body}>
               <TextInput
+                ref={inputRef}
                 value={text}
                 onChangeText={setText}
                 placeholder="e.g. we’re out of milk, need 2kg potatoes and coffee for the weekend"
                 placeholderTextColor={colors.muted}
                 style={[styles.input, { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line }]}
                 multiline
-                autoFocus
                 editable={phase !== 'loading'}
               />
               {/* Button sits directly under the field so the keyboard never hides it. */}
@@ -236,7 +255,13 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
           {phase === 'review' && (
             <View style={[styles.footer, { borderTopColor: colors.line }]}>
               <View style={styles.footerRow}>
-                <Pressable onPress={() => setPhase('input')} style={styles.back}>
+                <Pressable
+                  onPress={() => {
+                    setPhase('input');
+                    setTimeout(focusInput, 60);
+                  }}
+                  style={styles.back}
+                >
                   <Text style={[type.body, { color: colors.muted }]}>Back</Text>
                 </Pressable>
                 <Pressable
@@ -251,6 +276,11 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               </View>
             </View>
           )}
+
+          {/* Fills the space in front of the keyboard (or the safe area at rest),
+              lifting the content while the blurred background stays anchored to
+              the screen bottom — so no gap ever shows at the sheet's corners. */}
+          <Animated.View style={keyboardSpacerStyle} />
         </Animated.View>
       </View>
     </Modal>
