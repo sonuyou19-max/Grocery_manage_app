@@ -9,12 +9,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, useTheme } from '@/theme';
 
 /** Pill dimensions, exported so screens can reserve bottom clearance for it. */
-export const TAB_BAR_HEIGHT = 62;
+export const TAB_BAR_HEIGHT = 68;
 export const TAB_BAR_GAP = 12; // float gap above the home indicator
 
 const H_MARGIN = spacing.lg;
 const INNER_PAD = 6;
-const BUBBLE_INSET = 4;
+// The active highlight hugs the icon (a compact lozenge), not the whole column.
+const BUBBLE_W = 58;
+const BUBBLE_H = 36;
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -44,9 +46,11 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
     active.value = withSpring(state.index, { damping: 15, stiffness: 150, mass: 0.7 });
   }, [state.index, active]);
 
+  // Lozenge centred under each tab's icon; slides one tab-width per index.
   const bubbleStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: active.value * tabWidth }],
   }));
+  const bubbleBase = { left: INNER_PAD + tabWidth / 2 - BUBBLE_W / 2 };
 
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }]} pointerEvents="box-none">
@@ -59,9 +63,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
         >
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]} pointerEvents="none" />
           <View style={styles.row}>
-            <Animated.View
-              style={[styles.bubble, { width: tabWidth - BUBBLE_INSET * 2, backgroundColor: colors.accentSoft }, bubbleStyle]}
-            />
+            <Animated.View style={[styles.bubble, bubbleBase, { backgroundColor: colors.accentSoft }, bubbleStyle]} />
             {state.routes.map((route, i) => {
               const focused = state.index === i;
               const { options } = descriptors[route.key];
@@ -82,11 +84,13 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                   accessibilityState={focused ? { selected: true } : {}}
                   accessibilityLabel={label}
                 >
-                  <Ionicons
-                    name={focused ? activeIcon : inactiveIcon}
-                    size={22}
-                    color={focused ? colors.accent : colors.muted}
-                  />
+                  <View style={styles.iconZone}>
+                    <Ionicons
+                      name={focused ? activeIcon : inactiveIcon}
+                      size={22}
+                      color={focused ? colors.accent : colors.muted}
+                    />
+                  </View>
                   <Text style={[styles.label, { color: focused ? colors.accent : colors.muted }]} numberOfLines={1}>
                     {label}
                   </Text>
@@ -118,7 +122,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   row: { flexDirection: 'row', paddingHorizontal: INNER_PAD },
-  bubble: { position: 'absolute', left: INNER_PAD + BUBBLE_INSET, top: 8, bottom: 8, borderRadius: 21 },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 8 },
-  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
+  bubble: {
+    position: 'absolute',
+    top: 0,
+    width: BUBBLE_W,
+    height: BUBBLE_H,
+    borderRadius: BUBBLE_H / 2,
+  },
+  tab: { flex: 1, alignItems: 'center' },
+  iconZone: { height: BUBBLE_H, alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1, marginTop: 4 },
 });
