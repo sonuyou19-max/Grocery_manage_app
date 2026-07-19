@@ -8,7 +8,6 @@ import { EditList } from '@/components/edit-list';
 import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
 import { Screen } from '@/components/screen';
-import { StoreGroups } from '@/components/store-groups';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { euros } from '@/lib/money';
 import { useAuth } from '@/store/auth';
@@ -142,8 +141,6 @@ export default function ListsScreen() {
                 <ListCard key={l.id} list={l} onLongPress={() => setEditing(true)} />
               ))
             )}
-
-            {!editing && <StoreGroups />}
           </>
         )}
       </Screen>
