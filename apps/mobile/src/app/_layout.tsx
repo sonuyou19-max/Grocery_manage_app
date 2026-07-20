@@ -10,7 +10,9 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { ErrorBoundary } from '@/components/error-boundary';
 import { hydrateCategoryCache } from '@/lib/categorize';
+import { initMonitoring } from '@/lib/monitoring';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
@@ -46,6 +48,8 @@ export default function RootLayout() {
   const scheme = useColorScheme();
 
   useEffect(() => {
+    // Start crash/error reporting (no-op until a Sentry DSN is configured).
+    initMonitoring();
     // Load learned item→category mappings and remembered store preferences.
     void hydrateCategoryCache();
     void hydrateStorePrefs();
@@ -53,6 +57,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
         <AuthProvider>
           <HouseholdProvider>
@@ -79,6 +84,7 @@ export default function RootLayout() {
           </HouseholdProvider>
         </AuthProvider>
       </ThemeProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }
