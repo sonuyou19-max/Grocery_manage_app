@@ -275,6 +275,14 @@ export default function ListDetailScreen() {
             {list.store ?? 'Any store'} · {checkedCount}/{list.items.length} in cart
           </Text>
         </View>
+        {list.items.length > 0 && (
+          <Pressable
+            onPress={() => router.push({ pathname: '/shop/[id]', params: { id: list.id } })}
+            hitSlop={12}
+          >
+            <Ionicons name="bag-check-outline" size={22} color={colors.accent} />
+          </Pressable>
+        )}
         <Pressable onPress={inviteFamily} hitSlop={12}>
           <Ionicons name="person-add-outline" size={22} color={colors.accent} />
         </Pressable>
