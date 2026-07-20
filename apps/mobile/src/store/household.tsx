@@ -50,7 +50,11 @@ const Ctx = createContext<HouseholdContext | null>(null);
 
 const friendlyError = (message: string): string => {
   if (message.includes('invalid_code')) return 'That invite code didn’t match any household.';
-  if (message.includes('not_authenticated')) return 'Please sign in first.';
+  // Postgres denies the create/join RPCs to the `anon` role, so a caller who
+  // isn't signed in gets "permission denied for function …" — treat it, and the
+  // in-function not_authenticated guard, as the same "sign in first" case.
+  if (message.includes('not_authenticated') || message.includes('permission denied'))
+    return 'Please sign in first to create or join a household.';
   if (message.includes('not_owner')) return 'Only the owner can remove members.';
   if (message.includes('use_leave')) return 'Use “Leave household” to remove yourself.';
   return message;
@@ -132,6 +136,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       loading,
       refresh,
       createHousehold: async (name, displayName) => {
+        if (!user) return { error: 'Please sign in first to create or join a household.' };
         const { error } = await supabase.rpc('create_household', {
           p_name: name,
           p_display_name: displayName,
@@ -141,6 +146,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         return {};
       },
       joinHousehold: async (code, displayName) => {
+        if (!user) return { error: 'Please sign in first to create or join a household.' };
         const { error } = await supabase.rpc('join_household', {
           p_code: code,
           p_display_name: displayName,
@@ -187,7 +193,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         return {};
       },
     }),
-    [household, members, loading, refresh],
+    [household, members, loading, refresh, user],
   );
 
   // Live household updates (e.g. a rename by another member) reach everyone via

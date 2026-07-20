@@ -35,6 +35,7 @@ import { SupermarketBadge } from '@/components/supermarket-badge';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { euros } from '@/lib/money';
+import { useAuth } from '@/store/auth';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { usePantryIntel } from '@/store/pantry-intel';
@@ -49,6 +50,7 @@ export default function ListDetailScreen() {
   const { colors, scheme } = useTheme();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem } = useGroceries();
+  const { user } = useAuth();
   const { household } = useHousehold();
   const { logPurchase } = usePantryIntel();
   const [draft, setDraft] = useState('');
@@ -182,6 +184,17 @@ export default function ListDetailScreen() {
   // Invite a family member: open WhatsApp pre-filled with the household join
   // code (falls back to the system share sheet if WhatsApp isn't available).
   const inviteFamily = async () => {
+    if (!user) {
+      Alert.alert(
+        'Sign in to share',
+        'Sharing a list with your household needs an account. Signing in only takes a moment.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Sign in', onPress: () => router.push('/auth/sign-in') },
+        ],
+      );
+      return;
+    }
     if (!household) {
       Alert.alert(
         'Share this list',
@@ -224,6 +237,10 @@ export default function ListDetailScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
+      <KeyboardAvoidingView
+        style={styles.fillTransparent}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <SafeAreaView style={styles.fillTransparent} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
@@ -270,7 +287,7 @@ export default function ListDetailScreen() {
       </GlassView>
 
       {/* Items */}
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.list}>
         {grouped.map((group) => (
           <View key={group.category}>
             <View style={styles.catRow}>
@@ -297,37 +314,38 @@ export default function ListDetailScreen() {
         )}
       </ScrollView>
 
-      {/* Add bar */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <BlurView
-          intensity={scheme === 'dark' ? 40 : 60}
-          tint={colors.blurTint}
-          experimentalBlurMethod="dimezisBlurView"
-          style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
-        >
-          <SafeAreaView edges={['bottom']}>
-            <View style={styles.addBar}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Add an item…"
-                placeholderTextColor={colors.muted}
-                style={[styles.input, { color: colors.ink, backgroundColor: colors.glassFill, borderColor: colors.glassBorder }]}
-                returnKeyType="done"
-                onSubmitEditing={submit}
-              />
-              <Pressable onPress={() => setQuickAdd(true)} hitSlop={8} style={styles.mic}>
-                <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
-              </Pressable>
-              <Pressable
-                onPress={submit}
-                style={[styles.addBtn, { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 }]}
-              >
-                <Ionicons name="add" size={24} color={colors.accentInk} />
-              </Pressable>
-            </View>
-          </SafeAreaView>
-        </BlurView>
+      {/* Add bar — pinned above the keyboard by the screen-level
+          KeyboardAvoidingView (padding on iOS, height on Android). */}
+      <BlurView
+        intensity={scheme === 'dark' ? 40 : 60}
+        tint={colors.blurTint}
+        experimentalBlurMethod="dimezisBlurView"
+        style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
+      >
+        <SafeAreaView edges={['bottom']}>
+          <View style={styles.addBar}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Add an item…"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, { color: colors.ink, backgroundColor: colors.glassFill, borderColor: colors.glassBorder }]}
+              returnKeyType="done"
+              onSubmitEditing={submit}
+            />
+            <Pressable onPress={() => setQuickAdd(true)} hitSlop={8} style={styles.mic}>
+              <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
+            </Pressable>
+            <Pressable
+              onPress={submit}
+              style={[styles.addBtn, { backgroundColor: colors.accent, opacity: draft.trim() ? 1 : 0.45 }]}
+            >
+              <Ionicons name="add" size={24} color={colors.accentInk} />
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </BlurView>
+      </SafeAreaView>
       </KeyboardAvoidingView>
 
       <ItemSheet
@@ -337,7 +355,6 @@ export default function ListDetailScreen() {
         onClose={() => setSheetItemId(null)}
       />
       <QuickAddSheet visible={quickAdd} listId={list.id} onClose={() => setQuickAdd(false)} />
-      </SafeAreaView>
     </View>
   );
 }
@@ -523,6 +540,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   fillTransparent: { flex: 1, backgroundColor: 'transparent' },
   grow: { flex: 1, minWidth: 0 },
+  scroll: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
