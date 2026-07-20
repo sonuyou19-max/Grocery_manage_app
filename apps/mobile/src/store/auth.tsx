@@ -15,9 +15,9 @@ import { supabase } from '@/lib/supabase';
  * local data; signing in unlocks household sharing and sync. Session is
  * persisted by the Supabase client (AsyncStorage).
  *
- * Password methods are the temporary login while transactional email
- * deliverability is being set up; the OTP-code methods stay ready for when a
- * real sending domain is in place.
+ * The production sign-in is passwordless email codes (sendCode / verifyCode),
+ * which requires a working email sender in Supabase (Auth → SMTP). The
+ * password methods are kept as a fallback but are no longer used by the UI.
  */
 
 interface AuthContext {

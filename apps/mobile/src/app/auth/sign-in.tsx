@@ -7,115 +7,140 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
 import { useAuth } from '@/store/auth';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { spacing, type, useTheme } from '@/theme';
 
 /**
- * Temporary email + password sign-in. (Passwordless email codes return once a
- * real sending domain is configured — see auth store.)
+ * Passwordless sign-in: enter an email, receive a 6-digit code, verify it.
+ * The same flow creates an account on first use, so there's no separate
+ * sign-up — and no password to manage. Requires a working email sender
+ * configured in Supabase (Auth → SMTP).
  */
 export default function SignInScreen() {
   const { colors } = useTheme();
-  const { signInPassword, signUpPassword } = useAuth();
+  const { sendCode, verifyCode } = useAuth();
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [phase, setPhase] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const submit = async () => {
+  const requestCode = async () => {
     if (!email.includes('@')) {
       setError('Enter a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    setBusy(true);
+    setError(null);
+    const { error: err } = await sendCode(email);
+    setBusy(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    setNotice(`We emailed a 6-digit code to ${email.trim()}.`);
+    setCode('');
+    setPhase('code');
+  };
+
+  const verify = async () => {
+    if (code.trim().length < 6) {
+      setError('Enter the 6-digit code from your email.');
       return;
     }
     setBusy(true);
     setError(null);
-    const { error: err } =
-      mode === 'signup'
-        ? await signUpPassword(email, password)
-        : await signInPassword(email, password);
+    const { error: err } = await verifyCode(email, code);
     setBusy(false);
-    if (err) setError(err);
-    else router.back(); // back to Settings, now signed in
+    if (err) {
+      setError(err);
+      return;
+    }
+    router.back(); // back to Settings, now signed in
+  };
+
+  const backToEmail = () => {
+    setPhase('email');
+    setError(null);
+    setNotice(null);
+    setCode('');
   };
 
   return (
     <View style={styles.root}>
       <MeshBackground />
       <SafeAreaView style={styles.rootTransparent} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.fill}
-      >
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={26} color={colors.ink} />
-          </Pressable>
-        </View>
-
-        <View style={styles.body}>
-          <Text style={[type.h1, { color: colors.ink }]}>
-            {mode === 'signin' ? 'Sign in' : 'Create account'}
-          </Text>
-          <Text style={[type.bodyRegular, { color: colors.muted }]}>
-            Sign in to sync your lists and share them with your household.
-          </Text>
-
-          {/* Mode toggle */}
-          <View style={[styles.toggle, { borderColor: colors.line }]}>
-            {(['signin', 'signup'] as const).map((m) => {
-              const active = mode === m;
-              return (
-                <Pressable
-                  key={m}
-                  onPress={() => {
-                    setMode(m);
-                    setError(null);
-                  }}
-                  style={[styles.toggleBtn, active && { backgroundColor: colors.accentSoft }]}
-                >
-                  <Text style={[type.body, { color: active ? colors.accent : colors.muted }]}>
-                    {m === 'signin' ? 'Sign in' : 'Create account'}
-                  </Text>
-                </Pressable>
-              );
-            })}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.fill}
+        >
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => (phase === 'code' ? backToEmail() : router.back())}
+              hitSlop={12}
+            >
+              <Ionicons name="chevron-back" size={26} color={colors.ink} />
+            </Pressable>
           </View>
 
-          <FormField
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-          />
-          <FormField
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="At least 6 characters"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            onSubmitEditing={submit}
-            returnKeyType="done"
-          />
+          <View style={styles.body}>
+            <Text style={[type.h1, { color: colors.ink }]}>
+              {phase === 'email' ? 'Sign in' : 'Enter your code'}
+            </Text>
+            <Text style={[type.bodyRegular, { color: colors.muted }]}>
+              {phase === 'email'
+                ? 'Sync your lists and share them with your household. We’ll email you a code — no password needed.'
+                : notice}
+            </Text>
 
-          {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
+            {phase === 'email' ? (
+              <FormField
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                onSubmitEditing={requestCode}
+                returnKeyType="send"
+              />
+            ) : (
+              <FormField
+                label="6-digit code"
+                value={code}
+                onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                maxLength={6}
+                onSubmitEditing={verify}
+                returnKeyType="done"
+              />
+            )}
 
-          <PrimaryButton
-            label={mode === 'signin' ? 'Sign in' : 'Create account'}
-            onPress={submit}
-            loading={busy}
-          />
-        </View>
-      </KeyboardAvoidingView>
+            {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
+
+            {phase === 'email' ? (
+              <PrimaryButton label="Send code" onPress={requestCode} loading={busy} />
+            ) : (
+              <>
+                <PrimaryButton label="Verify & sign in" onPress={verify} loading={busy} />
+                <View style={styles.actions}>
+                  <Pressable onPress={requestCode} disabled={busy} hitSlop={8}>
+                    <Text style={[type.body, { color: colors.accent }]}>Resend code</Text>
+                  </Pressable>
+                  <Pressable onPress={backToEmail} hitSlop={8}>
+                    <Text style={[type.body, { color: colors.muted }]}>Use a different email</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
@@ -127,12 +152,5 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   body: { padding: spacing.lg, gap: spacing.lg, marginTop: spacing.md },
-  toggle: { flexDirection: 'row', borderWidth: 1, borderRadius: radii.md, padding: 3, gap: 3 },
-  toggleBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });
