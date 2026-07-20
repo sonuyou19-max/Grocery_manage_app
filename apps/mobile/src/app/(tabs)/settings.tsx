@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -16,6 +17,7 @@ import {
 
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
+import { PRIVACY_URL, TERMS_URL } from '@/lib/legal';
 import { normalizeKey } from '@/lib/pantry-intel';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
@@ -101,6 +103,12 @@ export default function SettingsScreen() {
           ]),
       },
     ]);
+  };
+
+  const openLegal = (doc: 'privacy' | 'terms') => {
+    const url = doc === 'privacy' ? PRIVACY_URL : TERMS_URL;
+    if (url) void Linking.openURL(url);
+    else router.push({ pathname: '/legal', params: { doc } });
   };
 
   const shareInvite = () => {
@@ -274,6 +282,23 @@ export default function SettingsScreen() {
         <Text style={[type.sub, { color: colors.muted }]}>
           Switch your phone to dark mode to see the dark theme.
         </Text>
+      </Card>
+
+      {/* Legal — reachable in-app (store-review requirement); opens the hosted
+          URL when one is configured, otherwise the bundled screen. */}
+      <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Legal</Text>
+      <Card>
+        <Pressable onPress={() => openLegal('privacy')} style={styles.row} hitSlop={6}>
+          <Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} />
+          <Text style={[type.body, styles.grow, { color: colors.ink }]}>Privacy Policy</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Pressable>
+        <View style={[styles.divider, { backgroundColor: colors.line }]} />
+        <Pressable onPress={() => openLegal('terms')} style={styles.row} hitSlop={6}>
+          <Ionicons name="document-text-outline" size={22} color={colors.accent} />
+          <Text style={[type.body, styles.grow, { color: colors.ink }]}>Terms of Service</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Pressable>
       </Card>
 
       {/* Dev-only: load sample data to preview the Vibe Check without waiting days. */}
