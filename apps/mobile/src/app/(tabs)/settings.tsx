@@ -27,7 +27,7 @@ const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
   const { household, members, renameHousehold, leaveHousehold, removeMember } = useHousehold();
   const { seedDemo } = usePantryIntel();
   const { lists, deleteItem } = useGroceries();
@@ -70,6 +70,38 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
     ]);
+
+  const [deleting, setDeleting] = useState(false);
+
+  // Permanent account + data deletion (GDPR erasure / App Store requirement).
+  // Two-step confirm since it can't be undone and may delete a shared household.
+  const confirmDeleteAccount = () => {
+    const others = members.length > 1;
+    const detail = others
+      ? 'If you own this household, ownership passes to another member and your shared lists stay with them.'
+      : 'Your household — including all its lists and pantry history — is permanently deleted.';
+    Alert.alert('Delete account?', `This can’t be undone. ${detail}`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert('Are you sure?', 'This permanently deletes your account and all your data.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete account',
+              style: 'destructive',
+              onPress: async () => {
+                setDeleting(true);
+                const { error } = await deleteAccount();
+                setDeleting(false);
+                if (error) Alert.alert('Couldn’t delete', error);
+              },
+            },
+          ]),
+      },
+    ]);
+  };
 
   const shareInvite = () => {
     if (!household) return;
@@ -130,6 +162,23 @@ export default function SettingsScreen() {
               <Text style={[type.body, { color: colors.crit }]}>Sign out</Text>
             </Pressable>
           </View>
+          <View style={[styles.divider, { backgroundColor: colors.line }]} />
+          <Pressable
+            onPress={confirmDeleteAccount}
+            disabled={deleting}
+            style={styles.row}
+            hitSlop={8}
+          >
+            <Ionicons name="trash-outline" size={22} color={colors.crit} />
+            <View style={styles.grow}>
+              <Text style={[type.body, { color: colors.crit }]}>
+                {deleting ? 'Deleting…' : 'Delete account'}
+              </Text>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                Permanently remove your account and data.
+              </Text>
+            </View>
+          </Pressable>
         </Card>
       ) : (
         <Pressable onPress={() => router.push('/auth/sign-in')}>

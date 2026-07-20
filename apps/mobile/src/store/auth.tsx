@@ -33,6 +33,8 @@ interface AuthContext {
   /** Sign in with email + password. */
   signInPassword: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  /** Permanently delete the account and all its data, then sign out. */
+  deleteAccount: () => Promise<{ error?: string }>;
 }
 
 const Ctx = createContext<AuthContext | null>(null);
@@ -132,6 +134,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
       signOut: async () => {
         await supabase.auth.signOut();
+      },
+      deleteAccount: async () => {
+        try {
+          const { error } = await supabase.rpc('delete_account');
+          if (error) return { error: cleanError(error, 'Couldn’t delete your account. Please try again.') };
+          // The account is gone; drop the now-invalid session locally.
+          await supabase.auth.signOut();
+          return {};
+        } catch (e) {
+          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+        }
       },
     }),
     [session, initializing],
