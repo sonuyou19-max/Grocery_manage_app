@@ -1,20 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
 import { EditList } from '@/components/edit-list';
 import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
+import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
+import { WeeklyListSheet } from '@/components/weekly-list-sheet';
 import { euros } from '@/lib/money';
 import { hasSeenOnboarding } from '@/lib/onboarding';
+import { normalizeKey } from '@/lib/pantry-intel';
+import { buildWeeklySuggestions, type WeeklySuggestion } from '@/lib/weekly-list';
 import { useAuth } from '@/store/auth';
 import { useGroceries, type List } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
-import { useVibeDeck } from '@/store/pantry-intel';
+import { usePantryIntel, useVibeDeck } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /** Time-of-day greeting based on the device's local clock. */
@@ -62,13 +66,27 @@ const vibeEmptyMessage = () =>
 
 export default function ListsScreen() {
   const { colors } = useTheme();
-  const { lists, addList, deleteList, reorderLists } = useGroceries();
+  const { lists, addList, addParsedItem, deleteList, reorderLists } = useGroceries();
   const { household, members } = useHousehold();
   const { user } = useAuth();
+  const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
   const vibeEmpty = vibeEmptyMessage();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  // Items the builder handed off, awaiting a destination-list choice.
+  const [pendingItems, setPendingItems] = useState<WeeklySuggestion[]>([]);
+
+  // Predicted-low items not already on a list — the weekly-list suggestions.
+  const excludeKeys = useMemo(
+    () => new Set(lists.flatMap((l) => l.items).map((it) => normalizeKey(it.name))),
+    [lists],
+  );
+  const suggestions = useMemo(
+    () => buildWeeklySuggestions(stats, excludeKeys, Date.now()),
+    [stats, excludeKeys],
+  );
 
   // On first launch, show the feature tour over the home screen (once per
   // install). The ref guards against the effect firing twice.
@@ -90,6 +108,28 @@ export default function ListsScreen() {
     const id = addList(name);
     setCreating(false);
     router.push({ pathname: '/list/[id]', params: { id } });
+  };
+
+  // Builder handed off the ticked items → ask which list to add them to.
+  const onBuild = (selected: WeeklySuggestion[]) => {
+    setBuilderOpen(false);
+    setPendingItems(selected);
+  };
+
+  const addWeeklyToList = (listId: string) => {
+    const items = pendingItems;
+    setPendingItems([]);
+    if (items.length === 0) return;
+    // addParsedItem fills the usual store from per-item memory (#3) itself.
+    for (const s of items) {
+      addParsedItem(listId, {
+        name: s.display,
+        category: s.category,
+        quantity: s.quantity,
+        unit: s.unit,
+      });
+    }
+    router.push({ pathname: '/list/[id]', params: { id: listId } });
   };
 
   const empty = lists.length === 0;
@@ -135,6 +175,22 @@ export default function ListsScreen() {
               </View>
             </Card>
           ))}
+
+        {!editing && suggestions.length > 0 && (
+          <Pressable
+            onPress={() => setBuilderOpen(true)}
+            style={[styles.buildRow, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}
+          >
+            <Ionicons name="sparkles" size={18} color={colors.accent} />
+            <Text style={[type.body, { color: colors.accent, flex: 1 }]}>Build this week's list</Text>
+            <View style={[styles.buildPill, { backgroundColor: colors.accent }]}>
+              <Text style={[type.sub, { color: colors.accentInk, fontWeight: '700' }]}>
+                {suggestions.length}
+              </Text>
+            </View>
+          </Pressable>
+        )}
+
         {empty ? (
           <EmptyState
             icon="basket-outline"
@@ -173,6 +229,18 @@ export default function ListsScreen() {
         confirmLabel="Create"
         onCancel={() => setCreating(false)}
         onSubmit={openNewList}
+      />
+      <WeeklyListSheet
+        visible={builderOpen}
+        suggestions={suggestions}
+        onClose={() => setBuilderOpen(false)}
+        onBuild={onBuild}
+      />
+      <ListPickerSheet
+        visible={pendingItems.length > 0}
+        title="Add these items to"
+        onCancel={() => setPendingItems([])}
+        onPick={addWeeklyToList}
       />
     </>
   );
@@ -231,4 +299,21 @@ const styles = StyleSheet.create({
   listHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   track: { height: 5, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
+  buildRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  buildPill: {
+    minWidth: 22,
+    height: 20,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
