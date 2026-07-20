@@ -94,6 +94,14 @@ export default function ListsScreen() {
 
   const empty = lists.length === 0;
 
+  // Deleting the last list while in edit mode left `editing` stuck true —
+  // the "Done" button only renders in the non-empty branch below, and the Fab
+  // is hidden while editing, so there was no way back to the Fab at all.
+  // Exiting edit mode as soon as the list becomes empty closes that dead end.
+  useEffect(() => {
+    if (empty && editing) setEditing(false);
+  }, [empty, editing]);
+
   return (
     <>
       <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'} hasFab>
