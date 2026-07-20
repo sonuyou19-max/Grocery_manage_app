@@ -10,24 +10,64 @@ order, if not already applied:
 
 - `0006_pantry_intel.sql` ✅ (applied)
 - `0007_household_recaps.sql` ✅ (applied)
-- `0008_tighten_membership_insert.sql` — RLS hardening (self-join fix)
-- `0009_delete_account.sql` — account-deletion RPC
-- `0010_ai_rate_limit.sql` — AI usage counter + `bump_ai_usage`
+- `0008_tighten_membership_insert.sql` ✅ (applied) — RLS hardening (self-join fix)
+- `0009_delete_account.sql` ✅ (applied) — account-deletion RPC
+- `0010_ai_rate_limit.sql` ✅ (applied) — AI usage counter + `bump_ai_usage`
 
-Deploy / redeploy the edge functions (they now import `_shared/rate-limit.ts`):
+Deploy / redeploy the edge functions (they import `_shared/rate-limit.ts`).
+If the `supabase` command isn't found, prefix with `npx`:
 
 ```
-supabase functions deploy categorize      --project-ref vtgmvamwspqnrmdliqhh
-supabase functions deploy quick-add-parse  --project-ref vtgmvamwspqnrmdliqhh
-supabase functions deploy weekly-recap     --project-ref vtgmvamwspqnrmdliqhh
+npx supabase functions deploy categorize      --project-ref vtgmvamwspqnrmdliqhh
+npx supabase functions deploy quick-add-parse  --project-ref vtgmvamwspqnrmdliqhh
+npx supabase functions deploy weekly-recap     --project-ref vtgmvamwspqnrmdliqhh
 ```
+
+✅ Deployed and verified via curl (all three return JSON; `ai_usage` rows confirm
+the rate limiter records calls).
 
 Confirm secrets/config:
 - `ANTHROPIC_API_KEY` set ✅
 - `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_URL` are auto-injected into functions.
-- **Auth → SMTP**: configure a real sending domain so email sign-in codes
-  deliver (the app is now passwordless email-code).
+- **Auth → SMTP**: see section 1a — required so passwordless sign-in codes deliver.
 - **Plan**: move the project to **Pro** and set a billing **spend cap**.
+
+## 1a. Email sending — Resend + Namecheap DNS + Supabase SMTP
+
+Sign-in is passwordless email codes, so a real sender is mandatory. Domain:
+**korb.app** (registered at Namecheap ✅). Sender: **no-reply@korb.app**.
+
+**Step 1 — Resend:** create account → **Domains → Add Domain** → `korb.app`.
+Resend shows the DNS records below.
+
+**Step 2 — add the records in Namecheap** (Domain List → Manage `korb.app` →
+**Advanced DNS**). Copy each **full** value from Resend (use its copy button —
+never the truncated display). Host = prefix only (e.g. `send`, not `send.korb.app`):
+
+| Record | Where in Namecheap | Type | Host | Value | Priority | Status |
+|---|---|---|---|---|---|---|
+| DKIM | Host Records | TXT | `resend._domainkey` | `p=MIGfMA0…` (from Resend) | — | ✅ green |
+| SPF (sending) | Host Records | TXT | `send` | `v=spf1 …amazonses.com ~all` | — | ☐ |
+| SPF (MX) | **Mail Settings → Custom MX** | MX | `send` | `feedback-smtp.…amazonses.com` | `10` | ☐ |
+| DMARC (recommended) | Host Records | TXT | `_dmarc` | `v=DMARC1; p=none;` | — | ☐ |
+
+> **MX gotcha:** Namecheap does NOT list MX in the Host Records dropdown. Scroll
+> to the separate **MAIL SETTINGS** section, switch it to **Custom MX**, then add
+> the MX row there. Switching to Custom MX disables Namecheap's built-in email
+> forwarding — fine; use Cloudflare Email Routing for `support@` later.
+>
+> Skip Resend's **"Enable Receiving"** toggle — not needed (outbound only).
+
+**Step 3 — verify:** wait ~15–30 min, then hit **Verify** in Resend until DKIM,
+SPF, and DMARC all show green ✓.
+
+**Step 4 — Supabase SMTP:** Dashboard → **Authentication → Emails → SMTP Settings**
+→ enable custom SMTP:
+- Host `smtp.resend.com`, Port `465`, Username `resend`, Password = Resend API key
+- Sender email `no-reply@korb.app`, Sender name `Korb`
+
+**Step 5 — test:** open the app's sign-in, enter your email, confirm the 6-digit
+code lands in your inbox (not spam). ☐ done
 
 ## 2. Legal
 
