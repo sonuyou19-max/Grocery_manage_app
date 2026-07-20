@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
@@ -42,7 +50,7 @@ export default function HouseholdSetupScreen() {
       <MeshBackground />
       <SafeAreaView style={styles.rootTransparent} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.fill}
       >
         <View style={styles.header}>
@@ -51,7 +59,9 @@ export default function HouseholdSetupScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.body}>
+        {/* Scrollable so the submit button stays reachable on small screens
+            once the keyboard has taken its share of the height. */}
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Text style={[type.h1, { color: colors.ink }]}>Your household</Text>
           <Text style={[type.bodyRegular, { color: colors.muted }]}>
             A household shares lists and pantry. Create one, or join someone who invited you.
@@ -113,7 +123,7 @@ export default function HouseholdSetupScreen() {
             onPress={submit}
             loading={busy}
           />
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
       </SafeAreaView>
     </View>

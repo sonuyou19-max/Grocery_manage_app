@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -34,6 +42,10 @@ export function TextPromptModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      {/* Modals live in their own window, which Android does not resize for the
+          keyboard — without this the centered card sits half-hidden behind it
+          on small screens. "padding" tracks the keyboard on both platforms. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.fill}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable
           style={[styles.card, { backgroundColor: colors.surface }]}
@@ -60,11 +72,13 @@ export function TextPromptModal({
           </View>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(12,18,10,0.45)',

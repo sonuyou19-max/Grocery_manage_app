@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
-  Platform,
   Pressable,
   Share,
   StyleSheet,
@@ -328,10 +327,9 @@ export default function SettingsScreen() {
 
       {/* Rename household — cross-platform (Alert.prompt is iOS-only). */}
       <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
-        >
+        {/* "padding" on Android too: modal windows don't auto-resize for the
+            keyboard, so undefined left the card behind it on small screens. */}
+        <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropFill} onPress={() => setRenaming(false)} />
           <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
             <Text style={[type.h2, { color: colors.ink }]}>Rename household</Text>

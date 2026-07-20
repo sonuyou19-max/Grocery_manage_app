@@ -219,14 +219,27 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
               })}
             </ScrollView>
           ) : (
-            <View style={styles.body}>
+            /* Scrollable so that on small screens — where the 88%-height cap
+               minus the keyboard leaves less room than the content needs — the
+               button and mic hint can still be scrolled into view. */
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.body}
+              keyboardShouldPersistTaps="handled"
+            >
               <TextInput
                 ref={inputRef}
                 value={text}
                 onChangeText={setText}
                 placeholder="e.g. we’re out of milk, need 2kg potatoes and coffee for the weekend"
                 placeholderTextColor={colors.muted}
-                style={[styles.input, { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line }]}
+                style={[
+                  styles.input,
+                  // Compact screens: a shorter field so the button and mic hint
+                  // still fit above the keyboard without scrolling.
+                  screenH < 700 && styles.inputCompact,
+                  { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line },
+                ]}
                 multiline
                 editable={phase !== 'loading'}
               />
@@ -249,7 +262,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                   Prefer to speak? Tap the microphone key on your keyboard.
                 </Text>
               </View>
-            </View>
+            </ScrollView>
           )}
 
           {phase === 'review' && (
@@ -317,6 +330,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlignVertical: 'top',
   },
+  inputCompact: { minHeight: 64 },
   hint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   itemRow: {
     flexDirection: 'row',

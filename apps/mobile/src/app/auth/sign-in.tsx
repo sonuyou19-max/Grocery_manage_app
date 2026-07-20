@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
@@ -72,7 +80,7 @@ export default function SignInScreen() {
       <MeshBackground />
       <SafeAreaView style={styles.rootTransparent} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.fill}
         >
           <View style={styles.header}>
@@ -84,7 +92,9 @@ export default function SignInScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.body}>
+          {/* Scrollable so the button stays reachable on small screens with
+              the keyboard up. */}
+          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={[type.h1, { color: colors.ink }]}>
               {phase === 'email' ? 'Sign in' : 'Enter your code'}
             </Text>
@@ -139,7 +149,7 @@ export default function SignInScreen() {
                 </View>
               </>
             )}
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
