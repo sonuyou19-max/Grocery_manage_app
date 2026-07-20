@@ -2,7 +2,8 @@
   "expo": {
     "name": "Korb",
     "slug": "korb",
-    "version": "0.1.0",
+    "version": "1.0.0",
+    "runtimeVersion": { "policy": "appVersion" },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "korb",
@@ -11,7 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.korb.mobile",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["whatsapp"]
+        "LSApplicationQueriesSchemes": ["whatsapp"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
