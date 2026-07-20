@@ -3,15 +3,14 @@
 **Last updated: 20 July 2026**
 
 > **Note for the operator:** This is a good-faith draft tailored to how Korb
-> works. It is **not legal advice**. Before publishing, have it reviewed by a
-> qualified professional and replace every **[PLACEHOLDER]** with your real
-> details. Keep this file in sync with the copy bundled in the app
-> (`apps/mobile/src/lib/legal.ts`).
+> works. It is **not legal advice** — have it reviewed by a qualified
+> professional before publishing. Keep this file in sync with the copy bundled
+> in the app (`apps/mobile/src/lib/legal.ts`).
 
-This Privacy Policy explains how **[COMPANY / OPERATOR NAME]** ("we", "us")
+This Privacy Policy explains how **Sonu Kumar Suman** ("we", "us")
 handles your personal data when you use the Korb mobile app ("Korb", "the
 app"). We are the data controller. For any privacy question, contact us at
-**[CONTACT EMAIL]**.
+**support@korb.app**.
 
 ## Who this applies to
 
@@ -62,8 +61,7 @@ We use a small number of service providers who process data on our behalf:
   commercial terms and is **not** used to train their models. Processing may
   occur outside the EU (e.g. the United States) under appropriate safeguards
   such as Standard Contractual Clauses.
-- **[CRASH REPORTING PROVIDER, e.g. Sentry]** — if enabled, receives
-  anonymised crash and error reports.
+- **Sentry** — receives anonymised crash and error reports to help us fix bugs.
 
 We may also disclose data if required by law.
 
@@ -89,7 +87,7 @@ withdraw consent where processing is based on consent. You can:
 
 - **Delete everything** yourself in **Settings → Delete account**.
 - **Export or access** your data, or exercise any other right, by emailing
-  **[CONTACT EMAIL]**.
+  **support@korb.app**.
 
 You also have the right to lodge a complaint with your local data protection
 authority.
@@ -108,6 +106,5 @@ by the "Last updated" date above and, where appropriate, highlighted in the app.
 
 ## Contact
 
-**[COMPANY / OPERATOR NAME]**
-**[CONTACT EMAIL]**
-**[POSTAL ADDRESS, if applicable]**
+**Sonu Kumar Suman** (operating Korb as an individual, based in Belgium)
+support@korb.app

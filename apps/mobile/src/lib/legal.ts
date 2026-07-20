@@ -4,7 +4,8 @@
  *
  * The canonical, hostable versions live in `/legal/*.md` at the repo root; these
  * strings are the user-facing mirror (without the operator notes). Keep them in
- * sync, and replace the [PLACEHOLDER] fields before launch.
+ * sync. Operator: Sonu Kumar Suman (individual, Belgium); contact
+ * support@korb.app. Still needs a professional review before publishing.
  *
  * Once the documents are hosted on a website, set PRIVACY_URL / TERMS_URL and
  * the Settings rows will open those instead of the bundled screen. The store
@@ -21,7 +22,7 @@ export const PRIVACY_MD = `# Privacy Policy
 
 Last updated: ${LEGAL_LAST_UPDATED}
 
-This Privacy Policy explains how **[COMPANY / OPERATOR NAME]** ("we", "us") handles your personal data when you use the Korb app. We are the data controller. For any privacy question, contact us at **[CONTACT EMAIL]**.
+This Privacy Policy explains how **Sonu Kumar Suman** ("we", "us") handles your personal data when you use the Korb app. We are the data controller. For any privacy question, contact us at **support@korb.app**.
 
 ## Who this applies to
 
@@ -50,7 +51,7 @@ We do not collect your contacts, precise location, advertising identifiers, or p
 
 - **Supabase** — hosting, database, and authentication, stored in the EU (Frankfurt).
 - **Anthropic** — powers the AI features. When you use AI quick-add, automatic categorisation, or the weekly recap, the relevant text is sent to Anthropic to generate a response. It is not used to train their models, and may be processed outside the EU under appropriate safeguards.
-- **[CRASH REPORTING PROVIDER]** — if enabled, receives anonymised crash reports.
+- **Sentry** — receives anonymised crash reports to help us fix bugs.
 
 We may also disclose data if required by law.
 
@@ -60,7 +61,7 @@ We keep your data for as long as your account exists. When you delete your accou
 
 ## Your rights
 
-If you are in the EU/EEA or UK, you have the right to access, correct, delete, export, restrict, or object to the processing of your data, and to withdraw consent. You can delete everything yourself in Settings → Delete account, or email **[CONTACT EMAIL]** to exercise any other right. You may also complain to your local data protection authority.
+If you are in the EU/EEA or UK, you have the right to access, correct, delete, export, restrict, or object to the processing of your data, and to withdraw consent. You can delete everything yourself in Settings → Delete account, or email **support@korb.app** to exercise any other right. You may also complain to your local data protection authority.
 
 ## Security
 
@@ -72,13 +73,13 @@ We may update this policy; material changes will be reflected by the "Last updat
 
 ## Contact
 
-**[COMPANY / OPERATOR NAME]** — **[CONTACT EMAIL]**`;
+**Sonu Kumar Suman** — **support@korb.app**`;
 
 export const TERMS_MD = `# Terms of Service
 
 Last updated: ${LEGAL_LAST_UPDATED}
 
-These Terms govern your use of the Korb app provided by **[COMPANY / OPERATOR NAME]** ("we", "us"). By using Korb you agree to these Terms.
+These Terms govern your use of the Korb app provided by **Sonu Kumar Suman** ("we", "us"). By using Korb you agree to these Terms.
 
 ## Eligibility
 
@@ -122,8 +123,8 @@ We may update these Terms; continued use after changes means you accept them.
 
 ## Governing law
 
-These Terms are governed by the laws of **[JURISDICTION / COUNTRY]**, subject to any mandatory consumer protections of your country of residence.
+These Terms are governed by the laws of **Belgium**, subject to any mandatory consumer protections of your country of residence.
 
 ## Contact
 
-**[COMPANY / OPERATOR NAME]** — **[CONTACT EMAIL]**`;
+**Sonu Kumar Suman** — **support@korb.app**`;

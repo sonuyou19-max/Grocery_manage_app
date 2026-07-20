@@ -3,13 +3,13 @@
 **Last updated: 20 July 2026**
 
 > **Note for the operator:** This is a good-faith draft, **not legal advice**.
-> Have it reviewed by a qualified professional and replace every
-> **[PLACEHOLDER]** before publishing. Keep it in sync with the copy bundled in
-> the app (`apps/mobile/src/lib/legal.ts`).
+> Have it reviewed by a qualified professional before publishing. Keep it in
+> sync with the copy bundled in the app (`apps/mobile/src/lib/legal.ts`).
 
 These Terms govern your use of the Korb mobile app ("Korb", "the app") provided
-by **[COMPANY / OPERATOR NAME]** ("we", "us"). By using Korb you agree to these
-Terms. If you do not agree, please don't use the app.
+by **Sonu Kumar Suman** ("we", "us"), operating Korb as an individual based in
+Belgium. By using Korb you agree to these Terms. If you do not agree, please
+don't use the app.
 
 ## Eligibility
 
@@ -81,11 +81,11 @@ latest version; continued use after changes means you accept them.
 
 ## Governing law
 
-These Terms are governed by the laws of **[JURISDICTION / COUNTRY]**, without
-regard to conflict-of-law rules, and subject to any mandatory consumer
-protections of your country of residence.
+These Terms are governed by the laws of **Belgium**, without regard to
+conflict-of-law rules, and subject to any mandatory consumer protections of
+your country of residence.
 
 ## Contact
 
-**[COMPANY / OPERATOR NAME]**
-**[CONTACT EMAIL]**
+**Sonu Kumar Suman**
+support@korb.app

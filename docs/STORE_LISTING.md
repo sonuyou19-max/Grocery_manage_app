@@ -1,7 +1,7 @@
 # Korb — Store Listing Copy
 
 Draft copy for the App Store and Google Play. Character limits noted; trim to
-your final wording. Replace **[SUPPORT EMAIL]** / **[WEBSITE]** / URLs.
+your final wording. Replace **support@korb.app** / **[WEBSITE]** / URLs.
 
 ## Names & identity
 
@@ -81,7 +81,7 @@ photos, advertising identifiers.
 
 **Encryption in transit:** Yes.
 **Account deletion:** Yes — in-app (Settings → Delete account) and on request
-at **[SUPPORT EMAIL]**.
+at **support@korb.app**.
 
 ## Support & marketing URLs
 
