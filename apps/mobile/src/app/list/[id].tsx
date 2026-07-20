@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { KeyboardAvoidingView, KeyboardController } from 'react-native-keyboard-controller';
 import Animated, {
   Easing,
   Extrapolation,
@@ -43,6 +43,23 @@ import { radii, spacing, type, useTheme } from '@/theme';
 // Set this to the store/app link at launch. While empty, the invite tells the
 // recipient how to join by code inside the app.
 const APP_DOWNLOAD_URL = '';
+
+// Opening the item sheet (a Modal — its own native window on Android) while
+// the add-bar's TextInput is still closing the keyboard races two windows'
+// keyboard transitions against each other, which can leave the sheet's
+// keyboard-avoiding padding stuck open (see item-sheet.tsx). Dismissing first
+// and awaiting the real native "hidden" event (not just firing-and-forgetting
+// the dismiss call) closes that race. KeyboardController.dismiss() resolves
+// immediately if the keyboard was already closed, and the timeout is a safety
+// net in case some OEM keyboard never fires the hide event.
+const KEYBOARD_DISMISS_TIMEOUT_MS = 400;
+
+const dismissKeyboardAndWait = async () => {
+  await Promise.race([
+    KeyboardController.dismiss(),
+    new Promise<void>((resolve) => setTimeout(resolve, KEYBOARD_DISMISS_TIMEOUT_MS)),
+  ]);
+};
 
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -147,11 +164,19 @@ export default function ListDetailScreen() {
     }
   };
 
+  // Adds/updates the store right away (instant feedback), then waits for the
+  // keyboard to actually finish closing before opening the sheet — see
+  // dismissKeyboardAndWait above for why the wait matters.
+  const openSheet = async (id: string, mode: 'added' | 'edit') => {
+    await dismissKeyboardAndWait();
+    setSheetMode(mode);
+    setSheetItemId(id);
+  };
+
   const doAdd = (name: string) => {
     const newId = addItem(list.id, name);
     setDraft('');
-    setSheetMode('added');
-    setSheetItemId(newId);
+    void openSheet(newId, 'added');
   };
 
   const submit = () => {
@@ -176,8 +201,7 @@ export default function ListDetailScreen() {
   };
 
   const openEdit = (item: Item) => {
-    setSheetMode('edit');
-    setSheetItemId(item.id);
+    void openSheet(item.id, 'edit');
   };
 
   // Invite a family member: open WhatsApp pre-filled with the household join
