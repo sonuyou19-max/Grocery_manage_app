@@ -53,11 +53,19 @@ introduces a parallel, independently-tracked data store. Concretely:
 
 ---
 
+## Status
+
+- **Baseline:** `v1.0-rc1` = commit `5b01346` (verified on device; tag push is
+  blocked by the sandbox proxy, so this hash is the fallback reference).
+- **Wave 1 — ✅ complete** (test all three in one build): #3 per-item memory,
+  #1 pantry swipe rows, #4a store price intelligence.
+- **Wave 2 — next:** #2 weekly-list builder, #6 shopping mode.
+
 ## Phase overview
 
 | Wave | Features | Native dep? | Backend? | Risk |
 |---|---|---|---|---|
-| **1 — JS-only, high value** | #3 Per-item memory · #1 Pantry swipe rows · #4a Store price intelligence | No | No | Low |
+| **1 — JS-only, high value ✅** | #3 Per-item memory · #1 Pantry swipe rows · #4a Store price intelligence | No | No | Low |
 | **2 — orchestration** | #2 Build my weekly list · #6 Shopping Mode | No | No | Low–Med |
 | **3 — infra/backend** | #4b Price history · #7a Recurring staples (in-app) · #5 Live household shopping | No new native (Supabase realtime) | Migrations + RLS | Med–High |
 | **4 — push** | #7b Auto-restock reminders | Yes (`expo-notifications`) | Scheduling | High (needs dev build + permissions) |

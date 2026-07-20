@@ -6,10 +6,13 @@ import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
+import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { euros } from '@/lib/money';
 import { basketBalance, GROUP_COLORS, GROUP_LABELS, type BalanceSlice } from '@/lib/nutrition';
+import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
+import { supermarketLabel } from '@/lib/supermarkets';
 import { useGroceries } from '@/store/groceries';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -56,6 +59,8 @@ export default function InsightsScreen() {
       .filter((x) => x.cents > 0)
       .sort((a, b) => b.cents - a.cents);
   }, [priced]);
+  const storeSpend = useMemo(() => spendByStore(priced), [priced]);
+  const cheaper = useMemo(() => cheaperStoreHints(priced), [priced]);
 
   return (
     <Screen title="Insights" subtitle="Your shopping, understood">
@@ -113,6 +118,47 @@ export default function InsightsScreen() {
           </Text>
         </Card>
       )}
+
+      {/* Spend per store — only when at least one priced item has a store. */}
+      {storeSpend.some((s) => s.store != null) && (
+        <Card>
+          <CardHead icon="storefront-outline" title="Where you shop" hint="By store" />
+          {storeSpend.map((s) => (
+            <View key={s.store ?? 'none'} style={styles.row}>
+              {s.store ? (
+                <SupermarketBadge store={s.store} size={20} />
+              ) : (
+                <Ionicons name="pricetag-outline" size={20} color={colors.muted} />
+              )}
+              <Text style={[type.sub, styles.grow, { color: colors.ink }]} numberOfLines={1}>
+                {s.store ? supermarketLabel(s.store) ?? s.store : 'No store set'}
+              </Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{euros(s.cents)}</Text>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      {/* Cheaper elsewhere — same item priced at 2+ stores. */}
+      {cheaper.length > 0 && (
+        <Card>
+          <CardHead icon="trending-down-outline" title="Cheaper elsewhere" hint="Same item, lower price" />
+          {cheaper.slice(0, 6).map((h) => (
+            <View key={h.name} style={styles.hintRow}>
+              <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                {h.name}
+              </Text>
+              <View style={styles.hintDetail}>
+                <SupermarketBadge store={h.cheapStore} size={16} />
+                <Text style={[type.sub, { color: colors.accent }]}>
+                  {euros(h.cheapCents)} at {supermarketLabel(h.cheapStore) ?? h.cheapStore}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>vs {euros(h.dearCents)}</Text>
+              </View>
+            </View>
+          ))}
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -161,4 +207,6 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
   spendTotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.xs },
+  hintRow: { gap: spacing.xs, paddingVertical: spacing.xs },
+  hintDetail: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
 });
