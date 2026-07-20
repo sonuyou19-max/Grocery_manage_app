@@ -10,10 +10,20 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  Easing,
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
-import { Card } from '@/components/card';
 import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
+import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { CATEGORY_LABELS, categorizeSync } from '@/lib/categorize';
@@ -22,9 +32,11 @@ import {
   dueAt,
   lastBoughtLabel,
   lifeRemaining,
+  normalizeKey,
   statusLabel,
   type ItemStat,
 } from '@/lib/pantry-intel';
+import { useGroceries } from '@/store/groceries';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -36,20 +48,26 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 /** An item is "running low" once less than this fraction of its lifespan is left. */
 const LOW_THRESHOLD = 0.35;
 
+type Colors = ReturnType<typeof useTheme>['colors'];
+
 /**
  * Pantry: the honest view of what Korb is tracking. Every item you check off a
  * list is learned here with a real burn-rate — the bar shows how much of its
- * usual lifespan is left. A search bar keeps it usable as the list grows, and
- * items split into "Running low" (open by default) and "In stock" (collapsed).
- * "Track item" seeds a staple manually (treated as bought now).
+ * usual lifespan is left. Swipe a row to snooze a prediction ("Still good", no
+ * hard delete) or send it to a shopping list. A search bar keeps it usable as
+ * the list grows, and items split into "Running low" (open by default) and "In
+ * stock" (collapsed). "Track item" seeds a staple manually (bought now).
  */
 export default function PantryScreen() {
   const { colors } = useTheme();
-  const { stats, logPurchase } = usePantryIntel();
+  const { stats, logPurchase, markAlmostOut, markStillGood } = usePantryIntel();
+  const { lists, addParsedItem } = useGroceries();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [lowOpen, setLowOpen] = useState(true);
   const [stockOpen, setStockOpen] = useState(false);
+  // The item awaiting a list-picker choice (null when the picker is closed).
+  const [pendingAdd, setPendingAdd] = useState<ItemStat | null>(null);
 
   const now = Date.now();
   const items = useMemo(
@@ -83,43 +101,49 @@ export default function PantryScreen() {
     else setStockOpen((v) => !v);
   };
 
-  const barColor = (left: number) =>
-    left < 0.15 ? colors.crit : left < LOW_THRESHOLD ? colors.warn : colors.accent;
+  // Swipe right: the item's fine — teach the model to wait longer (no delete).
+  const onStillGood = (item: ItemStat) => {
+    markStillGood(item.key);
+    haptics.tick();
+  };
+
+  // Swipe left: choose a list, then add the item and mark it almost-out.
+  const onAddToList = (item: ItemStat) => {
+    haptics.snap();
+    setPendingAdd(item);
+  };
+
+  const pickList = (listId: string) => {
+    const item = pendingAdd;
+    setPendingAdd(null);
+    if (!item) return;
+    const target = lists.find((l) => l.id === listId);
+    const already = target?.items.some((it) => normalizeKey(it.name) === item.key);
+    if (!already) {
+      addParsedItem(listId, {
+        name: item.display,
+        category: item.category,
+        quantity: null,
+        unit: null,
+      });
+    }
+    markAlmostOut(item.key);
+    haptics.success();
+  };
 
   const renderRows = (rows: ItemStat[]) => (
-    <Card>
-      {rows.map((item, i) => {
-        const left = lifeRemaining(item, now);
-        return (
-          <View
-            key={item.key}
-            style={[
-              styles.row,
-              i < rows.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line },
-            ]}
-          >
-            <View style={styles.grow}>
-              <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                {item.display}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-                {CATEGORY_LABELS[item.category]} · {lastBoughtLabel(item.lastPurchasedAt, now)}
-              </Text>
-            </View>
-            <View style={styles.stock}>
-              <View style={[styles.bar, { backgroundColor: colors.line }]}>
-                <View
-                  style={[styles.fill, { width: `${Math.max(left, 0.02) * 100}%`, backgroundColor: barColor(left) }]}
-                />
-              </View>
-              <Text style={[type.sub, { color: left < LOW_THRESHOLD ? barColor(left) : colors.muted }]}>
-                {statusLabel(item, now)}
-              </Text>
-            </View>
-          </View>
-        );
-      })}
-    </Card>
+    <View style={styles.rowStack}>
+      {rows.map((item) => (
+        <PantrySwipeRow
+          key={item.key}
+          item={item}
+          now={now}
+          colors={colors}
+          onStillGood={() => onStillGood(item)}
+          onAddToList={() => onAddToList(item)}
+        />
+      ))}
+    </View>
   );
 
   const SectionHeader = ({
@@ -184,6 +208,12 @@ export default function PantryScreen() {
                 </Pressable>
               )}
             </View>
+
+            {!searching && (
+              <Text style={[type.sub, { color: colors.muted }]}>
+                Swipe a row: → still good · ← add to a list
+              </Text>
+            )}
 
             {searching && low.length === 0 && stocked.length === 0 ? (
               <EmptyState
@@ -253,7 +283,107 @@ export default function PantryScreen() {
           setAdding(false);
         }}
       />
+      <ListPickerSheet
+        visible={pendingAdd != null}
+        title={pendingAdd ? `Add ${pendingAdd.display} to` : 'Add to list'}
+        onCancel={() => setPendingAdd(null)}
+        onPick={pickList}
+      />
     </>
+  );
+}
+
+/** How far (px) you must swipe a row before releasing fires its action. */
+const ACTION_THRESHOLD = 80;
+const MAX_TRAVEL = 130;
+
+/**
+ * One pantry row with a two-way swipe: right reveals "Still good" (snooze the
+ * prediction — never a delete), left reveals "Add to list". Releasing past the
+ * threshold fires that action and springs the row back; the item then moves
+ * between sections on its own as its status changes. The gesture only engages
+ * on a clear horizontal drag and yields to the vertical scroll (failOffsetY).
+ */
+function PantrySwipeRow({
+  item,
+  now,
+  colors,
+  onStillGood,
+  onAddToList,
+}: {
+  item: ItemStat;
+  now: number;
+  colors: Colors;
+  onStillGood: () => void;
+  onAddToList: () => void;
+}) {
+  const tx = useSharedValue(0);
+  const armed = useSharedValue(0); // -1/0/1: which side is past threshold (for haptic)
+  const settle = { duration: 260, easing: Easing.out(Easing.cubic) };
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-10, 10])
+    .onUpdate((e) => {
+      tx.value = Math.max(-MAX_TRAVEL, Math.min(MAX_TRAVEL, e.translationX));
+      const dir = tx.value > ACTION_THRESHOLD ? 1 : tx.value < -ACTION_THRESHOLD ? -1 : 0;
+      if (dir !== armed.value) {
+        armed.value = dir;
+        if (dir !== 0) runOnJS(haptics.snap)();
+      }
+    })
+    .onEnd(() => {
+      if (tx.value > ACTION_THRESHOLD) runOnJS(onStillGood)();
+      else if (tx.value < -ACTION_THRESHOLD) runOnJS(onAddToList)();
+      tx.value = withTiming(0, settle);
+      armed.value = 0;
+    });
+
+  const contentStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }] }));
+  const leftStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(tx.value, [0, ACTION_THRESHOLD], [0, 1], Extrapolation.CLAMP),
+  }));
+  const rightStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(tx.value, [-ACTION_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP),
+  }));
+
+  const left = lifeRemaining(item, now);
+  const barColor =
+    left < 0.15 ? colors.crit : left < LOW_THRESHOLD ? colors.warn : colors.accent;
+
+  return (
+    <View style={styles.swipeWrap}>
+      {/* Revealed behind the row; only the swiped side fades in. */}
+      <Animated.View style={[styles.actionPanel, styles.actionLeft, { backgroundColor: colors.warn }, leftStyle]}>
+        <Ionicons name="time-outline" size={20} color="#FFFFFF" />
+        <Text style={styles.actionText}>Still good</Text>
+      </Animated.View>
+      <Animated.View style={[styles.actionPanel, styles.actionRight, { backgroundColor: colors.accent }, rightStyle]}>
+        <Text style={styles.actionText}>Add to list</Text>
+        <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
+      </Animated.View>
+
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.rowContent, { backgroundColor: colors.surface }, contentStyle]}>
+          <View style={styles.grow}>
+            <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+              {item.display}
+            </Text>
+            <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+              {CATEGORY_LABELS[item.category]} · {lastBoughtLabel(item.lastPurchasedAt, now)}
+            </Text>
+          </View>
+          <View style={styles.stock}>
+            <View style={[styles.bar, { backgroundColor: colors.line }]}>
+              <View style={[styles.fill, { width: `${Math.max(left, 0.02) * 100}%`, backgroundColor: barColor }]} />
+            </View>
+            <Text style={[type.sub, { color: left < LOW_THRESHOLD ? barColor : colors.muted }]}>
+              {statusLabel(item, now)}
+            </Text>
+          </View>
+        </Animated.View>
+      </GestureDetector>
+    </View>
   );
 }
 
@@ -283,7 +413,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  rowStack: { gap: spacing.sm },
+  swipeWrap: { borderRadius: radii.md, overflow: 'hidden' },
+  actionPanel: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  actionLeft: { justifyContent: 'flex-start' },
+  actionRight: { justifyContent: 'flex-end' },
+  actionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  rowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
   grow: { flex: 1, minWidth: 0 },
   stock: { width: 104, gap: spacing.xs },
   bar: { height: 5, borderRadius: 3, overflow: 'hidden' },
