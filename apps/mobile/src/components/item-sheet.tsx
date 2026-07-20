@@ -2,9 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, {
   cancelAnimation,
   Extrapolation,
@@ -133,7 +132,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         style={styles.fill}
       >
         <Animated.View style={[styles.backdrop, backdropStyle]}>

@@ -96,7 +96,7 @@ export default function ListsScreen() {
 
   return (
     <>
-      <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'}>
+      <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'} hasFab>
         {!editing &&
           (vibeCount > 0 ? (
             <Pressable onPress={() => router.push('/vibe-check')}>

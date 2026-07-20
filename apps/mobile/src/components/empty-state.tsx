@@ -28,13 +28,16 @@ export function EmptyState({
 }
 
 const styles = StyleSheet.create({
+  // Anchored below the header rather than centered in the remaining space:
+  // centering pulled this toward the bottom on short screens, putting it
+  // right where a floating action button sits. Screen's ScrollView already
+  // reserves clearance below (see hasFab), so this never needs to fight for
+  // room with it.
   wrap: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.md,
+    marginTop: spacing.xxl,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
   },
   badge: {
     width: 64,

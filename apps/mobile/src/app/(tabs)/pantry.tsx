@@ -156,6 +156,7 @@ export default function PantryScreen() {
             ? 'What Korb is tracking'
             : `${items.length} tracked · ${lowCount} running low`
         }
+        hasFab
       >
         {items.length === 0 ? (
           <EmptyState

@@ -4,9 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -16,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, {
   Easing,
   Extrapolation,
@@ -237,10 +236,7 @@ export default function ListDetailScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <KeyboardAvoidingView
-        style={styles.fillTransparent}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={styles.fillTransparent} behavior="padding">
       <SafeAreaView style={styles.fillTransparent} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>

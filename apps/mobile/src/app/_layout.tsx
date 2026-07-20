@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import { hydrateCategoryCache } from '@/lib/categorize';
@@ -57,6 +58,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
       <ErrorBoundary>
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
         <AuthProvider>
@@ -85,6 +87,7 @@ export default function RootLayout() {
         </AuthProvider>
       </ThemeProvider>
       </ErrorBoundary>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

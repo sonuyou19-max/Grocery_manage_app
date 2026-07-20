@@ -1,13 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -43,8 +36,10 @@ export function TextPromptModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       {/* Modals live in their own window, which Android does not resize for the
-          keyboard — without this the centered card sits half-hidden behind it
-          on small screens. "padding" tracks the keyboard on both platforms. */}
+          keyboard, and RN's built-in KeyboardAvoidingView is unreliable inside
+          that window (its keyboard events don't consistently fire there). The
+          keyboard-controller library reads native keyboard insets directly, so
+          it tracks correctly even inside a Modal. */}
       <KeyboardAvoidingView behavior="padding" style={styles.fill}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable

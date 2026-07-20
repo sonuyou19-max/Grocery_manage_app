@@ -7,6 +7,11 @@ import { radii, spacing, type, useTheme } from '@/theme';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
+// Icon/label row height plus vertical padding, rounded up. Exported so Screen
+// can reserve enough bottom clearance to actually clear the Fab — not just
+// its offset above the tab bar — on short screens.
+export const FAB_HEIGHT = 48;
+
 interface FabProps {
   label: string;
   icon?: IoniconName;

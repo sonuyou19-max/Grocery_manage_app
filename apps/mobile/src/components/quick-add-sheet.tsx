@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Keyboard,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -66,35 +66,14 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
   const inputRef = useRef<TextInput>(null);
   const sheetY = useSharedValue(screenH);
-  // Animated bottom inset for the content: safe-area at rest, keyboard height
-  // when it's up. The sheet's background stays anchored to the screen bottom so
-  // nothing shows through; only the content rides above the keyboard.
-  const kbInset = useSharedValue(insets.bottom);
+  // Native keyboard height, driven per-frame by the platform (not JS `Keyboard`
+  // events, which are unreliable inside a Modal's own window on Android — the
+  // bug this replaced). `height` runs negative as the keyboard rises, so the
+  // spacer style below flips the sign; it floors at the safe-area inset when
+  // the keyboard is hidden.
+  const { height: kbHeight } = useReanimatedKeyboardAnimation();
 
   const focusInput = () => inputRef.current?.focus();
-
-  // Track the keyboard and animate the content inset in lockstep with it
-  // (same duration/curve), so lifting the content never jumps.
-  useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvt, (e) => {
-      kbInset.value = withTiming(e.endCoordinates.height, {
-        duration: e.duration || 250,
-        easing: Easing.out(Easing.cubic),
-      });
-    });
-    const hide = Keyboard.addListener(hideEvt, (e) => {
-      kbInset.value = withTiming(insets.bottom, {
-        duration: (e && e.duration) || 200,
-        easing: Easing.out(Easing.cubic),
-      });
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, [insets.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (visible) {
@@ -104,7 +83,6 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
       setSelected([]);
       setError(null);
       cancelAnimation(sheetY);
-      kbInset.value = insets.bottom;
       sheetY.value = screenH;
       // Slide the sheet fully up first, THEN raise the keyboard — decoupling the
       // two motions is what makes the entrance read as smooth.
@@ -126,7 +104,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(sheetY.value, [0, screenH * 0.7], [1, 0], Extrapolation.CLAMP),
   }));
-  const keyboardSpacerStyle = useAnimatedStyle(() => ({ height: kbInset.value }));
+  const keyboardSpacerStyle = useAnimatedStyle(() => ({
+    height: Math.max(-kbHeight.value, insets.bottom),
+  }));
 
   const runParse = async () => {
     const trimmed = text.trim();
