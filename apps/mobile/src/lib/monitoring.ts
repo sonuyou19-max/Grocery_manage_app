@@ -1,21 +1,13 @@
+import * as Sentry from '@sentry/react-native';
+
 /**
- * Crash & error monitoring seam.
+ * Crash & error monitoring.
  *
- * This module is provider-agnostic on purpose: the app reports through
- * `captureException`, and a reporter (Sentry) is plugged in at startup via
- * `setReporter` — but only when the native SDK is installed and a DSN is set.
- * Until then it's a safe no-op (plus a dev console log), so the app runs
- * unchanged in Expo Go and in builds without a DSN.
- *
- * ── Enabling Sentry (do this during the EAS build phase) ────────────────────
- *   1. Install:  npx expo install @sentry/react-native
- *   2. app.json → add the plugin:  "plugins": ["@sentry/react-native/expo"]
- *   3. Set EXPO_PUBLIC_SENTRY_DSN in your env / eas.json.
- *   4. In initMonitoring() below, replace the DSN-present branch with:
- *          const Sentry = require('@sentry/react-native');
- *          Sentry.init({ dsn: DSN, tracesSampleRate: 0.2, sendDefaultPii: false });
- *          setReporter((e, ctx) => Sentry.captureException(e, { extra: ctx }));
- *   (kept out of the bundle until the package exists so Metro doesn't fail).
+ * The app reports through `captureException`; Sentry is the active reporter,
+ * wired up in `initMonitoring` when a DSN is present. It stays fully dormant
+ * until `EXPO_PUBLIC_SENTRY_DSN` is set (e.g. via an EAS build secret), so the
+ * app runs unchanged in Expo Go and in builds without a DSN — importing the
+ * package alone does nothing until `Sentry.init` is called.
  */
 
 type Reporter = (error: unknown, context?: Record<string, unknown>) => void;
@@ -35,15 +27,25 @@ export function monitoringEnabled(): boolean {
   return DSN.length > 0;
 }
 
-/** Initialise monitoring once at app start. No-op until a reporter is wired. */
+/** Initialise monitoring once at app start. No-op until a DSN is configured. */
 export function initMonitoring(): void {
   if (initialized) return;
   initialized = true;
-  // Intentionally empty until Sentry is enabled (see header). Reading the DSN
-  // here keeps the seam ready without importing a package that may be absent.
-  if (__DEV__ && !monitoringEnabled()) {
-    // eslint-disable-next-line no-console
-    console.log('[monitoring] no DSN set — crash reporting disabled');
+  if (!monitoringEnabled()) {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.log('[monitoring] no DSN set — crash reporting disabled');
+    }
+    return;
+  }
+  try {
+    Sentry.init({ dsn: DSN, tracesSampleRate: 0.2, sendDefaultPii: false });
+    setReporter((e, ctx) => Sentry.captureException(e, { extra: ctx }));
+  } catch (err) {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[monitoring] Sentry init failed', err);
+    }
   }
 }
 

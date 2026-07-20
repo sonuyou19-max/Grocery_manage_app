@@ -18,7 +18,9 @@ android/
 .env.*
 !.env.example
 
-# supabase local dev
+# supabase local dev (anywhere in the tree, incl. apps/mobile)
+**/.temp/
+**/.branches/
 supabase/.temp/
 supabase/.branches/
 
