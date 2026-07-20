@@ -19,6 +19,9 @@ export async function parseQuickAdd(
     if (res.status === 422) {
       return { error: 'Couldn’t find any groceries in that — try naming the items plainly.' };
     }
+    if (res.status === 429) {
+      return { error: 'You’ve hit today’s quick-add limit. Try again tomorrow, or add items manually.' };
+    }
     if (!res.ok) {
       return { error: 'The AI had trouble with that. Please try again.' };
     }

@@ -9,6 +9,8 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 
+import { rateLimit } from '../_shared/rate-limit.ts';
+
 const CATEGORIES = [
   'fruit_veg', 'dairy_eggs', 'meat_fish', 'bakery', 'pantry',
   'frozen', 'drinks', 'household', 'personal_care', 'other',
@@ -48,6 +50,9 @@ Deno.serve(async (req) => {
   if (typeof name !== 'string' || !name.trim()) {
     return Response.json({ error: 'Body must be {"name": string}' }, { status: 400 });
   }
+
+  const limited = await rateLimit(req, 'categorize');
+  if (limited) return limited;
 
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 

@@ -8,6 +8,8 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 
+import { rateLimit } from '../_shared/rate-limit.ts';
+
 const SYSTEM_PROMPT = `You write a short weekly grocery recap for a household grocery app.
 Voice: warm, casual, second person ("you"), like a friendly check-in text — never corporate.
 Rules:
@@ -25,6 +27,9 @@ Deno.serve(async (req) => {
   if (!payload || typeof payload !== 'object') {
     return Response.json({ error: 'Body must be a recap payload object' }, { status: 400 });
   }
+
+  const limited = await rateLimit(req, 'weekly-recap');
+  if (limited) return limited;
 
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 

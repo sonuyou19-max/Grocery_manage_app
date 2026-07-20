@@ -9,6 +9,8 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 import { z } from 'npm:zod@3.24.1';
 
+import { rateLimit } from '../_shared/rate-limit.ts';
+
 // Keep in sync with packages/shared/src/schemas.ts. Lenient on purpose: bad
 // units/quantities become null rather than failing the whole parse.
 const itemCategorySchema = z.enum([
@@ -57,6 +59,9 @@ Deno.serve(async (req) => {
   if (typeof text !== 'string' || text.length === 0 || text.length > 1000) {
     return Response.json({ error: 'Body must be {"text": string} (1-1000 chars)' }, { status: 400 });
   }
+
+  const limited = await rateLimit(req, 'quick-add-parse');
+  if (limited) return limited;
 
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
