@@ -13,6 +13,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import { hydrateCategoryCache } from '@/lib/categorize';
+import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring } from '@/lib/monitoring';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
@@ -51,9 +52,11 @@ export default function RootLayout() {
   useEffect(() => {
     // Start crash/error reporting (no-op until a Sentry DSN is configured).
     initMonitoring();
-    // Load learned item→category mappings and remembered store preferences.
+    // Load learned item→category mappings, remembered store preferences, and
+    // per-item usual quantity/unit/store.
     void hydrateCategoryCache();
     void hydrateStorePrefs();
+    void hydrateItemMemory();
   }, []);
 
   return (

@@ -13,6 +13,7 @@ import {
 import type { ItemCategory, ParsedItem } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
+import { recallItemDetails } from '@/lib/item-memory';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { uuidv4 } from '@/lib/uuid';
@@ -173,9 +174,11 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         const id = uuidv4();
         if (!clean) return id;
         const category = categorizeSync(clean);
+        // Prefill the quantity/unit/store last used for this item (see #3).
+        const usual = recallItemDetails(clean) ?? {};
         setLists((prev) =>
           prev.map((l) =>
-            l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category), id }] } : l,
+            l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category, usual), id }] } : l,
           ),
         );
         if (category === 'other' && !isKnown(clean)) {
@@ -188,15 +191,21 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         return id;
       },
       addParsedItem: (listId, p) => {
+        // The AI sets quantity/unit from the sentence; fall back to remembered
+        // usuals for anything it left blank, and always prefill the usual store
+        // (which the AI never parses).
+        const usual = recallItemDetails(p.name);
+        const opts = {
+          quantity: p.quantity ?? usual?.quantity ?? null,
+          unit: p.unit ?? usual?.unit ?? null,
+          store: usual?.store ?? null,
+        };
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
               ? {
                   ...l,
-                  items: [
-                    ...l.items,
-                    newItem(p.name, p.category, { quantity: p.quantity, unit: p.unit }),
-                  ],
+                  items: [...l.items, newItem(p.name, p.category, opts)],
                 }
               : l,
           ),
@@ -395,14 +404,28 @@ function CloudGroceriesProvider({
         const id = uuidv4();
         if (!clean) return id;
         const category = categorizeSync(clean);
+        // Prefill the quantity/unit/store last used for this item (see #3),
+        // in both the optimistic row and the persisted insert.
+        const usual = recallItemDetails(clean);
         setLists((prev) =>
           prev.map((l) =>
-            l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category), id }] } : l,
+            l.id === listId
+              ? { ...l, items: [...l.items, { ...newItem(clean, category, usual ?? {}), id }] }
+              : l,
           ),
         );
         supabase
           .from('list_items')
-          .insert({ id, list_id: listId, name: clean, category, added_by: user?.id ?? null })
+          .insert({
+            id,
+            list_id: listId,
+            name: clean,
+            category,
+            quantity: usual?.quantity ?? null,
+            unit: usual?.unit ?? null,
+            store: usual?.store ?? null,
+            added_by: user?.id ?? null,
+          })
           .then(({ error }) => {
             if (error) scheduleRefetch();
           });
@@ -418,6 +441,12 @@ function CloudGroceriesProvider({
       },
       addParsedItem: (listId, p) => {
         const id = uuidv4();
+        // AI sets quantity/unit; fall back to remembered usuals for blanks and
+        // always prefill the usual store (the AI never parses it).
+        const usual = recallItemDetails(p.name);
+        const quantity = p.quantity ?? usual?.quantity ?? null;
+        const unit = p.unit ?? usual?.unit ?? null;
+        const store = usual?.store ?? null;
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
@@ -425,7 +454,7 @@ function CloudGroceriesProvider({
                   ...l,
                   items: [
                     ...l.items,
-                    { ...newItem(p.name, p.category, { quantity: p.quantity, unit: p.unit }), id },
+                    { ...newItem(p.name, p.category, { quantity, unit, store }), id },
                   ],
                 }
               : l,
@@ -438,8 +467,9 @@ function CloudGroceriesProvider({
             list_id: listId,
             name: p.name,
             category: p.category,
-            quantity: p.quantity,
-            unit: p.unit,
+            quantity,
+            unit,
+            store,
             added_by: user?.id ?? null,
           })
           .then(({ error }) => {

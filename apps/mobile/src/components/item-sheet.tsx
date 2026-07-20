@@ -28,6 +28,7 @@ import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
+import { rememberItemDetails } from '@/lib/item-memory';
 import { parsePriceToCents } from '@/lib/money';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
@@ -87,15 +88,30 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     sheetY.value = withTiming(0, { duration: 260 });
   }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On close, snapshot the item's final quantity/unit/store into per-item
+  // memory (#3) so the next add of the same item prefills them. One capture
+  // point covers every close path — the X, the backdrop, and pull-to-dismiss.
+  const rememberUsuals = () => {
+    if (!itemObj) return;
+    rememberItemDetails(itemObj.name, {
+      quantity: itemObj.quantity,
+      unit: itemObj.unit,
+      store: itemObj.store,
+    });
+  };
+
   /** Animate the sheet off-screen, then tell the parent to unmount. */
   const requestClose = () => {
+    rememberUsuals();
     cancelAnimation(sheetY);
     sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
       if (finished) runOnJS(onClose)();
     });
   };
 
-  // Pull-down on the grab handle / header dismisses the sheet.
+  // Pull-down on the grab handle / header dismisses the sheet. Routing the
+  // dismiss through requestClose keeps the remember-on-close behaviour in one
+  // place for both the button and the gesture.
   const dragGesture = Gesture.Pan()
     .activeOffsetY(8)
     .onUpdate((e) => {
@@ -103,9 +119,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     })
     .onEnd((e) => {
       if (sheetY.value > 110 || e.velocityY > 800) {
-        sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
-          if (finished) runOnJS(onClose)();
-        });
+        runOnJS(requestClose)();
       } else {
         sheetY.value = withTiming(0, { duration: 160 });
       }
