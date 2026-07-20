@@ -46,10 +46,17 @@ never the truncated display). Host = prefix only (e.g. `send`, not `send.korb.ap
 
 | Record | Where in Namecheap | Type | Host | Value | Priority | Status |
 |---|---|---|---|---|---|---|
-| DKIM | Host Records | TXT | `resend._domainkey` | `p=MIGfMA0…` (from Resend) | — | ✅ green |
-| SPF (sending) | Host Records | TXT | `send` | `v=spf1 …amazonses.com ~all` | — | ☐ |
-| SPF (MX) | **Mail Settings → Custom MX** | MX | `send` | `feedback-smtp.…amazonses.com` | `10` | ☐ |
-| DMARC (recommended) | Host Records | TXT | `_dmarc` | `v=DMARC1; p=none;` | — | ☐ |
+| DKIM | Host Records | TXT | `resend._domainkey` | `p=MIGfMA0…` (from Resend) | — | ✅ verified |
+| SPF (sending) | Host Records | TXT | `send` | `v=spf1 …amazonses.com ~all` | — | ✅ verified |
+| SPF (MX) | **Mail Settings → Custom MX** | MX | `send` | `feedback-smtp.…amazonses.com` | `10` | ✅ verified |
+| DMARC (recommended) | Host Records | TXT | `_dmarc` | `v=DMARC1; p=none;` | — | ✅ verified |
+
+Resend shows **Domain verified — ready to send** ✅. Remaining email steps:
+- ☐ Resend → create SMTP API key (`re_…`)
+- ☐ Supabase → Auth → SMTP Settings (host `smtp.resend.com`, port 465, user `resend`, pass = API key, sender `no-reply@korb.app`)
+- ☐ Supabase → Auth → Email Templates → Magic Link → include `{{ .Token }}` (the 6-digit code)
+- ☐ Supabase → Auth → Rate Limits → raise "Emails per hour"
+- ☐ Test sign-in from the app (code lands in inbox → enter → signed in)
 
 > **MX gotcha:** Namecheap does NOT list MX in the Host Records dropdown. Scroll
 > to the separate **MAIL SETTINGS** section, switch it to **Custom MX**, then add
