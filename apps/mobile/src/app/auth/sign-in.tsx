@@ -39,14 +39,14 @@ export default function SignInScreen() {
       setError(err);
       return;
     }
-    setNotice(`We emailed a 6-digit code to ${email.trim()}.`);
+    setNotice(`We emailed a sign-in code to ${email.trim()}.`);
     setCode('');
     setPhase('code');
   };
 
   const verify = async () => {
     if (code.trim().length < 6) {
-      setError('Enter the 6-digit code from your email.');
+      setError('Enter the code from your email.');
       return;
     }
     setBusy(true);
@@ -109,14 +109,14 @@ export default function SignInScreen() {
               />
             ) : (
               <FormField
-                label="6-digit code"
+                label="Verification code"
                 value={code}
-                onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-                placeholder="123456"
+                onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Enter your code"
                 keyboardType="number-pad"
                 autoComplete="one-time-code"
                 textContentType="oneTimeCode"
-                maxLength={6}
+                maxLength={10}
                 onSubmitEditing={verify}
                 returnKeyType="done"
               />
