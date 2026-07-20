@@ -5,8 +5,10 @@ your final wording. Replace **[SUPPORT EMAIL]** / **[WEBSITE]** / URLs.
 
 ## Names & identity
 
-- **App name:** Korb
-- **Apple subtitle** (≤30): `Shared grocery lists, sorted`
+- **Home-screen name** (`app.json`): `Korb` (keep short under the icon)
+- **Store title** (Apple name / Play title, ≤30): `Korb: Shared Grocery Lists` (26)
+- **Apple subtitle** (≤30): `Family shopping & pantry` (24)
+  - Alternatives: `Shopping & pantry, in sync` · `Plan the shop, never run out` · `Household lists & smart pantry`
 - **Google short description** (≤80): `Shared grocery lists that sort themselves — and learn when you run low.`
 - **Primary category:** Food & Drink
 - **Secondary category:** Productivity
