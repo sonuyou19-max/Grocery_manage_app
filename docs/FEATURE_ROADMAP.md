@@ -82,10 +82,14 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Align pantry/vibe-check left-swipe label** — make both say **"Add to list"**
   (vibe-check currently says "Almost out"). Approved, not yet implemented.
 - **Unify add-to-list destination selection** across the pantry swipe and the
-  vibe-check deck (today: pantry prompts a picker every swipe; vibe-check uses
-  one session destination). Per-swipe picker is too heavy for the rapid
-  vibe-check flow. Approach TBD — user choosing among options (leading: a
-  sticky, smart-defaulted "Adding to [list] ▾" chip on both surfaces). Not yet
+  vibe-check deck — **chosen: Option A**, a sticky "Adding to [list] ▾" chip on
+  both surfaces; swipes add silently to it, tap to change. Default resolves to:
+  the last list added to (persisted) if it still exists → else the only list →
+  else most recent → else "New list" (created on first add). Recall via a new
+  `lib/list-prefs.ts` mirroring `store-prefs.ts` (AsyncStorage + in-memory +
+  useSyncExternalStore), `recordListUse(listId)` called on every add-to-list;
+  a "still exists in current lists" check makes deleted lists and the
+  local↔household id-space switch self-heal to the fallback. Not yet
   implemented.
 
 ## Phase overview
