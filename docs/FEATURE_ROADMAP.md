@@ -98,8 +98,8 @@ introduces a parallel, independently-tracked data store. Concretely:
   - Needs a lightweight Toast component (new — fade in/out, ~2s, queue-safe).
   - Scope: SINGLE-item adds only. The #2 weekly builder keeps its one-destination
     picker (a generated weekly shop belongs on one list, not scattered per item).
-  - Open question for user: home = last list added to (current plan) vs strictly
-    the first-ever list.
+  - Home = the list it was LAST added to (confirmed by user): `rememberItemList`
+    overwrites on every add, so re-homing is automatic.
   Not yet implemented.
 
 ## Phase overview
