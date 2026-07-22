@@ -81,16 +81,26 @@ introduces a parallel, independently-tracked data store. Concretely:
   items. User will give the heads-up to implement.
 - **Align pantry/vibe-check left-swipe label** — make both say **"Add to list"**
   (vibe-check currently says "Almost out"). Approved, not yet implemented.
-- **Unify add-to-list destination selection** across the pantry swipe and the
-  vibe-check deck — **chosen: Option A**, a sticky "Adding to [list] ▾" chip on
-  both surfaces; swipes add silently to it, tap to change. Default resolves to:
-  the last list added to (persisted) if it still exists → else the only list →
-  else most recent → else "New list" (created on first add). Recall via a new
-  `lib/list-prefs.ts` mirroring `store-prefs.ts` (AsyncStorage + in-memory +
-  useSyncExternalStore), `recordListUse(listId)` called on every add-to-list;
-  a "still exists in current lists" check makes deleted lists and the
-  local↔household id-space switch self-heal to the fallback. Not yet
-  implemented.
+- **Unify add-to-list destination (Option A, AMENDED — per-item home list).**
+  Single-item swipe-adds from the Pantry tab and the Vibe Check deck route to
+  the item's remembered **home list** (the list it was added to). No chip.
+  - Persist a per-item `name → homeListId` map on-device: `lib/item-home-list.ts`
+    mirroring the item-memory/store-prefs pattern (AsyncStorage + in-memory +
+    hydrate at startup). `rememberItemList(name, listId)` is called whenever an
+    item is added to a list (both providers, all add paths); last-add wins.
+  - On swipe-add: `homeListId = recallItemList(name)`.
+    - Home list still live → add there silently (revive if it's on that list
+      checked; no-op if already there unchecked; else add fresh), then a **soft
+      auto-dismissing toast**: "‹item› added to ‹list›".
+    - Home list missing/deleted, or none recorded, or id-space mismatch
+      (local↔household) → open the ListPickerSheet (already has "New list…").
+      The chosen/created list becomes the item's new homeListId, then add + toast.
+  - Needs a lightweight Toast component (new — fade in/out, ~2s, queue-safe).
+  - Scope: SINGLE-item adds only. The #2 weekly builder keeps its one-destination
+    picker (a generated weekly shop belongs on one list, not scattered per item).
+  - Open question for user: home = last list added to (current plan) vs strictly
+    the first-ever list.
+  Not yet implemented.
 
 ## Phase overview
 
