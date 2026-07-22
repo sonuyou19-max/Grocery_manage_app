@@ -79,6 +79,14 @@ introduces a parallel, independently-tracked data store. Concretely:
   it** (revive to "to buy"); absent → add fresh. Apply the same revive logic to
   the vibe-check deck's add-to-list, and make the weekly builder ignore checked
   items. User will give the heads-up to implement.
+- **Align pantry/vibe-check left-swipe label** — make both say **"Add to list"**
+  (vibe-check currently says "Almost out"). Approved, not yet implemented.
+- **Unify add-to-list destination selection** across the pantry swipe and the
+  vibe-check deck (today: pantry prompts a picker every swipe; vibe-check uses
+  one session destination). Per-swipe picker is too heavy for the rapid
+  vibe-check flow. Approach TBD — user choosing among options (leading: a
+  sticky, smart-defaulted "Adding to [list] ▾" chip on both surfaces). Not yet
+  implemented.
 
 ## Phase overview
 
