@@ -64,6 +64,22 @@ introduces a parallel, independently-tracked data store. Concretely:
   #7a recurring-staple cadence, #5 live household shopping. Needs migrations
   `0011+` and RLS.
 
+## Deferred fixes (awaiting user go-ahead — do NOT start until asked)
+
+- **Pantry "add to list" leaves a checked item / weekly builder under-suggests.**
+  Root cause: checking an item off a list marks it `checked` but never removes
+  it, and that's also how it enters the pantry — so a bought item lingers on
+  the list as a checked row. The pantry swipe-add's duplicate guard
+  (`already = target.items.some(name matches)`) then matches that stale checked
+  row and skips adding, so the user sees the previously-bought (ticked) item
+  instead of a fresh "to buy" one. The weekly builder's `excludeKeys` has the
+  same blind spot (excludes names on a list even when checked).
+  **Fix (approved, not yet implemented):** when the item already exists on the
+  target list, branch on its state — unchecked → leave it; **checked → un-check
+  it** (revive to "to buy"); absent → add fresh. Apply the same revive logic to
+  the vibe-check deck's add-to-list, and make the weekly builder ignore checked
+  items. User will give the heads-up to implement.
+
 ## Phase overview
 
 | Wave | Features | Native dep? | Backend? | Risk |
