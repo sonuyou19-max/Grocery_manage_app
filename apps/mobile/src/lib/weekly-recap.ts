@@ -20,12 +20,16 @@ export interface RecapPayload {
   members: number;
 }
 
-export async function generateRecap(payload: RecapPayload): Promise<string | null> {
+/** The recap is prose, so it is generated in the reader's language. */
+export async function generateRecap(
+  payload: RecapPayload,
+  language: string,
+): Promise<string | null> {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/weekly-recap`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, language }),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { recap?: string };
@@ -44,23 +48,35 @@ interface CachedRecap {
   scope: string;
   week: string;
   text: string;
+  language: string;
 }
 
-/** Returns this week's cached recap for the account scope, or null. */
-export async function getCachedRecap(scope: string): Promise<string | null> {
+/**
+ * This week's cached recap for the account scope, or null. A cached recap in a
+ * different language is treated as a miss, so switching language in Settings
+ * rewrites it rather than leaving prose the reader can't read.
+ */
+export async function getCachedRecap(scope: string, language: string): Promise<string | null> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const c = JSON.parse(raw) as CachedRecap;
-    return c.scope === scope && c.week === weekKey() ? c.text : null;
+    return c.scope === scope && c.week === weekKey() && c.language === language ? c.text : null;
   } catch {
     return null;
   }
 }
 
-export async function setCachedRecap(scope: string, text: string): Promise<void> {
+export async function setCachedRecap(
+  scope: string,
+  text: string,
+  language: string,
+): Promise<void> {
   try {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ scope, week: weekKey(), text } satisfies CachedRecap));
+    await AsyncStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ scope, week: weekKey(), text, language } satisfies CachedRecap),
+    );
   } catch {
     // best-effort
   }
@@ -69,21 +85,38 @@ export async function setCachedRecap(scope: string, text: string): Promise<void>
 // --- Shared (household) recap: one row per household, seen by every member ---
 
 /** This household's stored recap, or null (also null before the table exists). */
-export async function getSharedRecap(householdId: string): Promise<{ week: string; text: string } | null> {
+export async function getSharedRecap(
+  householdId: string,
+): Promise<{ week: string; text: string; language: string } | null> {
   const { data, error } = await supabase
     .from('household_recaps')
-    .select('week, text')
+    .select('week, text, language')
     .eq('household_id', householdId)
     .maybeSingle();
   if (error || !data) return null;
-  return { week: data.week as string, text: data.text as string };
+  return {
+    week: data.week as string,
+    text: data.text as string,
+    // Rows written before the language column defaulted to English.
+    language: (data.language as string | null) ?? 'en',
+  };
 }
 
-export async function setSharedRecap(householdId: string, text: string): Promise<void> {
+export async function setSharedRecap(
+  householdId: string,
+  text: string,
+  language: string,
+): Promise<void> {
   await supabase
     .from('household_recaps')
     .upsert(
-      { household_id: householdId, week: weekKey(), text, updated_at: new Date().toISOString() },
+      {
+        household_id: householdId,
+        week: weekKey(),
+        text,
+        language,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'household_id' },
     );
 }

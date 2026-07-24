@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import type { ItemCategory } from '@korb/shared';
+
 import { Card } from '@/components/card';
-import { CATEGORY_LABELS } from '@/lib/categorize';
+import { categoryLabel } from '@/lib/categorize';
 import { basketBalance } from '@/lib/nutrition';
 import { dueAt } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
@@ -19,7 +21,7 @@ import {
 } from '@/lib/weekly-recap';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
-import { useT } from '@/store/locale';
+import { useLocale } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { spacing, type, useTheme } from '@/theme';
 
@@ -35,7 +37,7 @@ type Phase = 'empty' | 'loading' | 'ready' | 'error';
  */
 export function WeeklyRecapCard() {
   const { colors } = useTheme();
-  const t = useT();
+  const { t, language } = useLocale();
   const appActive = useAppActive();
   const { lists } = useGroceries();
   const { stats } = usePantryIntel();
@@ -49,10 +51,12 @@ export function WeeklyRecapCard() {
 
     const catCount = new Map<string, number>();
     for (const it of items) catCount.set(it.category, (catCount.get(it.category) ?? 0) + 1);
+    // Localized labels, so the model writes the recap using the same category
+    // wording the user sees elsewhere in the app.
     const topCategories = [...catCount.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
-      .map(([c, count]) => ({ label: CATEGORY_LABELS[c as keyof typeof CATEGORY_LABELS] ?? c, count }));
+      .map(([c, count]) => ({ label: categoryLabel(c as ItemCategory, t), count }));
 
     const staples = Object.values(stats)
       .filter((s) => s.sampleCount >= 1)
@@ -97,15 +101,17 @@ export function WeeklyRecapCard() {
     }
     // In a household the recap is shared (one per household per week, seen by
     // everyone); logged-out / solo falls back to a per-device weekly cache.
+    // A stored recap in another language is a miss either way: it's prose, so
+    // it has to be rewritten rather than shown to someone who can't read it.
     if (!force) {
       const cached = household ? await getSharedRecap(household.id) : null;
-      if (household && cached && cached.week === weekKey()) {
+      if (household && cached && cached.week === weekKey() && cached.language === language) {
         setText(cached.text);
         setPhase('ready');
         return;
       }
       if (!household) {
-        const local = await getCachedRecap(scope);
+        const local = await getCachedRecap(scope, language);
         if (local) {
           setText(local);
           setPhase('ready');
@@ -114,21 +120,21 @@ export function WeeklyRecapCard() {
       }
     }
     setPhase('loading');
-    const recap = await generateRecap(payloadRef.current);
+    const recap = await generateRecap(payloadRef.current, language);
     if (recap) {
       setText(recap);
       setPhase('ready');
-      if (household) void setSharedRecap(household.id, recap);
-      else void setCachedRecap(scope, recap);
+      if (household) void setSharedRecap(household.id, recap, language);
+      else void setCachedRecap(scope, recap, language);
     } else {
       setPhase('error');
     }
   };
 
-  // Load once per scope+week (cache first, generate if missing).
+  // Load once per scope+week+language (cache first, generate if missing).
   useEffect(() => {
     void run(false);
-  }, [scope, weekKey(), enoughData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scope, weekKey(), enoughData, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live-update when another member generates this week's recap. While
   // backgrounded we hold no socket; on return we fetch once to catch up on a
@@ -138,7 +144,9 @@ export function WeeklyRecapCard() {
     let alive = true;
     const syncShared = async () => {
       const shared = await getSharedRecap(household.id);
-      if (alive && shared && shared.week === weekKey()) {
+      // Ignore a recap another member generated in a different language —
+      // our own run() will rewrite it in this reader's language.
+      if (alive && shared && shared.week === weekKey() && shared.language === language) {
         setText(shared.text);
         setPhase('ready');
       }
@@ -156,7 +164,7 @@ export function WeeklyRecapCard() {
       alive = false;
       supabase.removeChannel(channel);
     };
-  }, [household?.id, appActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household?.id, appActive, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card accented>
