@@ -22,6 +22,14 @@ export const GROUP_LABELS: Record<DisplayGroup, string> = {
   other: 'Other',
 };
 
+/** Localized food-group label (GROUP_LABELS above is the English source). */
+export function groupLabel(
+  group: DisplayGroup,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return t(`group.${group}`);
+}
+
 // Fixed mid-tone hues that read on both light and dark backgrounds.
 export const GROUP_COLORS: Record<DisplayGroup, string> = {
   produce: '#5FA85A',

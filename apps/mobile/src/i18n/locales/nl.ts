@@ -100,6 +100,37 @@ const nl = {
     weeks: { one: '%{count} week geleden gekocht', other: '%{count} weken geleden gekocht' },
     months: { one: '%{count} maand geleden gekocht', other: '%{count} maanden geleden gekocht' },
   },
+  group: {
+    produce: 'Groenten & fruit',
+    protein: 'Eiwitten',
+    carbs: 'Koolhydraten',
+    fats: 'Vetten',
+    other: 'Overig',
+  },
+  insights: {
+    subtitle: 'Je boodschappen, begrepen',
+    basketTitle: 'In je mandje',
+    basketHint: { one: '%{count} voedingsmiddel', other: '%{count} voedingsmiddelen' },
+    basketNote: 'Een ruwe indicatie per item — geen voedingstracker.',
+    pantryMixTitle: 'Je voorraadmix',
+    pantryMixHint: '%{count} bijgehouden',
+    staplesTitle: 'Je vaste producten',
+    staplesHint: 'Meest gekocht',
+    boughtTimes: '%{count}× gekocht',
+    spendingTitle: 'Uitgaven',
+    spendingHint: '%{count} met prijs',
+    totalLogged: 'Totaal geregistreerd',
+    spendingOptional: 'Optioneel',
+    spendingEmpty:
+      'Voeg een prijs toe aan items tijdens het winkelen en Korb toont je weekuitgaven en waar je geld naartoe gaat. Altijd optioneel — tot dan blijft dit uit beeld.',
+    whereTitle: 'Waar je winkelt',
+    whereHint: 'Per winkel',
+    noStore: 'Geen winkel ingesteld',
+    cheaperTitle: 'Elders goedkoper',
+    cheaperHint: 'Zelfde item, lagere prijs',
+    cheaperAt: '%{price} bij %{store}',
+    cheaperVs: 't.o.v. %{price}',
+  },
 };
 
 export default nl;

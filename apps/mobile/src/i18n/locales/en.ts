@@ -113,6 +113,37 @@ const en = {
     weeks: { one: 'Last bought %{count} week ago', other: 'Last bought %{count} weeks ago' },
     months: { one: 'Last bought %{count} month ago', other: 'Last bought %{count} months ago' },
   },
+  group: {
+    produce: 'Produce',
+    protein: 'Protein',
+    carbs: 'Carbs',
+    fats: 'Fats',
+    other: 'Other',
+  },
+  insights: {
+    subtitle: 'Your shopping, understood',
+    basketTitle: 'In your basket',
+    basketHint: { one: '%{count} food item', other: '%{count} food items' },
+    basketNote: 'A rough guide by item — not a nutrition tracker.',
+    pantryMixTitle: 'Your pantry mix',
+    pantryMixHint: '%{count} tracked',
+    staplesTitle: 'Your staples',
+    staplesHint: 'Bought most often',
+    boughtTimes: '%{count}× bought',
+    spendingTitle: 'Spending',
+    spendingHint: '%{count} priced',
+    totalLogged: 'Total logged',
+    spendingOptional: 'Optional',
+    spendingEmpty:
+      'Add a price to items as you shop and Korb shows weekly spend and where your money goes. Always optional — until then this stays out of your way.',
+    whereTitle: 'Where you shop',
+    whereHint: 'By store',
+    noStore: 'No store set',
+    cheaperTitle: 'Cheaper elsewhere',
+    cheaperHint: 'Same item, lower price',
+    cheaperAt: '%{price} at %{store}',
+    cheaperVs: 'vs %{price}',
+  },
 };
 
 export default en;

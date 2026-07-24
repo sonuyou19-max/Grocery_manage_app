@@ -100,6 +100,37 @@ const fr = {
     weeks: { one: 'Acheté il y a %{count} semaine', other: 'Acheté il y a %{count} semaines' },
     months: { one: 'Acheté il y a %{count} mois', other: 'Acheté il y a %{count} mois' },
   },
+  group: {
+    produce: 'Fruits & légumes',
+    protein: 'Protéines',
+    carbs: 'Glucides',
+    fats: 'Lipides',
+    other: 'Autre',
+  },
+  insights: {
+    subtitle: 'Tes courses, décryptées',
+    basketTitle: 'Dans ton panier',
+    basketHint: { one: '%{count} aliment', other: '%{count} aliments' },
+    basketNote: 'Un aperçu indicatif par article — pas un suivi nutritionnel.',
+    pantryMixTitle: 'Ton profil de garde-manger',
+    pantryMixHint: '%{count} suivis',
+    staplesTitle: 'Tes incontournables',
+    staplesHint: 'Les plus achetés',
+    boughtTimes: 'acheté %{count}×',
+    spendingTitle: 'Dépenses',
+    spendingHint: '%{count} avec prix',
+    totalLogged: 'Total enregistré',
+    spendingOptional: 'Optionnel',
+    spendingEmpty:
+      'Ajoute un prix à tes articles en faisant les courses et Korb t’affiche tes dépenses hebdomadaires et où va ton argent. Toujours optionnel — d’ici là, ça reste discret.',
+    whereTitle: 'Où tu fais tes courses',
+    whereHint: 'Par magasin',
+    noStore: 'Aucun magasin défini',
+    cheaperTitle: 'Moins cher ailleurs',
+    cheaperHint: 'Même article, prix plus bas',
+    cheaperAt: '%{price} chez %{store}',
+    cheaperVs: 'contre %{price}',
+  },
 };
 
 export default fr;

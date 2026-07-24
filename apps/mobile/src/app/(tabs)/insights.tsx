@@ -8,12 +8,12 @@ import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
-import { euros } from '@/lib/money';
-import { basketBalance, GROUP_COLORS, GROUP_LABELS, type BalanceSlice } from '@/lib/nutrition';
+import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
+import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
 import { supermarketLabel } from '@/lib/supermarkets';
 import { useGroceries } from '@/store/groceries';
+import { useLocale } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -26,6 +26,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
  */
 export default function InsightsScreen() {
   const { colors } = useTheme();
+  const { t, money } = useLocale();
   const { lists } = useGroceries();
   const { stats } = usePantryIntel();
 
@@ -63,33 +64,43 @@ export default function InsightsScreen() {
   const cheaper = useMemo(() => cheaperStoreHints(priced), [priced]);
 
   return (
-    <Screen title="Insights" subtitle="Your shopping, understood">
+    <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
       <WeeklyRecapCard />
 
       {cart.total > 0 && (
         <Card>
-          <CardHead icon="nutrition-outline" title="In your basket" hint={`${cart.total} food item${cart.total === 1 ? '' : 's'}`} />
+          <CardHead
+            icon="nutrition-outline"
+            title={t('insights.basketTitle')}
+            hint={t('insights.basketHint', { count: cart.total })}
+          />
           <BalanceBar slices={cart.slices} />
-          <Text style={[type.sub, { color: colors.muted }]}>A rough guide by item — not a nutrition tracker.</Text>
+          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.basketNote')}</Text>
         </Card>
       )}
 
       {pantry.total > 0 && (
         <Card>
-          <CardHead icon="file-tray-full-outline" title="Your pantry mix" hint={`${pantry.total} tracked`} />
+          <CardHead
+            icon="file-tray-full-outline"
+            title={t('insights.pantryMixTitle')}
+            hint={t('insights.pantryMixHint', { count: pantry.total })}
+          />
           <BalanceBar slices={pantry.slices} />
         </Card>
       )}
 
       {staples.length > 0 && (
         <Card>
-          <CardHead icon="repeat-outline" title="Your staples" hint="Bought most often" />
+          <CardHead icon="repeat-outline" title={t('insights.staplesTitle')} hint={t('insights.staplesHint')} />
           {staples.map((s) => (
             <View key={s.key} style={styles.row}>
               <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
                 {s.display}
               </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>{s.sampleCount + 1}× bought</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t('insights.boughtTimes', { count: s.sampleCount + 1 })}
+              </Text>
             </View>
           ))}
         </Card>
@@ -97,32 +108,33 @@ export default function InsightsScreen() {
 
       {priced.length > 0 ? (
         <Card>
-          <CardHead icon="cash-outline" title="Spending" hint={`${priced.length} priced`} />
+          <CardHead
+            icon="cash-outline"
+            title={t('insights.spendingTitle')}
+            hint={t('insights.spendingHint', { count: priced.length })}
+          />
           <View style={styles.spendTotal}>
-            <Text style={[type.sub, { color: colors.muted }]}>Total logged</Text>
-            <Text style={[type.h2, { color: colors.ink }]}>{euros(spendTotal)}</Text>
+            <Text style={[type.sub, { color: colors.muted }]}>{t('insights.totalLogged')}</Text>
+            <Text style={[type.h2, { color: colors.ink }]}>{money(spendTotal)}</Text>
           </View>
           {spendByCat.map((x) => (
             <View key={x.category} style={styles.row}>
-              <Text style={[type.sub, styles.grow, { color: colors.ink }]}>{CATEGORY_LABELS[x.category]}</Text>
-              <Text style={[type.sub, { color: colors.muted }]}>{euros(x.cents)}</Text>
+              <Text style={[type.sub, styles.grow, { color: colors.ink }]}>{categoryLabel(x.category, t)}</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{money(x.cents)}</Text>
             </View>
           ))}
         </Card>
       ) : (
         <Card>
-          <CardHead icon="pricetag-outline" title="Spending" hint="Optional" />
-          <Text style={[type.sub, { color: colors.muted }]}>
-            Add a price to items as you shop and Korb shows weekly spend and where your money goes.
-            Always optional — until then this stays out of your way.
-          </Text>
+          <CardHead icon="pricetag-outline" title={t('insights.spendingTitle')} hint={t('insights.spendingOptional')} />
+          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.spendingEmpty')}</Text>
         </Card>
       )}
 
       {/* Spend per store — only when at least one priced item has a store. */}
       {storeSpend.some((s) => s.store != null) && (
         <Card>
-          <CardHead icon="storefront-outline" title="Where you shop" hint="By store" />
+          <CardHead icon="storefront-outline" title={t('insights.whereTitle')} hint={t('insights.whereHint')} />
           {storeSpend.map((s) => (
             <View key={s.store ?? 'none'} style={styles.row}>
               {s.store ? (
@@ -131,9 +143,9 @@ export default function InsightsScreen() {
                 <Ionicons name="pricetag-outline" size={20} color={colors.muted} />
               )}
               <Text style={[type.sub, styles.grow, { color: colors.ink }]} numberOfLines={1}>
-                {s.store ? supermarketLabel(s.store) ?? s.store : 'No store set'}
+                {s.store ? supermarketLabel(s.store) ?? s.store : t('insights.noStore')}
               </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>{euros(s.cents)}</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{money(s.cents)}</Text>
             </View>
           ))}
         </Card>
@@ -142,7 +154,7 @@ export default function InsightsScreen() {
       {/* Cheaper elsewhere — same item priced at 2+ stores. */}
       {cheaper.length > 0 && (
         <Card>
-          <CardHead icon="trending-down-outline" title="Cheaper elsewhere" hint="Same item, lower price" />
+          <CardHead icon="trending-down-outline" title={t('insights.cheaperTitle')} hint={t('insights.cheaperHint')} />
           {cheaper.slice(0, 6).map((h) => (
             <View key={h.name} style={styles.hintRow}>
               <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
@@ -151,9 +163,14 @@ export default function InsightsScreen() {
               <View style={styles.hintDetail}>
                 <SupermarketBadge store={h.cheapStore} size={16} />
                 <Text style={[type.sub, { color: colors.accent }]}>
-                  {euros(h.cheapCents)} at {supermarketLabel(h.cheapStore) ?? h.cheapStore}
+                  {t('insights.cheaperAt', {
+                    price: money(h.cheapCents),
+                    store: supermarketLabel(h.cheapStore) ?? h.cheapStore,
+                  })}
                 </Text>
-                <Text style={[type.sub, { color: colors.muted }]}>vs {euros(h.dearCents)}</Text>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {t('insights.cheaperVs', { price: money(h.dearCents) })}
+                </Text>
               </View>
             </View>
           ))}
@@ -177,6 +194,7 @@ function CardHead({ icon, title, hint }: { icon: IconName; title: string; hint?:
 /** A stacked, weighted bar of food-group slices with a percentage legend. */
 function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
   const { colors } = useTheme();
+  const { t } = useLocale();
   return (
     <View style={{ gap: spacing.md }}>
       <View style={[styles.bar, { backgroundColor: colors.line }]}>
@@ -189,7 +207,7 @@ function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
           <View key={s.group} style={styles.legendItem}>
             <View style={[styles.dot, { backgroundColor: GROUP_COLORS[s.group] }]} />
             <Text style={[type.sub, { color: colors.ink }]}>
-              {GROUP_LABELS[s.group]} {Math.round(s.fraction * 100)}%
+              {groupLabel(s.group, t)} {Math.round(s.fraction * 100)}%
             </Text>
           </View>
         ))}
