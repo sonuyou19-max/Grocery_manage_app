@@ -18,6 +18,8 @@ export const LEGAL_LAST_UPDATED = '20 July 2026';
 export const PRIVACY_URL = '';
 export const TERMS_URL = '';
 
+export type LegalDoc = 'privacy' | 'terms';
+
 export const PRIVACY_MD = `# Privacy Policy
 
 Last updated: ${LEGAL_LAST_UPDATED}
@@ -70,6 +72,10 @@ Data is encrypted in transit, and access to household data is enforced at the da
 ## Changes
 
 We may update this policy; material changes will be reflected by the "Last updated" date above.
+
+## Language
+
+This policy is written in English, and the English version is the binding one. Where we offer a translation, it is provided for convenience; if it differs from the English text, the English text applies — except where the law of your country of residence requires otherwise.
 
 ## Contact
 
@@ -125,6 +131,37 @@ We may update these Terms; continued use after changes means you accept them.
 
 These Terms are governed by the laws of **Belgium**, subject to any mandatory consumer protections of your country of residence.
 
+## Language
+
+These Terms are written in English, and the English version is the binding one. Where we offer a translation, it is provided for convenience; if it differs from the English text, the English text applies — except where the law of your country of residence requires otherwise.
+
 ## Contact
 
 **Sonu Kumar Suman** — **support@korb.app**`;
+
+/**
+ * Translated versions of the documents above, keyed by language code.
+ *
+ * Deliberately empty: these are binding legal texts, and the English source is
+ * itself still awaiting a professional review. Translating first would mean
+ * redoing every language once counsel edits the English. So the app serves the
+ * English text in every language for now — which the "Language" clause in both
+ * documents accounts for — and translations can be added here as they are
+ * professionally prepared, one language at a time.
+ *
+ * To add one: `nl: { privacy: '# Privacybeleid …', terms: '# …' }`.
+ */
+const LEGAL_TRANSLATIONS: Partial<Record<string, Partial<Record<LegalDoc, string>>>> = {};
+
+/**
+ * The legal document to display, in the reader's language where a reviewed
+ * translation exists and in English otherwise.
+ */
+export function legalDoc(doc: LegalDoc, language: string): string {
+  const english = doc === 'terms' ? TERMS_MD : PRIVACY_MD;
+  return LEGAL_TRANSLATIONS[language]?.[doc] ?? english;
+}
+
+/** Whether the reader is being shown English because their language has no translation. */
+export const isLegalFallback = (doc: LegalDoc, language: string): boolean =>
+  language !== 'en' && LEGAL_TRANSLATIONS[language]?.[doc] === undefined;

@@ -104,6 +104,13 @@ information.
 We may update this policy from time to time. Material changes will be reflected
 by the "Last updated" date above and, where appropriate, highlighted in the app.
 
+## Language
+
+This policy is written in English, and the English version is the binding one.
+Where we offer a translation, it is provided for convenience; if it differs from
+the English text, the English text applies — except where the law of your
+country of residence requires otherwise.
+
 ## Contact
 
 **Sonu Kumar Suman** (operating Korb as an individual, based in Belgium)

@@ -84,9 +84,25 @@ in Settings.
   settings, sign-in/household, item sheet, quick-add, weekly builder, shopping
   mode, empty states, alerts, category labels, relative-time phrases. Swap
   `euros()` for `money()`.
-- **Phase 3 — translations + polish.** Fill all locale files (AI draft → native
-  review), Dutch/French for Belgium first. Text-expansion layout pass on a
-  non-English build. Localized legal + store listings.
+- **Phase 3 — translations + polish ✅ (except where noted).** All six locales
+  are complete (275 keys + 8 plural groups each); no language relies on the
+  English fallback. Polish gets a registered CLDR plural rule (one/few/many).
+  `pnpm --filter mobile check:locales` guards key parity, per-language plural
+  categories, and `%{placeholder}` integrity. The AI weekly recap is generated
+  in the reader's language (migration 0011 adds `household_recaps.language`).
+  Text-expansion pass done: sign-in actions wrap, the lists header hint
+  shrinks, tab labels scale down. Store listings translated in
+  `docs/STORE_LISTING_LOCALIZED.md`.
+  - **Still open — native review.** Every locale is an AI draft. Worth a
+    native read-through before launch, especially store titles/subtitles,
+    which are hard to change later.
+  - **Still open — legal translations.** Deliberately not machine-translated:
+    they are binding texts and the English source itself still awaits
+    professional review, so translating now means redoing all six once
+    counsel edits the English. Both documents carry a "Language" clause
+    making English authoritative, and `legalDoc()` in `lib/legal.ts` serves a
+    per-language translation as soon as one is dropped into
+    `LEGAL_TRANSLATIONS`, falling back to English until then.
 - Notes: pure-JS so far (no rebuild); `expo-localization` optional later to
   pre-select the device language. Category *keywords* stay English but the AI
   categorizer already handles other languages, so items still classify.

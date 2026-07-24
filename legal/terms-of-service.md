@@ -85,6 +85,14 @@ These Terms are governed by the laws of **Belgium**, without regard to
 conflict-of-law rules, and subject to any mandatory consumer protections of
 your country of residence.
 
+## Language
+
+These Terms are written in English, and the English version is the binding one.
+Korb's interface is available in several languages, and we may offer
+translations of these Terms for convenience. If a translation differs from the
+English text, the English text applies — except where the law of your country
+of residence requires otherwise.
+
 ## Contact
 
 **Sonu Kumar Suman**

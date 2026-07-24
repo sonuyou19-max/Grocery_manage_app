@@ -4,7 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
-import { PRIVACY_MD, TERMS_MD } from '@/lib/legal';
+import { legalDoc } from '@/lib/legal';
+import { useLocale } from '@/store/locale';
 import { spacing, type, useTheme } from '@/theme';
 
 /** Render a line's inline **bold** spans. */
@@ -28,8 +29,9 @@ function Inline({ text, color }: { text: string; color: string }) {
  */
 export default function LegalScreen() {
   const { colors } = useTheme();
+  const { language } = useLocale();
   const { doc } = useLocalSearchParams<{ doc?: string }>();
-  const md = doc === 'terms' ? TERMS_MD : PRIVACY_MD;
+  const md = legalDoc(doc === 'terms' ? 'terms' : 'privacy', language);
   const lines = md.split('\n');
 
   return (
