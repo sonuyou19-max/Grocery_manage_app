@@ -24,8 +24,9 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Local + cloud parity:** lists exist in two modes — on-device and cloud
   (household). Any new item field must be handled in **both** the local store
   *and* the Supabase schema, or the feature silently breaks for one kind of user.
-- **Every schema change is a new migration** (next is `0011_`), never an edit to
-  an existing one. Add RLS for anything household-shared.
+- **Every schema change is a new migration** (next is `0012_`; `0011` is the
+  recap language column), never an edit to an existing one. Add RLS for
+  anything household-shared.
 - **The dead-end rule** (learned from the edit-mode bug): any UI mode that hides
   the primary action must keep an always-visible exit.
 - **Definition of done per feature:** typecheck clean → Android bundle exports →
@@ -62,7 +63,10 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Wave 2 — ✅ complete:** #2 weekly-list builder, #6 shopping mode.
 - **Wave 3 — next (backend):** #4b price history (purchase-log migration),
   #7a recurring-staple cadence, #5 live household shopping. Needs migrations
-  `0011+` and RLS.
+  `0012+` and RLS.
+- **i18n — ✅ complete, not yet verified on a real build.** Six languages, the
+  localized recap, and the layout pass have all passed typecheck + Android
+  bundle, but none of it has been seen on a device yet.
 
 ## TOP PRIORITY — Internationalization (i18n) for all of Europe
 
@@ -235,7 +239,7 @@ easy to verify. Native/push is deliberately last.
 - **Goal:** spend trends across weeks, not just current lists.
 - **Needs:** a **purchase-price log** — persist price/store/date when an item is
   checked off (ties into the existing `logPurchase` moment in `pantry-intel`).
-- **Schema:** new migration `0011_purchase_log` (household-scoped table + RLS),
+- **Schema:** new migration `0012_purchase_log` (household-scoped table + RLS),
   plus a local mirror for on-device lists.
 - **Connection:** the same log powers #7's accuracy — build once, use twice.
 - **Native/backend:** migration + RLS. **Risk:** med.
@@ -243,7 +247,7 @@ easy to verify. Native/push is deliberately last.
 ### #7a · Recurring staples (in-app surfacing)
 - **Goal:** mark a pantry item "always keep" with a cadence; surface it as **due**
   in-app (vibe deck / a "due soon" section) when the interval elapses.
-- **Schema:** add cadence fields to pantry stats — migration `0012_restock_cadence`
+- **Schema:** add cadence fields to pantry stats — migration `0013_restock_cadence`
   (+ local parity in `pantry-intel`).
 - **Connection:** burn-rate + cadence → the same list-building path as #2.
 - **Native/backend:** migration. **Risk:** med. (In-app only; the *reminder* is #7b.)
@@ -253,7 +257,7 @@ easy to verify. Native/push is deliberately last.
   and **item claiming** so two people don't buy the same thing.
 - **Extends:** the household realtime channel already in `store/household`.
 - **Schema:** `claimed_by` (+ optional `claimed_at`) on `list_items` — migration
-  `0013_item_claim` + RLS so only household members can claim/unclaim; Supabase
+  `0014_item_claim` + RLS so only household members can claim/unclaim; Supabase
   **Presence** for "who's shopping now" (no new native dep).
 - **Connection:** deepens the household spine; claims live on the shared item, not
   a side channel.
@@ -282,7 +286,7 @@ easy to verify. Native/push is deliberately last.
 
 - [ ] Works for **both** local-only and cloud (household) lists.
 - [ ] Any new item/pantry field added to the local store **and** a Supabase
-      migration (`0011+`), with RLS if household-shared.
+      migration (`0012+`), with RLS if household-shared.
 - [ ] No parallel data store — extends `groceries` / `pantry-intel` /
       `household` / `store-prefs` / `categorize`.
 - [ ] Reuses existing interaction patterns (`SwipeableItemRow`, quick-add review
