@@ -74,6 +74,20 @@ const nl = {
     trackConfirm: 'Volgen',
     addTo: '%{item} toevoegen aan',
   },
+  status: {
+    learning: 'Ik leer je tempo',
+    runningLow: 'Bijna op',
+    daysLeft: { one: 'nog ~%{count} dag', other: 'nog ~%{count} dagen' },
+  },
+  lastBought: {
+    never: 'Nog nooit gekocht',
+    today: 'Vandaag gekocht',
+    yesterday: 'Gisteren gekocht',
+    days: { one: '%{count} dag geleden gekocht', other: '%{count} dagen geleden gekocht' },
+    weekAgo: 'Een week geleden gekocht',
+    weeks: { one: '%{count} week geleden gekocht', other: '%{count} weken geleden gekocht' },
+    months: { one: '%{count} maand geleden gekocht', other: '%{count} maanden geleden gekocht' },
+  },
 };
 
 export default nl;

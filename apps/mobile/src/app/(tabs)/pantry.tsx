@@ -371,7 +371,7 @@ function PantrySwipeRow({
               {item.display}
             </Text>
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-              {CATEGORY_LABELS[item.category]} · {lastBoughtLabel(item.lastPurchasedAt, now)}
+              {CATEGORY_LABELS[item.category]} · {lastBoughtLabel(item.lastPurchasedAt, now, t)}
             </Text>
           </View>
           <View style={styles.stock}>
@@ -379,7 +379,7 @@ function PantrySwipeRow({
               <View style={[styles.fill, { width: `${Math.max(left, 0.02) * 100}%`, backgroundColor: barColor }]} />
             </View>
             <Text style={[type.sub, { color: left < LOW_THRESHOLD ? barColor : colors.muted }]}>
-              {statusLabel(item, now)}
+              {statusLabel(item, now, t)}
             </Text>
           </View>
         </Animated.View>

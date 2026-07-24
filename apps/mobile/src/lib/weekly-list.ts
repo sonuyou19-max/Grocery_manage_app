@@ -14,7 +14,6 @@ export interface WeeklySuggestion {
   key: string;
   display: string;
   category: ItemCategory;
-  subtitle: string;
   quantity: number | null;
   unit: ParsedItem['unit'];
   store: string | null;
@@ -35,7 +34,6 @@ export function buildWeeklySuggestions(
       key: c.key,
       display: c.display,
       category: c.category,
-      subtitle: c.subtitle,
       quantity: usual?.quantity ?? null,
       unit: asUnit(usual?.unit ?? null),
       store: usual?.store ?? null,

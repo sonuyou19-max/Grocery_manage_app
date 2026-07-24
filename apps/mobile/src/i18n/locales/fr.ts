@@ -74,6 +74,20 @@ const fr = {
     trackConfirm: 'Suivre',
     addTo: 'Ajouter %{item} à',
   },
+  status: {
+    learning: 'J’apprends ton rythme',
+    runningLow: 'Bientôt épuisé',
+    daysLeft: { one: '~%{count} jour restant', other: '~%{count} jours restants' },
+  },
+  lastBought: {
+    never: 'Jamais acheté',
+    today: 'Acheté aujourd’hui',
+    yesterday: 'Acheté hier',
+    days: { one: 'Acheté il y a %{count} jour', other: 'Acheté il y a %{count} jours' },
+    weekAgo: 'Acheté il y a une semaine',
+    weeks: { one: 'Acheté il y a %{count} semaine', other: 'Acheté il y a %{count} semaines' },
+    months: { one: 'Acheté il y a %{count} mois', other: 'Acheté il y a %{count} mois' },
+  },
 };
 
 export default fr;

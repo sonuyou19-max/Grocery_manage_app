@@ -19,7 +19,8 @@ import { GlassView } from '@/components/glass';
 import { MeshBackground } from '@/components/mesh-background';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { haptics } from '@/lib/haptics';
-import { isDue, normalizeKey } from '@/lib/pantry-intel';
+import { isDue, lastBoughtLabel, normalizeKey } from '@/lib/pantry-intel';
+import { useT } from '@/store/locale';
 import { useGroceries } from '@/store/groceries';
 import { useVibeDeck, usePantryIntel, type DeckCard } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -347,12 +348,15 @@ export default function VibeCheckScreen() {
 /** The star: a big glass card with the item name and a muted subtitle. */
 function VibeCard({ card }: { card: DeckCard }) {
   const { colors } = useTheme();
+  const t = useT();
   return (
     <GlassView radius={24} style={styles.card}>
       <Text style={[styles.itemName, { color: colors.ink }]} numberOfLines={3} adjustsFontSizeToFit>
         {card.display}
       </Text>
-      <Text style={[styles.itemSub, { color: colors.muted }]}>{card.subtitle}</Text>
+      <Text style={[styles.itemSub, { color: colors.muted }]}>
+        {lastBoughtLabel(card.lastPurchasedAt, Date.now(), t)}
+      </Text>
     </GlassView>
   );
 }

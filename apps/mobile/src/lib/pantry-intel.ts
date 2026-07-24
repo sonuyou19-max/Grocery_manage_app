@@ -59,8 +59,8 @@ export interface DeckCard {
   key: string;
   display: string;
   category: ItemCategory;
-  /** "Last bought 3 weeks ago" — the tiny muted subtitle. */
-  subtitle: string;
+  /** When it was last bought — rendered to a localized subtitle by the caller. */
+  lastPurchasedAt: number;
 }
 
 export const normalizeKey = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -89,25 +89,28 @@ export function lifeRemaining(stat: ItemStat, now: number): number {
   return Math.max(0, Math.min(1, 1 - (now - stat.lastPurchasedAt) / span));
 }
 
+/** A translate function (from the locale store), passed in so this pure lib
+ * stays i18n-agnostic while still producing localized strings. */
+export type Translate = (key: string, options?: Record<string, unknown>) => string;
+
 /** Short status for a pantry row: learning / ~N days left / running low. */
-export function statusLabel(stat: ItemStat, now: number): string {
-  if (!stat.lastPurchasedAt) return 'Learning your pace';
+export function statusLabel(stat: ItemStat, now: number, t: Translate): string {
+  if (!stat.lastPurchasedAt) return t('status.learning');
   const days = Math.ceil((dueAt(stat) - now) / DAY);
-  if (days <= 0) return 'Running low';
-  if (days === 1) return '~1 day left';
-  return `~${days} days left`;
+  if (days <= 0) return t('status.runningLow');
+  return t('status.daysLeft', { count: days });
 }
 
 /** Human "last bought" label for the card subtitle. */
-export function lastBoughtLabel(lastPurchasedAt: number, now: number): string {
-  if (!lastPurchasedAt) return 'Never bought yet';
+export function lastBoughtLabel(lastPurchasedAt: number, now: number, t: Translate): string {
+  if (!lastPurchasedAt) return t('lastBought.never');
   const days = Math.floor((now - lastPurchasedAt) / DAY);
-  if (days <= 0) return 'Last bought today';
-  if (days === 1) return 'Last bought yesterday';
-  if (days < 7) return `Last bought ${days} days ago`;
-  if (days < 14) return 'Last bought a week ago';
-  if (days < 56) return `Last bought ${Math.round(days / 7)} weeks ago`;
-  return `Last bought ${Math.round(days / 30)} months ago`;
+  if (days <= 0) return t('lastBought.today');
+  if (days === 1) return t('lastBought.yesterday');
+  if (days < 7) return t('lastBought.days', { count: days });
+  if (days < 14) return t('lastBought.weekAgo');
+  if (days < 56) return t('lastBought.weeks', { count: Math.round(days / 7) });
+  return t('lastBought.months', { count: Math.round(days / 30) });
 }
 
 /**
@@ -124,7 +127,7 @@ export function buildDeck(stats: StatMap, excludeKeys: Set<string>, now: number)
       key: stat.key,
       display: stat.display,
       category: stat.category,
-      subtitle: lastBoughtLabel(stat.lastPurchasedAt, now),
+      lastPurchasedAt: stat.lastPurchasedAt,
     }));
 }
 

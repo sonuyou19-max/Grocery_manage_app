@@ -87,6 +87,20 @@ const en = {
     trackConfirm: 'Track',
     addTo: 'Add %{item} to',
   },
+  status: {
+    learning: 'Learning your pace',
+    runningLow: 'Running low',
+    daysLeft: { one: '~%{count} day left', other: '~%{count} days left' },
+  },
+  lastBought: {
+    never: 'Never bought yet',
+    today: 'Last bought today',
+    yesterday: 'Last bought yesterday',
+    days: { one: 'Last bought %{count} day ago', other: 'Last bought %{count} days ago' },
+    weekAgo: 'Last bought a week ago',
+    weeks: { one: 'Last bought %{count} week ago', other: 'Last bought %{count} weeks ago' },
+    months: { one: 'Last bought %{count} month ago', other: 'Last bought %{count} months ago' },
+  },
 };
 
 export default en;
