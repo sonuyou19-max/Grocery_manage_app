@@ -31,12 +31,12 @@ import { ItemSheet } from '@/components/item-sheet';
 import { MeshBackground } from '@/components/mesh-background';
 import { QuickAddSheet } from '@/components/quick-add-sheet';
 import { SupermarketBadge } from '@/components/supermarket-badge';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
+import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
-import { euros } from '@/lib/money';
 import { useAuth } from '@/store/auth';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
+import { useLocale } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -64,6 +64,7 @@ const dismissKeyboardAndWait = async () => {
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useTheme();
+  const { t, money } = useLocale();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem } = useGroceries();
   const { user } = useAuth();
@@ -121,7 +122,7 @@ export default function ListDetailScreen() {
         <MeshBackground />
         <SafeAreaView style={styles.fillTransparent}>
           <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
-            This list no longer exists.
+            {t('listDetail.gone')}
           </Text>
         </SafeAreaView>
       </View>
@@ -188,11 +189,13 @@ export default function ListDetailScreen() {
     );
     if (duplicate) {
       Alert.alert(
-        'Already on the list',
-        `“${duplicate.name}” is already here${duplicate.checked ? ' (in your cart)' : ''}.`,
+        t('listDetail.dupTitle'),
+        duplicate.checked
+          ? t('listDetail.dupHereCart', { name: duplicate.name })
+          : t('listDetail.dupHere', { name: duplicate.name }),
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Add anyway', onPress: () => doAdd(name) },
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('listDetail.addAnyway'), onPress: () => doAdd(name) },
         ],
       );
       return;
@@ -208,36 +211,28 @@ export default function ListDetailScreen() {
   // code (falls back to the system share sheet if WhatsApp isn't available).
   const inviteFamily = async () => {
     if (!user) {
-      Alert.alert(
-        'Sign in to share',
-        'Sharing a list with your household needs an account. Signing in only takes a moment.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Sign in', onPress: () => router.push('/auth/sign-in') },
-        ],
-      );
+      Alert.alert(t('listDetail.signInShareTitle'), t('listDetail.signInShareBody'), [
+        { text: t('common.notNow'), style: 'cancel' },
+        { text: t('listDetail.signIn'), onPress: () => router.push('/auth/sign-in') },
+      ]);
       return;
     }
     if (!household) {
-      Alert.alert(
-        'Share this list',
-        'Set up a household first, then you can invite family with a join code.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Set up household', onPress: () => router.push('/auth/household') },
-        ],
-      );
+      Alert.alert(t('listDetail.shareTitle'), t('listDetail.shareBody'), [
+        { text: t('common.notNow'), style: 'cancel' },
+        { text: t('listDetail.setUpHousehold'), onPress: () => router.push('/auth/household') },
+      ]);
       return;
     }
 
     const lines = [
-      `Join our grocery household “${household.name}” on Korb 🧺`,
+      t('listDetail.inviteIntro', { name: household.name }),
       '',
-      `Invite code: ${household.invite_code}`,
+      t('listDetail.inviteCode', { code: household.invite_code }),
       '',
       APP_DOWNLOAD_URL
-        ? `Get the app: ${APP_DOWNLOAD_URL}`
-        : 'In the app: Settings → Household → Join, then enter the code.',
+        ? t('listDetail.inviteGetApp', { url: APP_DOWNLOAD_URL })
+        : t('listDetail.inviteInApp'),
     ];
     const message = lines.join('\n');
 
@@ -272,7 +267,8 @@ export default function ListDetailScreen() {
             {list.name}
           </Text>
           <Text style={[type.sub, { color: colors.muted }]}>
-            {list.store ?? 'Any store'} · {checkedCount}/{list.items.length} in cart
+            {list.store ?? t('listDetail.anyStore')} ·{' '}
+            {t('listDetail.inCartCount', { checked: checkedCount, total: list.items.length })}
           </Text>
         </View>
         {list.items.length > 0 && (
@@ -299,17 +295,17 @@ export default function ListDetailScreen() {
       <GlassView radius={radii.md} style={styles.budget}>
         {budget.hasPrices ? (
           <>
-            <Stat label="To buy" value={euros(budget.toBuy)} colors={colors} />
-            <Stat label="In cart" value={euros(budget.inCart)} colors={colors} />
+            <Stat label={t('listDetail.toBuy')} value={money(budget.toBuy)} colors={colors} />
+            <Stat label={t('listDetail.inCartLabel')} value={money(budget.inCart)} colors={colors} />
             <Stat
-              label="Priced"
-              value={`${budget.pricedCount} of ${budget.totalCount}`}
+              label={t('listDetail.priced')}
+              value={t('listDetail.pricedOf', { count: budget.pricedCount, total: budget.totalCount })}
               colors={colors}
             />
           </>
         ) : (
           <Text style={[type.sub, { color: colors.muted, textAlign: 'center', flex: 1 }]}>
-            Add a price to any item to track spend — optional.
+            {t('listDetail.addPriceHint')}
           </Text>
         )}
       </GlassView>
@@ -320,7 +316,7 @@ export default function ListDetailScreen() {
           <View key={group.category}>
             <View style={styles.catRow}>
               <Text style={[type.label, { color: colors.accent }]}>
-                {CATEGORY_LABELS[group.category]}
+                {categoryLabel(group.category, t)}
               </Text>
               <View style={[styles.catLine, { backgroundColor: colors.line }]} />
             </View>
@@ -337,7 +333,7 @@ export default function ListDetailScreen() {
         ))}
         {list.items.length === 0 && (
           <Text style={[type.sub, { color: colors.muted, textAlign: 'center', marginTop: spacing.xl }]}>
-            Nothing here yet — add your first item below.
+            {t('listDetail.emptyItems')}
           </Text>
         )}
       </ScrollView>
@@ -355,7 +351,7 @@ export default function ListDetailScreen() {
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder="Add an item…"
+              placeholder={t('listDetail.addItem')}
               placeholderTextColor={colors.muted}
               style={[styles.input, { color: colors.ink, backgroundColor: colors.glassFill, borderColor: colors.glassBorder }]}
               returnKeyType="done"
@@ -410,6 +406,7 @@ function SwipeableItemRow({
   onDelete: () => void;
 }) {
   const { colors } = useTheme();
+  const { t, money } = useLocale();
   const tx = useSharedValue(0); // 0 = closed, -DELETE_WIDTH = open
   const startX = useSharedValue(0);
   const pastThreshold = useSharedValue(false);
@@ -521,7 +518,7 @@ function SwipeableItemRow({
 
           <Pressable onPress={guard(onEdit)} hitSlop={8}>
             {it.priceCents != null ? (
-              <Text style={[type.price, { color: colors.ink }]}>{euros(it.priceCents)}</Text>
+              <Text style={[type.price, { color: colors.ink }]}>{money(it.priceCents)}</Text>
             ) : (
               <Text style={[type.price, { color: colors.muted, opacity: 0.5 }]}>＋ €</Text>
             )}
@@ -540,7 +537,7 @@ function SwipeableItemRow({
           style={[styles.deleteAction, { backgroundColor: colors.crit }]}
         >
           <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.deleteText}>Delete</Text>
+          <Text style={styles.deleteText}>{t('listDetail.delete')}</Text>
         </Pressable>
       </Animated.View>
     </View>
