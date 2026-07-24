@@ -5,11 +5,12 @@ import { Modal, Pressable, StyleSheet, Text } from 'react-native';
 import { GlassView } from '@/components/glass';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { useGroceries } from '@/store/groceries';
+import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 interface ListPickerSheetProps {
   visible: boolean;
-  /** Heading, e.g. "Add Milk to". */
+  /** Heading, e.g. "Add Milk to". Defaults to the localized "Add to list". */
   title?: string;
   onCancel: () => void;
   /** Called with the chosen (or freshly-created) list id. */
@@ -22,10 +23,12 @@ interface ListPickerSheetProps {
  * a new one inline, and hands the chosen list id back. Used by the pantry
  * "Add to list" swipe and the weekly-list builder.
  */
-export function ListPickerSheet({ visible, title = 'Add to list', onCancel, onPick }: ListPickerSheetProps) {
+export function ListPickerSheet({ visible, title, onCancel, onPick }: ListPickerSheetProps) {
   const { colors } = useTheme();
+  const t = useT();
   const { lists, addList } = useGroceries();
   const [creating, setCreating] = useState(false);
+  const heading = title ?? t('pantry.addToList');
 
   return (
     <>
@@ -39,11 +42,13 @@ export function ListPickerSheet({ visible, title = 'Add to list', onCancel, onPi
       >
         <Pressable style={styles.backdrop} onPress={onCancel}>
           <GlassView radius={radii.lg} style={styles.card}>
-            <Text style={[type.h2, { color: colors.ink }]}>{title}</Text>
+            <Text style={[type.h2, { color: colors.ink }]}>{heading}</Text>
 
             <Pressable style={styles.row} onPress={() => setCreating(true)}>
               <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
-              <Text style={[type.body, { color: colors.accent, flex: 1 }]}>New list…</Text>
+              <Text style={[type.body, { color: colors.accent, flex: 1 }]}>
+                {t('lists.newListInline')}
+              </Text>
             </Pressable>
 
             {lists.map((l) => (
@@ -60,9 +65,9 @@ export function ListPickerSheet({ visible, title = 'Add to list', onCancel, onPi
 
       <TextPromptModal
         visible={creating}
-        title="New list"
-        placeholder="e.g. Weekly groceries"
-        confirmLabel="Create"
+        title={t('lists.newList')}
+        placeholder={t('lists.newListPlaceholder')}
+        confirmLabel={t('lists.create')}
         onCancel={() => setCreating(false)}
         onSubmit={(name) => {
           const id = addList(name);

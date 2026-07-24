@@ -22,6 +22,8 @@ import { DEFAULT_REGION, formatMoney, regionByCode } from '@/i18n/regions';
 interface LocaleValue {
   region: string;
   language: string;
+  /** Active currency code (ISO 4217), derived from the region. */
+  currency: string;
   setLocale: (region: string, language: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
   money: (minorUnits: number) => string;
@@ -60,6 +62,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     return {
       region,
       language,
+      currency,
       setLocale,
       t: (key, options) => i18n.t(key, { locale: language, ...options }),
       money: (minor) => formatMoney(minor, currency, language),

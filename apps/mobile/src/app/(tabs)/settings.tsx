@@ -23,7 +23,7 @@ import { normalizeKey } from '@/lib/pantry-intel';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold, type Member } from '@/store/household';
-import { useLocale } from '@/store/locale';
+import { useLocale, useT } from '@/store/locale';
 import { DEMO_KEYS, usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -68,13 +68,13 @@ export default function SettingsScreen() {
     const { error } = await renameHousehold(next);
     setSavingName(false);
     setRenaming(false);
-    if (error) Alert.alert('Couldn’t rename', error);
+    if (error) Alert.alert(t('settings.renameFailTitle'), error);
   };
 
   const confirmSignOut = () =>
-    Alert.alert('Sign out', 'Your local lists stay on this device.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    Alert.alert(t('settings.signOut'), t('settings.signOutMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('settings.signOut'), style: 'destructive', onPress: () => void signOut() },
     ]);
 
   const [deleting, setDeleting] = useState(false);
@@ -84,24 +84,24 @@ export default function SettingsScreen() {
   const confirmDeleteAccount = () => {
     const others = members.length > 1;
     const detail = others
-      ? 'If you own this household, ownership passes to another member and your shared lists stay with them.'
-      : 'Your household — including all its lists and pantry history — is permanently deleted.';
-    Alert.alert('Delete account?', `This can’t be undone. ${detail}`, [
-      { text: 'Cancel', style: 'cancel' },
+      ? t('settings.deleteDetailOwner')
+      : t('settings.deleteDetailSolo');
+    Alert.alert(t('settings.deleteAccountTitle'), t('settings.deleteCantUndo', { detail }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('settings.delete'),
         style: 'destructive',
         onPress: () =>
-          Alert.alert('Are you sure?', 'This permanently deletes your account and all your data.', [
-            { text: 'Cancel', style: 'cancel' },
+          Alert.alert(t('settings.areYouSure'), t('settings.deleteFinal'), [
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Delete account',
+              text: t('settings.deleteAccount'),
               style: 'destructive',
               onPress: async () => {
                 setDeleting(true);
                 const { error } = await deleteAccount();
                 setDeleting(false);
-                if (error) Alert.alert('Couldn’t delete', error);
+                if (error) Alert.alert(t('settings.deleteFailTitle'), error);
               },
             },
           ]),
@@ -118,48 +118,58 @@ export default function SettingsScreen() {
   const shareInvite = () => {
     if (!household) return;
     void Share.share({
-      message: `Join our "${household.name}" grocery list on Korb. Invite code: ${household.invite_code}`,
+      message: t('settings.shareInvite', {
+        name: household.name,
+        code: household.invite_code,
+      }),
     });
   };
 
   const confirmRemove = (member: Member) =>
-    Alert.alert('Remove member', `Remove ${member.display_name} from ${household?.name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await removeMember(member.user_id);
-          if (error) Alert.alert('Couldn’t remove', error);
+    Alert.alert(
+      t('settings.removeMemberTitle'),
+      t('settings.removeMemberMessage', {
+        name: member.display_name,
+        household: household?.name ?? '',
+      }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.remove'),
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await removeMember(member.user_id);
+            if (error) Alert.alert(t('settings.removeFailTitle'), error);
+          },
         },
-      },
-    ]);
+      ],
+    );
 
   const confirmLeave = () => {
     const soleOwner = iAmOwner && members.filter((m) => m.role === 'owner').length === 1;
     const others = members.length > 1;
     const message = !others
-      ? 'You’re the only member — the household and its shared lists will be deleted.'
+      ? t('settings.leaveSolo')
       : soleOwner
-        ? 'You’re the owner. Ownership will pass to another member. Your household lists stay with them.'
-        : 'You’ll lose access to this household’s shared lists.';
-    Alert.alert('Leave household', message, [
-      { text: 'Cancel', style: 'cancel' },
+        ? t('settings.leaveOwner')
+        : t('settings.leaveMember');
+    Alert.alert(t('settings.leaveHousehold'), message, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Leave',
+        text: t('settings.leave'),
         style: 'destructive',
         onPress: async () => {
           const { error } = await leaveHousehold();
-          if (error) Alert.alert('Couldn’t leave', error);
+          if (error) Alert.alert(t('settings.leaveFailTitle'), error);
         },
       },
     ]);
   };
 
   return (
-    <Screen title="Settings" subtitle="Account · household · preferences">
+    <Screen title={t('settings.screenTitle')} subtitle={t('settings.screenSubtitle')}>
       {/* Account */}
-      <Text style={[type.label, { color: colors.muted }]}>Account</Text>
+      <Text style={[type.label, { color: colors.muted }]}>{t('settings.account')}</Text>
       {user ? (
         <Card>
           <View style={styles.row}>
@@ -168,10 +178,10 @@ export default function SettingsScreen() {
               <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
                 {user.email}
               </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>Signed in</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{t('settings.signedIn')}</Text>
             </View>
             <Pressable onPress={confirmSignOut} hitSlop={8}>
-              <Text style={[type.body, { color: colors.crit }]}>Sign out</Text>
+              <Text style={[type.body, { color: colors.crit }]}>{t('settings.signOut')}</Text>
             </Pressable>
           </View>
           <View style={[styles.divider, { backgroundColor: colors.line }]} />
@@ -184,10 +194,10 @@ export default function SettingsScreen() {
             <Ionicons name="trash-outline" size={22} color={colors.crit} />
             <View style={styles.grow}>
               <Text style={[type.body, { color: colors.crit }]}>
-                {deleting ? 'Deleting…' : 'Delete account'}
+                {deleting ? t('settings.deleting') : t('settings.deleteAccount')}
               </Text>
               <Text style={[type.sub, { color: colors.muted }]}>
-                Permanently remove your account and data.
+                {t('settings.deleteAccountHint')}
               </Text>
             </View>
           </Pressable>
@@ -198,9 +208,9 @@ export default function SettingsScreen() {
             <View style={styles.row}>
               <Ionicons name="log-in-outline" size={24} color={colors.accent} />
               <View style={styles.grow}>
-                <Text style={[type.body, { color: colors.ink }]}>Sign in to sync & share</Text>
+                <Text style={[type.body, { color: colors.ink }]}>{t('settings.signInCta')}</Text>
                 <Text style={[type.sub, { color: colors.muted }]}>
-                  Share lists with your household across phones.
+                  {t('settings.signInHint')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
@@ -213,7 +223,7 @@ export default function SettingsScreen() {
       {user && (
         <>
           <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>
-            Household
+            {t('settings.household')}
           </Text>
           {household ? (
             <Card>
@@ -247,9 +257,9 @@ export default function SettingsScreen() {
               <Pressable onPress={shareInvite} style={styles.row}>
                 <Ionicons name="share-outline" size={20} color={colors.accent} />
                 <View style={styles.grow}>
-                  <Text style={[type.body, { color: colors.ink }]}>Invite someone</Text>
+                  <Text style={[type.body, { color: colors.ink }]}>{t('settings.inviteSomeone')}</Text>
                   <Text style={[type.sub, { color: colors.muted }]}>
-                    Code: {household.invite_code}
+                    {t('settings.codeLabel', { code: household.invite_code })}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.muted} />
@@ -259,7 +269,9 @@ export default function SettingsScreen() {
 
               <Pressable onPress={confirmLeave} style={styles.row}>
                 <Ionicons name="exit-outline" size={20} color={colors.crit} />
-                <Text style={[type.body, styles.grow, { color: colors.crit }]}>Leave household</Text>
+                <Text style={[type.body, styles.grow, { color: colors.crit }]}>
+                  {t('settings.leaveHousehold')}
+                </Text>
               </Pressable>
             </Card>
           ) : (
@@ -268,8 +280,8 @@ export default function SettingsScreen() {
                 <View style={styles.row}>
                   <Ionicons name="home-outline" size={22} color={colors.accent} />
                   <View style={styles.grow}>
-                    <Text style={[type.body, { color: colors.ink }]}>Set up your household</Text>
-                    <Text style={[type.sub, { color: colors.muted }]}>Create one or join with a code.</Text>
+                    <Text style={[type.body, { color: colors.ink }]}>{t('settings.setUpHousehold')}</Text>
+                    <Text style={[type.sub, { color: colors.muted }]}>{t('settings.setUpHouseholdHint')}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.muted} />
                 </View>
@@ -280,11 +292,13 @@ export default function SettingsScreen() {
       )}
 
       {/* Appearance */}
-      <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Appearance</Text>
+      <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>
+        {t('settings.appearance')}
+      </Text>
       <Card>
-        <Text style={[type.body, { color: colors.ink }]}>Follows your system theme</Text>
+        <Text style={[type.body, { color: colors.ink }]}>{t('settings.appearanceTitle')}</Text>
         <Text style={[type.sub, { color: colors.muted }]}>
-          Switch your phone to dark mode to see the dark theme.
+          {t('settings.appearanceHint')}
         </Text>
       </Card>
 
@@ -309,17 +323,19 @@ export default function SettingsScreen() {
 
       {/* Legal — reachable in-app (store-review requirement); opens the hosted
           URL when one is configured, otherwise the bundled screen. */}
-      <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Legal</Text>
+      <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>
+        {t('settings.legal')}
+      </Text>
       <Card>
         <Pressable onPress={() => openLegal('privacy')} style={styles.row} hitSlop={6}>
           <Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} />
-          <Text style={[type.body, styles.grow, { color: colors.ink }]}>Privacy Policy</Text>
+          <Text style={[type.body, styles.grow, { color: colors.ink }]}>{t('settings.privacy')}</Text>
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </Pressable>
         <View style={[styles.divider, { backgroundColor: colors.line }]} />
         <Pressable onPress={() => openLegal('terms')} style={styles.row} hitSlop={6}>
           <Ionicons name="document-text-outline" size={22} color={colors.accent} />
-          <Text style={[type.body, styles.grow, { color: colors.ink }]}>Terms of Service</Text>
+          <Text style={[type.body, styles.grow, { color: colors.ink }]}>{t('settings.terms')}</Text>
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </Pressable>
       </Card>
@@ -356,14 +372,14 @@ export default function SettingsScreen() {
         <KeyboardAvoidingView behavior="padding" style={styles.modalBackdrop}>
           <Pressable style={styles.modalBackdropFill} onPress={() => setRenaming(false)} />
           <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
-            <Text style={[type.h2, { color: colors.ink }]}>Rename household</Text>
+            <Text style={[type.h2, { color: colors.ink }]}>{t('settings.renameTitle')}</Text>
             <Text style={[type.sub, { color: colors.muted }]}>
-              Everyone in the household sees the new name.
+              {t('settings.renameHint')}
             </Text>
             <TextInput
               value={nameDraft}
               onChangeText={setNameDraft}
-              placeholder="Household name"
+              placeholder={t('settings.householdNamePlaceholder')}
               placeholderTextColor={colors.muted}
               style={[styles.modalInput, { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line }]}
               autoFocus
@@ -373,7 +389,7 @@ export default function SettingsScreen() {
             />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setRenaming(false)} style={styles.modalBtn}>
-                <Text style={[type.body, { color: colors.muted }]}>Cancel</Text>
+                <Text style={[type.body, { color: colors.muted }]}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 onPress={submitRename}
@@ -385,7 +401,7 @@ export default function SettingsScreen() {
                 ]}
               >
                 <Text style={[type.body, { color: colors.accentInk }]}>
-                  {savingName ? 'Saving…' : 'Save'}
+                  {savingName ? t('settings.saving') : t('common.save')}
                 </Text>
               </Pressable>
             </View>
@@ -425,6 +441,7 @@ function MemberRow({
   onRemove: () => void;
 }) {
   const { colors } = useTheme();
+  const t = useT();
   const initials = member.display_name.slice(0, 2).toUpperCase();
   return (
     <View style={styles.row}>
@@ -433,9 +450,11 @@ function MemberRow({
       </View>
       <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
         {member.display_name}
-        {isMe ? ' (you)' : ''}
+        {isMe ? ` ${t('settings.you')}` : ''}
       </Text>
-      {member.role === 'owner' && <Text style={[type.sub, { color: colors.muted }]}>Owner</Text>}
+      {member.role === 'owner' && (
+        <Text style={[type.sub, { color: colors.muted }]}>{t('settings.owner')}</Text>
+      )}
       {canRemove && (
         <Pressable onPress={onRemove} hitSlop={8}>
           <Ionicons name="remove-circle-outline" size={22} color={colors.crit} />

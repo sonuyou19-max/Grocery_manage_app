@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
+import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 interface TextPromptModalProps {
@@ -18,11 +19,12 @@ export function TextPromptModal({
   visible,
   title,
   placeholder,
-  confirmLabel = 'Add',
+  confirmLabel,
   onCancel,
   onSubmit,
 }: TextPromptModalProps) {
   const { colors } = useTheme();
+  const t = useT();
   const [value, setValue] = useState('');
 
   useEffect(() => {
@@ -59,10 +61,12 @@ export function TextPromptModal({
           />
           <View style={styles.actions}>
             <Pressable onPress={onCancel} style={styles.btn}>
-              <Text style={[type.body, { color: colors.muted }]}>Cancel</Text>
+              <Text style={[type.body, { color: colors.muted }]}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable onPress={submit} style={[styles.btn, styles.confirm, { backgroundColor: colors.accent }]}>
-              <Text style={[type.body, { color: colors.accentInk }]}>{confirmLabel}</Text>
+              <Text style={[type.body, { color: colors.accentInk }]}>
+                {confirmLabel ?? t('common.add')}
+              </Text>
             </Pressable>
           </View>
         </Pressable>

@@ -28,9 +28,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ParsedItem } from '@korb/shared';
 
-import { CATEGORY_LABELS } from '@/lib/categorize';
+import { categoryLabel } from '@/lib/categorize';
 import { parseQuickAdd } from '@/lib/quick-add';
 import { useGroceries, useList } from '@/store/groceries';
+import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 interface QuickAddSheetProps {
@@ -47,6 +48,7 @@ interface QuickAddSheetProps {
 export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) {
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const { addParsedItem } = useGroceries();
   const list = useList(listId);
   const { height: screenH } = useWindowDimensions();
@@ -115,7 +117,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
     setError(null);
     const { items: parsed, error: err } = await parseQuickAdd(trimmed);
     if (err || !parsed) {
-      setError(err ?? 'Something went wrong.');
+      setError(err ? t(`quickAdd.err.${err}`) : t('quickAdd.somethingWrong'));
       setPhase('input');
       return;
     }
@@ -159,7 +161,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
           <View style={styles.header}>
             <Ionicons name="sparkles" size={20} color={colors.accent} />
-            <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>Quick add with AI</Text>
+            <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>{t('quickAdd.title')}</Text>
             <Pressable onPress={requestClose} hitSlop={10}>
               <Ionicons name="close" size={24} color={colors.muted} />
             </Pressable>
@@ -167,7 +169,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
           {phase === 'review' ? (
             <ScrollView style={styles.scrollArea} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-              <Text style={[type.sub, { color: colors.muted }]}>Tap to include or skip, then add.</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{t('quickAdd.tapToInclude')}</Text>
               {items.map((item, i) => {
                 const on = selected[i];
                 const dup = existingNames.has(item.name.trim().toLowerCase());
@@ -185,13 +187,13 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                     <View style={styles.grow}>
                       <Text style={[type.body, { color: colors.ink }]}>{item.name}</Text>
                       <Text style={[type.sub, { color: colors.muted }]}>
-                        {CATEGORY_LABELS[item.category]}
+                        {categoryLabel(item.category, t)}
                         {item.quantity != null ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}
                       </Text>
                     </View>
                     {dup && (
                       <View style={[styles.dupTag, { backgroundColor: colors.bg, borderColor: colors.line }]}>
-                        <Text style={[type.sub, { color: colors.muted }]}>Already on list</Text>
+                        <Text style={[type.sub, { color: colors.muted }]}>{t('quickAdd.alreadyOnList')}</Text>
                       </View>
                     )}
                   </Pressable>
@@ -211,7 +213,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 ref={inputRef}
                 value={text}
                 onChangeText={setText}
-                placeholder="e.g. we’re out of milk, need 2kg potatoes and coffee for the weekend"
+                placeholder={t('quickAdd.placeholder')}
                 placeholderTextColor={colors.muted}
                 style={[
                   styles.input,
@@ -232,14 +234,14 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 {phase === 'loading' ? (
                   <ActivityIndicator color={colors.accentInk} />
                 ) : (
-                  <Text style={[type.body, { color: colors.accentInk }]}>Add with AI</Text>
+                  <Text style={[type.body, { color: colors.accentInk }]}>{t('quickAdd.addWithAi')}</Text>
                 )}
               </Pressable>
               {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
               <View style={styles.hint}>
                 <Ionicons name="mic-outline" size={15} color={colors.muted} />
                 <Text style={[type.sub, { color: colors.muted, flex: 1 }]}>
-                  Prefer to speak? Tap the microphone key on your keyboard.
+                  {t('quickAdd.micHint')}
                 </Text>
               </View>
             </ScrollView>
@@ -255,7 +257,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                   }}
                   style={styles.back}
                 >
-                  <Text style={[type.body, { color: colors.muted }]}>Back</Text>
+                  <Text style={[type.body, { color: colors.muted }]}>{t('common.back')}</Text>
                 </Pressable>
                 <Pressable
                   onPress={confirmAdd}
@@ -263,7 +265,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                   style={[styles.primary, { backgroundColor: colors.accent, opacity: selectedCount ? 1 : 0.45 }]}
                 >
                   <Text style={[type.body, { color: colors.accentInk }]}>
-                    Add {selectedCount} item{selectedCount === 1 ? '' : 's'}
+                    {t('common.addCount', { count: selectedCount })}
                   </Text>
                 </Pressable>
               </View>

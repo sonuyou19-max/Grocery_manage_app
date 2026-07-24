@@ -59,6 +59,10 @@ const CURRENCY_SYMBOL: Record<string, string> = {
   GBP: '£',
 };
 
+/** The bare symbol for a currency (e.g. "€", "zł"), for price-entry prefixes. */
+export const currencySymbolFor = (currency: string): string =>
+  CURRENCY_SYMBOL[currency] ?? '€';
+
 /**
  * Format integer minor units (e.g. cents) for a region + language. Values are
  * stored currency-agnostically, so this only changes the symbol and separators

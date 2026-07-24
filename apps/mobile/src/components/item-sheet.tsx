@@ -26,12 +26,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
+import { currencySymbolFor } from '@/i18n';
+import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { rememberItemDetails } from '@/lib/item-memory';
 import { parsePriceToCents } from '@/lib/money';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
+import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 const UNITS: (string | null)[] = [null, 'pcs', 'g', 'kg', 'ml', 'L'];
@@ -56,6 +58,7 @@ const parseQuantity = (text: string): number | null => {
 export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
+  const { t, currency } = useLocale();
   const { updateItem } = useGroceries();
   const liveItem = useItem(listId, itemId ?? undefined);
   const storePrefs = useStorePrefs();
@@ -172,11 +175,13 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                   <>
                     <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
                     <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
-                      Added to {CATEGORY_LABELS[itemObj.category]}
+                      {t('itemSheet.addedTo', { category: categoryLabel(itemObj.category, t) })}
                     </Text>
                   </>
                 ) : (
-                  <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>Edit item</Text>
+                  <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
+                    {t('itemSheet.editItem')}
+                  </Text>
                 )}
                 <Pressable onPress={requestClose} hitSlop={10}>
                   <Ionicons name="close" size={24} color={colors.muted} />
@@ -190,7 +195,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             contentContainerStyle={styles.scroll}
           >
             {/* Name */}
-            <Field label="Item">
+            <Field label={t('itemSheet.itemLabel')}>
               <TextInput
                 value={name}
                 onChangeText={(t) => {
@@ -202,7 +207,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             </Field>
 
             {/* Category */}
-            <Field label="Category">
+            <Field label={t('itemSheet.categoryLabel')}>
               <View style={styles.chips}>
                 {CATEGORY_ORDER.map((cat) => {
                   const active = itemObj.category === cat;
@@ -222,7 +227,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                       <Text
                         style={[styles.chipText, { color: active ? colors.accent : colors.muted }]}
                       >
-                        {CATEGORY_LABELS[cat]}
+                        {categoryLabel(cat, t)}
                       </Text>
                     </Pressable>
                   );
@@ -231,7 +236,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             </Field>
 
             {/* Quantity (optional) */}
-            <Field label="Quantity · optional">
+            <Field label={t('itemSheet.quantityLabel')}>
               <View style={styles.qtyRow}>
                 <TextInput
                   value={qtyText}
@@ -260,7 +265,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                         <Text
                           style={[styles.chipText, { color: active ? colors.accent : colors.muted }]}
                         >
-                          {u ?? 'none'}
+                          {u ?? t('itemSheet.unitNone')}
                         </Text>
                       </Pressable>
                     );
@@ -270,9 +275,9 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             </Field>
 
             {/* Price (optional) */}
-            <Field label="Price · optional">
+            <Field label={t('itemSheet.priceLabel')}>
               <View style={[styles.input, styles.priceRow, inputColors(colors)]}>
-                <Text style={[type.body, { color: colors.muted }]}>€</Text>
+                <Text style={[type.body, { color: colors.muted }]}>{currencySymbolFor(currency)}</Text>
                 <TextInput
                   value={priceText}
                   onChangeText={(t) => {
@@ -288,7 +293,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             </Field>
 
             {/* Supermarket (optional) */}
-            <Field label="Buy at · optional">
+            <Field label={t('itemSheet.buyAtLabel')}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -301,7 +306,9 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                   colors={colors}
                 >
                   <Ionicons name="remove-circle-outline" size={22} color={colors.muted} />
-                  <Text style={[styles.storeLabel, { color: colors.muted }]}>None</Text>
+                  <Text style={[styles.storeLabel, { color: colors.muted }]}>
+                    {t('itemSheet.storeNone')}
+                  </Text>
                 </StoreOption>
 
                 {orderedStoreOptions(storePrefs).map((entry) => (
@@ -326,7 +333,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                     <Ionicons name="add" size={16} color={colors.accent} />
                   </View>
                   <Text style={[styles.storeLabel, { color: colors.accent }]} numberOfLines={1}>
-                    Other
+                    {t('itemSheet.storeOther')}
                   </Text>
                 </StoreOption>
               </ScrollView>
@@ -344,7 +351,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
               onPress={requestClose}
               style={[styles.done, { backgroundColor: colors.accent }]}
             >
-              <Text style={[type.body, { color: colors.accentInk }]}>Done</Text>
+              <Text style={[type.body, { color: colors.accentInk }]}>{t('common.done')}</Text>
             </Pressable>
           </View>
         </Animated.View>
@@ -352,9 +359,9 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
 
       <TextPromptModal
         visible={customStore}
-        title="Custom store"
-        placeholder="e.g. Local farm shop"
-        confirmLabel="Set"
+        title={t('itemSheet.customStoreTitle')}
+        placeholder={t('itemSheet.customStorePlaceholder')}
+        confirmLabel={t('itemSheet.customStoreConfirm')}
         onCancel={() => setCustomStore(false)}
         onSubmit={(value) => {
           patch({ store: value });

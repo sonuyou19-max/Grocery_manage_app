@@ -4,9 +4,10 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SupermarketBadge } from '@/components/supermarket-badge';
-import { CATEGORY_LABELS } from '@/lib/categorize';
+import { categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import type { WeeklySuggestion } from '@/lib/weekly-list';
+import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 interface WeeklyListSheetProps {
@@ -25,6 +26,7 @@ interface WeeklyListSheetProps {
 export function WeeklyListSheet({ visible, suggestions, onClose, onBuild }: WeeklyListSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Pre-tick everything each time the sheet opens.
@@ -53,20 +55,20 @@ export function WeeklyListSheet({ visible, suggestions, onClose, onBuild }: Week
 
           <View style={styles.header}>
             <Ionicons name="sparkles" size={20} color={colors.accent} />
-            <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>This week's list</Text>
+            <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>{t('weekly.title')}</Text>
             <Pressable onPress={onClose} hitSlop={10}>
               <Ionicons name="close" size={24} color={colors.muted} />
             </Pressable>
           </View>
           <Text style={[type.sub, { color: colors.muted, paddingHorizontal: spacing.lg }]}>
-            Predicted low, based on how fast you get through them. Untick anything you don't need.
+            {t('weekly.subtitle')}
           </Text>
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             {suggestions.map((s) => {
               const on = selected.has(s.key);
               const detail = [
-                CATEGORY_LABELS[s.category],
+                categoryLabel(s.category, t),
                 s.quantity != null ? `${s.quantity}${s.unit ? ` ${s.unit}` : ''}` : null,
               ]
                 .filter(Boolean)
@@ -103,7 +105,7 @@ export function WeeklyListSheet({ visible, suggestions, onClose, onBuild }: Week
               style={[styles.build, { backgroundColor: colors.accent, opacity: count ? 1 : 0.45 }]}
             >
               <Text style={[type.body, { color: colors.accentInk }]}>
-                Add {count} item{count === 1 ? '' : 's'}
+                {t('common.addCount', { count })}
               </Text>
             </Pressable>
           </View>
