@@ -15,12 +15,15 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { Card } from '@/components/card';
+import { LocaleSetup } from '@/components/locale-setup';
 import { Screen } from '@/components/screen';
+import { languageByCode, regionByCode } from '@/i18n';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/legal';
 import { normalizeKey } from '@/lib/pantry-intel';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold, type Member } from '@/store/household';
+import { useLocale } from '@/store/locale';
 import { DEMO_KEYS, usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -32,6 +35,8 @@ export default function SettingsScreen() {
   const { household, members, renameHousehold, leaveHousehold, removeMember } = useHousehold();
   const { seedDemo } = usePantryIntel();
   const { lists, deleteItem } = useGroceries();
+  const { region, language, setLocale, t } = useLocale();
+  const [localeOpen, setLocaleOpen] = useState(false);
 
   // Dev preview: clear any prior sample items off lists so the deck refills,
   // then reseed and open the Vibe Check. (No-op cost in production — hidden.)
@@ -283,6 +288,25 @@ export default function SettingsScreen() {
         </Text>
       </Card>
 
+      {/* Region & language — changeable anytime; reuses the first-launch chooser. */}
+      <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>
+        {t('settings.localeSection')}
+      </Text>
+      <Card>
+        <Pressable onPress={() => setLocaleOpen(true)} style={styles.row} hitSlop={6}>
+          <Ionicons name="globe-outline" size={22} color={colors.accent} />
+          <View style={styles.grow}>
+            <Text style={[type.body, { color: colors.ink }]}>{t('settings.language')}</Text>
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {(languageByCode(language)?.endonym ?? language) +
+                ' · ' +
+                (regionByCode(region)?.name ?? region)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Pressable>
+      </Card>
+
       {/* Legal — reachable in-app (store-review requirement); opens the hosted
           URL when one is configured, otherwise the bundled screen. */}
       <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>Legal</Text>
@@ -367,6 +391,21 @@ export default function SettingsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Change region + language — reuses the first-launch chooser full-screen. */}
+      <Modal
+        visible={localeOpen}
+        animationType="slide"
+        onRequestClose={() => setLocaleOpen(false)}
+      >
+        <LocaleSetup
+          onCancel={() => setLocaleOpen(false)}
+          onDone={(r, l) => {
+            setLocale(r, l);
+            setLocaleOpen(false);
+          }}
+        />
       </Modal>
     </Screen>
   );
