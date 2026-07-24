@@ -180,7 +180,12 @@ export default function ListsScreen() {
                   <Text style={[type.body, { color: colors.accent }]}>{t('common.done')}</Text>
                 </Pressable>
               ) : (
-                <Text style={[type.sub, { color: colors.muted }]}>{t('lists.holdToEdit')}</Text>
+                <Text
+                  style={[type.sub, styles.holdHint, { color: colors.muted }]}
+                  numberOfLines={1}
+                >
+                  {t('lists.holdToEdit')}
+                </Text>
               )}
             </View>
 
@@ -266,8 +271,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
+  // Translations run much longer than the English "hold to edit" (German is
+  // ~2.5×), so let the hint give way instead of pushing the row out of bounds.
+  holdHint: { flexShrink: 1, textAlign: 'right' },
   grow: { flex: 1, minWidth: 0 },
   vibeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   vibeEmoji: { fontSize: 26 },

@@ -157,5 +157,14 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   body: { padding: spacing.lg, gap: spacing.lg, marginTop: spacing.md },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  // Both links are translated and sit at body size, so together they overrun a
+  // phone width in several languages ("Code erneut senden" + "Andere
+  // E-Mail-Adresse verwenden"). Wrapping lets them stack instead of clipping.
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
 });

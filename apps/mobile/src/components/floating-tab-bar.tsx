@@ -91,7 +91,16 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                       color={focused ? colors.accent : colors.muted}
                     />
                   </View>
-                  <Text style={[styles.label, { color: focused ? colors.accent : colors.muted }]} numberOfLines={1}>
+                  {/* Tab labels translate longer than English ("Settings" →
+                      "Einstellungen"/"Instellingen"), which overruns a quarter
+                      of the pill on narrow phones. Shrink a little before
+                      falling back to truncation. */}
+                  <Text
+                    style={[styles.label, { color: focused ? colors.accent : colors.muted }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
                     {label}
                   </Text>
                 </Pressable>

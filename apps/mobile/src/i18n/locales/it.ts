@@ -144,7 +144,8 @@ const it = {
     other: 'Altro',
   },
   status: {
-    learning: 'Sto imparando il tuo ritmo',
+    // Kept short: this renders in a fixed 104pt column in the pantry list.
+    learning: 'Imparo il tuo ritmo',
     runningLow: 'In esaurimento',
     daysLeft: { one: '~%{count} giorno rimasto', other: '~%{count} giorni rimasti' },
   },
