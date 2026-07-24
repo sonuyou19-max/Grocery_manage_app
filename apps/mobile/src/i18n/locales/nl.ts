@@ -159,6 +159,11 @@ const nl = {
     inviteGetApp: 'Download de app: %{url}',
     inviteInApp: 'In de app: Instellingen → Huishouden → Deelnemen, voer dan de code in.',
   },
+  shop: {
+    allDoneTitle: 'Alles in het mandje',
+    allDoneBody: 'Alles afgevinkt. Fijn gewinkeld.',
+    finish: 'Klaar met winkelen',
+  },
 };
 
 export default nl;

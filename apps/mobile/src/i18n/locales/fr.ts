@@ -159,6 +159,11 @@ const fr = {
     inviteGetApp: 'Télécharge l’app : %{url}',
     inviteInApp: 'Dans l’app : Réglages → Foyer → Rejoindre, puis saisis le code.',
   },
+  shop: {
+    allDoneTitle: 'Tout est dans le panier',
+    allDoneBody: 'Tout est coché. Bonnes courses.',
+    finish: 'Terminer les courses',
+  },
 };
 
 export default fr;

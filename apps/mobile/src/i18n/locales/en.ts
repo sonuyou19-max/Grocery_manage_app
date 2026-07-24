@@ -172,6 +172,11 @@ const en = {
     inviteGetApp: 'Get the app: %{url}',
     inviteInApp: 'In the app: Settings → Household → Join, then enter the code.',
   },
+  shop: {
+    allDoneTitle: 'All in the cart',
+    allDoneBody: "Everything's ticked off. Nice shop.",
+    finish: 'Finish shopping',
+  },
 };
 
 export default en;

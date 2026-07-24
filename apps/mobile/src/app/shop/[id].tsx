@@ -7,9 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
 import { SupermarketBadge } from '@/components/supermarket-badge';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/categorize';
+import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { useGroceries, useList, type Item } from '@/store/groceries';
+import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { spacing, type, useTheme } from '@/theme';
 
@@ -23,6 +24,7 @@ export default function ShoppingModeScreen() {
   useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const t = useT();
   const list = useList(id);
   const { toggleItem } = useGroceries();
   const { logPurchase } = usePantryIntel();
@@ -41,10 +43,10 @@ export default function ShoppingModeScreen() {
         <MeshBackground />
         <SafeAreaView style={styles.fill}>
           <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
-            This list no longer exists.
+            {t('listDetail.gone')}
           </Text>
           <Pressable onPress={() => router.back()} style={styles.exitBtn}>
-            <Text style={[type.body, { color: colors.accent }]}>Close</Text>
+            <Text style={[type.body, { color: colors.accent }]}>{t('common.close')}</Text>
           </Pressable>
         </SafeAreaView>
       </View>
@@ -79,7 +81,8 @@ export default function ShoppingModeScreen() {
               {list.name}
             </Text>
             <Text style={[type.sub, { color: colors.muted }]}>
-              {list.store ?? 'Any store'} · {checked}/{total} in cart
+              {list.store ?? t('listDetail.anyStore')} ·{' '}
+              {t('listDetail.inCartCount', { checked, total })}
             </Text>
           </View>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.close}>
@@ -96,7 +99,7 @@ export default function ShoppingModeScreen() {
           {grouped.map((group) => (
             <View key={group.category} style={styles.section}>
               <Text style={[type.label, { color: colors.accent }]}>
-                {CATEGORY_LABELS[group.category]}
+                {categoryLabel(group.category, t)}
               </Text>
               {group.items.map((it) => (
                 <Pressable
@@ -147,9 +150,11 @@ export default function ShoppingModeScreen() {
           {allDone && (
             <View style={styles.done}>
               <Text style={styles.doneEmoji}>🎉</Text>
-              <Text style={[type.h2, { color: colors.ink, textAlign: 'center' }]}>All in the cart</Text>
+              <Text style={[type.h2, { color: colors.ink, textAlign: 'center' }]}>
+                {t('shop.allDoneTitle')}
+              </Text>
               <Text style={[type.sub, { color: colors.muted, textAlign: 'center' }]}>
-                Everything's ticked off. Nice shop.
+                {t('shop.allDoneBody')}
               </Text>
             </View>
           )}
@@ -157,7 +162,9 @@ export default function ShoppingModeScreen() {
 
         <View style={styles.footer}>
           <Pressable onPress={() => router.back()} style={[styles.exitBtn, { backgroundColor: colors.accent }]}>
-            <Text style={[type.body, { color: colors.accentInk }]}>{allDone ? 'Done' : 'Finish shopping'}</Text>
+            <Text style={[type.body, { color: colors.accentInk }]}>
+              {allDone ? t('common.done') : t('shop.finish')}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
