@@ -52,6 +52,28 @@ const nl = {
     itemsCount: { one: '%{count} item', other: '%{count} items' },
     inCart: '%{count} in mandje',
   },
+  pantry: {
+    subtitleEmpty: 'Wat Korb bijhoudt',
+    subtitleTracked: '%{count} bijgehouden · %{low} bijna op',
+    emptyTitle: 'Nog niets bijgehouden',
+    emptyBody:
+      'Terwijl je items van je lijsten afvinkt, leert Korb hoe snel je ze opmaakt en houdt ze hier bij. Of tik op “Item volgen” om een vaste voorraad toe te voegen die je altijd in huis hebt.',
+    search: 'Zoek in je voorraad',
+    swipeHint: 'Veeg een rij: → nog goed · ← naar een lijst',
+    noMatchesTitle: 'Geen resultaten',
+    noMatchesBody: 'Niets in je voorraad komt overeen met “%{query}”.',
+    runningLow: 'Bijna op',
+    inStock: 'Op voorraad',
+    nothingLow: 'Niets bijna op — mooi op voorraad.',
+    nothingHere: 'Nog niets hier.',
+    stillGood: 'Nog goed',
+    addToList: 'Naar lijst',
+    track: 'Item volgen',
+    trackTitle: 'Voorraaditem volgen',
+    trackPlaceholder: 'bijv. Olijfolie',
+    trackConfirm: 'Volgen',
+    addTo: '%{item} toevoegen aan',
+  },
 };
 
 export default nl;

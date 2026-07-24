@@ -37,6 +37,7 @@ import {
   type ItemStat,
 } from '@/lib/pantry-intel';
 import { useGroceries } from '@/store/groceries';
+import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -60,6 +61,7 @@ type Colors = ReturnType<typeof useTheme>['colors'];
  */
 export default function PantryScreen() {
   const { colors } = useTheme();
+  const t = useT();
   const { stats, logPurchase, markAlmostOut, markStillGood } = usePantryIntel();
   const { lists, addParsedItem } = useGroceries();
   const [adding, setAdding] = useState(false);
@@ -174,19 +176,19 @@ export default function PantryScreen() {
   return (
     <>
       <Screen
-        title="Pantry"
+        title={t('tabs.pantry')}
         subtitle={
           items.length === 0
-            ? 'What Korb is tracking'
-            : `${items.length} tracked · ${lowCount} running low`
+            ? t('pantry.subtitleEmpty')
+            : t('pantry.subtitleTracked', { count: items.length, low: lowCount })
         }
         hasFab
       >
         {items.length === 0 ? (
           <EmptyState
             icon="file-tray-full-outline"
-            title="Nothing tracked yet"
-            body="As you tick items off your lists, Korb learns how fast you get through them and tracks them here. Or tap “Track item” to add a staple you always keep at home."
+            title={t('pantry.emptyTitle')}
+            body={t('pantry.emptyBody')}
           />
         ) : (
           <>
@@ -196,7 +198,7 @@ export default function PantryScreen() {
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search your pantry"
+                placeholder={t('pantry.search')}
                 placeholderTextColor={colors.muted}
                 autoCorrect={false}
                 returnKeyType="search"
@@ -210,16 +212,14 @@ export default function PantryScreen() {
             </View>
 
             {!searching && (
-              <Text style={[type.sub, { color: colors.muted }]}>
-                Swipe a row: → still good · ← add to a list
-              </Text>
+              <Text style={[type.sub, { color: colors.muted }]}>{t('pantry.swipeHint')}</Text>
             )}
 
             {searching && low.length === 0 && stocked.length === 0 ? (
               <EmptyState
                 icon="search-outline"
-                title="No matches"
-                body={`Nothing in your pantry matches “${query.trim()}”.`}
+                title={t('pantry.noMatchesTitle')}
+                body={t('pantry.noMatchesBody', { query: query.trim() })}
               />
             ) : (
               <>
@@ -227,7 +227,7 @@ export default function PantryScreen() {
                 {(!searching || low.length > 0) && (
                   <View style={styles.section}>
                     <SectionHeader
-                      title="Running low"
+                      title={t('pantry.runningLow')}
                       tone={colors.warn}
                       count={low.length}
                       expanded={lowExpanded}
@@ -238,7 +238,7 @@ export default function PantryScreen() {
                         renderRows(low)
                       ) : (
                         <Text style={[type.sub, { color: colors.muted, paddingVertical: spacing.sm }]}>
-                          Nothing running low — nicely stocked.
+                          {t('pantry.nothingLow')}
                         </Text>
                       ))}
                   </View>
@@ -248,7 +248,7 @@ export default function PantryScreen() {
                 {(!searching || stocked.length > 0) && (
                   <View style={styles.section}>
                     <SectionHeader
-                      title="In stock"
+                      title={t('pantry.inStock')}
                       tone={colors.muted}
                       count={stocked.length}
                       expanded={stockExpanded}
@@ -259,7 +259,7 @@ export default function PantryScreen() {
                         renderRows(stocked)
                       ) : (
                         <Text style={[type.sub, { color: colors.muted, paddingVertical: spacing.sm }]}>
-                          Nothing here yet.
+                          {t('pantry.nothingHere')}
                         </Text>
                       ))}
                   </View>
@@ -270,12 +270,12 @@ export default function PantryScreen() {
         )}
       </Screen>
 
-      <Fab label="Track item" onPress={() => setAdding(true)} />
+      <Fab label={t('pantry.track')} onPress={() => setAdding(true)} />
       <TextPromptModal
         visible={adding}
-        title="Track a pantry item"
-        placeholder="e.g. Olive oil"
-        confirmLabel="Track"
+        title={t('pantry.trackTitle')}
+        placeholder={t('pantry.trackPlaceholder')}
+        confirmLabel={t('pantry.trackConfirm')}
         onCancel={() => setAdding(false)}
         onSubmit={(name) => {
           const clean = name.trim();
@@ -285,7 +285,7 @@ export default function PantryScreen() {
       />
       <ListPickerSheet
         visible={pendingAdd != null}
-        title={pendingAdd ? `Add ${pendingAdd.display} to` : 'Add to list'}
+        title={pendingAdd ? t('pantry.addTo', { item: pendingAdd.display }) : t('pantry.addToList')}
         onCancel={() => setPendingAdd(null)}
         onPick={pickList}
       />
@@ -317,6 +317,7 @@ function PantrySwipeRow({
   onStillGood: () => void;
   onAddToList: () => void;
 }) {
+  const t = useT();
   const tx = useSharedValue(0);
   const armed = useSharedValue(0); // -1/0/1: which side is past threshold (for haptic)
   const settle = { duration: 260, easing: Easing.out(Easing.cubic) };
@@ -356,10 +357,10 @@ function PantrySwipeRow({
       {/* Revealed behind the row; only the swiped side fades in. */}
       <Animated.View style={[styles.actionPanel, styles.actionLeft, { backgroundColor: colors.warn }, leftStyle]}>
         <Ionicons name="time-outline" size={20} color="#FFFFFF" />
-        <Text style={styles.actionText}>Still good</Text>
+        <Text style={styles.actionText}>{t('pantry.stillGood')}</Text>
       </Animated.View>
       <Animated.View style={[styles.actionPanel, styles.actionRight, { backgroundColor: colors.accent }, rightStyle]}>
-        <Text style={styles.actionText}>Add to list</Text>
+        <Text style={styles.actionText}>{t('pantry.addToList')}</Text>
         <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
       </Animated.View>
 

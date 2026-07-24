@@ -65,6 +65,28 @@ const en = {
     itemsCount: { one: '%{count} item', other: '%{count} items' },
     inCart: '%{count} in cart',
   },
+  pantry: {
+    subtitleEmpty: 'What Korb is tracking',
+    subtitleTracked: '%{count} tracked · %{low} running low',
+    emptyTitle: 'Nothing tracked yet',
+    emptyBody:
+      'As you tick items off your lists, Korb learns how fast you get through them and tracks them here. Or tap “Track item” to add a staple you always keep at home.',
+    search: 'Search your pantry',
+    swipeHint: 'Swipe a row: → still good · ← add to a list',
+    noMatchesTitle: 'No matches',
+    noMatchesBody: 'Nothing in your pantry matches “%{query}”.',
+    runningLow: 'Running low',
+    inStock: 'In stock',
+    nothingLow: 'Nothing running low — nicely stocked.',
+    nothingHere: 'Nothing here yet.',
+    stillGood: 'Still good',
+    addToList: 'Add to list',
+    track: 'Track item',
+    trackTitle: 'Track a pantry item',
+    trackPlaceholder: 'e.g. Olive oil',
+    trackConfirm: 'Track',
+    addTo: 'Add %{item} to',
+  },
 };
 
 export default en;
