@@ -11,14 +11,13 @@ import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { WeeklyListSheet } from '@/components/weekly-list-sheet';
-import { euros } from '@/lib/money';
 import { hasSeenOnboarding } from '@/lib/onboarding';
 import { normalizeKey } from '@/lib/pantry-intel';
 import { buildWeeklySuggestions, type WeeklySuggestion } from '@/lib/weekly-list';
 import { useAuth } from '@/store/auth';
 import { useGroceries, type List } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
-import { useT } from '@/store/locale';
+import { useLocale, useT } from '@/store/locale';
 import { usePantryIntel, useVibeDeck } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -30,40 +29,8 @@ function greetingKey(date = new Date()): 'morning' | 'afternoon' | 'evening' {
   return 'evening';
 }
 
-/**
- * "All set" copy for the Vibe Check card when nothing's due. Rotates daily so it
- * feels alive — first-person, casual, a little fun.
- */
-const VIBE_EMPTY_MESSAGES: Array<{ title: string; body: string }> = [
-  {
-    title: 'All good in the pantry 🧺',
-    body: "Nothing running low yet. Shop like you normally would — I'll get a feel for your rhythm and give you a heads-up before stuff runs out.",
-  },
-  {
-    title: 'Nothing to swipe… yet 😌',
-    body: "Your shelves are looking healthy. The more you shop, the more I learn your habits — then I'll nudge you before the milk betrays you.",
-  },
-  {
-    title: "You're all stocked up",
-    body: 'Nothing to review right now. As you shop, I get a feel for how fast things disappear and pop them here before you’re caught short.',
-  },
-  {
-    title: 'All clear ✨',
-    body: "No low items today. Keep shopping — I'm quietly learning your pace so nothing sneaks up on you.",
-  },
-  {
-    title: "Pantry's happy 🥑",
-    body: "Nothing to check off yet. Shop as usual and I'll learn what you burn through fastest — then flag it here before you run dry.",
-  },
-  {
-    title: "Nice — nothing's low",
-    body: "Do your thing at the shops. I'll learn your pace and drop a reminder here right before you run out.",
-  },
-];
-
-/** Deterministic pick that advances once per day and cycles through them all. */
-const vibeEmptyMessage = () =>
-  VIBE_EMPTY_MESSAGES[Math.floor(Date.now() / 86_400_000) % VIBE_EMPTY_MESSAGES.length];
+/** Deterministic 1..3 that advances once per day, for the rotating "all set" copy. */
+const vibeEmptyVariant = () => (Math.floor(Date.now() / 86_400_000) % 3) + 1;
 
 export default function ListsScreen() {
   const { colors } = useTheme();
@@ -73,7 +40,7 @@ export default function ListsScreen() {
   const { user } = useAuth();
   const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
-  const vibeEmpty = vibeEmptyMessage();
+  const vibeVariant = vibeEmptyVariant();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -155,9 +122,9 @@ export default function ListsScreen() {
                 <View style={styles.vibeRow}>
                   <Text style={styles.vibeEmoji}>☕️</Text>
                   <View style={styles.grow}>
-                    <Text style={[type.body, { color: colors.ink }]}>Pantry Vibe Check</Text>
+                    <Text style={[type.body, { color: colors.ink }]}>{t('lists.vibeTitle')}</Text>
                     <Text style={[type.sub, { color: colors.muted }]}>
-                      {vibeCount} item{vibeCount === 1 ? '' : 's'} to review · 10 seconds
+                      {t('lists.vibeReview', { count: vibeCount })}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.accent} />
@@ -170,10 +137,14 @@ export default function ListsScreen() {
                 <Ionicons name="checkmark-circle" size={26} color={colors.accent} />
                 <View style={styles.grow}>
                   <Text style={[type.label, { color: colors.muted, marginBottom: 3 }]}>
-                    Pantry Vibe Check
+                    {t('lists.vibeTitle')}
                   </Text>
-                  <Text style={[type.body, { color: colors.ink }]}>{vibeEmpty.title}</Text>
-                  <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>{vibeEmpty.body}</Text>
+                  <Text style={[type.body, { color: colors.ink }]}>
+                    {t(`lists.vibeEmpty${vibeVariant}Title`)}
+                  </Text>
+                  <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
+                    {t(`lists.vibeEmpty${vibeVariant}Body`)}
+                  </Text>
                 </View>
               </View>
             </Card>
@@ -185,7 +156,7 @@ export default function ListsScreen() {
             style={[styles.buildRow, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}
           >
             <Ionicons name="sparkles" size={18} color={colors.accent} />
-            <Text style={[type.body, { color: colors.accent, flex: 1 }]}>Build this week's list</Text>
+            <Text style={[type.body, { color: colors.accent, flex: 1 }]}>{t('lists.buildWeekly')}</Text>
             <View style={[styles.buildPill, { backgroundColor: colors.accent }]}>
               <Text style={[type.sub, { color: colors.accentInk, fontWeight: '700' }]}>
                 {suggestions.length}
@@ -197,19 +168,19 @@ export default function ListsScreen() {
         {empty ? (
           <EmptyState
             icon="basket-outline"
-            title="No lists yet"
-            body="Tap “New list” to start your first shopping list. Add items, tick them off as you shop, and (once you’re in a household) share it live with the people you shop for."
+            title={t('lists.emptyTitle')}
+            body={t('lists.emptyBody')}
           />
         ) : (
           <>
             <View style={styles.listsHead}>
-              <Text style={[type.label, { color: colors.muted }]}>Your lists</Text>
+              <Text style={[type.label, { color: colors.muted }]}>{t('lists.yourLists')}</Text>
               {editing ? (
                 <Pressable onPress={() => setEditing(false)} hitSlop={8}>
-                  <Text style={[type.body, { color: colors.accent }]}>Done</Text>
+                  <Text style={[type.body, { color: colors.accent }]}>{t('common.done')}</Text>
                 </Pressable>
               ) : (
-                <Text style={[type.sub, { color: colors.muted }]}>hold to edit</Text>
+                <Text style={[type.sub, { color: colors.muted }]}>{t('lists.holdToEdit')}</Text>
               )}
             </View>
 
@@ -224,12 +195,12 @@ export default function ListsScreen() {
         )}
       </Screen>
 
-      {!editing && <Fab label="New list" onPress={() => setCreating(true)} />}
+      {!editing && <Fab label={t('lists.newList')} onPress={() => setCreating(true)} />}
       <TextPromptModal
         visible={creating}
-        title="New list"
-        placeholder="e.g. Weekly groceries"
-        confirmLabel="Create"
+        title={t('lists.newList')}
+        placeholder={t('lists.newListPlaceholder')}
+        confirmLabel={t('lists.create')}
         onCancel={() => setCreating(false)}
         onSubmit={openNewList}
       />
@@ -241,7 +212,7 @@ export default function ListsScreen() {
       />
       <ListPickerSheet
         visible={pendingItems.length > 0}
-        title="Add these items to"
+        title={t('lists.addTheseTo')}
         onCancel={() => setPendingItems([])}
         onPick={addWeeklyToList}
       />
@@ -251,6 +222,7 @@ export default function ListsScreen() {
 
 function ListCard({ list, onLongPress }: { list: List; onLongPress: () => void }) {
   const { colors } = useTheme();
+  const { t, money } = useLocale();
   const checked = list.items.filter((it) => it.checked).length;
   const priced = list.items.filter((it) => it.priceCents != null);
   const total = priced.reduce((sum, it) => sum + (it.priceCents ?? 0), 0);
@@ -268,11 +240,11 @@ function ListCard({ list, onLongPress }: { list: List; onLongPress: () => void }
             <Text style={[type.body, { color: colors.ink }]}>{list.name}</Text>
             <Text style={[type.sub, { color: colors.muted }]}>
               {list.store ? `${list.store} · ` : ''}
-              {list.items.length} item{list.items.length === 1 ? '' : 's'} · {checked} in cart
+              {t('lists.itemsCount', { count: list.items.length })} · {t('lists.inCart', { count: checked })}
             </Text>
           </View>
           {priced.length > 0 ? (
-            <Text style={[type.price, { color: colors.ink }]}>{euros(total)}</Text>
+            <Text style={[type.price, { color: colors.ink }]}>{money(total)}</Text>
           ) : (
             <Ionicons name="chevron-forward" size={20} color={colors.muted} />
           )}
