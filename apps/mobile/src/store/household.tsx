@@ -13,6 +13,7 @@ import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
+import { useT } from '@/store/locale';
 
 /**
  * The household the signed-in user belongs to, plus its members. A user has at
@@ -48,20 +49,23 @@ interface HouseholdContext {
 
 const Ctx = createContext<HouseholdContext | null>(null);
 
-const friendlyError = (message: string): string => {
-  if (message.includes('invalid_code')) return 'That invite code didn’t match any household.';
+type TFn = (key: string, options?: Record<string, unknown>) => string;
+
+const friendlyError = (message: string, t: TFn): string => {
+  if (message.includes('invalid_code')) return t('householdError.invalidCode');
   // Postgres denies the create/join RPCs to the `anon` role, so a caller who
   // isn't signed in gets "permission denied for function …" — treat it, and the
   // in-function not_authenticated guard, as the same "sign in first" case.
   if (message.includes('not_authenticated') || message.includes('permission denied'))
-    return 'Please sign in first to create or join a household.';
-  if (message.includes('not_owner')) return 'Only the owner can remove members.';
-  if (message.includes('use_leave')) return 'Use “Leave household” to remove yourself.';
+    return t('householdError.signInFirst');
+  if (message.includes('not_owner')) return t('householdError.notOwner');
+  if (message.includes('use_leave')) return t('householdError.useLeave');
   return message;
 };
 
 export function HouseholdProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
+  const t = useT();
   const appActive = useAppActive();
   const [household, setHousehold] = useState<Household | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -136,22 +140,22 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       loading,
       refresh,
       createHousehold: async (name, displayName) => {
-        if (!user) return { error: 'Please sign in first to create or join a household.' };
+        if (!user) return { error: t('householdError.signInFirst') };
         const { error } = await supabase.rpc('create_household', {
           p_name: name,
           p_display_name: displayName,
         });
-        if (error) return { error: friendlyError(error.message) };
+        if (error) return { error: friendlyError(error.message, t) };
         await refresh();
         return {};
       },
       joinHousehold: async (code, displayName) => {
-        if (!user) return { error: 'Please sign in first to create or join a household.' };
+        if (!user) return { error: t('householdError.signInFirst') };
         const { error } = await supabase.rpc('join_household', {
           p_code: code,
           p_display_name: displayName,
         });
-        if (error) return { error: friendlyError(error.message) };
+        if (error) return { error: friendlyError(error.message, t) };
         await refresh();
         return {};
       },
@@ -168,7 +172,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
           .eq('id', household.id);
         if (error) {
           await refresh();
-          return { error: friendlyError(error.message) };
+          return { error: friendlyError(error.message, t) };
         }
         // Keep the signature in step so the next poll/realtime tick doesn't
         // think nothing changed and skip re-applying the server truth.
@@ -178,7 +182,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       leaveHousehold: async () => {
         if (!household) return {};
         const { error } = await supabase.rpc('leave_household', { p_household: household.id });
-        if (error) return { error: friendlyError(error.message) };
+        if (error) return { error: friendlyError(error.message, t) };
         await refresh();
         return {};
       },
@@ -188,12 +192,12 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
           p_household: household.id,
           p_user: userId,
         });
-        if (error) return { error: friendlyError(error.message) };
+        if (error) return { error: friendlyError(error.message, t) };
         await refresh();
         return {};
       },
     }),
-    [household, members, loading, refresh, user],
+    [household, members, loading, refresh, user, t],
   );
 
   // Live household updates (e.g. a rename by another member) reach everyone via

@@ -8,12 +8,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
 import { useHousehold } from '@/store/household';
+import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /** Create a new household or join an existing one with an invite code. */
 export default function HouseholdSetupScreen() {
   const { colors } = useTheme();
   const { createHousehold, joinHousehold } = useHousehold();
+  const t = useT();
 
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [displayName, setDisplayName] = useState('');
@@ -24,7 +26,7 @@ export default function HouseholdSetupScreen() {
 
   const submit = async () => {
     if (!displayName.trim()) {
-      setError('Add your name so household members recognise you.');
+      setError(t('auth.addYourName'));
       return;
     }
     setBusy(true);
@@ -52,9 +54,9 @@ export default function HouseholdSetupScreen() {
         {/* Scrollable so the submit button stays reachable on small screens
             once the keyboard has taken its share of the height. */}
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Text style={[type.h1, { color: colors.ink }]}>Your household</Text>
+          <Text style={[type.h1, { color: colors.ink }]}>{t('auth.householdTitle')}</Text>
           <Text style={[type.bodyRegular, { color: colors.muted }]}>
-            A household shares lists and pantry. Create one, or join someone who invited you.
+            {t('auth.householdIntro')}
           </Text>
 
           {/* Mode toggle */}
@@ -71,7 +73,7 @@ export default function HouseholdSetupScreen() {
                   style={[styles.toggleBtn, active && { backgroundColor: colors.accentSoft }]}
                 >
                   <Text style={[type.body, { color: active ? colors.accent : colors.muted }]}>
-                    {m === 'create' ? 'Create' : 'Join'}
+                    {m === 'create' ? t('auth.create') : t('auth.join')}
                   </Text>
                 </Pressable>
               );
@@ -79,27 +81,27 @@ export default function HouseholdSetupScreen() {
           </View>
 
           <FormField
-            label="Your name"
+            label={t('auth.yourName')}
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="e.g. Sara"
+            placeholder={t('auth.yourNamePlaceholder')}
             autoCapitalize="words"
           />
 
           {mode === 'create' ? (
             <FormField
-              label="Household name"
+              label={t('auth.householdName')}
               value={householdName}
               onChangeText={setHouseholdName}
-              placeholder="e.g. Bakker household"
+              placeholder={t('auth.householdNamePlaceholder')}
               autoCapitalize="words"
             />
           ) : (
             <FormField
-              label="Invite code"
+              label={t('auth.inviteCode')}
               value={code}
-              onChangeText={(t) => setCode(t.toUpperCase())}
-              placeholder="6-character code"
+              onChangeText={(v) => setCode(v.toUpperCase())}
+              placeholder={t('auth.inviteCodePlaceholder')}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={6}
@@ -109,7 +111,7 @@ export default function HouseholdSetupScreen() {
           {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
 
           <PrimaryButton
-            label={mode === 'create' ? 'Create household' : 'Join household'}
+            label={mode === 'create' ? t('auth.createHousehold') : t('auth.joinHousehold')}
             onPress={submit}
             loading={busy}
           />

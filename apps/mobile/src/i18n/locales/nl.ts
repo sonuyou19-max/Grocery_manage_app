@@ -164,6 +164,54 @@ const nl = {
     allDoneBody: 'Alles afgevinkt. Fijn gewinkeld.',
     finish: 'Klaar met winkelen',
   },
+  auth: {
+    signInTitle: 'Aanmelden',
+    codeTitle: 'Voer je code in',
+    emailSubtitle:
+      'Synchroniseer je lijsten en deel ze met je huishouden. We e-mailen je een code — geen wachtwoord nodig.',
+    codeSent: 'We hebben een aanmeldcode gemaild naar %{email}.',
+    emailLabel: 'E-mail',
+    emailPlaceholder: 'jij@voorbeeld.com',
+    codeLabel: 'Verificatiecode',
+    codePlaceholder: 'Voer je code in',
+    sendCode: 'Stuur code',
+    verify: 'Verifiëren & aanmelden',
+    resend: 'Code opnieuw sturen',
+    differentEmail: 'Ander e-mailadres gebruiken',
+    invalidEmail: 'Voer een geldig e-mailadres in.',
+    enterCode: 'Voer de code uit je e-mail in.',
+    householdTitle: 'Je huishouden',
+    householdIntro:
+      'Een huishouden deelt lijsten en voorraad. Maak er een aan, of sluit je aan bij iemand die je heeft uitgenodigd.',
+    create: 'Aanmaken',
+    join: 'Deelnemen',
+    yourName: 'Je naam',
+    yourNamePlaceholder: 'bijv. Sara',
+    householdName: 'Naam huishouden',
+    householdNamePlaceholder: 'bijv. Huishouden Bakker',
+    inviteCode: 'Uitnodigingscode',
+    inviteCodePlaceholder: 'code van 6 tekens',
+    addYourName: 'Voeg je naam toe zodat huisgenoten je herkennen.',
+    createHousehold: 'Huishouden aanmaken',
+    joinHousehold: 'Deelnemen aan huishouden',
+  },
+  authError: {
+    sendFailed:
+      'Kon de code niet versturen — e-mailbezorging mislukt. Controleer je SMTP-instellingen en probeer opnieuw.',
+    network: 'Kon de server niet bereiken. Controleer je verbinding en probeer opnieuw.',
+    codeWrong: 'Die code werkte niet. Controleer hem en probeer opnieuw.',
+    createFailed: 'Kon het account niet aanmaken.',
+    confirmEmailOn:
+      'Account aangemaakt, maar e-mailbevestiging staat aan. Zet “Confirm email” uit in Supabase → Authentication → Providers → Email en probeer opnieuw.',
+    signInFailed: 'Kon niet aanmelden. Controleer je e-mail en wachtwoord.',
+    deleteFailed: 'Kon je account niet verwijderen. Probeer het opnieuw.',
+  },
+  householdError: {
+    invalidCode: 'Die uitnodigingscode kwam niet overeen met een huishouden.',
+    signInFirst: 'Meld je eerst aan om een huishouden aan te maken of eraan deel te nemen.',
+    notOwner: 'Alleen de eigenaar kan leden verwijderen.',
+    useLeave: 'Gebruik “Huishouden verlaten” om jezelf te verwijderen.',
+  },
 };
 
 export default nl;

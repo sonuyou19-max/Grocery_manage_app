@@ -164,6 +164,54 @@ const fr = {
     allDoneBody: 'Tout est coché. Bonnes courses.',
     finish: 'Terminer les courses',
   },
+  auth: {
+    signInTitle: 'Se connecter',
+    codeTitle: 'Saisis ton code',
+    emailSubtitle:
+      'Synchronise tes listes et partage-les avec ton foyer. On t’envoie un code par e-mail — pas de mot de passe.',
+    codeSent: 'On a envoyé un code de connexion à %{email}.',
+    emailLabel: 'E-mail',
+    emailPlaceholder: 'toi@exemple.com',
+    codeLabel: 'Code de vérification',
+    codePlaceholder: 'Saisis ton code',
+    sendCode: 'Envoyer le code',
+    verify: 'Vérifier et se connecter',
+    resend: 'Renvoyer le code',
+    differentEmail: 'Utiliser une autre adresse',
+    invalidEmail: 'Saisis une adresse e-mail valide.',
+    enterCode: 'Saisis le code reçu par e-mail.',
+    householdTitle: 'Ton foyer',
+    householdIntro:
+      'Un foyer partage listes et garde-manger. Crée-en un, ou rejoins quelqu’un qui t’a invité.',
+    create: 'Créer',
+    join: 'Rejoindre',
+    yourName: 'Ton nom',
+    yourNamePlaceholder: 'ex. Sara',
+    householdName: 'Nom du foyer',
+    householdNamePlaceholder: 'ex. Foyer Bakker',
+    inviteCode: 'Code d’invitation',
+    inviteCodePlaceholder: 'code à 6 caractères',
+    addYourName: 'Ajoute ton nom pour que les membres du foyer te reconnaissent.',
+    createHousehold: 'Créer le foyer',
+    joinHousehold: 'Rejoindre le foyer',
+  },
+  authError: {
+    sendFailed:
+      'Impossible d’envoyer le code — échec de l’envoi de l’e-mail. Vérifie tes réglages SMTP et réessaie.',
+    network: 'Impossible de joindre le serveur. Vérifie ta connexion et réessaie.',
+    codeWrong: 'Ce code n’a pas fonctionné. Vérifie-le et réessaie.',
+    createFailed: 'Impossible de créer le compte.',
+    confirmEmailOn:
+      'Compte créé, mais la confirmation par e-mail est activée. Désactive « Confirm email » dans Supabase → Authentication → Providers → Email, puis réessaie.',
+    signInFailed: 'Connexion impossible. Vérifie ton e-mail et ton mot de passe.',
+    deleteFailed: 'Impossible de supprimer ton compte. Réessaie.',
+  },
+  householdError: {
+    invalidCode: 'Ce code d’invitation ne correspond à aucun foyer.',
+    signInFirst: 'Connecte-toi d’abord pour créer un foyer ou en rejoindre un.',
+    notOwner: 'Seul le propriétaire peut retirer des membres.',
+    useLeave: 'Utilise « Quitter le foyer » pour te retirer toi-même.',
+  },
 };
 
 export default fr;

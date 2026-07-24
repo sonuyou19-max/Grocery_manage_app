@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
 import { useAuth } from '@/store/auth';
+import { useT } from '@/store/locale';
 import { spacing, type, useTheme } from '@/theme';
 
 /**
@@ -19,6 +20,7 @@ import { spacing, type, useTheme } from '@/theme';
 export default function SignInScreen() {
   const { colors } = useTheme();
   const { sendCode, verifyCode } = useAuth();
+  const t = useT();
 
   const [phase, setPhase] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -29,7 +31,7 @@ export default function SignInScreen() {
 
   const requestCode = async () => {
     if (!email.includes('@')) {
-      setError('Enter a valid email address.');
+      setError(t('auth.invalidEmail'));
       return;
     }
     setBusy(true);
@@ -40,14 +42,14 @@ export default function SignInScreen() {
       setError(err);
       return;
     }
-    setNotice(`We emailed a sign-in code to ${email.trim()}.`);
+    setNotice(t('auth.codeSent', { email: email.trim() }));
     setCode('');
     setPhase('code');
   };
 
   const verify = async () => {
     if (code.trim().length < 6) {
-      setError('Enter the code from your email.');
+      setError(t('auth.enterCode'));
       return;
     }
     setBusy(true);
@@ -89,20 +91,18 @@ export default function SignInScreen() {
               the keyboard up. */}
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={[type.h1, { color: colors.ink }]}>
-              {phase === 'email' ? 'Sign in' : 'Enter your code'}
+              {phase === 'email' ? t('auth.signInTitle') : t('auth.codeTitle')}
             </Text>
             <Text style={[type.bodyRegular, { color: colors.muted }]}>
-              {phase === 'email'
-                ? 'Sync your lists and share them with your household. We’ll email you a code — no password needed.'
-                : notice}
+              {phase === 'email' ? t('auth.emailSubtitle') : notice}
             </Text>
 
             {phase === 'email' ? (
               <FormField
-                label="Email"
+                label={t('auth.emailLabel')}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="you@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -112,10 +112,10 @@ export default function SignInScreen() {
               />
             ) : (
               <FormField
-                label="Verification code"
+                label={t('auth.codeLabel')}
                 value={code}
-                onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 10))}
-                placeholder="Enter your code"
+                onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 10))}
+                placeholder={t('auth.codePlaceholder')}
                 keyboardType="number-pad"
                 autoComplete="one-time-code"
                 textContentType="oneTimeCode"
@@ -128,16 +128,18 @@ export default function SignInScreen() {
             {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
 
             {phase === 'email' ? (
-              <PrimaryButton label="Send code" onPress={requestCode} loading={busy} />
+              <PrimaryButton label={t('auth.sendCode')} onPress={requestCode} loading={busy} />
             ) : (
               <>
-                <PrimaryButton label="Verify & sign in" onPress={verify} loading={busy} />
+                <PrimaryButton label={t('auth.verify')} onPress={verify} loading={busy} />
                 <View style={styles.actions}>
                   <Pressable onPress={requestCode} disabled={busy} hitSlop={8}>
-                    <Text style={[type.body, { color: colors.accent }]}>Resend code</Text>
+                    <Text style={[type.body, { color: colors.accent }]}>{t('auth.resend')}</Text>
                   </Pressable>
                   <Pressable onPress={backToEmail} hitSlop={8}>
-                    <Text style={[type.body, { color: colors.muted }]}>Use a different email</Text>
+                    <Text style={[type.body, { color: colors.muted }]}>
+                      {t('auth.differentEmail')}
+                    </Text>
                   </Pressable>
                 </View>
               </>

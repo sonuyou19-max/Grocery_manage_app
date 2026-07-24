@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { supabase } from '@/lib/supabase';
+import { useT } from '@/store/locale';
 
 /**
  * Authentication. Sign-in is optional — the app works fully logged-out with
@@ -39,19 +40,22 @@ interface AuthContext {
 
 const Ctx = createContext<AuthContext | null>(null);
 
-/** Turn raw/verbose auth errors into a short, human message. */
-function cleanError(raw: unknown, fallback: string): string {
+type TFn = (key: string, options?: Record<string, unknown>) => string;
+
+/** Turn raw/verbose auth errors into a short, human, localized message. */
+function cleanError(raw: unknown, fallback: string, t: TFn): string {
   const msg = raw instanceof Error ? raw.message : typeof raw === 'string' ? raw : '';
   if (!msg) return fallback;
   // A JSON blob or a huge string means an unexpected server/transport failure.
   if (msg.trim().startsWith('{') || msg.length > 140) return fallback;
   if (/otp|magic link|email/i.test(msg) && /send|deliver|smtp|500/i.test(msg)) {
-    return 'Couldn’t send the code — email delivery failed. Check your SMTP settings and try again.';
+    return t('authError.sendFailed');
   }
   return msg;
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const t = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
 
@@ -80,11 +84,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
             options: { shouldCreateUser: true },
           });
           if (error) {
-            return { error: cleanError(error, 'Couldn’t send the code — email delivery failed. Check your SMTP settings and try again.') };
+            return { error: cleanError(error, t('authError.sendFailed'), t) };
           }
           return {};
         } catch (e) {
-          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+          return { error: cleanError(e, t('authError.network'), t) };
         }
       },
       verifyCode: async (email, token) => {
@@ -95,11 +99,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
             type: 'email',
           });
           if (error) {
-            return { error: cleanError(error, 'That code didn’t work. Check it and try again.') };
+            return { error: cleanError(error, t('authError.codeWrong'), t) };
           }
           return {};
         } catch (e) {
-          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+          return { error: cleanError(e, t('authError.network'), t) };
         }
       },
       signUpPassword: async (email, password) => {
@@ -108,16 +112,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
             email: email.trim(),
             password,
           });
-          if (error) return { error: cleanError(error, 'Couldn’t create the account.') };
+          if (error) return { error: cleanError(error, t('authError.createFailed'), t) };
           if (!data.session) {
-            return {
-              error:
-                'Account made, but email confirmation is on. Turn off “Confirm email” in Supabase → Authentication → Providers → Email, then try again.',
-            };
+            return { error: t('authError.confirmEmailOn') };
           }
           return {};
         } catch (e) {
-          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+          return { error: cleanError(e, t('authError.network'), t) };
         }
       },
       signInPassword: async (email, password) => {
@@ -126,10 +127,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
             email: email.trim(),
             password,
           });
-          if (error) return { error: cleanError(error, 'Couldn’t sign in. Check your email and password.') };
+          if (error) return { error: cleanError(error, t('authError.signInFailed'), t) };
           return {};
         } catch (e) {
-          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+          return { error: cleanError(e, t('authError.network'), t) };
         }
       },
       signOut: async () => {
@@ -138,16 +139,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       deleteAccount: async () => {
         try {
           const { error } = await supabase.rpc('delete_account');
-          if (error) return { error: cleanError(error, 'Couldn’t delete your account. Please try again.') };
+          if (error) return { error: cleanError(error, t('authError.deleteFailed'), t) };
           // The account is gone; drop the now-invalid session locally.
           await supabase.auth.signOut();
           return {};
         } catch (e) {
-          return { error: cleanError(e, 'Couldn’t reach the server. Check your connection and try again.') };
+          return { error: cleanError(e, t('authError.network'), t) };
         }
       },
     }),
-    [session, initializing],
+    [session, initializing, t],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

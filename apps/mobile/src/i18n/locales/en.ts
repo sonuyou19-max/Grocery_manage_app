@@ -177,6 +177,53 @@ const en = {
     allDoneBody: "Everything's ticked off. Nice shop.",
     finish: 'Finish shopping',
   },
+  auth: {
+    signInTitle: 'Sign in',
+    codeTitle: 'Enter your code',
+    emailSubtitle:
+      'Sync your lists and share them with your household. We’ll email you a code — no password needed.',
+    codeSent: 'We emailed a sign-in code to %{email}.',
+    emailLabel: 'Email',
+    emailPlaceholder: 'you@example.com',
+    codeLabel: 'Verification code',
+    codePlaceholder: 'Enter your code',
+    sendCode: 'Send code',
+    verify: 'Verify & sign in',
+    resend: 'Resend code',
+    differentEmail: 'Use a different email',
+    invalidEmail: 'Enter a valid email address.',
+    enterCode: 'Enter the code from your email.',
+    householdTitle: 'Your household',
+    householdIntro:
+      'A household shares lists and pantry. Create one, or join someone who invited you.',
+    create: 'Create',
+    join: 'Join',
+    yourName: 'Your name',
+    yourNamePlaceholder: 'e.g. Sara',
+    householdName: 'Household name',
+    householdNamePlaceholder: 'e.g. Bakker household',
+    inviteCode: 'Invite code',
+    inviteCodePlaceholder: '6-character code',
+    addYourName: 'Add your name so household members recognise you.',
+    createHousehold: 'Create household',
+    joinHousehold: 'Join household',
+  },
+  authError: {
+    sendFailed: 'Couldn’t send the code — email delivery failed. Check your SMTP settings and try again.',
+    network: 'Couldn’t reach the server. Check your connection and try again.',
+    codeWrong: 'That code didn’t work. Check it and try again.',
+    createFailed: 'Couldn’t create the account.',
+    confirmEmailOn:
+      'Account made, but email confirmation is on. Turn off “Confirm email” in Supabase → Authentication → Providers → Email, then try again.',
+    signInFailed: 'Couldn’t sign in. Check your email and password.',
+    deleteFailed: 'Couldn’t delete your account. Please try again.',
+  },
+  householdError: {
+    invalidCode: 'That invite code didn’t match any household.',
+    signInFirst: 'Please sign in first to create or join a household.',
+    notOwner: 'Only the owner can remove members.',
+    useLeave: 'Use “Leave household” to remove yourself.',
+  },
 };
 
 export default en;
