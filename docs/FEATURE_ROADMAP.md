@@ -64,6 +64,33 @@ introduces a parallel, independently-tracked data store. Concretely:
   #7a recurring-staple cadence, #5 live household shopping. Needs migrations
   `0011+` and RLS.
 
+## TOP PRIORITY — Internationalization (i18n) for all of Europe
+
+Goal: available in every European language, starting with the EU's 5 largest by
+native speakers (**de, fr, it, es, pl**) + **nl** (home market); English is the
+source/fallback. First launch asks **region → language**; both changeable later
+in Settings.
+
+- **Phase 1 — foundation ✅ (in progress → done this commit).** `i18n-js` engine
+  (`src/i18n/`: `languages.ts`, `regions.ts` with locale-aware `formatMoney`,
+  per-language locale files, `index.ts`). `LocaleProvider` (`store/locale.tsx`)
+  persists `{region, language}`, gates first launch on a two-step region→language
+  chooser (`components/locale-setup.tsx`, previews the picked language), exposes
+  `useT()` / `money()`. Wired at root. First strings extracted as proof: tab bar
+  + home greeting/subtitle.
+- **Phase 2 — Settings + string extraction (next).** Add Region/Language rows to
+  Settings (reuse LocaleSetup). Then extract remaining UI strings screen by
+  screen into locale keys: lists, list detail, pantry, insights, vibe-check,
+  settings, sign-in/household, item sheet, quick-add, weekly builder, shopping
+  mode, empty states, alerts, category labels, relative-time phrases. Swap
+  `euros()` for `money()`.
+- **Phase 3 — translations + polish.** Fill all locale files (AI draft → native
+  review), Dutch/French for Belgium first. Text-expansion layout pass on a
+  non-English build. Localized legal + store listings.
+- Notes: pure-JS so far (no rebuild); `expo-localization` optional later to
+  pre-select the device language. Category *keywords* stay English but the AI
+  categorizer already handles other languages, so items still classify.
+
 ## Deferred fixes (awaiting user go-ahead — do NOT start until asked)
 
 - **Pantry "add to list" leaves a checked item / weekly builder under-suggests.**

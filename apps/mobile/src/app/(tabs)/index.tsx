@@ -18,15 +18,16 @@ import { buildWeeklySuggestions, type WeeklySuggestion } from '@/lib/weekly-list
 import { useAuth } from '@/store/auth';
 import { useGroceries, type List } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
+import { useT } from '@/store/locale';
 import { usePantryIntel, useVibeDeck } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-/** Time-of-day greeting based on the device's local clock. */
-function timeGreeting(date = new Date()): string {
+/** Time-of-day greeting key based on the device's local clock. */
+function greetingKey(date = new Date()): 'morning' | 'afternoon' | 'evening' {
   const h = date.getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 12) return 'morning';
+  if (h < 18) return 'afternoon';
+  return 'evening';
 }
 
 /**
@@ -66,6 +67,7 @@ const vibeEmptyMessage = () =>
 
 export default function ListsScreen() {
   const { colors } = useTheme();
+  const t = useT();
   const { lists, addList, addParsedItem, deleteList, reorderLists } = useGroceries();
   const { household, members } = useHousehold();
   const { user } = useAuth();
@@ -102,7 +104,8 @@ export default function ListsScreen() {
   // First name from the household display name the user chose, when available.
   const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
   const firstName = myName ? myName.split(/\s+/)[0] : null;
-  const greeting = firstName ? `${timeGreeting()}, ${firstName}` : timeGreeting();
+  const base = t(`greeting.${greetingKey()}`);
+  const greeting = firstName ? `${base}, ${firstName}` : base;
 
   const openNewList = (name: string) => {
     const id = addList(name);
@@ -144,7 +147,7 @@ export default function ListsScreen() {
 
   return (
     <>
-      <Screen title={greeting} subtitle={household ? household.name : 'Your grocery lists'} hasFab>
+      <Screen title={greeting} subtitle={household ? household.name : t('greeting.subtitle')} hasFab>
         {!editing &&
           (vibeCount > 0 ? (
             <Pressable onPress={() => router.push('/vibe-check')}>

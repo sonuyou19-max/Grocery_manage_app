@@ -19,6 +19,7 @@ import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
 import { HouseholdProvider } from '@/store/household';
+import { LocaleProvider } from '@/store/locale';
 import { PantryIntelProvider } from '@/store/pantry-intel';
 import { palette } from '@/theme';
 
@@ -64,6 +65,7 @@ export default function RootLayout() {
       <KeyboardProvider>
       <ErrorBoundary>
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
+        <LocaleProvider>
         <AuthProvider>
           <HouseholdProvider>
             <GroceriesProvider>
@@ -92,6 +94,7 @@ export default function RootLayout() {
             </GroceriesProvider>
           </HouseholdProvider>
         </AuthProvider>
+        </LocaleProvider>
       </ThemeProvider>
       </ErrorBoundary>
       </KeyboardProvider>
