@@ -74,6 +74,18 @@ const fr = {
     trackConfirm: 'Suivre',
     addTo: 'Ajouter %{item} à',
   },
+  category: {
+    fruit_veg: 'Fruits & Légumes',
+    dairy_eggs: 'Crèmerie & Œufs',
+    meat_fish: 'Viande & Poisson',
+    bakery: 'Boulangerie',
+    pantry: 'Épicerie',
+    frozen: 'Surgelés',
+    drinks: 'Boissons',
+    household: 'Maison',
+    personal_care: 'Soins personnels',
+    other: 'Autre',
+  },
   status: {
     learning: 'J’apprends ton rythme',
     runningLow: 'Bientôt épuisé',

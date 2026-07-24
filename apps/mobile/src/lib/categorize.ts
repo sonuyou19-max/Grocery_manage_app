@@ -18,6 +18,15 @@ export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   other: 'Other',
 };
 
+/** Localized category label. CATEGORY_LABELS above stays as the English source
+ * (and dev fallback); screens render via this with the active translator. */
+export function categoryLabel(
+  cat: ItemCategory,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return t(`category.${cat}`);
+}
+
 /** Order items appear in — roughly a supermarket walk. */
 export const CATEGORY_ORDER: ItemCategory[] = [
   'fruit_veg',

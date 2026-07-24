@@ -87,6 +87,18 @@ const en = {
     trackConfirm: 'Track',
     addTo: 'Add %{item} to',
   },
+  category: {
+    fruit_veg: 'Fruit & Veg',
+    dairy_eggs: 'Dairy & Eggs',
+    meat_fish: 'Meat & Fish',
+    bakery: 'Bakery',
+    pantry: 'Pantry',
+    frozen: 'Frozen',
+    drinks: 'Drinks',
+    household: 'Household',
+    personal_care: 'Personal Care',
+    other: 'Other',
+  },
   status: {
     learning: 'Learning your pace',
     runningLow: 'Running low',

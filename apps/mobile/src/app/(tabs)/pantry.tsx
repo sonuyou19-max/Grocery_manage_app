@@ -26,7 +26,7 @@ import { Fab } from '@/components/fab';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
-import { CATEGORY_LABELS, categorizeSync } from '@/lib/categorize';
+import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import {
   dueAt,
@@ -371,7 +371,7 @@ function PantrySwipeRow({
               {item.display}
             </Text>
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-              {CATEGORY_LABELS[item.category]} · {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+              {categoryLabel(item.category, t)} · {lastBoughtLabel(item.lastPurchasedAt, now, t)}
             </Text>
           </View>
           <View style={styles.stock}>

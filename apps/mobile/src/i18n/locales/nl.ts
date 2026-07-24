@@ -74,6 +74,18 @@ const nl = {
     trackConfirm: 'Volgen',
     addTo: '%{item} toevoegen aan',
   },
+  category: {
+    fruit_veg: 'Groente & Fruit',
+    dairy_eggs: 'Zuivel & Eieren',
+    meat_fish: 'Vlees & Vis',
+    bakery: 'Bakkerij',
+    pantry: 'Voorraadkast',
+    frozen: 'Diepvries',
+    drinks: 'Dranken',
+    household: 'Huishouden',
+    personal_care: 'Persoonlijke verzorging',
+    other: 'Overig',
+  },
   status: {
     learning: 'Ik leer je tempo',
     runningLow: 'Bijna op',
