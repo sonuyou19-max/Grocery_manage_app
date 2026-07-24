@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
@@ -16,10 +16,11 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/glass';
+import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { MeshBackground } from '@/components/mesh-background';
-import { TextPromptModal } from '@/components/text-prompt-modal';
 import { haptics } from '@/lib/haptics';
 import { isDue, lastBoughtLabel, normalizeKey } from '@/lib/pantry-intel';
+import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useT } from '@/store/locale';
 import { useGroceries } from '@/store/groceries';
 import { useVibeDeck, usePantryIntel, type DeckCard } from '@/store/pantry-intel';
@@ -38,7 +39,8 @@ export default function VibeCheckScreen() {
   const { width } = useWindowDimensions();
   const { deck } = useVibeDeck();
   const { stats, markAlmostOut, markStillGood } = usePantryIntel();
-  const { lists, addList, addParsedItem } = useGroceries();
+  const { lists } = useGroceries();
+  const { addToHomeList, addToChosenList } = useHomeListAdd();
 
   // Frozen ORDER captured when the deck opens; membership stays live below so a
   // card another household member resolves drops off this device's stack too.
@@ -47,23 +49,20 @@ export default function VibeCheckScreen() {
   const [handled, setHandled] = useState<Set<string>>(() => new Set());
   const [done, setDone] = useState(false);
 
-  // Items still due right now, minus anything already queued on a list —
+  // Items still due right now, minus anything still waiting on a list —
   // recomputed from shared stats, so another member's swipe removes it here.
+  // Only UNCHECKED rows count as queued: a ticked row is something already
+  // bought, and treating it as queued would hide the item from the deck for good.
   const validKeys = useMemo(() => {
     const excluded = new Set<string>();
-    for (const list of lists) for (const it of list.items) excluded.add(normalizeKey(it.name));
+    for (const list of lists) {
+      for (const it of list.items) if (!it.checked) excluded.add(normalizeKey(it.name));
+    }
     const now = Date.now();
     const s = new Set<string>();
     for (const key in stats) if (isDue(stats[key], now) && !excluded.has(key)) s.add(key);
     return s;
   }, [stats, lists]);
-
-  // Every item currently on any list, so we never queue a duplicate.
-  const listedKeys = useMemo(() => {
-    const s = new Set<string>();
-    for (const list of lists) for (const it of list.items) s.add(normalizeKey(it.name));
-    return s;
-  }, [lists]);
 
   // The live stack: frozen order, minus what anyone has resolved.
   const remaining = useMemo(
@@ -72,11 +71,8 @@ export default function VibeCheckScreen() {
   );
   const top = remaining[0];
 
-  // Where "Almost Out" items go — defaults to the first (top) list.
-  const [destListId, setDestListId] = useState<string | null>(lists[0]?.id ?? null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [creatingList, setCreatingList] = useState(false);
-  const destList = lists.find((l) => l.id === destListId) ?? lists[0];
+  // A swiped card with no usable home list, waiting on a destination choice.
+  const [pendingPick, setPendingPick] = useState<DeckCard | null>(null);
 
   const THRESHOLD = width * 0.28;
   const tx = useSharedValue(0);
@@ -84,13 +80,9 @@ export default function VibeCheckScreen() {
   const lastTickX = useSharedValue(0);
   const pastThreshold = useSharedValue(false);
 
-  // Latest values reachable from gesture callbacks.
+  // Latest value reachable from gesture callbacks.
   const topRef = useRef<DeckCard | undefined>(top);
   topRef.current = top;
-  const destRef = useRef<string | null>(destListId);
-  destRef.current = destList?.id ?? null;
-  const listedRef = useRef(listedKeys);
-  listedRef.current = listedKeys;
 
   // Reset the drag whenever the visible top card changes.
   useEffect(() => {
@@ -100,35 +92,33 @@ export default function VibeCheckScreen() {
     pastThreshold.value = false;
   }, [top?.key, tx, ty, lastTickX, pastThreshold]);
 
-  // When the stack empties, celebrate once and bow out.
+  // When the stack empties, celebrate once and bow out — but not while a
+  // destination is still being chosen. The last card can empty the deck and
+  // open the picker in the same gesture, and auto-closing then would dismiss
+  // the picker before the item was ever filed.
   const celebratedRef = useRef(false);
   useEffect(() => {
-    if (remaining.length === 0 && !celebratedRef.current) {
+    if (remaining.length === 0 && !pendingPick && !celebratedRef.current) {
       celebratedRef.current = true;
       setDone(true);
       if (cards.length > 0) haptics.success();
       const timer = setTimeout(() => router.back(), cards.length > 0 ? 1900 : 1500);
       return () => clearTimeout(timer);
     }
-  }, [remaining.length, cards.length]);
-
-  const addToList = (card: DeckCard) => {
-    // Never queue a duplicate: if it's already on any list, don't write it.
-    if (listedRef.current.has(card.key)) return;
-    let listId = destRef.current;
-    if (!listId) {
-      listId = addList(t('vibeCheck.defaultListName'));
-      setDestListId(listId);
-    }
-    addParsedItem(listId, { name: card.display, category: card.category, quantity: null, unit: null });
-  };
+  }, [remaining.length, cards.length, pendingPick]);
 
   const commit = (dir: 'left' | 'right') => {
     const card = topRef.current;
     if (!card) return;
     if (dir === 'left') {
-      addToList(card); // self-guards against duplicates across all lists
-      markAlmostOut(card.key);
+      // Straight back to the list this item lives on. Only when it has no
+      // usable home do we interrupt the deck to ask — and then the add (and
+      // the almost-out signal) happen once a list is chosen.
+      if (addToHomeList(card.display, card.category)) {
+        markAlmostOut(card.key);
+      } else {
+        setPendingPick(card);
+      }
     } else {
       markStillGood(card.key);
     }
@@ -137,6 +127,14 @@ export default function VibeCheckScreen() {
       n.add(card.key);
       return n;
     });
+  };
+
+  const pickList = (listId: string) => {
+    const card = pendingPick;
+    setPendingPick(null);
+    if (!card) return;
+    addToChosenList(listId, card.display, card.category);
+    markAlmostOut(card.key);
   };
 
   const pan = Gesture.Pan()
@@ -250,8 +248,10 @@ export default function VibeCheckScreen() {
               {/* Reveal icons sit behind the card */}
               <Animated.View style={[styles.revealIcon, leftIcon]} pointerEvents="none">
                 <Ionicons name="cart" size={64} color={colors.warn} />
+                {/* Same wording as the Pantry tab's left swipe — one action,
+                    two surfaces, so it reads as the same thing. */}
                 <Text style={[styles.revealLabel, { color: colors.warn }]}>
-                  {t('vibeCheck.almostOut')}
+                  {t('pantry.addToList')}
                 </Text>
               </Animated.View>
               <Animated.View style={[styles.revealIcon, rightIcon]} pointerEvents="none">
@@ -275,17 +275,8 @@ export default function VibeCheckScreen() {
               )}
             </View>
 
-            {/* Destination + hint */}
+            {/* Swipe hint + progress */}
             <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
-              <Pressable onPress={() => setPickerOpen(true)} style={styles.destPill}>
-                <Ionicons name="cart-outline" size={16} color="rgba(255,255,255,0.85)" />
-                <Text style={styles.destText} numberOfLines={1}>
-                  {t('vibeCheck.addingTo', {
-                    list: destList ? destList.name : t('vibeCheck.aNewList'),
-                  })}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.6)" />
-              </Pressable>
               <Text style={styles.hint}>{t('vibeCheck.swipeHint')}</Text>
               <Text style={styles.remaining}>
                 {t('vibeCheck.toReview', { count: remaining.length })}
@@ -295,60 +286,13 @@ export default function VibeCheckScreen() {
         )}
       </View>
 
-      {/* Destination picker */}
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable style={styles.pickerBackdrop} onPress={() => setPickerOpen(false)}>
-          <GlassView radius={radii.lg} style={styles.pickerCard}>
-            <Text style={[type.h2, { color: colors.ink }]}>{t('vibeCheck.addLowTo')}</Text>
-            <Pressable
-              style={styles.pickerRow}
-              onPress={() => {
-                setPickerOpen(false);
-                setCreatingList(true);
-              }}
-            >
-              <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
-              <Text style={[type.body, { color: colors.accent, flex: 1 }]}>
-                {t('lists.newListInline')}
-              </Text>
-            </Pressable>
-            {lists.map((l) => {
-              const active = l.id === destList?.id;
-              return (
-                <Pressable
-                  key={l.id}
-                  style={styles.pickerRow}
-                  onPress={() => {
-                    setDestListId(l.id);
-                    setPickerOpen(false);
-                  }}
-                >
-                  <Ionicons
-                    name={active ? 'radio-button-on' : 'radio-button-off'}
-                    size={22}
-                    color={active ? colors.accent : colors.muted}
-                  />
-                  <Text style={[type.body, { color: colors.ink, flex: 1 }]} numberOfLines={1}>
-                    {l.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </GlassView>
-        </Pressable>
-      </Modal>
-
-      <TextPromptModal
-        visible={creatingList}
-        title={t('lists.newList')}
-        placeholder={t('vibeCheck.newListPlaceholder')}
-        confirmLabel={t('lists.create')}
-        onCancel={() => setCreatingList(false)}
-        onSubmit={(name) => {
-          const id = addList(name);
-          setDestListId(id);
-          setCreatingList(false);
-        }}
+      {/* Only shown for an item with no usable home list — everything else is
+          filed silently, confirmed by a toast. */}
+      <ListPickerSheet
+        visible={pendingPick != null}
+        title={pendingPick ? t('pantry.addTo', { item: pendingPick.display }) : t('pantry.addToList')}
+        onCancel={() => setPendingPick(null)}
+        onPick={pickList}
       />
     </View>
   );
@@ -509,19 +453,6 @@ const styles = StyleSheet.create({
   revealLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
 
   footer: { paddingHorizontal: spacing.lg, alignItems: 'center', gap: spacing.sm },
-  destPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.25)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    maxWidth: '90%',
-  },
-  destText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600', flexShrink: 1 },
   hint: { color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: '600' },
   remaining: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '600' },
 
@@ -532,12 +463,4 @@ const styles = StyleSheet.create({
   allSetSub: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '500' },
   particle: { position: 'absolute', width: 8, height: 8, borderRadius: 2 },
 
-  pickerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(3,5,3,0.6)',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  pickerCard: { padding: spacing.lg, gap: spacing.xs },
-  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
 });

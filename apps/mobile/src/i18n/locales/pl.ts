@@ -333,16 +333,14 @@ const pl = {
     insightsBody:
       'Zobacz równowagę koszyka, swoje podstawy i ciepłe tygodniowe podsumowanie tego, jak naprawdę robisz zakupy.',
   },
+  toast: {
+    // Framed so the declined words stay correct around the interpolated names.
+    addedTo: 'Dodano %{item} do listy %{list}',
+  },
   vibeCheck: {
     left: 'zostało %{count}',
-    almostOut: 'Prawie się skończyło',
-    addingTo: 'Dodawanie do %{list}',
-    aNewList: 'nowej listy',
-    swipeHint: '← Prawie koniec      Wciąż dobre →',
+    swipeHint: '← Na listę      Wciąż dobre →',
     toReview: '%{count} do sprawdzenia',
-    addLowTo: 'Dodaj kończące się produkty do',
-    newListPlaceholder: 'np. Uzupełnienie zapasów',
-    defaultListName: 'Lista zakupów',
     allSet: 'Gotowe.',
     allSetSub: 'Nieźle — zajęło to dziesięć sekund.',
     emptyTitle: 'Nie ma czego sprawdzać',

@@ -292,16 +292,13 @@ const de = {
     insightsBody:
       'Sieh die Balance deines Korbs, deine Basics und einen warmen Wochenrückblick, wie du wirklich einkaufst.',
   },
+  toast: {
+    addedTo: '%{item} zu %{list} hinzugefügt',
+  },
   vibeCheck: {
     left: 'noch %{count}',
-    almostOut: 'Fast leer',
-    addingTo: 'Wird hinzugefügt zu %{list}',
-    aNewList: 'einer neuen Liste',
-    swipeHint: '← Fast leer      Noch gut →',
+    swipeHint: '← Auf Liste      Noch gut →',
     toReview: '%{count} zu prüfen',
-    addLowTo: 'Knappe Artikel hinzufügen zu',
-    newListPlaceholder: 'z. B. Nachschub-Runde',
-    defaultListName: 'Einkaufsliste',
     allSet: 'Alles erledigt.',
     allSetSub: 'Schön — das hat zehn Sekunden gedauert.',
     emptyTitle: 'Nichts zu prüfen',

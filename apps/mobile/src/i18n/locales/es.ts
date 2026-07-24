@@ -289,16 +289,13 @@ const es = {
     insightsBody:
       'Mira el equilibrio de tu cesta, tus básicos y un resumen semanal cercano de cómo compras de verdad.',
   },
+  toast: {
+    addedTo: '%{item} añadido a %{list}',
+  },
   vibeCheck: {
     left: 'quedan %{count}',
-    almostOut: 'Casi agotado',
-    addingTo: 'Añadiendo a %{list}',
-    aNewList: 'una lista nueva',
-    swipeHint: '← Casi agotado      Aún bien →',
+    swipeHint: '← A la lista      Aún bien →',
     toReview: '%{count} por revisar',
-    addLowTo: 'Añadir los artículos que se acaban a',
-    newListPlaceholder: 'p. ej. Ronda de reposición',
-    defaultListName: 'Lista de la compra',
     allSet: 'Todo listo.',
     allSetSub: 'Genial — han sido diez segundos.',
     emptyTitle: 'Nada que revisar',

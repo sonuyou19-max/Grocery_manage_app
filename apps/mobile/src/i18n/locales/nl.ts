@@ -288,16 +288,13 @@ const nl = {
     insightsBody:
       'Zie je mandjebalans, je vaste producten en een warm weekoverzicht van hoe je echt winkelt.',
   },
+  toast: {
+    addedTo: '%{item} toegevoegd aan %{list}',
+  },
   vibeCheck: {
     left: 'nog %{count}',
-    almostOut: 'Bijna op',
-    addingTo: 'Toevoegen aan %{list}',
-    aNewList: 'een nieuwe lijst',
-    swipeHint: '← Bijna op      Nog goed →',
+    swipeHint: '← Naar lijst      Nog goed →',
     toReview: '%{count} te bekijken',
-    addLowTo: 'Voeg bijna-op-items toe aan',
-    newListPlaceholder: 'bijv. Aanvulronde',
-    defaultListName: 'Boodschappenlijst',
     allSet: 'Helemaal klaar.',
     allSetSub: 'Mooi — dat kostte tien seconden.',
     emptyTitle: 'Niets te bekijken',

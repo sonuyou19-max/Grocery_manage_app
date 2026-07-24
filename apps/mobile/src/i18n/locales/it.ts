@@ -290,16 +290,13 @@ const it = {
     insightsBody:
       'Guarda l’equilibrio del carrello, i tuoi immancabili e un riepilogo settimanale di come fai davvero la spesa.',
   },
+  toast: {
+    addedTo: '%{item} aggiunto a %{list}',
+  },
   vibeCheck: {
     left: '%{count} rimasti',
-    almostOut: 'Quasi finito',
-    addingTo: 'Aggiungo a %{list}',
-    aNewList: 'una nuova lista',
-    swipeHint: '← Quasi finito      Ancora buono →',
+    swipeHint: '← In lista      Ancora buono →',
     toReview: '%{count} da controllare',
-    addLowTo: 'Aggiungi gli articoli in esaurimento a',
-    newListPlaceholder: 'es. Giro di rifornimento',
-    defaultListName: 'Lista della spesa',
     allSet: 'Tutto fatto.',
     allSetSub: 'Bene — ci sono voluti dieci secondi.',
     emptyTitle: 'Nulla da controllare',

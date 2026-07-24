@@ -47,9 +47,18 @@ export default function ListsScreen() {
   // Items the builder handed off, awaiting a destination-list choice.
   const [pendingItems, setPendingItems] = useState<WeeklySuggestion[]>([]);
 
-  // Predicted-low items not already on a list — the weekly-list suggestions.
+  // Predicted-low items not already waiting on a list — the weekly-list
+  // suggestions. Only UNCHECKED items count as queued: a ticked item is one you
+  // already bought (check-off is also how it enters the pantry), so treating it
+  // as queued would quietly drop it from every weekly list from then on.
   const excludeKeys = useMemo(
-    () => new Set(lists.flatMap((l) => l.items).map((it) => normalizeKey(it.name))),
+    () =>
+      new Set(
+        lists
+          .flatMap((l) => l.items)
+          .filter((it) => !it.checked)
+          .map((it) => normalizeKey(it.name)),
+      ),
     [lists],
   );
   const suggestions = useMemo(

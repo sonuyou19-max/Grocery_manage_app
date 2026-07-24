@@ -290,16 +290,13 @@ const fr = {
     insightsBody:
       'Vois l’équilibre de ton panier, tes incontournables et un récap hebdo chaleureux de ta façon de faire les courses.',
   },
+  toast: {
+    addedTo: '%{item} ajouté à %{list}',
+  },
   vibeCheck: {
     left: 'encore %{count}',
-    almostOut: 'Bientôt épuisé',
-    addingTo: 'Ajout à %{list}',
-    aNewList: 'une nouvelle liste',
-    swipeHint: '← Bientôt épuisé      Encore bon →',
+    swipeHint: '← Vers une liste      Encore bon →',
     toReview: '%{count} à vérifier',
-    addLowTo: 'Ajouter les articles bientôt épuisés à',
-    newListPlaceholder: 'ex. Réassort',
-    defaultListName: 'Liste de courses',
     allSet: 'C’est fait.',
     allSetSub: 'Parfait — ça a pris dix secondes.',
     emptyTitle: 'Rien à vérifier',

@@ -32,10 +32,10 @@ import {
   dueAt,
   lastBoughtLabel,
   lifeRemaining,
-  normalizeKey,
   statusLabel,
   type ItemStat,
 } from '@/lib/pantry-intel';
+import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useGroceries } from '@/store/groceries';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
@@ -63,7 +63,7 @@ export default function PantryScreen() {
   const { colors } = useTheme();
   const t = useT();
   const { stats, logPurchase, markAlmostOut, markStillGood } = usePantryIntel();
-  const { lists, addParsedItem } = useGroceries();
+  const { addToHomeList, addToChosenList } = useHomeListAdd();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [lowOpen, setLowOpen] = useState(true);
@@ -109,9 +109,15 @@ export default function PantryScreen() {
     haptics.tick();
   };
 
-  // Swipe left: choose a list, then add the item and mark it almost-out.
+  // Swipe left: send the item back to its home list without interrupting. Only
+  // when it has no usable home do we ask which list.
   const onAddToList = (item: ItemStat) => {
     haptics.snap();
+    if (addToHomeList(item.display, item.category)) {
+      markAlmostOut(item.key);
+      haptics.success();
+      return;
+    }
     setPendingAdd(item);
   };
 
@@ -119,16 +125,7 @@ export default function PantryScreen() {
     const item = pendingAdd;
     setPendingAdd(null);
     if (!item) return;
-    const target = lists.find((l) => l.id === listId);
-    const already = target?.items.some((it) => normalizeKey(it.name) === item.key);
-    if (!already) {
-      addParsedItem(listId, {
-        name: item.display,
-        category: item.category,
-        quantity: null,
-        unit: null,
-      });
-    }
+    addToChosenList(listId, item.display, item.category);
     markAlmostOut(item.key);
     haptics.success();
   };

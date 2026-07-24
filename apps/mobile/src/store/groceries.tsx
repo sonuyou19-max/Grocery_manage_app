@@ -13,7 +13,9 @@ import {
 import type { ItemCategory, ParsedItem } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
+import { forgetHomeList, rememberItemList } from '@/lib/item-home-list';
 import { recallItemDetails } from '@/lib/item-memory';
+import { normalizeKey } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { uuidv4 } from '@/lib/uuid';
@@ -59,6 +61,15 @@ export interface List {
   items: Item[];
 }
 
+/**
+ * What `addOrReviveItem` did:
+ * - `added`   — it wasn't on the list, so a fresh row was created.
+ * - `revived` — it was there but ticked off from a previous shop; un-ticked
+ *               back to "to buy" rather than adding a confusing duplicate.
+ * - `already` — it was already on the list unticked; nothing to do.
+ */
+export type AddOutcome = 'added' | 'revived' | 'already';
+
 interface GroceriesContext {
   lists: List[];
   addList: (name: string) => string;
@@ -67,6 +78,15 @@ interface GroceriesContext {
   addItem: (listId: string, name: string) => string;
   /** Add an already-structured item (from AI quick-add) without re-categorizing. */
   addParsedItem: (listId: string, item: ParsedItem) => void;
+  /**
+   * Put an item on a list, accounting for one already being there.
+   *
+   * Checking an item off never removes it, so a bought item lingers as a ticked
+   * row — and that ticked row is exactly what a plain "is it already here?"
+   * guard used to match, silently skipping the add and leaving the user staring
+   * at last week's ticked item. This branches on the row's state instead.
+   */
+  addOrReviveItem: (listId: string, item: ParsedItem) => AddOutcome;
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
   deleteItem: (listId: string, itemId: string) => void;
@@ -152,6 +172,38 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
     );
   }, []);
 
+  const setChecked = useCallback((listId: string, itemId: string, checked: boolean) => {
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId
+          ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, checked } : it)) }
+          : l,
+      ),
+    );
+  }, []);
+
+  /**
+   * Insert a structured item. Shared by quick-add and the pantry/vibe adds so
+   * they enrich and remember identically.
+   */
+  const insertParsed = useCallback((listId: string, p: ParsedItem) => {
+    // The AI sets quantity/unit from the sentence; fall back to remembered
+    // usuals for anything it left blank, and always prefill the usual store
+    // (which the AI never parses).
+    const usual = recallItemDetails(p.name);
+    const opts = {
+      quantity: p.quantity ?? usual?.quantity ?? null,
+      unit: p.unit ?? usual?.unit ?? null,
+      store: usual?.store ?? null,
+    };
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId ? { ...l, items: [...l.items, newItem(p.name, p.category, opts)] } : l,
+      ),
+    );
+    rememberItemList(p.name, listId);
+  }, []);
+
   const value = useMemo<GroceriesContext>(
     () => ({
       lists,
@@ -160,7 +212,10 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
         return id;
       },
-      deleteList: (listId) => setLists((prev) => prev.filter((l) => l.id !== listId)),
+      deleteList: (listId) => {
+        setLists((prev) => prev.filter((l) => l.id !== listId));
+        forgetHomeList(listId);
+      },
       reorderLists: (orderedIds) => {
         setLists((prev) => {
           const rank = new Map(orderedIds.map((id, i) => [id, i]));
@@ -181,6 +236,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
             l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category, usual), id }] } : l,
           ),
         );
+        rememberItemList(clean, listId);
         if (category === 'other' && !isKnown(clean)) {
           resolveCategoryAsync(clean).then((res) => {
             if (!res || res.category === 'other') return;
@@ -190,26 +246,25 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         }
         return id;
       },
-      addParsedItem: (listId, p) => {
-        // The AI sets quantity/unit from the sentence; fall back to remembered
-        // usuals for anything it left blank, and always prefill the usual store
-        // (which the AI never parses).
-        const usual = recallItemDetails(p.name);
-        const opts = {
-          quantity: p.quantity ?? usual?.quantity ?? null,
-          unit: p.unit ?? usual?.unit ?? null,
-          store: usual?.store ?? null,
-        };
-        setLists((prev) =>
-          prev.map((l) =>
-            l.id === listId
-              ? {
-                  ...l,
-                  items: [...l.items, newItem(p.name, p.category, opts)],
-                }
-              : l,
-          ),
-        );
+      addParsedItem: (listId, p) => insertParsed(listId, p),
+      addOrReviveItem: (listId, p) => {
+        const key = normalizeKey(p.name);
+        const existing = lists
+          .find((l) => l.id === listId)
+          ?.items.find((it) => normalizeKey(it.name) === key);
+        if (existing) {
+          // Already waiting to be bought — adding again would just duplicate it.
+          if (!existing.checked) {
+            rememberItemList(p.name, listId);
+            return 'already';
+          }
+          // Ticked off from a previous shop: bring that row back to "to buy".
+          setChecked(listId, existing.id, false);
+          rememberItemList(p.name, listId);
+          return 'revived';
+        }
+        insertParsed(listId, p);
+        return 'added';
       },
       toggleItem: (listId, itemId) =>
         setLists((prev) =>
@@ -231,7 +286,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
           prev.map((l) => (l.id === listId ? { ...l, items: l.items.filter((it) => it.id !== itemId) } : l)),
         ),
     }),
-    [lists, patchItem],
+    [lists, patchItem, setChecked, insertParsed],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -353,6 +408,16 @@ function CloudGroceriesProvider({
     );
   }, []);
 
+  const setCheckedLocal = useCallback((listId: string, itemId: string, checked: boolean) => {
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId
+          ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, checked } : it)) }
+          : l,
+      ),
+    );
+  }, []);
+
   const value = useMemo<GroceriesContext>(() => {
     const dbPatch = (patch: ItemPatch): Record<string, unknown> => {
       const db: Record<string, unknown> = {};
@@ -363,6 +428,49 @@ function CloudGroceriesProvider({
       if (patch.priceCents !== undefined) db.price_cents = patch.priceCents;
       if (patch.store !== undefined) db.store = patch.store;
       return db;
+    };
+
+    /**
+     * Insert a structured item (optimistic row + persisted insert). Shared by
+     * quick-add and the pantry/vibe adds so they enrich and remember alike.
+     */
+    const insertParsed = (listId: string, p: ParsedItem) => {
+      const id = uuidv4();
+      // AI sets quantity/unit; fall back to remembered usuals for blanks and
+      // always prefill the usual store (the AI never parses it).
+      const usual = recallItemDetails(p.name);
+      const quantity = p.quantity ?? usual?.quantity ?? null;
+      const unit = p.unit ?? usual?.unit ?? null;
+      const store = usual?.store ?? null;
+      setLists((prev) =>
+        prev.map((l) =>
+          l.id === listId
+            ? {
+                ...l,
+                items: [
+                  ...l.items,
+                  { ...newItem(p.name, p.category, { quantity, unit, store }), id },
+                ],
+              }
+            : l,
+        ),
+      );
+      supabase
+        .from('list_items')
+        .insert({
+          id,
+          list_id: listId,
+          name: p.name,
+          category: p.category,
+          quantity,
+          unit,
+          store,
+          added_by: user?.id ?? null,
+        })
+        .then(({ error }) => {
+          if (error) scheduleRefetch();
+        });
+      rememberItemList(p.name, listId);
     };
 
     return {
@@ -380,6 +488,7 @@ function CloudGroceriesProvider({
       },
       deleteList: (listId) => {
         setLists((prev) => prev.filter((l) => l.id !== listId));
+        forgetHomeList(listId);
         supabase
           .from('shopping_lists')
           .delete()
@@ -429,6 +538,7 @@ function CloudGroceriesProvider({
           .then(({ error }) => {
             if (error) scheduleRefetch();
           });
+        rememberItemList(clean, listId);
         if (category === 'other' && !isKnown(clean)) {
           resolveCategoryAsync(clean).then((res) => {
             if (!res || res.category === 'other') return;
@@ -439,42 +549,32 @@ function CloudGroceriesProvider({
         }
         return id;
       },
-      addParsedItem: (listId, p) => {
-        const id = uuidv4();
-        // AI sets quantity/unit; fall back to remembered usuals for blanks and
-        // always prefill the usual store (the AI never parses it).
-        const usual = recallItemDetails(p.name);
-        const quantity = p.quantity ?? usual?.quantity ?? null;
-        const unit = p.unit ?? usual?.unit ?? null;
-        const store = usual?.store ?? null;
-        setLists((prev) =>
-          prev.map((l) =>
-            l.id === listId
-              ? {
-                  ...l,
-                  items: [
-                    ...l.items,
-                    { ...newItem(p.name, p.category, { quantity, unit, store }), id },
-                  ],
-                }
-              : l,
-          ),
-        );
-        supabase
-          .from('list_items')
-          .insert({
-            id,
-            list_id: listId,
-            name: p.name,
-            category: p.category,
-            quantity,
-            unit,
-            store,
-            added_by: user?.id ?? null,
-          })
-          .then(({ error }) => {
-            if (error) scheduleRefetch();
-          });
+      addParsedItem: (listId, p) => insertParsed(listId, p),
+      addOrReviveItem: (listId, p) => {
+        const key = normalizeKey(p.name);
+        const existing = lists
+          .find((l) => l.id === listId)
+          ?.items.find((it) => normalizeKey(it.name) === key);
+        if (existing) {
+          // Already waiting to be bought — adding again would just duplicate it.
+          if (!existing.checked) {
+            rememberItemList(p.name, listId);
+            return 'already';
+          }
+          // Ticked off from a previous shop: bring that row back to "to buy".
+          setCheckedLocal(listId, existing.id, false);
+          supabase
+            .from('list_items')
+            .update({ checked: false })
+            .eq('id', existing.id)
+            .then(({ error }) => {
+              if (error) scheduleRefetch();
+            });
+          rememberItemList(p.name, listId);
+          return 'revived';
+        }
+        insertParsed(listId, p);
+        return 'added';
       },
       toggleItem: (listId, itemId) => {
         const current = lists
@@ -517,7 +617,7 @@ function CloudGroceriesProvider({
           });
       },
     };
-  }, [lists, householdId, user, patchLocalItem, scheduleRefetch]);
+  }, [lists, householdId, user, patchLocalItem, setCheckedLocal, scheduleRefetch]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -326,9 +326,14 @@ export function useVibeDeck(): { deck: DeckCard[]; count: number } {
   const { lists } = useGroceries();
 
   return useMemo(() => {
+    // Only items still waiting to be bought suppress a card. A ticked item is
+    // one you already bought — it stays on the list as a checked row, and
+    // treating that as "queued" would hide it from the deck forever.
     const excludeKeys = new Set<string>();
     for (const list of lists) {
-      for (const item of list.items) excludeKeys.add(normalizeKey(item.name));
+      for (const item of list.items) {
+        if (!item.checked) excludeKeys.add(normalizeKey(item.name));
+      }
     }
     const deck = buildDeck(stats, excludeKeys, Date.now());
     return { deck, count: deck.length };

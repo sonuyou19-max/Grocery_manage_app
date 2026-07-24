@@ -12,7 +12,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import { ToastProvider } from '@/components/toast';
 import { hydrateCategoryCache } from '@/lib/categorize';
+import { hydrateItemHomeLists } from '@/lib/item-home-list';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring } from '@/lib/monitoring';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
@@ -53,11 +55,12 @@ export default function RootLayout() {
   useEffect(() => {
     // Start crash/error reporting (no-op until a Sentry DSN is configured).
     initMonitoring();
-    // Load learned item→category mappings, remembered store preferences, and
-    // per-item usual quantity/unit/store.
+    // Load learned item→category mappings, remembered store preferences,
+    // per-item usual quantity/unit/store, and each item's home list.
     void hydrateCategoryCache();
     void hydrateStorePrefs();
     void hydrateItemMemory();
+    void hydrateItemHomeLists();
   }, []);
 
   return (
@@ -66,6 +69,7 @@ export default function RootLayout() {
       <ErrorBoundary>
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
         <LocaleProvider>
+        <ToastProvider>
         <AuthProvider>
           <HouseholdProvider>
             <GroceriesProvider>
@@ -94,6 +98,7 @@ export default function RootLayout() {
             </GroceriesProvider>
           </HouseholdProvider>
         </AuthProvider>
+        </ToastProvider>
         </LocaleProvider>
       </ThemeProvider>
       </ErrorBoundary>

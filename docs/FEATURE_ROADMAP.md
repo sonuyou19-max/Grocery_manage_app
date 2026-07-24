@@ -111,7 +111,34 @@ in Settings.
   pre-select the device language. Category *keywords* stay English but the AI
   categorizer already handles other languages, so items still classify.
 
-## Deferred fixes (awaiting user go-ahead — do NOT start until asked)
+## Deferred fixes — ✅ all three shipped (not yet device-verified)
+
+Implemented as agreed; the original specs are kept below for reference.
+
+1. **Revive instead of skip.** `addOrReviveItem` on the groceries store (both
+   the local and cloud providers) branches on the existing row: unchecked →
+   leave it, checked → un-tick it back to "to buy", absent → add fresh. The old
+   "is the name already here?" guard that silently skipped the add is gone from
+   both the Pantry swipe and the Vibe Check deck. Un-ticking goes through the
+   store, not the screens' check handler, so it never logs a purchase.
+2. **Checked items no longer suppress suggestions.** The same blind spot existed
+   in *three* places, all fixed: the weekly builder's `excludeKeys`
+   (`app/(tabs)/index.tsx`), `useVibeDeck` (`store/pantry-intel.tsx`), and the
+   deck's own `validKeys` (`app/vibe-check.tsx`). Only unchecked rows count as
+   "already queued".
+3. **Per-item home list.** `lib/item-home-list.ts` (AsyncStorage + in-memory +
+   hydrate at startup) maps normalized name → list id; every add path in both
+   providers records it, so last-add wins. `lib/use-home-list-add.ts` is the
+   shared routing used by both surfaces: home list still live → add silently +
+   toast; no home, deleted list, or local↔household id mismatch → the
+   ListPickerSheet, and the chosen list becomes the new home. `deleteList`
+   forgets the homes it owned. New `components/toast.tsx` (fade in/out, 2s,
+   replaces rather than stacks).
+   - The Vibe Check's global destination pill was removed: with per-item
+     routing a single "adding to X" chip would have been wrong.
+   - Weekly builder unchanged — it keeps its one-destination picker.
+
+## Original specs (for reference)
 
 - **Pantry "add to list" leaves a checked item / weekly builder under-suggests.**
   Root cause: checking an item off a list marks it `checked` but never removes

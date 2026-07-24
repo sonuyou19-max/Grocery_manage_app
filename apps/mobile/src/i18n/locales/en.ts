@@ -295,16 +295,13 @@ const en = {
     insightsBody:
       'See your basket balance, your staples, and a warm weekly recap of how you actually shop.',
   },
+  toast: {
+    addedTo: '%{item} added to %{list}',
+  },
   vibeCheck: {
     left: '%{count} left',
-    almostOut: 'Almost out',
-    addingTo: 'Adding to %{list}',
-    aNewList: 'a new list',
-    swipeHint: '← Almost out      Still good →',
+    swipeHint: '← Add to list      Still good →',
     toReview: '%{count} to review',
-    addLowTo: 'Add low items to',
-    newListPlaceholder: 'e.g. Restock run',
-    defaultListName: 'Shopping list',
     allSet: 'All Set.',
     allSetSub: 'Nice — that took ten seconds.',
     emptyTitle: 'Nothing to review',
