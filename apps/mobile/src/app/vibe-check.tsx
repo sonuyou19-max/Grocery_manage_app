@@ -33,6 +33,7 @@ import { radii, spacing, type, useTheme } from '@/theme';
  */
 export default function VibeCheckScreen() {
   const { colors } = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { deck } = useVibeDeck();
@@ -106,8 +107,8 @@ export default function VibeCheckScreen() {
       celebratedRef.current = true;
       setDone(true);
       if (cards.length > 0) haptics.success();
-      const t = setTimeout(() => router.back(), cards.length > 0 ? 1900 : 1500);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => router.back(), cards.length > 0 ? 1900 : 1500);
+      return () => clearTimeout(timer);
     }
   }, [remaining.length, cards.length]);
 
@@ -116,7 +117,7 @@ export default function VibeCheckScreen() {
     if (listedRef.current.has(card.key)) return;
     let listId = destRef.current;
     if (!listId) {
-      listId = addList('Shopping list');
+      listId = addList(t('vibeCheck.defaultListName'));
       setDestListId(listId);
     }
     addParsedItem(listId, { name: card.display, category: card.category, quantity: null, unit: null });
@@ -230,10 +231,10 @@ export default function VibeCheckScreen() {
             <Ionicons name="close" size={26} color="rgba(255,255,255,0.7)" />
           </Pressable>
           <View style={styles.headerMid}>
-            <Text style={[type.label, styles.headerTitle]}>Pantry Vibe Check</Text>
+            <Text style={[type.label, styles.headerTitle]}>{t('lists.vibeTitle')}</Text>
             {!done && remaining.length > 0 && (
               <Text style={styles.headerCount}>
-                {remaining.length} left
+                {t('vibeCheck.left', { count: remaining.length })}
               </Text>
             )}
           </View>
@@ -249,11 +250,15 @@ export default function VibeCheckScreen() {
               {/* Reveal icons sit behind the card */}
               <Animated.View style={[styles.revealIcon, leftIcon]} pointerEvents="none">
                 <Ionicons name="cart" size={64} color={colors.warn} />
-                <Text style={[styles.revealLabel, { color: colors.warn }]}>Almost out</Text>
+                <Text style={[styles.revealLabel, { color: colors.warn }]}>
+                  {t('vibeCheck.almostOut')}
+                </Text>
               </Animated.View>
               <Animated.View style={[styles.revealIcon, rightIcon]} pointerEvents="none">
                 <Ionicons name="checkmark-circle" size={64} color={colors.accent} />
-                <Text style={[styles.revealLabel, { color: colors.accent }]}>Still good</Text>
+                <Text style={[styles.revealLabel, { color: colors.accent }]}>
+                  {t('pantry.stillGood')}
+                </Text>
               </Animated.View>
 
               {/* Back cards for depth */}
@@ -275,14 +280,16 @@ export default function VibeCheckScreen() {
               <Pressable onPress={() => setPickerOpen(true)} style={styles.destPill}>
                 <Ionicons name="cart-outline" size={16} color="rgba(255,255,255,0.85)" />
                 <Text style={styles.destText} numberOfLines={1}>
-                  Adding to {destList ? destList.name : 'a new list'}
+                  {t('vibeCheck.addingTo', {
+                    list: destList ? destList.name : t('vibeCheck.aNewList'),
+                  })}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.6)" />
               </Pressable>
-              <Text style={styles.hint}>
-                ← Almost out{'      '}Still good →
+              <Text style={styles.hint}>{t('vibeCheck.swipeHint')}</Text>
+              <Text style={styles.remaining}>
+                {t('vibeCheck.toReview', { count: remaining.length })}
               </Text>
-              <Text style={styles.remaining}>{remaining.length} to review</Text>
             </View>
           </>
         )}
@@ -292,7 +299,7 @@ export default function VibeCheckScreen() {
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable style={styles.pickerBackdrop} onPress={() => setPickerOpen(false)}>
           <GlassView radius={radii.lg} style={styles.pickerCard}>
-            <Text style={[type.h2, { color: colors.ink }]}>Add low items to</Text>
+            <Text style={[type.h2, { color: colors.ink }]}>{t('vibeCheck.addLowTo')}</Text>
             <Pressable
               style={styles.pickerRow}
               onPress={() => {
@@ -301,7 +308,9 @@ export default function VibeCheckScreen() {
               }}
             >
               <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
-              <Text style={[type.body, { color: colors.accent, flex: 1 }]}>New list…</Text>
+              <Text style={[type.body, { color: colors.accent, flex: 1 }]}>
+                {t('lists.newListInline')}
+              </Text>
             </Pressable>
             {lists.map((l) => {
               const active = l.id === destList?.id;
@@ -331,9 +340,9 @@ export default function VibeCheckScreen() {
 
       <TextPromptModal
         visible={creatingList}
-        title="New list"
-        placeholder="e.g. Restock run"
-        confirmLabel="Create"
+        title={t('lists.newList')}
+        placeholder={t('vibeCheck.newListPlaceholder')}
+        confirmLabel={t('lists.create')}
         onCancel={() => setCreatingList(false)}
         onSubmit={(name) => {
           const id = addList(name);
@@ -381,6 +390,7 @@ function BackCard({ depth }: { depth: number }) {
 
 /** "All Set." glow + a light particle burst when the deck is cleared. */
 function Celebration({ empty }: { empty: boolean }) {
+  const t = useT();
   const glow = useSharedValue(0);
   useEffect(() => {
     glow.value = withTiming(1, { duration: 700 });
@@ -402,9 +412,11 @@ function Celebration({ empty }: { empty: boolean }) {
         </View>
       </Animated.View>
       {!empty && <Confetti />}
-      <Text style={[styles.allSet, { color: '#FFFFFF' }]}>{empty ? 'Nothing to review' : 'All Set.'}</Text>
+      <Text style={[styles.allSet, { color: '#FFFFFF' }]}>
+        {empty ? t('vibeCheck.emptyTitle') : t('vibeCheck.allSet')}
+      </Text>
       <Text style={styles.allSetSub}>
-        {empty ? 'Your pantry looks stocked.' : 'Nice — that took ten seconds.'}
+        {empty ? t('vibeCheck.emptySub') : t('vibeCheck.allSetSub')}
       </Text>
     </View>
   );

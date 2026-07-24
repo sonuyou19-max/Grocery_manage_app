@@ -55,6 +55,13 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     AsyncStorage.setItem(STORE_KEY, JSON.stringify({ region, language })).catch(() => {});
   }, []);
 
+  // Keep the engine's global locale in step with the active language, so code
+  // that can't read this context — notably the error boundary, which sits above
+  // the provider — still translates in the user's language via `i18n.t`.
+  useEffect(() => {
+    i18n.locale = state?.language ?? DEFAULT_LANGUAGE;
+  }, [state]);
+
   const value = useMemo<LocaleValue>(() => {
     const language = state?.language ?? DEFAULT_LANGUAGE;
     const region = state?.region ?? DEFAULT_REGION;

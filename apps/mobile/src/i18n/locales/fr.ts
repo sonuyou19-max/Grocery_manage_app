@@ -259,6 +259,51 @@ const fr = {
     title: 'La liste de cette semaine',
     subtitle:
       'Bientôt épuisés d’après la vitesse à laquelle tu les consommes. Décoche ce dont tu n’as pas besoin.',
+    recapThisWeek: 'Cette semaine',
+    recapWriting: 'Rédaction de ton récap…',
+    recapEmpty:
+      'Ajoute quelques articles et coches-en — j’écrirai ici ton premier récap de la semaine.',
+    recapError: 'Impossible d’écrire ton récap pour le moment. Touche actualiser pour réessayer.',
+  },
+  errorBoundary: {
+    title: 'Une erreur est survenue',
+    body: 'Korb a rencontré un problème inattendu. Tes listes sont en sécurité — réessayons.',
+    retry: 'Réessayer',
+  },
+  onboarding: {
+    skip: 'Passer',
+    next: 'Suivant',
+    getStarted: 'Commencer',
+    welcomeTitle: 'Bienvenue sur Korb',
+    welcomeBody:
+      'Ta liste de courses — sans le papier. Rapide à remplir, organisée toute seule et partagée avec toute la maison.',
+    addTitle: 'Ajoute à ta façon',
+    addBody:
+      'Note « lait, œufs, 2 avocats » d’un coup et Korb range chaque article par rayon et par magasin pour toi.',
+    syncTitle: 'Une liste, tout le monde synchro',
+    syncBody:
+      'Partage un foyer et tes listes se mettent à jour en direct sur chaque téléphone. Celui qui prend le lait, tout le monde le voit.',
+    vibeTitle: 'Point garde-manger',
+    vibeBody:
+      'Korb apprend à quelle vitesse tu épuises les choses et te propose un swipe de 10 secondes pour réapprovisionner — avant que ça manque.',
+    insightsTitle: 'Des analyses qui te comprennent',
+    insightsBody:
+      'Vois l’équilibre de ton panier, tes incontournables et un récap hebdo chaleureux de ta façon de faire les courses.',
+  },
+  vibeCheck: {
+    left: 'encore %{count}',
+    almostOut: 'Bientôt épuisé',
+    addingTo: 'Ajout à %{list}',
+    aNewList: 'une nouvelle liste',
+    swipeHint: '← Bientôt épuisé      Encore bon →',
+    toReview: '%{count} à vérifier',
+    addLowTo: 'Ajouter les articles bientôt épuisés à',
+    newListPlaceholder: 'ex. Réassort',
+    defaultListName: 'Liste de courses',
+    allSet: 'C’est fait.',
+    allSetSub: 'Parfait — ça a pris dix secondes.',
+    emptyTitle: 'Rien à vérifier',
+    emptySub: 'Ton garde-manger a l’air bien rempli.',
   },
   auth: {
     signInTitle: 'Se connecter',

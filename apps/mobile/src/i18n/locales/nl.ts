@@ -257,6 +257,51 @@ const nl = {
     title: 'Lijst van deze week',
     subtitle:
       'Voorspeld bijna op, op basis van hoe snel je ze opmaakt. Vink uit wat je niet nodig hebt.',
+    recapThisWeek: 'Deze week',
+    recapWriting: 'Je overzicht wordt geschreven…',
+    recapEmpty:
+      'Voeg wat items toe en vink er een paar af — ik schrijf hier je eerste weekoverzicht.',
+    recapError: 'Kon je overzicht nu niet schrijven. Tik op vernieuwen om het opnieuw te proberen.',
+  },
+  errorBoundary: {
+    title: 'Er ging iets mis',
+    body: 'Korb liep tegen een onverwacht probleem aan. Je lijsten zijn veilig — laten we het opnieuw proberen.',
+    retry: 'Opnieuw proberen',
+  },
+  onboarding: {
+    skip: 'Overslaan',
+    next: 'Volgende',
+    getStarted: 'Aan de slag',
+    welcomeTitle: 'Welkom bij Korb',
+    welcomeBody:
+      'Je boodschappenlijst — zonder papier. Snel toevoegen, vanzelf geordend en gedeeld met iedereen thuis.',
+    addTitle: 'Voeg toe op jouw manier',
+    addBody:
+      'Typ “melk, eieren, 2 avocado’s” in één keer en Korb sorteert elk item per schap en winkel voor je.',
+    syncTitle: 'Eén lijst, iedereen gelijk',
+    syncBody:
+      'Deel een huishouden en je lijsten worden live bijgewerkt op elke telefoon. Wie de melk pakt, iedereen ziet het.',
+    vibeTitle: 'Voorraadcheck',
+    vibeBody:
+      'Korb leert hoe snel je dingen opmaakt en geeft je een swipe van 10 seconden om aan te vullen — voordat je misgrijpt.',
+    insightsTitle: 'Inzichten die je snappen',
+    insightsBody:
+      'Zie je mandjebalans, je vaste producten en een warm weekoverzicht van hoe je echt winkelt.',
+  },
+  vibeCheck: {
+    left: 'nog %{count}',
+    almostOut: 'Bijna op',
+    addingTo: 'Toevoegen aan %{list}',
+    aNewList: 'een nieuwe lijst',
+    swipeHint: '← Bijna op      Nog goed →',
+    toReview: '%{count} te bekijken',
+    addLowTo: 'Voeg bijna-op-items toe aan',
+    newListPlaceholder: 'bijv. Aanvulronde',
+    defaultListName: 'Boodschappenlijst',
+    allSet: 'Helemaal klaar.',
+    allSetSub: 'Mooi — dat kostte tien seconden.',
+    emptyTitle: 'Niets te bekijken',
+    emptySub: 'Je voorraad ziet er goed uit.',
   },
   auth: {
     signInTitle: 'Aanmelden',

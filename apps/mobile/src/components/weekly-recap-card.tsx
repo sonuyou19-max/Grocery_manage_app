@@ -19,6 +19,7 @@ import {
 } from '@/lib/weekly-recap';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
+import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { spacing, type, useTheme } from '@/theme';
 
@@ -34,6 +35,7 @@ type Phase = 'empty' | 'loading' | 'ready' | 'error';
  */
 export function WeeklyRecapCard() {
   const { colors } = useTheme();
+  const t = useT();
   const appActive = useAppActive();
   const { lists } = useGroceries();
   const { stats } = usePantryIntel();
@@ -160,7 +162,9 @@ export function WeeklyRecapCard() {
     <Card accented>
       <View style={styles.head}>
         <Ionicons name="sparkles" size={20} color={colors.accent} />
-        <Text style={[type.body, styles.grow, { color: colors.ink }]}>This week</Text>
+        <Text style={[type.body, styles.grow, { color: colors.ink }]}>
+          {t('weekly.recapThisWeek')}
+        </Text>
         {phase === 'ready' || phase === 'error' ? (
           <Pressable onPress={() => void run(true)} hitSlop={10}>
             <Ionicons name="refresh-outline" size={18} color={colors.muted} />
@@ -171,21 +175,17 @@ export function WeeklyRecapCard() {
       {phase === 'loading' && (
         <View style={styles.loadingRow}>
           <ActivityIndicator color={colors.accent} />
-          <Text style={[type.sub, { color: colors.muted }]}>Writing your recap…</Text>
+          <Text style={[type.sub, { color: colors.muted }]}>{t('weekly.recapWriting')}</Text>
         </View>
       )}
       {phase === 'ready' && text && (
         <Text style={[type.bodyRegular, { color: colors.ink, lineHeight: 22 }]}>{text}</Text>
       )}
       {phase === 'empty' && (
-        <Text style={[type.sub, { color: colors.muted }]}>
-          Add a few items and tick some off — I’ll write your first weekly recap here.
-        </Text>
+        <Text style={[type.sub, { color: colors.muted }]}>{t('weekly.recapEmpty')}</Text>
       )}
       {phase === 'error' && (
-        <Text style={[type.sub, { color: colors.muted }]}>
-          Couldn’t write your recap just now. Tap refresh to try again.
-        </Text>
+        <Text style={[type.sub, { color: colors.muted }]}>{t('weekly.recapError')}</Text>
       )}
     </Card>
   );

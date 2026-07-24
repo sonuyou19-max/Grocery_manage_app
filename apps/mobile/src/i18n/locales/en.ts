@@ -265,6 +265,50 @@ const en = {
     title: "This week's list",
     subtitle:
       "Predicted low, based on how fast you get through them. Untick anything you don't need.",
+    recapThisWeek: 'This week',
+    recapWriting: 'Writing your recap…',
+    recapEmpty: 'Add a few items and tick some off — I’ll write your first weekly recap here.',
+    recapError: 'Couldn’t write your recap just now. Tap refresh to try again.',
+  },
+  errorBoundary: {
+    title: 'Something went wrong',
+    body: 'Korb hit an unexpected snag. Your lists are safe — let’s try that again.',
+    retry: 'Try again',
+  },
+  onboarding: {
+    skip: 'Skip',
+    next: 'Next',
+    getStarted: 'Get started',
+    welcomeTitle: 'Welcome to Korb',
+    welcomeBody:
+      'Your grocery list — minus the paper. Quick to add, organised on its own, and shared with everyone at home.',
+    addTitle: 'Add it your way',
+    addBody:
+      'Jot “milk, eggs, 2 avocados” in one go and Korb sorts each item by aisle and store for you.',
+    syncTitle: 'One list, everyone in sync',
+    syncBody:
+      'Share a household and your lists update live on every phone. Whoever grabs the milk, everyone sees it.',
+    vibeTitle: 'Pantry Vibe Check',
+    vibeBody:
+      'Korb learns how fast you run out of things and gives you a 10-second swipe to restock — before you’re caught short.',
+    insightsTitle: 'Insights that get you',
+    insightsBody:
+      'See your basket balance, your staples, and a warm weekly recap of how you actually shop.',
+  },
+  vibeCheck: {
+    left: '%{count} left',
+    almostOut: 'Almost out',
+    addingTo: 'Adding to %{list}',
+    aNewList: 'a new list',
+    swipeHint: '← Almost out      Still good →',
+    toReview: '%{count} to review',
+    addLowTo: 'Add low items to',
+    newListPlaceholder: 'e.g. Restock run',
+    defaultListName: 'Shopping list',
+    allSet: 'All Set.',
+    allSetSub: 'Nice — that took ten seconds.',
+    emptyTitle: 'Nothing to review',
+    emptySub: 'Your pantry looks stocked.',
   },
   auth: {
     signInTitle: 'Sign in',

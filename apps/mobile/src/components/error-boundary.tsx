@@ -2,10 +2,15 @@ import { Component, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MeshBackground } from '@/components/mesh-background';
+import { i18n } from '@/i18n';
 import { captureException } from '@/lib/monitoring';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-/** Friendly full-screen fallback shown when a render error is caught. */
+/**
+ * Friendly full-screen fallback shown when a render error is caught. This sits
+ * above the locale provider, so it can't read that context — it translates via
+ * the engine's global locale, which the provider keeps in sync.
+ */
 function ErrorFallback({ onReset }: { onReset: () => void }) {
   const { colors } = useTheme();
   return (
@@ -13,10 +18,10 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
       <MeshBackground />
       <View style={styles.body}>
         <Text style={[type.display, styles.title, { color: colors.ink }]}>
-          Something went wrong
+          {i18n.t('errorBoundary.title')}
         </Text>
         <Text style={[type.bodyRegular, styles.text, { color: colors.muted }]}>
-          Korb hit an unexpected snag. Your lists are safe — let’s try that again.
+          {i18n.t('errorBoundary.body')}
         </Text>
         <Pressable
           onPress={onReset}
@@ -25,7 +30,9 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
             { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <Text style={[type.body, { color: colors.accentInk }]}>Try again</Text>
+          <Text style={[type.body, { color: colors.accentInk }]}>
+            {i18n.t('errorBoundary.retry')}
+          </Text>
         </Pressable>
       </View>
     </View>

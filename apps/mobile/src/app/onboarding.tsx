@@ -17,47 +17,29 @@ import { GlassView } from '@/components/glass';
 import { MeshBackground } from '@/components/mesh-background';
 import { haptics } from '@/lib/haptics';
 import { markOnboardingSeen } from '@/lib/onboarding';
+import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 interface Slide {
+  /** Stable id + translation-key prefix (onboarding.<id>Title / <id>Body). */
+  id: string;
   icon: IconName;
-  title: string;
-  body: string;
 }
 
 /** The feature tour — one card per thing that makes Korb worth opening. */
 const SLIDES: Slide[] = [
-  {
-    icon: 'basket-outline',
-    title: 'Welcome to Korb',
-    body: 'Your grocery list — minus the paper. Quick to add, organised on its own, and shared with everyone at home.',
-  },
-  {
-    icon: 'sparkles-outline',
-    title: 'Add it your way',
-    body: 'Jot “milk, eggs, 2 avocados” in one go and Korb sorts each item by aisle and store for you.',
-  },
-  {
-    icon: 'people-outline',
-    title: 'One list, everyone in sync',
-    body: 'Share a household and your lists update live on every phone. Whoever grabs the milk, everyone sees it.',
-  },
-  {
-    icon: 'pulse-outline',
-    title: 'Pantry Vibe Check',
-    body: 'Korb learns how fast you run out of things and gives you a 10-second swipe to restock — before you’re caught short.',
-  },
-  {
-    icon: 'stats-chart-outline',
-    title: 'Insights that get you',
-    body: 'See your basket balance, your staples, and a warm weekly recap of how you actually shop.',
-  },
+  { id: 'welcome', icon: 'basket-outline' },
+  { id: 'add', icon: 'sparkles-outline' },
+  { id: 'sync', icon: 'people-outline' },
+  { id: 'vibe', icon: 'pulse-outline' },
+  { id: 'insights', icon: 'stats-chart-outline' },
 ];
 
 export default function OnboardingScreen() {
   const { colors } = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
@@ -100,7 +82,7 @@ export default function OnboardingScreen() {
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
         {!isLast ? (
           <Pressable onPress={finish} hitSlop={12} style={styles.skip}>
-            <Text style={[type.body, { color: colors.muted }]}>Skip</Text>
+            <Text style={[type.body, { color: colors.muted }]}>{t('onboarding.skip')}</Text>
           </Pressable>
         ) : (
           <View style={styles.skip} />
@@ -116,12 +98,16 @@ export default function OnboardingScreen() {
         style={styles.pager}
       >
         {SLIDES.map((slide) => (
-          <View key={slide.title} style={[styles.slide, { width }]}>
+          <View key={slide.id} style={[styles.slide, { width }]}>
             <GlassView accented radius={radii.pill} style={styles.iconWrap}>
               <Ionicons name={slide.icon} size={52} color={colors.accent} />
             </GlassView>
-            <Text style={[type.display, styles.title, { color: colors.ink }]}>{slide.title}</Text>
-            <Text style={[type.bodyRegular, styles.body, { color: colors.muted }]}>{slide.body}</Text>
+            <Text style={[type.display, styles.title, { color: colors.ink }]}>
+              {t(`onboarding.${slide.id}Title`)}
+            </Text>
+            <Text style={[type.bodyRegular, styles.body, { color: colors.muted }]}>
+              {t(`onboarding.${slide.id}Body`)}
+            </Text>
           </View>
         ))}
       </ScrollView>
@@ -130,7 +116,7 @@ export default function OnboardingScreen() {
         <View style={styles.dots}>
           {SLIDES.map((s, i) => (
             <View
-              key={s.title}
+              key={s.id}
               style={[
                 styles.dot,
                 i === index
@@ -149,7 +135,7 @@ export default function OnboardingScreen() {
           ]}
         >
           <Text style={[type.body, { color: colors.accentInk }]}>
-            {isLast ? 'Get started' : 'Next'}
+            {isLast ? t('onboarding.getStarted') : t('onboarding.next')}
           </Text>
         </Pressable>
       </View>
