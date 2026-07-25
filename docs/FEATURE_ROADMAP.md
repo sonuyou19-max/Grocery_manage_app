@@ -61,9 +61,16 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Wave 1 — ✅ complete** (test all three in one build): #3 per-item memory,
   #1 pantry swipe rows, #4a store price intelligence.
 - **Wave 2 — ✅ complete:** #2 weekly-list builder, #6 shopping mode.
+- **Proposed pivot — per-list access + event-sourced pantry.** Replaces
+  household-scoped sharing with per-list ACLs, and derives the pantry by folding
+  an append-only event log instead of storing it. Design in
+  `PER_LIST_ACCESS_DESIGN.md`. Recommended **before** launch and **before**
+  Wave 3 — it resets learned intervals (fine now, not with real users) and
+  Wave 3 needs to know its scope. Absorbs #4b's purchase log; renumbers the
+  Wave 3 migrations to `0014+`.
 - **Wave 3 — next (backend):** #4b price history (purchase-log migration),
   #7a recurring-staple cadence, #5 live household shopping. Needs migrations
-  `0012+` and RLS.
+  `0012+` and RLS — or `0014+` if the pivot above lands first.
 - **i18n — ✅ complete, not yet verified on a real build.** Six languages, the
   localized recap, and the layout pass have all passed typecheck + Android
   bundle, but none of it has been seen on a device yet.
