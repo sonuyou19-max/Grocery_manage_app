@@ -198,6 +198,7 @@ const it = {
     priced: 'Con prezzo',
     pricedOf: '%{count} su %{total}',
     addPriceHint: 'Aggiungi un prezzo a un articolo per monitorare le spese — facoltativo.',
+    usuallyDue: 'Compri di solito',
     emptyItems: 'Ancora nulla qui — aggiungi il tuo primo articolo qui sotto.',
     addItem: 'Aggiungi un articolo…',
     delete: 'Elimina',

@@ -206,6 +206,7 @@ const en = {
     priced: 'Priced',
     pricedOf: '%{count} of %{total}',
     addPriceHint: 'Add a price to any item to track spend — optional.',
+    usuallyDue: 'You usually buy',
     emptyItems: 'Nothing here yet — add your first item below.',
     addItem: 'Add an item…',
     delete: 'Delete',

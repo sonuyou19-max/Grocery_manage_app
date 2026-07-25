@@ -197,6 +197,7 @@ const nl = {
     priced: 'Met prijs',
     pricedOf: '%{count} van %{total}',
     addPriceHint: 'Voeg een prijs toe aan een item om uitgaven bij te houden — optioneel.',
+    usuallyDue: 'Je koopt hier vaak',
     emptyItems: 'Nog niets hier — voeg hieronder je eerste item toe.',
     addItem: 'Voeg een item toe…',
     delete: 'Verwijderen',

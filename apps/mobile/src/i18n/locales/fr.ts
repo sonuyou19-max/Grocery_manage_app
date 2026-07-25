@@ -198,6 +198,7 @@ const fr = {
     priced: 'Avec prix',
     pricedOf: '%{count} sur %{total}',
     addPriceHint: 'Ajoute un prix à un article pour suivre tes dépenses — optionnel.',
+    usuallyDue: 'Tu achètes souvent',
     emptyItems: 'Rien ici pour l’instant — ajoute ton premier article ci-dessous.',
     addItem: 'Ajouter un article…',
     delete: 'Supprimer',

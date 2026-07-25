@@ -10,6 +10,7 @@ import { Fab } from '@/components/fab';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
+import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
 import { WeeklyListSheet } from '@/components/weekly-list-sheet';
 import { hasSeenOnboarding } from '@/lib/onboarding';
 import { normalizeKey } from '@/lib/pantry-intel';
@@ -76,6 +77,14 @@ export default function ListsScreen() {
       if (!seen) router.push('/onboarding');
     });
   }, []);
+
+  // Who can see these lists. Household-wide for now, so every card shows the
+  // same faces; once lists carry their own membership (see
+  // docs/PER_LIST_ACCESS_DESIGN.md) this becomes per-list.
+  const listMembers = useMemo<AvatarMember[]>(
+    () => members.map((m) => ({ id: m.user_id, displayName: m.display_name })),
+    [members],
+  );
 
   // First name from the household display name the user chose, when available.
   const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
@@ -202,7 +211,12 @@ export default function ListsScreen() {
               <EditList lists={lists} onDelete={deleteList} onReorder={reorderLists} />
             ) : (
               lists.map((l) => (
-                <ListCard key={l.id} list={l} onLongPress={() => setEditing(true)} />
+                <ListCard
+                  key={l.id}
+                  list={l}
+                  members={listMembers}
+                  onLongPress={() => setEditing(true)}
+                />
               ))
             )}
           </>
@@ -234,7 +248,15 @@ export default function ListsScreen() {
   );
 }
 
-function ListCard({ list, onLongPress }: { list: List; onLongPress: () => void }) {
+function ListCard({
+  list,
+  members,
+  onLongPress,
+}: {
+  list: List;
+  members: AvatarMember[];
+  onLongPress: () => void;
+}) {
   const { colors } = useTheme();
   const { t, money } = useLocale();
   const checked = list.items.filter((it) => it.checked).length;
@@ -270,6 +292,9 @@ function ListCard({ list, onLongPress }: { list: List; onLongPress: () => void }
             />
           </View>
         )}
+        {/* Who this list is shared with. Renders nothing when you're on your
+            own, so solo users see no change. */}
+        <MemberAvatars members={members} />
       </Card>
     </Pressable>
   );

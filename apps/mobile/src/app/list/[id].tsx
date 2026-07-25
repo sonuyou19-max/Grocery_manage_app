@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/glass';
 import { ItemSheet } from '@/components/item-sheet';
+import { ListPantryStrip } from '@/components/list-pantry-strip';
 import { MeshBackground } from '@/components/mesh-background';
 import { QuickAddSheet } from '@/components/quick-add-sheet';
 import { SupermarketBadge } from '@/components/supermarket-badge';
@@ -309,6 +310,10 @@ export default function ListDetailScreen() {
           </Text>
         )}
       </GlassView>
+
+      {/* Pantry, surfaced where you'd act on it: things you usually buy on this
+          list that are due. A view over the one pantry, not a per-list copy. */}
+      <ListPantryStrip list={list} />
 
       {/* Items */}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.list}>

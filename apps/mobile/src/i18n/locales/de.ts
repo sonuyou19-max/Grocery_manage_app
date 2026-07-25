@@ -199,6 +199,7 @@ const de = {
     priced: 'Mit Preis',
     pricedOf: '%{count} von %{total}',
     addPriceHint: 'Gib einem Artikel einen Preis, um Ausgaben zu verfolgen — optional.',
+    usuallyDue: 'Kaufst du hier meist',
     emptyItems: 'Hier ist noch nichts — füge unten deinen ersten Artikel hinzu.',
     addItem: 'Artikel hinzufügen…',
     delete: 'Löschen',

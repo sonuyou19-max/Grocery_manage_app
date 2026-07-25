@@ -242,6 +242,7 @@ const pl = {
     priced: 'Z ceną',
     pricedOf: '%{count} z %{total}',
     addPriceHint: 'Dodaj cenę do produktu, aby śledzić wydatki — opcjonalne.',
+    usuallyDue: 'Zwykle tu kupujesz',
     emptyItems: 'Jeszcze nic tu nie ma — dodaj poniżej swój pierwszy produkt.',
     addItem: 'Dodaj produkt…',
     delete: 'Usuń',
