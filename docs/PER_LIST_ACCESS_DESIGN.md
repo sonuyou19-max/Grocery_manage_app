@@ -1,8 +1,32 @@
 # Design — Per-list access + event-sourced pantry
 
-Status: **proposed**, not implemented. Supersedes the household-scoped sharing
-model. Read alongside `FEATURE_ROADMAP.md`, whose Wave 3 migration numbers this
-document shifts.
+> **Status: REJECTED.** Superseded by `MULTI_HOUSEHOLD_DESIGN.md`, which lets a
+> user belong to several households and scopes everything to the active one.
+> Kept for the reasoning, not as a plan.
+>
+> **Why it was rejected.** It solved sharing at per-list granularity, but to keep
+> one pantry coherent across differently-permissioned lists it needed
+> viewer-scoped folding and a snapshotted viewers table — machinery that exists
+> only because the permission boundary and the kitchen boundary had been forced
+> apart. Multiple households collapse them back together: a household *is* a
+> kitchen, so the pantry is simply scoped to it, and lists stay free to be
+> errands within it. That needs no new tables, no event log, and no migration.
+>
+> **What is still worth keeping from this document:**
+> - The additivity argument (money sums, burn-rate does not) — it is why a
+>   *per-list* pantry is wrong, and it is what ruled that option out.
+> - The `SECURITY DEFINER` recursion note, if per-row ACLs are ever revisited.
+> - The observation that `0001` shipped `consumption_events` and `price_entries`
+>   which the client has never referenced. Wave 3's `#4b` should either use them
+>   or drop them.
+> - Invite codes over email lookup, to avoid account enumeration.
+
+Original document follows.
+
+---
+
+Status: proposed. Supersedes the household-scoped sharing model. Read alongside
+`FEATURE_ROADMAP.md`, whose Wave 3 migration numbers this document shifts.
 
 ## Why
 
