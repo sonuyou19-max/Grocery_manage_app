@@ -172,6 +172,84 @@ New strings for the switcher and the multi-household Settings section, plus a
 plural for "%{count} households". All six locales must stay at parity
 (`pnpm --filter mobile check:locales`).
 
+## Settings layout
+
+Today's five sections are `Account · Household · Appearance · Region & language ·
+Legal` (plus a `__DEV__` block). Only the second changes shape; the rest are
+user-level and stay exactly as they are.
+
+```
+Settings
+Account · households · preferences
+
+ACCOUNT
+┌──────────────────────────────────────────┐
+│ 👤  sonu@example.com                     │
+│     Signed in                  Sign out  │
+│ ─────────────────────────────────────────│
+│ ✏️  Your name                      Sonu ›│   ← new; one name, everywhere
+│ ─────────────────────────────────────────│
+│ 🗑  Delete account                       │
+│     Permanently remove your account…     │
+└──────────────────────────────────────────┘
+
+HOUSEHOLDS
+┌──────────────────────────────────────────┐
+│ 🏠  Home                        ACTIVE  ›│
+│     2 members                            │
+│ ─────────────────────────────────────────│
+│ 🏢  Office                              ›│
+│     3 members                            │
+│ ─────────────────────────────────────────│
+│ ➕  Add a household                      │
+│     Create one or join with a code.      │
+└──────────────────────────────────────────┘
+
+APPEARANCE / REGION & LANGUAGE / LEGAL      ← unchanged
+```
+
+**Why rows rather than expanded cards.** The current single-household card already
+carries name + every member + invite + leave. Repeating that inline for three
+households makes Settings unscannable, so each household becomes one row that
+opens its own screen — the same pattern lists already use.
+
+### New screen: `/household/[id]`
+
+```
+‹ Back                        Home
+
+🏠  Home                              ✏️     ← rename (owner only)
+    Invite code · 7QK2XM
+
+    ✓ Active household                       ← or: "Switch to this household"
+
+MEMBERS
+┌──────────────────────────────────────────┐
+│ (SO) Sonu (you)                    Owner │
+│ (AP) Anna P.                          ⊖  │   ← remove (owner only)
+└──────────────────────────────────────────┘
+
+┌──────────────────────────────────────────┐
+│ 📤  Invite someone                      ›│
+│ 🚪  Leave household                      │
+└──────────────────────────────────────────┘
+```
+
+Everything here already exists in today's Settings household card — it is lifted
+out and scoped to one household, with `useHousehold()` calls taking an id rather
+than assuming the single active one.
+
+### Details worth fixing in advance
+
+- **Switching** is primarily the dashboard dropdown. This screen offers it too as
+  a secondary path, so a household reached from Settings isn't a dead end.
+- **"Your name"** only appears once the user is in at least one household, because
+  that is where the name is stored. Signed in with none → no row, and the join
+  form asks for it that first time.
+- **Leaving the active household** must pick a new active one (first remaining) or
+  fall back to local lists if it was the last.
+- **`screenSubtitle`** becomes "Account · households · preferences" — plural.
+
 ## Tradeoff to accept
 
 You cannot share a *single list* without sharing the household around it. A
