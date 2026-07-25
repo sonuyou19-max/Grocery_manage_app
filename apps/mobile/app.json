@@ -35,6 +35,14 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "locales": {
+      "de": "./locales/de.json",
+      "es": "./locales/es.json",
+      "fr": "./locales/fr.json",
+      "it": "./locales/it.json",
+      "nl": "./locales/nl.json",
+      "pl": "./locales/pl.json"
+    },
     "plugins": [
       "expo-router",
       [
@@ -43,6 +51,19 @@
           "backgroundColor": "#2E7442",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Korb uses the camera to read the barcode on your loyalty card. The image is never saved or uploaded.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Korb needs access to your photos so you can add a loyalty card from a screenshot."
         }
       ],
       "@sentry/react-native"

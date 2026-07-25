@@ -1,0 +1,4 @@
+{
+  "NSCameraUsageDescription": "Korb używa kamery, aby odczytać kod kreskowy z Twojej karty lojalnościowej. Zdjęcie nigdy nie jest zapisywane ani wysyłane.",
+  "NSPhotoLibraryUsageDescription": "Korb potrzebuje dostępu do Twoich zdjęć, aby umożliwić dodanie karty lojalnościowej ze zrzutu ekranu."
+}

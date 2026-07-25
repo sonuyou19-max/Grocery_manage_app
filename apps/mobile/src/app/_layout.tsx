@@ -81,6 +81,8 @@ export default function RootLayout() {
                     name="shop/[id]"
                     options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
                   />
+                  <Stack.Screen name="cards/index" />
+                  <Stack.Screen name="cards/add" />
                   <Stack.Screen name="legal" options={{ presentation: 'modal' }} />
                   <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
                   <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />

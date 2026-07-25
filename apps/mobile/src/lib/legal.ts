@@ -43,6 +43,12 @@ When you sign in to sync and share, we process:
 
 We do not collect your contacts, precise location, advertising identifiers, or payment card details, and we do not sell your data or use it for advertising.
 
+## Store cards stay on your device
+
+If you add supermarket loyalty cards, the card number and the shop it belongs to are stored **only on your phone**. They are never sent to us or to any other service, and they are not shared with other members of your household — even members who share the device, because cards are kept separately for each signed-in account. Deleting a card, or deleting your account, removes them from the phone.
+
+The camera is used only to read the barcode at the moment you add a card. No photo is stored or uploaded; only the decoded number is kept. Granting access to your photo library, if you choose to add a card from a screenshot, likewise only reads the image to decode it.
+
 ## How we use your data
 
 - To provide the service — store and sync your lists and manage households.

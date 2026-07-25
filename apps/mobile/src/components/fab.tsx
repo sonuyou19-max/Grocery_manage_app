@@ -16,13 +16,20 @@ interface FabProps {
   label: string;
   icon?: IoniconName;
   onPress: () => void;
+  /**
+   * Clear the floating tab bar. True on tab screens; set false on pushed
+   * routes (which have no tab bar) so the Fab doesn't hover in empty space.
+   */
+  aboveTabBar?: boolean;
 }
 
 /** Floating primary action, bottom-right, hovering above the floating tab bar. */
-export function Fab({ label, icon = 'add', onPress }: FabProps) {
+export function Fab({ label, icon = 'add', onPress, aboveTabBar = true }: FabProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const bottom = insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + spacing.md;
+  const bottom = aboveTabBar
+    ? insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + spacing.md
+    : insets.bottom + spacing.lg;
   return (
     <Pressable
       onPress={onPress}

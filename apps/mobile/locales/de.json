@@ -1,0 +1,4 @@
+{
+  "NSCameraUsageDescription": "Korb nutzt die Kamera, um den Barcode auf deiner Kundenkarte zu lesen. Das Bild wird nie gespeichert oder hochgeladen.",
+  "NSPhotoLibraryUsageDescription": "Korb braucht Zugriff auf deine Fotos, damit du eine Kundenkarte aus einem Screenshot hinzufügen kannst."
+}

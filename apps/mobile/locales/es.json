@@ -1,0 +1,4 @@
+{
+  "NSCameraUsageDescription": "Korb usa la cámara para leer el código de barras de tu tarjeta de fidelidad. La imagen nunca se guarda ni se sube.",
+  "NSPhotoLibraryUsageDescription": "Korb necesita acceso a tus fotos para que puedas añadir una tarjeta de fidelidad desde una captura de pantalla."
+}

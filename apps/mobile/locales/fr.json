@@ -1,0 +1,4 @@
+{
+  "NSCameraUsageDescription": "Korb utilise l’appareil photo pour lire le code-barres de ta carte de fidélité. L’image n’est jamais enregistrée ni envoyée.",
+  "NSPhotoLibraryUsageDescription": "Korb a besoin d’accéder à tes photos pour que tu puisses ajouter une carte de fidélité depuis une capture d’écran."
+}

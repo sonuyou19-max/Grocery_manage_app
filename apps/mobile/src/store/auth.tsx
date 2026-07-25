@@ -8,6 +8,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 
+import { wipeLoyaltyCards } from '@/lib/loyalty-cards';
 import { supabase } from '@/lib/supabase';
 import { useT } from '@/store/locale';
 
@@ -137,9 +138,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await supabase.auth.signOut();
       },
       deleteAccount: async () => {
+        // Grab the id before anything signs us out — it's the key the local
+        // loyalty cards are filed under, and the session is gone afterwards.
+        const deletedUserId = session?.user.id ?? null;
         try {
           const { error } = await supabase.rpc('delete_account');
           if (error) return { error: cleanError(error, t('authError.deleteFailed'), t) };
+          // Loyalty cards live only on this device, so the server-side delete
+          // can't reach them — clear them here or they'd outlive the account.
+          await wipeLoyaltyCards(deletedUserId);
           // The account is gone; drop the now-invalid session locally.
           await supabase.auth.signOut();
           return {};

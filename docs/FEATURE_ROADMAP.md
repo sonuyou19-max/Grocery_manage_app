@@ -146,6 +146,47 @@ Implemented as agreed; the original specs are kept below for reference.
      routing a single "adding to X" chip would have been wrong.
    - Weekly builder unchanged — it keeps its one-destination picker.
 
+## Loyalty cards — ✅ shipped (not yet device-verified)
+
+A wallet icon on the dashboard opens a stack of the user's supermarket cards.
+Adding one asks **which shop first**, then offers live camera scan, screenshot
+import, or manual entry, and finishes on a confirm step showing the re-drawn
+code beside the number.
+
+The decisions worth remembering:
+
+- **Store the number, not the photo.** A photograph of a card fails at the till
+  often enough to be embarrassing — glare, crop, focus, screen dimming. We decode
+  to `{symbology, value}` and re-draw the barcode ourselves as vectors, which is
+  full-contrast and sharp at any size, with the number printed underneath so a
+  cashier can key it in if the scanner still refuses. `lib/barcode.ts` is a pure
+  encoder (EAN-13/8, UPC-A, Code 128, ITF); QR goes through
+  `react-native-qrcode-svg`.
+- **Device-only, per user.** Never synced to Supabase, and keyed by user id so a
+  partner sharing the same phone and household cannot see them. Enforced rather
+  than intended: one storage key per scope (another user's cards are never read
+  into memory), the scope is an explicit argument instead of module state, reads
+  are gated on the loaded scope matching the requested one, and `undefined`
+  means "auth not resolved yet" so the launch-time race can't file a card under
+  the wrong bucket. `wipeLoyaltyCards` runs on account deletion.
+- **Case is preserved.** Code 128 Code B is case-sensitive, so upper-casing a
+  card number would encode a *different* value — a barcode that scans cleanly as
+  the wrong account. Spaces always go; dashes only when the remainder is purely
+  numeric. QR payloads are kept byte-for-byte.
+- **Gallery import fails softly.** `scanFromURLAsync` reads only QR codes on
+  iOS and wants the barcode to fill the frame on Android (plus a known release
+  -build crash, expo#35011), so it is wrapped and drops into manual entry with
+  an explanation rather than dead-ending.
+- **`pnpm --filter mobile check:barcode`** round-trips the encoder through
+  decoders written separately from it. Worth keeping: the first version of that
+  check shared a copy-pasted Code 128 table with the implementation and passed
+  2,500 round-trips while the table had two bogus rows shifting every code value
+  above 82.
+
+Deliberately not done: no cloud backup of cards (so they don't survive a new
+phone — accepted), no brightness boost when a card is open, and no card
+reordering.
+
 ## Original specs (for reference)
 
 - **Pantry "add to list" leaves a checked item / weekly builder under-suggests.**

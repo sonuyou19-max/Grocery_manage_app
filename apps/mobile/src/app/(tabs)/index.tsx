@@ -133,7 +133,12 @@ export default function ListsScreen() {
 
   return (
     <>
-      <Screen title={greeting} subtitle={<HouseholdSwitcher fallback={t('greeting.subtitle')} />} hasFab>
+      <Screen
+        title={greeting}
+        subtitle={<HouseholdSwitcher fallback={t('greeting.subtitle')} />}
+        headerAction={<WalletButton />}
+        hasFab
+      >
         {!editing &&
           (vibeCount > 0 ? (
             <Pressable onPress={() => router.push('/vibe-check')}>
@@ -249,6 +254,26 @@ export default function ListsScreen() {
   );
 }
 
+/**
+ * Opens the loyalty-card wallet. Lives in the dashboard header because a
+ * store card is needed on the way *into* the shop, before any list is open.
+ */
+function WalletButton() {
+  const { colors } = useTheme();
+  const t = useT();
+  return (
+    <Pressable
+      onPress={() => router.push('/cards')}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={t('cards.title')}
+      style={[styles.wallet, { backgroundColor: colors.accentSoft, borderColor: colors.line }]}
+    >
+      <Ionicons name="card-outline" size={22} color={colors.accent} />
+    </Pressable>
+  );
+}
+
 function ListCard({
   list,
   members,
@@ -302,6 +327,16 @@ function ListCard({
 }
 
 const styles = StyleSheet.create({
+  wallet: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Nudge down so it optically centres against the tall display title.
+    marginTop: spacing.xs,
+  },
   listsHead: {
     flexDirection: 'row',
     alignItems: 'center',

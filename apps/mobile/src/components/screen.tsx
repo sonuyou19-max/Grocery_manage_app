@@ -15,10 +15,12 @@ interface ScreenProps extends PropsWithChildren {
   /** Set on screens that render a <Fab>, so scroll content clears its full
    * height (not just its offset above the tab bar) on short screens. */
   hasFab?: boolean;
+  /** Control placed at the top-right of the header, e.g. the card wallet. */
+  headerAction?: ReactNode;
 }
 
 /** Standard page shell: mesh background, safe area, big display title. */
-export function Screen({ title, subtitle, hasFab, children }: ScreenProps) {
+export function Screen({ title, subtitle, hasFab, headerAction, children }: ScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Clear the floating tab bar (and the Fab, when present) so the last card
@@ -35,12 +37,20 @@ export function Screen({ title, subtitle, hasFab, children }: ScreenProps) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={[type.display, { color: colors.ink }]}>{title}</Text>
-            {typeof subtitle === 'string' ? (
-              <Text style={[type.sub, { color: colors.muted }]}>{subtitle}</Text>
-            ) : (
-              (subtitle ?? null)
-            )}
+            {/* The action sits beside the title block rather than above it, so
+                a long translated greeting wraps within its own column instead
+                of pushing the control off-screen. */}
+            <View style={styles.headerRow}>
+              <View style={styles.headerText}>
+                <Text style={[type.display, { color: colors.ink }]}>{title}</Text>
+                {typeof subtitle === 'string' ? (
+                  <Text style={[type.sub, { color: colors.muted }]}>{subtitle}</Text>
+                ) : (
+                  (subtitle ?? null)
+                )}
+              </View>
+              {headerAction ?? null}
+            </View>
           </View>
           {children}
         </ScrollView>
@@ -58,4 +68,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: { gap: spacing.xs, marginBottom: spacing.sm },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  // minWidth 0 lets the title actually wrap instead of forcing the row wide.
+  headerText: { flex: 1, minWidth: 0, gap: spacing.xs },
 });
