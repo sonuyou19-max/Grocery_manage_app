@@ -56,10 +56,10 @@ Isolation falls out of the existing RLS rather than needing new rules.
 - `household_members` is readable only through `is_household_member(household_id)`,
   so a member of Office cannot see that you also belong to Home — not the
   household, its name, or its members.
-- `display_name` lives on the *membership*, not the user, so you can appear
-  under different names in different households. Already true today — and the
-  user-level greeting name is kept in session metadata precisely so it is
-  readable only by you, never by other members (see the naming section above).
+- `display_name` is mirrored onto each membership and is the only thing other
+  members can read about you. They see the one name you chose and nothing else —
+  no email, no user id beyond what they already share a household with, and no
+  indication that you belong to any other household.
 - `invite_code` is readable only by members; joining goes through a
   `SECURITY DEFINER` RPC, so codes cannot be enumerated by outsiders.
 - The recap edge function is fed a client-built aggregate of the active
@@ -68,7 +68,7 @@ Isolation falls out of the existing RLS rather than needing new rules.
 **Rule to hold to:** no query may span households. Anything that aggregates
 (Insights, recap, Vibe Check deck) reads only the active household's providers.
 
-## Your name must not change when you switch
+## One name, and it must not change when you switch
 
 Today the dashboard greeting reads the *membership* name:
 
@@ -77,35 +77,50 @@ Today the dashboard greeting reads the *membership* name:
 const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
 ```
 
-`display_name` lives on `household_members`, not on the user — so with two
-households the greeting would flip from "Good morning, Sonu" to "Good morning,
-S. Suman" purely because you switched context. Wrong: the greeting is the app
-talking to *you*, and you are the same person in both.
+`display_name` lives on `household_members`, not on the user, so with two
+households the greeting would change purely because you switched context.
 
-**Two names, different jobs:**
+**Decision: you have exactly one name, shown everywhere.** There is no
+per-household alias. The ability to appear under different names in different
+households was a side effect of where the column happens to sit, not a feature
+anyone asked for — and two editable name fields in Settings is a worse product
+than one.
 
-| Name | Stored on | Used for | Visible to |
-|---|---|---|---|
-| Your name | the user | the dashboard greeting | only you |
-| Your name in this household | the membership | member lists, "who added this" | that household's members |
+**Storage.** The name still has to be written onto every `household_members` row,
+because that column is the only thing *other* members can read — they cannot see
+your user record. So the data is mirrored, but the mirror is invisible: the user
+edits one field, and every membership carries the same value.
 
-**Where the user-level name lives:** Supabase user metadata —
-`supabase.auth.updateUser({ data: { display_name } })`, read back from
-`session.user.user_metadata.display_name`. No schema change, no new table, no
-migration, and it rides along in the session the client already has.
+Deliberately **no** user-level copy in user metadata or a `profiles` table. A
+second store would only be justified if the values could differ; now that they
+cannot, it is just something to keep in sync and drift out of.
 
-Chosen over the conventional `profiles` table precisely *because* it is not
-readable by other users. A `profiles` row would need RLS to keep it private, and
-the moment anything relaxed that, the name would leak across household
-boundaries — the exact isolation this design is protecting.
+**Renaming** goes through one RPC so it stays atomic across households:
 
-**Seeding it:** set it from the name field the first time a user creates or joins
-a household, so nobody types their name twice and existing users get one without
-being asked. Fall back to the active membership name if metadata is empty, so
-the greeting never regresses to nameless for someone who upgraded.
+```sql
+create or replace function set_display_name(p_name text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update household_members
+    set display_name = coalesce(nullif(trim(p_name), ''), display_name)
+    where user_id = auth.uid();
+$$;
+```
 
-**Settings** gains a user-level "Your name" row, separate from the per-household
-name. Logged-out users keep today's behaviour — a greeting with no name.
+**Reading it** for the greeting: take the active membership's `display_name`.
+Because every membership holds the same value, this is stable across switches by
+construction — no special-casing needed.
+
+**Joining a household** uses the name you already have rather than asking again;
+the field only appears the first time, when there is nothing to reuse. Existing
+users need no migration — today nobody has more than one membership, so there is
+nothing that can already be inconsistent.
+
+**Settings** gets a single "Your name" row. Zero-household and logged-out users
+keep today's behaviour: a greeting with no name.
 
 ## Work
 
@@ -125,9 +140,11 @@ name. Logged-out users keep today's behaviour — a greeting with no name.
 5. **`auth/household.tsx`** — becomes "add a household" rather than one-time
    setup; use the RPC's returned row to switch to it immediately.
 6. **Zero households** — unchanged: fall back to local lists, exactly as today.
-7. **Greeting** — read the user-level name from session metadata instead of the
-   active membership, so it survives a switch (see above). Add the "Your name"
-   row to Settings and seed the metadata on first create/join.
+7. **Name** — add the `set_display_name` RPC so a rename applies to every
+   membership at once, a single "Your name" row in Settings, and drop the name
+   field from the join flow once the user already has one. The greeting keeps
+   reading the active membership, which is stable because all memberships hold
+   the same value.
 
 ### On-device caches to scope
 
