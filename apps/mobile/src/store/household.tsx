@@ -8,18 +8,26 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 
+import { setHomeListScope } from '@/lib/item-home-list';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
 import { useT } from '@/store/locale';
 
 /**
- * The household the signed-in user belongs to, plus its members. A user has at
- * most one household in the MVP (multi-household comes later). Grocery data
- * moves into this household in the next phase — for now it establishes the
- * shared account and invite flow.
+ * The households the signed-in user belongs to, and which one is active.
+ *
+ * A user can hold several — "Home" shared with a partner, "Office" with a
+ * colleague — and everything else scopes to the active one: lists, pantry,
+ * Vibe Check, Insights, recap. Households are fully isolated; see
+ * docs/MULTI_HOUSEHOLD_DESIGN.md.
+ *
+ * The schema always allowed this (household_members is keyed
+ * (household_id, user_id) and every table carries household_id); only the
+ * client's `.limit(1)` enforced a single one.
  */
 
 export interface Household {
@@ -36,15 +44,28 @@ export interface Member {
 }
 
 interface HouseholdContext {
+  /** Every household the user belongs to, name-sorted. */
+  households: Household[];
+  /** The one everything else is scoped to — lists, pantry, insights, recap. */
   household: Household | null;
+  setActiveHousehold: (householdId: string) => void;
+  /** Members of the active household. */
   members: Member[];
+  /** Members of any household the user belongs to. */
+  membersOf: (householdId: string) => Member[];
+  /** The user's display name. One name, identical in every household. */
+  myName: string | null;
   loading: boolean;
   refresh: () => Promise<void>;
+  /** Creates and switches to it. */
   createHousehold: (name: string, displayName: string) => Promise<{ error?: string }>;
+  /** Joins and switches to it. */
   joinHousehold: (code: string, displayName: string) => Promise<{ error?: string }>;
-  renameHousehold: (name: string) => Promise<{ error?: string }>;
-  leaveHousehold: () => Promise<{ error?: string }>;
-  removeMember: (userId: string) => Promise<{ error?: string }>;
+  renameHousehold: (householdId: string, name: string) => Promise<{ error?: string }>;
+  leaveHousehold: (householdId: string) => Promise<{ error?: string }>;
+  removeMember: (householdId: string, userId: string) => Promise<{ error?: string }>;
+  /** Rename yourself across every household at once. */
+  setDisplayName: (name: string) => Promise<{ error?: string }>;
 }
 
 const Ctx = createContext<HouseholdContext | null>(null);
@@ -60,54 +81,87 @@ const friendlyError = (message: string, t: TFn): string => {
     return t('householdError.signInFirst');
   if (message.includes('not_owner')) return t('householdError.notOwner');
   if (message.includes('use_leave')) return t('householdError.useLeave');
+  if (message.includes('household_limit')) return t('householdError.limitReached');
+  if (message.includes('name_required')) return t('householdError.nameRequired');
   return message;
 };
+
+/** Which household is selected. Persisted so a relaunch reopens the same one. */
+const ACTIVE_KEY = 'korb.activeHousehold.v1';
 
 export function HouseholdProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const t = useT();
   const appActive = useAppActive();
-  const [household, setHousehold] = useState<Household | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [households, setHouseholds] = useState<Household[]>([]);
+  /** Members of every household the user belongs to, keyed by household id. */
+  const [byHousehold, setByHousehold] = useState<Record<string, Member[]>>({});
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // Signature of the last-applied membership, so background polling only
-  // re-renders when something actually changed.
+  // Signature of the last-applied data, so background polling only re-renders
+  // when something actually changed.
   const sigRef = useRef<string>('');
+
+  // Restore the previously selected household before the first fetch, so the
+  // app reopens where it left off instead of flashing another household.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem(ACTIVE_KEY)
+      .then((id) => {
+        if (id) setActiveId(id);
+      })
+      .catch(() => {})
+      .finally(() => {
+        restoredRef.current = true;
+      });
+  }, []);
+
+  const setActiveHousehold = useCallback((householdId: string) => {
+    setActiveId(householdId);
+    AsyncStorage.setItem(ACTIVE_KEY, householdId).catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!user) {
       sigRef.current = '';
-      setHousehold(null);
-      setMembers([]);
+      setHouseholds([]);
+      setByHousehold({});
       return;
     }
     setLoading(true);
     try {
-      const { data: membership } = await supabase
-        .from('household_members')
-        .select('household_id, households(id, name, invite_code, created_at)')
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle();
+      // Both queries lean on RLS rather than filtering client-side: a user can
+      // only read households they belong to, and only membership rows of those
+      // households. That also means one query covers every household at once.
+      const [{ data: householdRows }, { data: memberRows }] = await Promise.all([
+        supabase.from('households').select('id, name, invite_code, created_at'),
+        supabase.from('household_members').select('household_id, user_id, role, display_name'),
+      ]);
 
-      const h = (membership?.households as unknown as Household) ?? null;
-      let rows: Member[] = [];
-      if (h) {
-        const { data } = await supabase
-          .from('household_members')
-          .select('user_id, role, display_name')
-          .eq('household_id', h.id);
-        rows = (data as Member[] | null) ?? [];
+      const list = ((householdRows as Household[] | null) ?? []).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+      const grouped: Record<string, Member[]> = {};
+      for (const row of (memberRows as (Member & { household_id: string })[] | null) ?? []) {
+        (grouped[row.household_id] ??= []).push({
+          user_id: row.user_id,
+          role: row.role,
+          display_name: row.display_name,
+        });
       }
 
       const sig = JSON.stringify({
-        h: h?.id ?? null,
-        m: rows.map((r) => `${r.user_id}:${r.role}:${r.display_name}`).sort(),
+        h: list.map((h) => `${h.id}:${h.name}`),
+        m: Object.entries(grouped)
+          .map(([id, rows]) =>
+            `${id}:${rows.map((r) => `${r.user_id}:${r.role}:${r.display_name}`).sort().join(',')}`,
+          )
+          .sort(),
       });
       if (sig !== sigRef.current) {
         sigRef.current = sig;
-        setHousehold(h);
-        setMembers(rows);
+        setHouseholds(list);
+        setByHousehold(grouped);
       }
     } finally {
       setLoading(false);
@@ -117,6 +171,43 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /**
+   * The active household: the stored choice when it still resolves, otherwise
+   * the first one. Falling back matters — the stored id goes stale whenever the
+   * user leaves that household, it is deleted, or they sign in as someone else.
+   */
+  const household = useMemo(
+    () => households.find((h) => h.id === activeId) ?? households[0] ?? null,
+    [households, activeId],
+  );
+
+  // Write the fallback back to storage so the choice is stable from here on.
+  useEffect(() => {
+    if (!restoredRef.current || !household || household.id === activeId) return;
+    setActiveHousehold(household.id);
+  }, [household, activeId, setActiveHousehold]);
+
+  // Point the per-item home-list cache at the active household, so routing an
+  // item back to "its" list never reaches across into another household.
+  useEffect(() => {
+    setHomeListScope(household?.id ?? null);
+  }, [household?.id]);
+
+  const members = useMemo(
+    () => (household ? byHousehold[household.id] ?? [] : []),
+    [byHousehold, household],
+  );
+
+  // One name in every household, so any membership row answers this.
+  const myName = useMemo(() => {
+    if (!user) return null;
+    for (const rows of Object.values(byHousehold)) {
+      const mine = rows.find((r) => r.user_id === user.id)?.display_name?.trim();
+      if (mine) return mine;
+    }
+    return null;
+  }, [byHousehold, user]);
 
   // Membership changes (e.g. being removed by the owner) have no realtime
   // path that reaches the removed member, so keep it fresh by re-checking when
@@ -135,41 +226,54 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<HouseholdContext>(
     () => ({
+      households,
       household,
+      setActiveHousehold,
       members,
+      membersOf: (householdId) => byHousehold[householdId] ?? [],
+      myName,
       loading,
       refresh,
       createHousehold: async (name, displayName) => {
         if (!user) return { error: t('householdError.signInFirst') };
-        const { error } = await supabase.rpc('create_household', {
+        // The RPC returns the new row, so we can switch straight to it —
+        // you almost certainly want to use what you just made.
+        const { data, error } = await supabase.rpc('create_household', {
           p_name: name,
           p_display_name: displayName,
         });
         if (error) return { error: friendlyError(error.message, t) };
+        const created = data as Household | null;
+        if (created?.id) setActiveHousehold(created.id);
         await refresh();
         return {};
       },
       joinHousehold: async (code, displayName) => {
         if (!user) return { error: t('householdError.signInFirst') };
-        const { error } = await supabase.rpc('join_household', {
+        const { data, error } = await supabase.rpc('join_household', {
           p_code: code,
           p_display_name: displayName,
         });
         if (error) return { error: friendlyError(error.message, t) };
+        const joined = data as Household | null;
+        if (joined?.id) setActiveHousehold(joined.id);
         await refresh();
         return {};
       },
-      renameHousehold: async (name) => {
-        if (!household) return {};
+      renameHousehold: async (householdId, name) => {
+        const target = households.find((h) => h.id === householdId);
+        if (!target) return {};
         const clean = name.trim();
-        if (!clean || clean === household.name) return {};
+        if (!clean || clean === target.name) return {};
         // Optimistic: reflect the new name immediately, then persist. RLS lets
         // only the owner update; a failure rolls back via refresh().
-        setHousehold((prev) => (prev ? { ...prev, name: clean } : prev));
+        setHouseholds((prev) =>
+          prev.map((h) => (h.id === householdId ? { ...h, name: clean } : h)),
+        );
         const { error } = await supabase
           .from('households')
           .update({ name: clean })
-          .eq('id', household.id);
+          .eq('id', householdId);
         if (error) {
           await refresh();
           return { error: friendlyError(error.message, t) };
@@ -179,17 +283,28 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         sigRef.current = '';
         return {};
       },
-      leaveHousehold: async () => {
-        if (!household) return {};
-        const { error } = await supabase.rpc('leave_household', { p_household: household.id });
+      leaveHousehold: async (householdId) => {
+        const { error } = await supabase.rpc('leave_household', { p_household: householdId });
         if (error) return { error: friendlyError(error.message, t) };
+        // Leaving the active one hands over to whatever remains; the derived
+        // `household` above falls back to the first, and local lists take over
+        // if that was the last household.
         await refresh();
         return {};
       },
-      removeMember: async (userId) => {
-        if (!household) return {};
+      setDisplayName: async (name) => {
+        if (!user) return { error: t('householdError.signInFirst') };
+        // Applies to every membership at once — household_members has no UPDATE
+        // policy, so this has to go through the definer RPC.
+        const { error } = await supabase.rpc('set_display_name', { p_name: name });
+        if (error) return { error: friendlyError(error.message, t) };
+        sigRef.current = '';
+        await refresh();
+        return {};
+      },
+      removeMember: async (householdId, userId) => {
         const { error } = await supabase.rpc('remove_member', {
-          p_household: household.id,
+          p_household: householdId,
           p_user: userId,
         });
         if (error) return { error: friendlyError(error.message, t) };
@@ -197,30 +312,40 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         return {};
       },
     }),
-    [household, members, loading, refresh, user, t],
+    [
+      households,
+      household,
+      setActiveHousehold,
+      members,
+      byHousehold,
+      myName,
+      loading,
+      refresh,
+      user,
+      t,
+    ],
   );
 
   // Live household updates (e.g. a rename by another member) reach everyone via
   // the realtime channel; the membership poll/foreground refresh is the backstop.
   // While backgrounded we hold no socket — the foreground refresh above catches
   // any rename that landed while we were away, then this re-subscribes.
+  // Unfiltered: RLS already limits the rows we can see to our own households, so
+  // one subscription covers all of them — a rename in the household you're not
+  // currently looking at still lands, and switching to it shows the new name.
   useEffect(() => {
-    if (!household || !appActive) return;
+    if (!user || !appActive) return;
     const channel = supabase
-      .channel(`household-${household.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'households', filter: `id=eq.${household.id}` },
-        () => {
-          sigRef.current = '';
-          void refresh();
-        },
-      )
+      .channel(`households-${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'households' }, () => {
+        sigRef.current = '';
+        void refresh();
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [household?.id, refresh, appActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, refresh, appActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

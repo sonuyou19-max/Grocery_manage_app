@@ -10,6 +10,7 @@ import { Fab } from '@/components/fab';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
+import { HouseholdSwitcher } from '@/components/household-switcher';
 import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
 import { WeeklyListSheet } from '@/components/weekly-list-sheet';
 import { hasSeenOnboarding } from '@/lib/onboarding';
@@ -37,7 +38,7 @@ export default function ListsScreen() {
   const { colors } = useTheme();
   const t = useT();
   const { lists, addList, addParsedItem, deleteList, reorderLists } = useGroceries();
-  const { household, members } = useHousehold();
+  const { household, members, myName } = useHousehold();
   const { user } = useAuth();
   const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
@@ -86,8 +87,8 @@ export default function ListsScreen() {
     [members],
   );
 
-  // First name from the household display name the user chose, when available.
-  const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
+  // Your name, not your name *in this household* — the two are the same value,
+  // so the greeting stays put when you switch.
   const firstName = myName ? myName.split(/\s+/)[0] : null;
   const base = t(`greeting.${greetingKey()}`);
   const greeting = firstName ? `${base}, ${firstName}` : base;
@@ -132,7 +133,7 @@ export default function ListsScreen() {
 
   return (
     <>
-      <Screen title={greeting} subtitle={household ? household.name : t('greeting.subtitle')} hasFab>
+      <Screen title={greeting} subtitle={<HouseholdSwitcher fallback={t('greeting.subtitle')} />} hasFab>
         {!editing &&
           (vibeCount > 0 ? (
             <Pressable onPress={() => router.push('/vibe-check')}>

@@ -1,6 +1,6 @@
 # Design — Multiple households per user
 
-Status: **accepted**, not implemented. Supersedes `PER_LIST_ACCESS_DESIGN.md`,
+Status: **implemented** (migration 0012 pending `supabase db push`; not yet device-verified). Supersedes `PER_LIST_ACCESS_DESIGN.md`,
 which is retained as a rejected alternative.
 
 ## The change

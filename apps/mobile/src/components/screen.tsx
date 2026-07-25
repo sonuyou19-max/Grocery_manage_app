@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,7 +9,9 @@ import { spacing, type, useTheme } from '@/theme';
 
 interface ScreenProps extends PropsWithChildren {
   title: string;
-  subtitle?: string;
+  /** Text, or a node when the line needs to be interactive (e.g. the
+   * household switcher on the dashboard). */
+  subtitle?: ReactNode;
   /** Set on screens that render a <Fab>, so scroll content clears its full
    * height (not just its offset above the tab bar) on short screens. */
   hasFab?: boolean;
@@ -34,9 +36,11 @@ export function Screen({ title, subtitle, hasFab, children }: ScreenProps) {
         >
           <View style={styles.header}>
             <Text style={[type.display, { color: colors.ink }]}>{title}</Text>
-            {subtitle ? (
+            {typeof subtitle === 'string' ? (
               <Text style={[type.sub, { color: colors.muted }]}>{subtitle}</Text>
-            ) : null}
+            ) : (
+              (subtitle ?? null)
+            )}
           </View>
           {children}
         </ScrollView>

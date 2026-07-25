@@ -21,10 +21,23 @@ import { normalizeKey } from '@/lib/pantry-intel';
  * id can go stale (the list was deleted, or you signed in and moved from local
  * to household lists, which is a different id space). Callers must treat a
  * recalled id as a *suggestion* and check it still resolves to a live list.
+ *
+ * Entries are namespaced per household. Without that, "milk" homed to a list at
+ * home would resolve to nothing at the office, and picking an office list there
+ * would overwrite the home mapping — so the routing would thrash every time you
+ * switched. `setHomeListScope` is called by the provider when the active
+ * household changes.
  */
 
-const CACHE_KEY = 'korb.itemHomeList.v1';
-let homes: Record<string, string> = {};
+const CACHE_KEY = 'korb.itemHomeList.v2';
+/** { [householdId | 'local']: { [itemKey]: listId } } */
+let homes: Record<string, Record<string, string>> = {};
+let scope = 'local';
+
+/** Point the cache at a household (or 'local' when signed out). */
+export function setHomeListScope(householdId: string | null): void {
+  scope = householdId ?? 'local';
+}
 
 export async function hydrateItemHomeLists(): Promise<void> {
   try {
@@ -42,7 +55,7 @@ export async function hydrateItemHomeLists(): Promise<void> {
 export function rememberItemList(name: string, listId: string): void {
   const key = normalizeKey(name);
   if (!key || !listId) return;
-  homes[key] = listId;
+  (homes[scope] ??= {})[key] = listId;
   AsyncStorage.setItem(CACHE_KEY, JSON.stringify(homes)).catch(() => {
     // best-effort persistence
   });
@@ -54,7 +67,7 @@ export function rememberItemList(name: string, listId: string): void {
  * using it.
  */
 export function recallItemList(name: string): string | null {
-  return homes[normalizeKey(name)] ?? null;
+  return homes[scope]?.[normalizeKey(name)] ?? null;
 }
 
 /**
@@ -63,10 +76,12 @@ export function recallItemList(name: string): string | null {
  */
 export function forgetHomeList(listId: string): void {
   let changed = false;
-  for (const [key, id] of Object.entries(homes)) {
-    if (id === listId) {
-      delete homes[key];
-      changed = true;
+  for (const entries of Object.values(homes)) {
+    for (const [key, id] of Object.entries(entries)) {
+      if (id === listId) {
+        delete entries[key];
+        changed = true;
+      }
     }
   }
   if (!changed) return;
