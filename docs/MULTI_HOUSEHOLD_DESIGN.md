@@ -57,7 +57,9 @@ Isolation falls out of the existing RLS rather than needing new rules.
   so a member of Office cannot see that you also belong to Home — not the
   household, its name, or its members.
 - `display_name` lives on the *membership*, not the user, so you can appear
-  under different names in different households. Already true today.
+  under different names in different households. Already true today — and the
+  user-level greeting name is kept in session metadata precisely so it is
+  readable only by you, never by other members (see the naming section above).
 - `invite_code` is readable only by members; joining goes through a
   `SECURITY DEFINER` RPC, so codes cannot be enumerated by outsiders.
 - The recap edge function is fed a client-built aggregate of the active
@@ -65,6 +67,45 @@ Isolation falls out of the existing RLS rather than needing new rules.
 
 **Rule to hold to:** no query may span households. Anything that aggregates
 (Insights, recap, Vibe Check deck) reads only the active household's providers.
+
+## Your name must not change when you switch
+
+Today the dashboard greeting reads the *membership* name:
+
+```ts
+// app/(tabs)/index.tsx
+const myName = members.find((m) => m.user_id === user?.id)?.display_name?.trim();
+```
+
+`display_name` lives on `household_members`, not on the user — so with two
+households the greeting would flip from "Good morning, Sonu" to "Good morning,
+S. Suman" purely because you switched context. Wrong: the greeting is the app
+talking to *you*, and you are the same person in both.
+
+**Two names, different jobs:**
+
+| Name | Stored on | Used for | Visible to |
+|---|---|---|---|
+| Your name | the user | the dashboard greeting | only you |
+| Your name in this household | the membership | member lists, "who added this" | that household's members |
+
+**Where the user-level name lives:** Supabase user metadata —
+`supabase.auth.updateUser({ data: { display_name } })`, read back from
+`session.user.user_metadata.display_name`. No schema change, no new table, no
+migration, and it rides along in the session the client already has.
+
+Chosen over the conventional `profiles` table precisely *because* it is not
+readable by other users. A `profiles` row would need RLS to keep it private, and
+the moment anything relaxed that, the name would leak across household
+boundaries — the exact isolation this design is protecting.
+
+**Seeding it:** set it from the name field the first time a user creates or joins
+a household, so nobody types their name twice and existing users get one without
+being asked. Fall back to the active membership name if metadata is empty, so
+the greeting never regresses to nameless for someone who upgraded.
+
+**Settings** gains a user-level "Your name" row, separate from the per-household
+name. Logged-out users keep today's behaviour — a greeting with no name.
 
 ## Work
 
@@ -84,6 +125,9 @@ Isolation falls out of the existing RLS rather than needing new rules.
 5. **`auth/household.tsx`** — becomes "add a household" rather than one-time
    setup; use the RPC's returned row to switch to it immediately.
 6. **Zero households** — unchanged: fall back to local lists, exactly as today.
+7. **Greeting** — read the user-level name from session metadata instead of the
+   active membership, so it survives a switch (see above). Add the "Your name"
+   row to Settings and seed the metadata on first create/join.
 
 ### On-device caches to scope
 
