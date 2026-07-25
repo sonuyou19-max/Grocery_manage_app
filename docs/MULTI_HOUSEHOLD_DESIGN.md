@@ -133,8 +133,9 @@ keep today's behaviour: a greeting with no name.
 2. **Providers** — `GroceriesProvider` and `PantryIntelProvider` key on the
    active id. Both already use `key={household.id}`, so a switch remounts them
    with the correct per-household cache; no flash of another household's data.
-3. **Dashboard** — household switcher in the header. Hidden entirely when the
-   user has fewer than two, so solo users see no change.
+3. **Dashboard** — make the existing header subtitle a switcher chip; add the
+   switcher sheet; widen `Screen`'s `subtitle` to a `ReactNode`. No chevron below
+   two households, so solo users see no change.
 4. **Settings** — a list of households instead of one: create, join by code,
    rename, and leave each individually.
 5. **`auth/household.tsx`** — becomes "add a household" rather than one-time
@@ -171,6 +172,75 @@ and is currently unbounded.
 New strings for the switcher and the multi-household Settings section, plus a
 plural for "%{count} households". All six locales must stay at parity
 (`pnpm --filter mobile check:locales`).
+
+## Dashboard layout
+
+The switcher needs no new furniture. The header subtitle **already** renders the
+household name:
+
+```ts
+// app/(tabs)/index.tsx
+<Screen title={greeting} subtitle={household ? household.name : t('greeting.subtitle')} hasFab>
+```
+
+So it becomes tappable rather than moving anywhere. The greeting above it is your
+name and never changes.
+
+```
+┌──────────────────────────────────────────┐
+│  Good morning, Sonu                      │   ← your name; stable
+│  Home ⌄                                  │   ← tap to switch
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │ ☕️  Pantry Vibe Check              │  │
+│  │     3 items to review · 10 seconds │  │   ← Home's pantry only
+│  └────────────────────────────────────┘  │
+│                                          │
+│  ✨ Build this week's list                │
+│                                          │
+│  YOUR LISTS            hold to edit      │
+│  ┌────────────────────────────────────┐  │
+│  │ Weekly groceries              €24  │  │
+│  │ Aldi · 12 items · 4 in cart        │  │
+│  │ ▓▓▓▓▓▓░░░░░░░░░░░░                 │  │
+│  │ (SO)(AP)                           │  │   ← Home's members
+│  └────────────────────────────────────┘  │
+└──────────────────────────────────────────┘
+```
+
+**Progressive disclosure on the subtitle:**
+
+| Households | Subtitle | Tappable |
+|---|---|---|
+| 0 (logged out / no household) | "Your grocery lists" | no — unchanged from today |
+| 1 | "Home" | no — nothing to switch to |
+| 2+ | "Home ⌄" | yes |
+
+Solo users therefore see no change at all, and the chevron only appears once it
+means something.
+
+**The switcher sheet** reuses the `ListPickerSheet` pattern already in the app:
+
+```
+┌──────────────────────────────────────────┐
+│  Switch household                        │
+│                                          │
+│  ◉  🏠 Home            2 members         │
+│  ○  🏢 Office          3 members         │
+│  ─────────────────────────────────────── │
+│  ➕ Add a household                      │
+└──────────────────────────────────────────┘
+```
+
+**Everything below the header is untouched.** The Vibe Check card, weekly builder
+and list cards all read `useGroceries()` / `usePantryIntel()`, which are keyed on
+the active household — so they re-render with the right data on switch without
+any change to those components. The member avatars added earlier become genuinely
+useful here, since Home and Office now show different faces.
+
+**One small component change:** `Screen`'s `subtitle` prop is `string`; it needs
+to accept a `ReactNode` so the chip can be passed in. Every other caller passes a
+string, so widening the type is backward compatible.
 
 ## Settings layout
 
