@@ -1,0 +1,86 @@
+-- ---------------------------------------------------------------------------
+-- Post-migration verification.
+--
+-- Run this in the Supabase SQL editor AFTER `supabase db push`. Every row must
+-- say PASS. It checks the things the app actually depends on at runtime, so a
+-- partially-applied migration shows up here rather than as a confusing failure
+-- on a phone.
+--
+-- Safe to run any number of times: it only reads catalog tables.
+-- ---------------------------------------------------------------------------
+
+with checks as (
+  -- 0011 · weekly recap language
+  select '0011 household_recaps.language' as check,
+         exists (select 1 from information_schema.columns
+                 where table_name = 'household_recaps' and column_name = 'language') as ok
+
+  -- 0012 · one name across every household, and the household cap
+  union all select '0012 set_display_name() exists',
+         exists (select 1 from pg_proc where proname = 'set_display_name')
+
+  -- 0016 · that RPC is authenticated-only, like every other definer function
+  union all select '0016 set_display_name not executable by anon',
+         not has_function_privilege('anon', 'set_display_name(text)', 'execute')
+  union all select '0016 set_display_name executable by authenticated',
+         has_function_privilege('authenticated', 'set_display_name(text)', 'execute')
+
+  -- 0013 · purchase log (spend over time)
+  union all select '0013 price_entries.item_key',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'price_entries' and column_name = 'item_key')
+  union all select '0013 price_entries.quantity',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'price_entries' and column_name = 'quantity')
+  union all select '0013 price_entries.unit',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'price_entries' and column_name = 'unit')
+  union all select '0013 index idx_prices_household_time',
+         exists (select 1 from pg_indexes where indexname = 'idx_prices_household_time')
+  union all select '0013 index idx_prices_household_item_time',
+         exists (select 1 from pg_indexes where indexname = 'idx_prices_household_item_time')
+  -- price_entries must stay OUT of realtime: publishing it would push a socket
+  -- message to every member on every single check-off.
+  union all select '0013 price_entries NOT in realtime (intentional)',
+         not exists (select 1 from pg_publication_tables
+                     where pubname = 'supabase_realtime' and tablename = 'price_entries')
+
+  -- 0014 · recurring staples
+  union all select '0014 pantry_items.keep_stocked',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'pantry_items' and column_name = 'keep_stocked')
+  union all select '0014 pantry_items.cadence_days',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'pantry_items' and column_name = 'cadence_days')
+  union all select '0014 index idx_pantry_staples',
+         exists (select 1 from pg_indexes where indexname = 'idx_pantry_staples')
+
+  -- 0015 · item claiming
+  union all select '0015 list_items.claimed_by',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'list_items' and column_name = 'claimed_by')
+  union all select '0015 list_items.claimed_at',
+         exists (select 1 from information_schema.columns
+                 where table_name = 'list_items' and column_name = 'claimed_at')
+  union all select '0015 index idx_items_claimed',
+         exists (select 1 from pg_indexes where indexname = 'idx_items_claimed')
+  -- Claims are useless unless they reach the other phone within seconds.
+  union all select '0015 list_items IS in realtime (required)',
+         exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and tablename = 'list_items')
+
+  -- Pre-existing invariants the new columns rely on. RLS off on any of these
+  -- would expose one household's data to another.
+  union all select 'RLS on list_items',
+         (select relrowsecurity from pg_class where relname = 'list_items')
+  union all select 'RLS on pantry_items',
+         (select relrowsecurity from pg_class where relname = 'pantry_items')
+  union all select 'RLS on price_entries',
+         (select relrowsecurity from pg_class where relname = 'price_entries')
+  union all select 'pantry_items in realtime (shared deck)',
+         exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and tablename = 'pantry_items')
+)
+select case when ok then 'PASS' else '*** FAIL ***' end as result, check
+from checks
+order by ok, check;
