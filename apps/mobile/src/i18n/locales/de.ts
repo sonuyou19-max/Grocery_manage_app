@@ -130,6 +130,10 @@ const de = {
     emptyBody:
       'Füge deine Kundenkarten hinzu und Korb zeichnet den Barcode für die Kasse. Sie bleiben auf diesem Handy und niemand sonst in deinem Haushalt sieht sie.',
     addCard: 'Karte hinzufügen',
+    signInTitle: 'Melde dich an, um Karten hinzuzufügen',
+    signInBody:
+      'Eine Kundenkarte gehört dir, nicht dem Handy — deshalb speichert Korb sie unter deinem Konto. So sieht niemand sonst, der dieses Handy in die Hand nimmt, deine Karten. Sie bleiben trotzdem auf diesem Gerät und werden nie hochgeladen.',
+    signInCta: 'Anmelden',
     showAtTill: 'Halte das an der Kasse vor den Scanner.',
     removeTitle: 'Karte entfernen?',
     removeBody: 'Deine %{store}-Karte wird von diesem Handy gelöscht.',

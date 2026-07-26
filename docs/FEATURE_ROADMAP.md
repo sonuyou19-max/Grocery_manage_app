@@ -162,13 +162,19 @@ The decisions worth remembering:
   cashier can key it in if the scanner still refuses. `lib/barcode.ts` is a pure
   encoder (EAN-13/8, UPC-A, Code 128, ITF); QR goes through
   `react-native-qrcode-svg`.
-- **Device-only, per user.** Never synced to Supabase, and keyed by user id so a
-  partner sharing the same phone and household cannot see them. Enforced rather
-  than intended: one storage key per scope (another user's cards are never read
-  into memory), the scope is an explicit argument instead of module state, reads
-  are gated on the loaded scope matching the requested one, and `undefined`
-  means "auth not resolved yet" so the launch-time race can't file a card under
-  the wrong bucket. `wipeLoyaltyCards` runs on account deletion.
+- **Device-only, per user, sign-in required.** Never synced to Supabase, and
+  keyed by user id so a partner sharing the same phone and household cannot see
+  them. Cards are the one feature that needs an account, unlike lists: without a
+  user there is only a single "this device" bucket, which on a shared phone is
+  exactly the leak the per-user rule exists to prevent. So **a user id is the
+  only thing that produces a storage scope** — no anonymous bucket exists, which
+  makes the rule structural rather than a UI convention. Also enforced: one
+  storage key per user (another user's cards are never read into memory), the
+  scope is an explicit argument instead of module state, and reads are gated on
+  the loaded scope matching the requested one. `undefined` distinguishes "auth
+  still resolving" from "signed out", so the wallet shows a spinner rather than
+  flashing a sign-in prompt at someone who already is.
+  `wipeLoyaltyCards` runs on account deletion.
 - **Case is preserved.** Code 128 Code B is case-sensitive, so upper-casing a
   card number would encode a *different* value — a barcode that scans cleanly as
   the wrong account. Spaces always go; dashes only when the remainder is purely

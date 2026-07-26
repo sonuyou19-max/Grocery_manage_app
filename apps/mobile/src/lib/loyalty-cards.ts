@@ -5,9 +5,9 @@ import { guessSymbology, normalizeForSymbology, type Symbology } from '@/lib/bar
 import { uuidv4 } from '@/lib/uuid';
 
 /**
- * Loyalty cards — on this device, for this user, and nowhere else.
+ * Loyalty cards — on this device, for this signed-in user, and nowhere else.
  *
- * Two hard rules, both deliberate:
+ * Three hard rules, all deliberate:
  *
  * 1. **Device only.** Cards never touch Supabase — no table, no RPC, no
  *    realtime. A loyalty number is a payment-adjacent identifier tied to a
@@ -22,9 +22,16 @@ import { uuidv4 } from '@/lib/uuid';
  *    invisible to everyone else, including a partner in the same household on
  *    the same device.
  *
+ * 3. **Sign-in required.** Unlike lists, which work fully logged-out, a card
+ *    needs an owner. Without one there is only "this device", and on a shared
+ *    phone that bucket is exactly the leak rule 2 exists to prevent — whoever
+ *    picks the phone up next would find someone else's cards. So there is no
+ *    anonymous bucket at all: a user id is the *only* thing that produces a
+ *    storage scope.
+ *
  * How rule 2 is enforced, rather than merely intended:
  *
- * - Each scope gets **its own storage key**, so switching users doesn't just
+ * - Each user gets **their own storage key**, so switching users doesn't just
  *   filter another user's cards out of view — theirs are never read into memory
  *   at all.
  * - The scope is an **explicit argument**, derived at the call site from the
@@ -32,8 +39,11 @@ import { uuidv4 } from '@/lib/uuid';
  *   while a screen is mounted, which is the usual way this class of leak
  *   happens.
  * - Reads are **scope-checked against the cache**: if the loaded scope isn't
- *   the requested one, callers get an empty list and a loading flag, never the
- *   previous user's data during the gap.
+ *   the requested one, callers get an empty list, never the previous user's
+ *   data during the gap.
+ * - **No signed-in user means no scope**, so reads return nothing and writes
+ *   refuse — the gate is in the storage layer, not only in the UI that happens
+ *   to sit in front of it.
  */
 
 export interface LoyaltyCard {
@@ -50,24 +60,16 @@ export interface LoyaltyCard {
   createdAt: number;
 }
 
-/** Signed-out scope. The device owner's own bucket; no user identity exists. */
-const DEVICE_SCOPE = 'device';
-
-const keyFor = (scope: string) => `korb.loyaltyCards.v1.${scope}`;
+/** One key per user. There is no shared or anonymous key — see rule 3 above. */
+const keyFor = (userId: string) => `korb.loyaltyCards.v1.${userId}`;
 
 /**
- * Which bucket a user id maps to.
- *
- * `undefined` means *not yet known* — auth is still restoring the session — and
- * returns null rather than falling back to the device bucket. Without that
- * distinction there's a live race at launch: for the moment before the session
- * resolves, a signed-in user looks signed-out, so a card added right then would
- * be filed under `device` and appear to vanish once auth caught up.
+ * The storage scope for a user id: the id itself, or null when there is no
+ * signed-in user to own the cards. Null covers both "signed out" and "auth
+ * hasn't resolved yet"; callers that need to tell those apart (to choose
+ * between a sign-in prompt and a spinner) read `authPending` below.
  */
-const scopeFor = (userId: string | null | undefined): string | null => {
-  if (userId === undefined) return null;
-  return userId || DEVICE_SCOPE;
-};
+const scopeFor = (userId: string | null | undefined): string | null => userId || null;
 
 /**
  * Only ever holds ONE scope's cards. Replaced wholesale on a scope change, so
@@ -158,9 +160,14 @@ export interface NewCard {
 
 export interface LoyaltyCardsApi {
   cards: LoyaltyCard[];
-  /** True until this scope's cards are in memory. */
+  /** True while this user's cards are being read, or while auth resolves. */
   loading: boolean;
-  /** Returns the created card, or null when the value is empty. */
+  /**
+   * No signed-in user, so there is nowhere to keep cards. The screen shows a
+   * sign-in prompt; every mutator below is a no-op.
+   */
+  needsSignIn: boolean;
+  /** Returns the created card, or null when there's no owner or no value. */
   addCard: (input: NewCard) => LoyaltyCard | null;
   removeCard: (id: string) => void;
   /** Change the store a card is filed under. */
@@ -171,13 +178,16 @@ export interface LoyaltyCardsApi {
  * The signed-in user's cards.
  *
  * Pass the user id from `useAuth()`, and pass **`undefined` while auth is still
- * initializing** — that reports `loading` and refuses writes, instead of
- * briefly treating a signed-in user as signed-out. The scope is intentionally
- * an argument rather than module state, so it cannot go stale under a mounted
- * screen.
+ * initializing** — that reports `loading` rather than `needsSignIn`, so the
+ * wallet shows a spinner for the moment before a restored session appears
+ * instead of flashing "sign in" at someone who already is.
+ *
+ * The scope is intentionally an argument rather than module state, so it cannot
+ * go stale under a mounted screen.
  */
 export function useLoyaltyCards(userId: string | null | undefined): LoyaltyCardsApi {
   const scope = scopeFor(userId);
+  const authPending = userId === undefined;
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
 
   useEffect(() => {
@@ -238,5 +248,14 @@ export function useLoyaltyCards(userId: string | null | undefined): LoyaltyCards
     [scope],
   );
 
-  return { cards, loading: !ready, addCard, removeCard, renameCardStore };
+  return {
+    cards,
+    // Signed out isn't "loading" — there is nothing to wait for, so the screen
+    // shows the sign-in prompt straight away rather than an endless spinner.
+    loading: authPending || (scope !== null && !ready),
+    needsSignIn: !authPending && scope === null,
+    addCard,
+    removeCard,
+    renameCardStore,
+  };
 }

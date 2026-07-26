@@ -129,6 +129,10 @@ const nl = {
     emptyBody:
       'Voeg je klantenkaarten toe en Korb tekent de barcode voor de kassa. Ze blijven op dit toestel en niemand anders in je huishouden kan ze zien.',
     addCard: 'Kaart toevoegen',
+    signInTitle: 'Meld je aan om kaarten toe te voegen',
+    signInBody:
+      'Een klantenkaart is van jou, niet van het toestel — daarom bewaart Korb die onder jouw account. Zo kan niemand anders die dit toestel oppakt jouw kaarten zien. Ze blijven wel op dit toestel staan en worden nooit geüpload.',
+    signInCta: 'Aanmelden',
     showAtTill: 'Houd dit bij de kassa voor de scanner.',
     removeTitle: 'Kaart verwijderen?',
     removeBody: 'Je %{store}-kaart wordt van dit toestel verwijderd.',

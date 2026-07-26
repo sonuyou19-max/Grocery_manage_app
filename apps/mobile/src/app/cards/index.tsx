@@ -20,6 +20,7 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CardCode } from '@/components/card-code';
+import { CardsSignInGate } from '@/components/cards-sign-in-gate';
 import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
 import { GlassView } from '@/components/glass';
@@ -59,9 +60,11 @@ export default function CardsScreen() {
   const { colors } = useTheme();
   const t = useT();
   const { user, initializing } = useAuth();
-  // undefined while the session is still being restored, so a signed-in user is
-  // never briefly shown the signed-out (device) wallet.
-  const { cards, loading, removeCard } = useLoyaltyCards(initializing ? undefined : user?.id ?? null);
+  // undefined while the session is still being restored, so someone who *is*
+  // signed in never gets flashed the sign-in prompt on the way in.
+  const { cards, loading, needsSignIn, removeCard } = useLoyaltyCards(
+    initializing ? undefined : user?.id ?? null,
+  );
   const { width } = useWindowDimensions();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -107,7 +110,9 @@ export default function CardsScreen() {
           <View style={styles.grow}>
             <Text style={[type.h2, { color: colors.ink }]}>{t('cards.title')}</Text>
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={2}>
-              {cards.length > 0 ? t('cards.countAndPrivacy', { count: cards.length }) : t('cards.subtitle')}
+              {cards.length > 0
+                ? t('cards.countAndPrivacy', { count: cards.length })
+                : t('cards.subtitle')}
             </Text>
           </View>
         </View>
@@ -123,12 +128,17 @@ export default function CardsScreen() {
             cards.length > 0 && { height: stackHeight + spacing.xxl * 3 },
           ]}
         >
-          {cards.length === 0 && !loading && (
-            <EmptyState
-              icon="card-outline"
-              title={t('cards.emptyTitle')}
-              body={t('cards.emptyBody')}
-            />
+          {needsSignIn ? (
+            <CardsSignInGate />
+          ) : (
+            cards.length === 0 &&
+            !loading && (
+              <EmptyState
+                icon="card-outline"
+                title={t('cards.emptyTitle')}
+                body={t('cards.emptyBody')}
+              />
+            )
           )}
 
           {cards.map((card, index) => (
@@ -148,8 +158,16 @@ export default function CardsScreen() {
         </Animated.ScrollView>
       </SafeAreaView>
 
-      {/* Pushed route, so there's no tab bar to clear. */}
-      <Fab label={t('cards.addCard')} onPress={() => router.push('/cards/add')} aboveTabBar={false} />
+      {/* Hidden until there's an account to attach a card to — the gate above
+          is the way forward, not a Fab that would only bounce off it. Pushed
+          route, so there's no tab bar to clear. */}
+      {!needsSignIn && (
+        <Fab
+          label={t('cards.addCard')}
+          onPress={() => router.push('/cards/add')}
+          aboveTabBar={false}
+        />
+      )}
 
       {/* Full-size card, for holding up to a scanner. */}
       <Modal

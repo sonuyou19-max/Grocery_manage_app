@@ -129,6 +129,10 @@ const it = {
     emptyBody:
       'Aggiungi le tue carte fedeltà e Korb disegna il codice a barre per la cassa. Restano su questo telefono e nessun altro nella tua famiglia può vederle.',
     addCard: 'Aggiungi carta',
+    signInTitle: 'Accedi per aggiungere le carte',
+    signInBody:
+      'Una carta fedeltà è tua, non del telefono — quindi Korb la tiene sotto il tuo account. Così nessun altro che prende questo telefono può vedere le tue carte. Restano comunque su questo dispositivo e non vengono mai caricate.',
+    signInCta: 'Accedi',
     showAtTill: 'Mostralo allo scanner alla cassa.',
     removeTitle: 'Rimuovere la carta?',
     removeBody: 'La tua carta %{store} verrà eliminata da questo telefono.',

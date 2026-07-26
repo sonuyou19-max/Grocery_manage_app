@@ -157,6 +157,10 @@ const pl = {
     emptyBody:
       'Dodaj swoje karty lojalnościowe, a Korb narysuje kod kreskowy do kasy. Zostają na tym telefonie i nikt inny w gospodarstwie ich nie zobaczy.',
     addCard: 'Dodaj kartę',
+    signInTitle: 'Zaloguj się, aby dodać karty',
+    signInBody:
+      'Karta lojalnościowa należy do Ciebie, nie do telefonu — dlatego Korb trzyma ją na Twoim koncie. Nikt inny, kto weźmie ten telefon, nie zobaczy Twoich kart. Nadal zostają na tym urządzeniu i nigdy nie są wysyłane.',
+    signInCta: 'Zaloguj się',
     showAtTill: 'Pokaż to skanerowi przy kasie.',
     removeTitle: 'Usunąć kartę?',
     removeBody: 'Twoja karta %{store} zostanie usunięta z tego telefonu.',

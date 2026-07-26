@@ -45,7 +45,7 @@ We do not collect your contacts, precise location, advertising identifiers, or p
 
 ## Store cards stay on your device
 
-If you add supermarket loyalty cards, the card number and the shop it belongs to are stored **only on your phone**. They are never sent to us or to any other service, and they are not shared with other members of your household — even members who share the device, because cards are kept separately for each signed-in account. Deleting a card, or deleting your account, removes them from the phone.
+If you add supermarket loyalty cards, the card number and the shop it belongs to are stored **only on your phone**. They are never sent to us or to any other service, and they are not shared with other members of your household — even members who share the device, because cards are kept separately for each signed-in account. Adding a card therefore requires you to be signed in: a card is held under your account so that nobody else using the same phone can see it. Deleting a card, or deleting your account, removes them from the phone.
 
 The camera is used only to read the barcode at the moment you add a card. No photo is stored or uploaded; only the decoded number is kept. Granting access to your photo library, if you choose to add a card from a screenshot, likewise only reads the image to decode it.
 

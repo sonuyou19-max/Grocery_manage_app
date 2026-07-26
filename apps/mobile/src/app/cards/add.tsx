@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
 import { CardCode } from '@/components/card-code';
+import { CardsSignInGate } from '@/components/cards-sign-in-gate';
 import { PrimaryButton } from '@/components/form';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
@@ -84,9 +85,11 @@ export default function AddCardScreen() {
   const { user, initializing } = useAuth();
   // undefined while auth resolves — addCard refuses until the scope is known,
   // so a card can't be filed under the device bucket by a launch-time race.
-  const { addCard, loading: walletLoading } = useLoyaltyCards(
-    initializing ? undefined : user?.id ?? null,
-  );
+  const {
+    addCard,
+    loading: walletLoading,
+    needsSignIn,
+  } = useLoyaltyCards(initializing ? undefined : user?.id ?? null);
   const { showToast } = useToast();
 
   const [step, setStep] = useState<Step>('store');
@@ -182,6 +185,19 @@ export default function AddCardScreen() {
     // card because both screens read the same store.
     router.back();
   };
+
+  /* ------------------------------------------------------------- sign-in gate */
+
+  // A card needs an owner, so there is nothing to do here without an account.
+  // Checked before the camera step too: signing out mid-flow (or arriving by a
+  // deep link) must not leave a form that silently refuses to save.
+  if (needsSignIn) {
+    return (
+      <Screen title={t('cards.addTitle')} subtitle={t('cards.signInTitle')}>
+        <CardsSignInGate />
+      </Screen>
+    );
+  }
 
   /* -------------------------------------------------------------- scan step */
 
