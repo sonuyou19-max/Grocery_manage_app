@@ -170,6 +170,16 @@ const de = {
     importIosLimit:
       'Auf dem iPhone lassen sich aus einem gespeicherten Bild nur QR-Codes lesen. Scanne die Karte mit der Kamera oder gib die Nummer ein.',
   },
+  claim: {
+    take: 'Ich hole das',
+    yours: 'Du holst das',
+    taken: '%{name} holt das',
+    someone: 'Jemand',
+    takeA11y: 'Sag, dass du diesen Artikel holst',
+    releaseA11y: '%{label}. Tippen, um freizugeben.',
+    oneShopping: '%{name} kauft auch gerade ein',
+    manyShopping: '%{count} andere kaufen auch gerade ein',
+  },
   staple: {
     badge: 'Basis',
     openFor: 'Nachkauf-Einstellungen für %{item}',

@@ -26,6 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { GlassView } from '@/components/glass';
 import { ItemSheet } from '@/components/item-sheet';
 import { ListPantryStrip } from '@/components/list-pantry-strip';
@@ -67,9 +68,9 @@ export default function ListDetailScreen() {
   const { colors, scheme } = useTheme();
   const { t, money } = useLocale();
   const list = useList(id);
-  const { addItem, toggleItem, deleteItem } = useGroceries();
+  const { addItem, toggleItem, deleteItem, setClaim, shoppersOnline } = useGroceries();
   const { user } = useAuth();
-  const { household } = useHousehold();
+  const { household, members } = useHousehold();
   const { logPurchase } = usePantryIntel();
   const [draft, setDraft] = useState('');
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
@@ -100,6 +101,18 @@ export default function ListDetailScreen() {
       timers.clear();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A claim stores a user id; the household roster is the only place a name for
+  // it exists. Falls back to a generic label rather than showing a raw uuid when
+  // the claimer has since left the household.
+  const nameFor = (userId: string): string =>
+    members.find((m) => m.user_id === userId)?.display_name?.trim() || t('claim.someone');
+
+  // Names of other members with the app open right now, for the live badge.
+  const shopperNames = useMemo(
+    () => shoppersOnline.map((id) => members.find((m) => m.user_id === id)?.display_name?.trim() || t('claim.someone')),
+    [shoppersOnline, members, t],
+  );
 
   const grouped = useMemo(() => {
     if (!list) return [];
@@ -290,6 +303,8 @@ export default function ListDetailScreen() {
             {list.store ?? t('listDetail.anyStore')} ·{' '}
             {t('listDetail.inCartCount', { checked: checkedCount, total: list.items.length })}
           </Text>
+          {/* Renders nothing when you're the only one here. */}
+          <ShoppersBadge names={shopperNames} />
         </View>
         {list.items.length > 0 && (
           <Pressable
@@ -351,6 +366,16 @@ export default function ListDetailScreen() {
                 onToggle={() => handleToggle(it)}
                 onEdit={() => openEdit(it)}
                 onDelete={() => deleteItem(list.id, it.id)}
+                // Only offer claiming when it can matter: someone else is
+                // online, or the item is already claimed. Solo shoppers see the
+                // row exactly as before.
+                claimable={shoppersOnline.length > 0 || it.claimedBy != null}
+                claimedByName={it.claimedBy ? nameFor(it.claimedBy) : null}
+                claimMine={it.claimedBy != null && it.claimedBy === user?.id}
+                onToggleClaim={() => {
+                  haptics.tick();
+                  setClaim(list.id, it.id, it.claimedBy == null);
+                }}
               />
             ))}
           </View>
@@ -421,11 +446,19 @@ const DELETE_WIDTH = 92;
 function SwipeableItemRow({
   item: it,
   onToggle,
+  claimable,
+  claimedByName,
+  claimMine,
+  onToggleClaim,
   onEdit,
   onDelete,
 }: {
   item: Item;
   onToggle: () => void;
+  claimable: boolean;
+  claimedByName: string | null;
+  claimMine: boolean;
+  onToggleClaim: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -539,6 +572,12 @@ function SwipeableItemRow({
               </View>
             )}
           </Pressable>
+
+          {/* Claiming: only once a second person is around, and never on
+              something already bought. */}
+          {claimable && !it.checked && (
+            <ClaimChip claimedByName={claimedByName} mine={claimMine} onPress={onToggleClaim} />
+          )}
 
           <Pressable onPress={guard(onEdit)} hitSlop={8}>
             {it.priceCents != null ? (

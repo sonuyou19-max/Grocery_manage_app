@@ -180,6 +180,16 @@ const en = {
     importIosLimit:
       'On iPhone, only QR codes can be read from a saved image. Scan the card with the camera, or type the number.',
   },
+  claim: {
+    take: 'I’ll get this',
+    yours: 'You’re getting this',
+    taken: '%{name} is getting this',
+    someone: 'Someone',
+    takeA11y: 'Say you’re getting this item',
+    releaseA11y: '%{label}. Tap to release.',
+    oneShopping: '%{name} is shopping too',
+    manyShopping: '%{count} others are shopping too',
+  },
   staple: {
     badge: 'Staple',
     openFor: 'Restock settings for %{item}',

@@ -24,9 +24,9 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Local + cloud parity:** lists exist in two modes — on-device and cloud
   (household). Any new item field must be handled in **both** the local store
   *and* the Supabase schema, or the feature silently breaks for one kind of user.
-- **Every schema change is a new migration** (next is `0012_`; `0011` is the
-  recap language column), never an edit to an existing one. Add RLS for
-  anything household-shared.
+- **Every schema change is a new migration** (next is `0016_`; 0013–0015 are the
+  purchase log, restock cadence and item claims), never an edit to an existing
+  one. Add RLS for anything household-shared.
 - **The dead-end rule** (learned from the edit-mode bug): any UI mode that hides
   the primary action must keep an always-visible exit.
 - **Definition of done per feature:** typecheck clean → Android bundle exports →
@@ -47,10 +47,10 @@ introduces a parallel, independently-tracked data store. Concretely:
 | Area | Already in place | The actual gap |
 |---|---|---|
 | Pantry snooze/learning | `pantry-intel`: `markAlmostOut`, `markStillGood`, `snoozeUntil`, `useVibeDeck` (home-screen vibe card) | Those actions aren't surfaced on the **Pantry tab** rows |
-| Insights | `insights.tsx`: basket balance, staples, spend total, spend-by-category, weekly recap | No **per-store** price intelligence; no **price history over time** (spend is computed from current lists only) |
+| Insights | `insights.tsx`: basket balance, staples, spend total, spend-by-category, per-store spend, cheaper-elsewhere, weekly spend trend + price changes, weekly recap | — |
 | Categorisation memory | `lib/categorize`: on-device keyword + learned name→category cache | No learned **usual quantity / unit / store** per item |
 | Store prefs | `lib/store-prefs`: ordered store options, `recordStoreUse` | — |
-| Item schema | `Item`: name, category, quantity, unit, priceCents, store, checked | No `claimed_by`, no restock cadence, no purchase-price log |
+| Item schema | `Item`: name, category, quantity, unit, priceCents, store, checked, claimedBy/claimedAt; pantry stats carry keepStocked + cadenceDays; purchases logged to `price_entries` | — |
 
 ---
 
@@ -69,9 +69,11 @@ introduces a parallel, independently-tracked data store. Concretely:
   so it needs no migration and does not have to precede launch or Wave 3.
   - Rejected alternative: `PER_LIST_ACCESS_DESIGN.md` (per-list ACLs +
     event-sourced pantry). Kept for its reasoning.
-- **Wave 3 — next (backend):** #4b price history (purchase-log migration),
-  #7a recurring-staple cadence, #5 live household shopping. Needs migrations
-  `0012+` and RLS. Already household-scoped, so multi-household comes free.
+- **Wave 3 — ✅ complete, not yet device-verified:** #4b price history
+  (0013), #7a recurring-staple cadence (0014), #5 live household shopping
+  (0015). All three are household-scoped, so multi-household came free.
+- **Wave 4 — next:** #7b auto-restock push reminders. The only remaining
+  feature, and the only one needing a native capability.
 - **i18n — ✅ complete, not yet verified on a real build.** Six languages, the
   localized recap, and the layout pass have all passed typecheck + Android
   bundle, but none of it has been seen on a device yet.
@@ -315,7 +317,81 @@ easy to verify. Native/push is deliberately last.
 
 ---
 
-## Wave 3 — backend / realtime
+## Wave 3 — ✅ all three shipped (not yet device-verified)
+
+Migration numbers shifted by one from the specs below: 0012 was taken by
+multi-household, so the purchase log is **0013**, cadence **0014**, claims
+**0015**.
+
+### #4b · Spending over time
+
+`price_entries` already existed from 0001 with the right shape and a working RLS
+policy — it had simply never been written to. 0013 adds a normalized `item_key`,
+quantity/unit, and the two indexes the screen queries; a parallel table would
+have meant two sources of truth for one fact. Deliberately **not** published to
+realtime: nothing watches it live, and publishing would push a socket message to
+every member on every check-off.
+
+Both check-off paths write it (Shopping Mode was silently logging null prices
+before), and the detail is snapshotted at check-off rather than when the debounce
+fires, so editing a row in between can't rewrite what the log says was paid.
+
+`lib/purchase-log.ts` is where the care went, all of it about not asserting
+things that aren't true: local Monday week boundaries (UTC pushes a Sunday
+evening shop into next week east of Greenwich), empty weeks emitted rather than
+skipped, averages over *active* weeks, week-over-week across the two most recent
+*complete* weeks, and median baselines compared per-unit within a matching unit
+bucket. `check:purchase-log` pins all of it and passes under five timezones.
+
+The chart uses one fill for every bar — bar length already encodes the amount, so
+shading by value would double-encode it — and labels the partial current week
+rather than recolouring it, because it's incomplete data, not less spend.
+
+### #7a · Recurring staples
+
+The whole mechanism is `effectiveInterval`'s precedence chain: user cadence →
+learned rate → category default. Because the due date, the deck, the pantry bar
+and the weekly builder all read the interval through that one function, a pinned
+cadence reaches all of them without any of them knowing the feature exists. The
+builder needed no change at all.
+
+`keep_stocked` stays a separate column from `cadence_days` because they're
+independent claims — a fixed cadence on a non-staple is reasonable, and so is
+marking a staple while still letting Korb learn. The flag doesn't move the due
+date; it decides what wins a place in the **capped** deck.
+
+`check:pantry-intel` caught `recordPurchase` rebuilding the stat from scratch and
+wiping the user's staple settings on first re-purchase — the feature undoing
+itself. It also pins that a null/zero cadence falls through rather than reading
+as "due now", and that setting a cadence clears a stale snooze while merely
+toggling the flag does not.
+
+### #5 · Live household shopping
+
+Claims live on the row (0015), presence lives on the socket — the split is the
+design. A claim has to survive the claimer backgrounding the app or losing signal
+in a shop basement, which anything socket-scoped cannot; "who's shopping right
+now" *should* evaporate when someone closes the app, which is exactly what
+socket-scoped membership gives for free.
+
+No unique constraint and no `claims` table: a claim is a hint between people who
+trust each other, not a lock. The failure it prevents is buying two of something,
+and the cost of getting it wrong is a spare bottle of milk. Any member can
+release any claim — if someone's phone died holding one, the household has to be
+able to take the item back.
+
+The UI appears **only** when a second person is online or an item is already
+claimed, so a solo shopper's list looks exactly as it did before.
+
+### Deliberately not done
+
+- No push notification for a claim or a due staple — that's #7b, Wave 4.
+- No per-item price history *screen*; `historyFor` exists and is unused by UI.
+- No "due soon" section separate from the Vibe Check deck: the deck already is
+  that surface, and a second one would compete with it.
+- Presence shows *that* someone is shopping, not which list or aisle.
+
+## Original Wave 3 specs (for reference)
 
 ### #4b · Insights: price history over time
 - **Goal:** spend trends across weeks, not just current lists.

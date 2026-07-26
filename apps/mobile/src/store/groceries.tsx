@@ -48,6 +48,13 @@ export interface Item {
   /** Supermarket id (see lib/supermarkets) or a custom store name; optional. */
   store: string | null;
   checked: boolean;
+  /**
+   * The member who said "I'm getting this" — a hint to stop two people buying
+   * the same thing, not a lock. Null on local lists, which have no one to
+   * coordinate with.
+   */
+  claimedBy: string | null;
+  claimedAt: number | null;
 }
 
 export type ItemPatch = Partial<
@@ -90,9 +97,26 @@ interface GroceriesContext {
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
   deleteItem: (listId: string, itemId: string) => void;
+  /**
+   * Claim an item ("I'm getting this") or release it. A no-op on local lists.
+   * Any member can release any claim — see migration 0015 for why.
+   */
+  setClaim: (listId: string, itemId: string, claimed: boolean) => void;
+  /**
+   * Other members with the app open right now, from realtime presence. Empty
+   * when solo, offline, or on local lists — callers must degrade to showing
+   * nothing rather than a "nobody here" state.
+   */
+  shoppersOnline: string[];
 }
 
 const Ctx = createContext<GroceriesContext | null>(null);
+
+/**
+ * Stable empty array for the no-presence case. A fresh `[]` each render would
+ * change identity every time and defeat memoization in every consumer.
+ */
+const EMPTY_SHOPPERS: string[] = [];
 
 const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {}): Item => ({
   id: uuidv4(),
@@ -103,6 +127,9 @@ const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {})
   priceCents: null,
   store: null,
   checked: false,
+  // Local lists have nobody to coordinate with, so nothing is ever claimed.
+  claimedBy: null,
+  claimedAt: null,
   ...opts,
 });
 
@@ -285,6 +312,11 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         setLists((prev) =>
           prev.map((l) => (l.id === listId ? { ...l, items: l.items.filter((it) => it.id !== itemId) } : l)),
         ),
+      // Claiming and presence are meaningless on a local list — there is nobody
+      // else on it. No-ops rather than errors, so the UI can call them
+      // unconditionally and simply render nothing.
+      setClaim: () => {},
+      shoppersOnline: EMPTY_SHOPPERS,
     }),
     [lists, patchItem, setChecked, insertParsed],
   );
@@ -306,6 +338,8 @@ interface DbItem {
   store: string | null;
   checked: boolean;
   created_at: string;
+  claimed_by: string | null;
+  claimed_at: string | null;
 }
 interface DbList {
   id: string;
@@ -324,6 +358,8 @@ const mapItem = (r: DbItem): Item => ({
   priceCents: r.price_cents,
   store: r.store,
   checked: r.checked,
+  claimedBy: r.claimed_by,
+  claimedAt: r.claimed_at ? Date.parse(r.claimed_at) : null,
 });
 
 const mapList = (r: DbList): List => ({
@@ -342,6 +378,8 @@ function CloudGroceriesProvider({
   const { user } = useAuth();
   const appActive = useAppActive();
   const [lists, setLists] = useState<List[]>([]);
+  /** Other members with the app open, from presence. Never persisted. */
+  const [shoppers, setShoppers] = useState<string[]>(EMPTY_SHOPPERS);
   const cacheKey = `korb.lists.cloud.${householdId}`;
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -358,7 +396,7 @@ function CloudGroceriesProvider({
     const { data, error } = await supabase
       .from('shopping_lists')
       .select(
-        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, created_at)',
+        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, created_at, claimed_by, claimed_at)',
       )
       .eq('household_id', householdId)
       .eq('archived', false)
@@ -385,18 +423,40 @@ function CloudGroceriesProvider({
 
     void fetchLists();
 
+    // One channel carries both the row changes and presence. Presence is
+    // genuinely ephemeral — "who has the app open right now" should vanish when
+    // someone closes it, which is exactly what a socket-scoped membership does
+    // for free. (Claims are the opposite and live on the row; see 0015.)
     const channel = supabase
-      .channel(`lists-${householdId}`)
+      .channel(`lists-${householdId}`, { config: { presence: { key: user?.id ?? 'anon' } } })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' }, scheduleRefetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_lists' }, scheduleRefetch)
-      .subscribe();
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        // Everyone except me. Presence keys are user ids, and a member with two
+        // devices appears twice, so this de-duplicates.
+        const others = Object.keys(state).filter((id) => id && id !== user?.id);
+        // Only replace the array when the set actually changed, so a presence
+        // heartbeat doesn't re-render the whole list tree every few seconds.
+        setShoppers((prev) =>
+          prev.length === others.length && prev.every((id) => others.includes(id)) ? prev : others,
+        );
+      })
+      .subscribe((status) => {
+        // Announce ourselves only once the socket is actually joined; tracking
+        // earlier is dropped silently.
+        if (status === 'SUBSCRIBED' && user?.id) void channel.track({ at: Date.now() });
+      });
 
     return () => {
       alive = false;
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
+      // Leaving the channel drops our presence, so backgrounding the app takes
+      // us out of "shopping now" rather than leaving a ghost behind.
+      setShoppers(EMPTY_SHOPPERS);
       supabase.removeChannel(channel);
     };
-  }, [householdId, cacheKey, fetchLists, scheduleRefetch, appActive]);
+  }, [householdId, cacheKey, fetchLists, scheduleRefetch, appActive, user?.id]);
 
   const patchLocalItem = useCallback((listId: string, itemId: string, patch: ItemPatch) => {
     setLists((prev) =>
@@ -616,8 +676,38 @@ function CloudGroceriesProvider({
             if (error) scheduleRefetch();
           });
       },
+      setClaim: (listId, itemId, claimed) => {
+        const claimedBy = claimed ? user?.id ?? null : null;
+        if (claimed && !claimedBy) return; // nothing to claim it as
+        const claimedAt = claimed ? Date.now() : null;
+        // Optimistic: the tap has to feel instant while you're stood in an
+        // aisle, and realtime will confirm it on everyone else's phone.
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId
+              ? {
+                  ...l,
+                  items: l.items.map((it) =>
+                    it.id === itemId ? { ...it, claimedBy, claimedAt } : it,
+                  ),
+                }
+              : l,
+          ),
+        );
+        supabase
+          .from('list_items')
+          .update({
+            claimed_by: claimedBy,
+            claimed_at: claimedAt ? new Date(claimedAt).toISOString() : null,
+          })
+          .eq('id', itemId)
+          .then(({ error }) => {
+            if (error) scheduleRefetch();
+          });
+      },
+      shoppersOnline: shoppers,
     };
-  }, [lists, householdId, user, patchLocalItem, setCheckedLocal, scheduleRefetch]);
+  }, [lists, shoppers, householdId, user, patchLocalItem, setCheckedLocal, scheduleRefetch]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

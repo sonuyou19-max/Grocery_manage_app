@@ -197,6 +197,16 @@ const pl = {
     importIosLimit:
       'Na iPhone’ie z zapisanego obrazu można odczytać tylko kody QR. Zeskanuj kartę kamerą albo wpisz numer.',
   },
+  claim: {
+    take: 'Ja to wezmę',
+    yours: 'Ty to bierzesz',
+    taken: '%{name} to bierze',
+    someone: 'Ktoś',
+    takeA11y: 'Zaznacz, że bierzesz ten produkt',
+    releaseA11y: '%{label}. Dotknij, aby zwolnić.',
+    oneShopping: '%{name} też robi zakupy',
+    manyShopping: 'Jeszcze %{count} osób robi zakupy',
+  },
   staple: {
     badge: 'Podstawa',
     openFor: 'Ustawienia uzupełniania dla %{item}',

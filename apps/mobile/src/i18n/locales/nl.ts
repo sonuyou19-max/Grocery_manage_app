@@ -169,6 +169,16 @@ const nl = {
     importIosLimit:
       'Op de iPhone kunnen uit een opgeslagen afbeelding alleen QR-codes worden gelezen. Scan de kaart met de camera of typ het nummer.',
   },
+  claim: {
+    take: 'Ik pak dit',
+    yours: 'Jij pakt dit',
+    taken: '%{name} pakt dit',
+    someone: 'Iemand',
+    takeA11y: 'Geef aan dat jij dit item pakt',
+    releaseA11y: '%{label}. Tik om vrij te geven.',
+    oneShopping: '%{name} doet ook boodschappen',
+    manyShopping: '%{count} anderen doen ook boodschappen',
+  },
   staple: {
     badge: 'Basis',
     openFor: 'Aanvulinstellingen voor %{item}',

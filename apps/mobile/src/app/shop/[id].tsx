@@ -5,11 +5,14 @@ import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { MeshBackground } from '@/components/mesh-background';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
+import { useAuth } from '@/store/auth';
 import { useGroceries, useList, type Item } from '@/store/groceries';
+import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { spacing, type, useTheme } from '@/theme';
@@ -26,7 +29,19 @@ export default function ShoppingModeScreen() {
   const { colors } = useTheme();
   const t = useT();
   const list = useList(id);
-  const { toggleItem } = useGroceries();
+  const { toggleItem, setClaim, shoppersOnline } = useGroceries();
+  const { user } = useAuth();
+  const { members } = useHousehold();
+
+  // A claim carries a user id; the household roster is where its name lives.
+  const nameFor = (userId: string): string =>
+    members.find((m) => m.user_id === userId)?.display_name?.trim() || t('claim.someone');
+
+  const shopperNames = useMemo(
+    () => shoppersOnline.map((id) => nameFor(id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shoppersOnline, members, t],
+  );
   const { logPurchase } = usePantryIntel();
 
   const grouped = useMemo(() => {
@@ -91,6 +106,8 @@ export default function ShoppingModeScreen() {
               {list.store ?? t('listDetail.anyStore')} ·{' '}
               {t('listDetail.inCartCount', { checked, total })}
             </Text>
+            {/* Renders nothing when you're shopping alone. */}
+            <ShoppersBadge names={shopperNames} />
           </View>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.close}>
             <Ionicons name="close" size={26} color={colors.ink} />
@@ -137,6 +154,20 @@ export default function ShoppingModeScreen() {
                     >
                       {it.name}
                     </Text>
+                    {/* Claiming matters most here — this is the screen you're
+                        holding while walking the aisles. */}
+                    {(shoppersOnline.length > 0 || it.claimedBy != null) && !it.checked && (
+                      <View style={styles.claimRow}>
+                        <ClaimChip
+                          claimedByName={it.claimedBy ? nameFor(it.claimedBy) : null}
+                          mine={it.claimedBy != null && it.claimedBy === user?.id}
+                          onPress={() => {
+                            haptics.tick();
+                            setClaim(list.id, it.id, it.claimedBy == null);
+                          }}
+                        />
+                      </View>
+                    )}
                     {(it.quantity != null || it.store != null) && (
                       <View style={styles.meta}>
                         {it.store != null && <SupermarketBadge store={it.store} size={16} />}
@@ -183,6 +214,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   fill: { flex: 1, backgroundColor: 'transparent' },
   grow: { flex: 1, minWidth: 0 },
+  claimRow: { marginTop: spacing.xs, marginBottom: spacing.xs },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

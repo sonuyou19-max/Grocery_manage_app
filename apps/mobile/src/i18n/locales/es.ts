@@ -169,6 +169,16 @@ const es = {
     importIosLimit:
       'En iPhone solo se pueden leer códigos QR de una imagen guardada. Escanea la tarjeta con la cámara o escribe el número.',
   },
+  claim: {
+    take: 'Yo lo cojo',
+    yours: 'Tú lo coges',
+    taken: 'Lo coge %{name}',
+    someone: 'Alguien',
+    takeA11y: 'Indica que coges este artículo',
+    releaseA11y: '%{label}. Toca para liberarlo.',
+    oneShopping: '%{name} también está comprando',
+    manyShopping: 'Otras %{count} personas también están comprando',
+  },
   staple: {
     badge: 'Básico',
     openFor: 'Ajustes de reposición de %{item}',
