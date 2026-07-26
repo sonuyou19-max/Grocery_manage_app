@@ -35,14 +35,6 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "locales": {
-      "de": "./locales/de.json",
-      "es": "./locales/es.json",
-      "fr": "./locales/fr.json",
-      "it": "./locales/it.json",
-      "nl": "./locales/nl.json",
-      "pl": "./locales/pl.json"
-    },
     "plugins": [
       "expo-router",
       [
