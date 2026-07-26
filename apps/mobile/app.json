@@ -63,7 +63,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Korb needs access to your photos so you can add a loyalty card from a screenshot."
+          "photosPermission": "Korb needs access to your photos so you can add a loyalty card from a screenshot.",
+          "microphonePermission": false
         }
       ],
       "@sentry/react-native"
