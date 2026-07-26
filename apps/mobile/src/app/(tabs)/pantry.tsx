@@ -25,11 +25,13 @@ import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
+import { StapleSheet } from '@/components/staple-sheet';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import {
   dueAt,
+  hasUserCadence,
   lastBoughtLabel,
   lifeRemaining,
   statusLabel,
@@ -62,7 +64,7 @@ type Colors = ReturnType<typeof useTheme>['colors'];
 export default function PantryScreen() {
   const { colors } = useTheme();
   const t = useT();
-  const { stats, logPurchase, markAlmostOut, markStillGood } = usePantryIntel();
+  const { stats, logPurchase, markAlmostOut, markStillGood, setStaple } = usePantryIntel();
   const { addToHomeList, addToChosenList } = useHomeListAdd();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
@@ -70,6 +72,9 @@ export default function PantryScreen() {
   const [stockOpen, setStockOpen] = useState(false);
   // The item awaiting a list-picker choice (null when the picker is closed).
   const [pendingAdd, setPendingAdd] = useState<ItemStat | null>(null);
+  // The item whose restock settings are open. Held by key, not by value, so the
+  // sheet re-reads from `stats` and reflects each change as it's made.
+  const [stapleKey, setStapleKey] = useState<string | null>(null);
 
   const now = Date.now();
   const items = useMemo(
@@ -140,6 +145,10 @@ export default function PantryScreen() {
           colors={colors}
           onStillGood={() => onStillGood(item)}
           onAddToList={() => onAddToList(item)}
+          onOpen={() => {
+            haptics.tick();
+            setStapleKey(item.key);
+          }}
         />
       ))}
     </View>
@@ -280,6 +289,13 @@ export default function PantryScreen() {
           setAdding(false);
         }}
       />
+      <StapleSheet
+        item={stapleKey ? stats[stapleKey] ?? null : null}
+        onClose={() => setStapleKey(null)}
+        onChange={(patch) => {
+          if (stapleKey) setStaple(stapleKey, patch);
+        }}
+      />
       <ListPickerSheet
         visible={pendingAdd != null}
         title={pendingAdd ? t('pantry.addTo', { item: pendingAdd.display }) : t('pantry.addToList')}
@@ -307,12 +323,14 @@ function PantrySwipeRow({
   colors,
   onStillGood,
   onAddToList,
+  onOpen,
 }: {
   item: ItemStat;
   now: number;
   colors: Colors;
   onStillGood: () => void;
   onAddToList: () => void;
+  onOpen: () => void;
 }) {
   const t = useT();
   const tx = useSharedValue(0);
@@ -363,14 +381,34 @@ function PantrySwipeRow({
 
       <GestureDetector gesture={pan}>
         <Animated.View style={[styles.rowContent, { backgroundColor: colors.surface }, contentStyle]}>
-          <View style={styles.grow}>
-            <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-              {item.display}
-            </Text>
+          {/* Tap opens restock settings. Nested inside the pan gesture rather
+              than wrapping it, so a swipe still wins over a press. */}
+          <Pressable
+            onPress={onOpen}
+            style={styles.grow}
+            accessibilityRole="button"
+            accessibilityLabel={t('staple.openFor', { item: item.display })}
+          >
+            <View style={styles.nameRow}>
+              {/* Staples carry a mark, and the accessible name says so too —
+                  never colour or icon alone. */}
+              {item.keepStocked && (
+                <Ionicons
+                  name="bookmark"
+                  size={13}
+                  color={colors.accent}
+                  accessibilityLabel={t('staple.badge')}
+                />
+              )}
+              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
+                {item.display}
+              </Text>
+            </View>
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
               {categoryLabel(item.category, t)} · {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+              {hasUserCadence(item) ? ` · ${t('staple.everyDays', { count: item.cadenceDays ?? 0 })}` : ''}
             </Text>
-          </View>
+          </Pressable>
           <View style={styles.stock}>
             <View style={[styles.bar, { backgroundColor: colors.line }]}>
               <View style={[styles.fill, { width: `${Math.max(left, 0.02) * 100}%`, backgroundColor: barColor }]} />
@@ -431,6 +469,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   grow: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   stock: { width: 104, gap: spacing.xs },
   bar: { height: 5, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },

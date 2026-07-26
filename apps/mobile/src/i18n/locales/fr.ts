@@ -170,6 +170,18 @@ const fr = {
     importIosLimit:
       'Sur iPhone, seuls les QR codes peuvent être lus depuis une image enregistrée. Scanne la carte avec l’appareil photo, ou saisis le numéro.',
   },
+  staple: {
+    badge: 'Essentiel',
+    openFor: 'Réglages de réapprovisionnement pour %{item}',
+    keepTitle: 'Toujours en avoir',
+    keepHint: 'Passe en premier dans le Check garde-manger quand c’est le moment — pour ne jamais en manquer.',
+    cadenceTitle: 'À quelle fréquence tu en rachètes',
+    cadenceAuto: 'Laisser Korb apprendre',
+    everyDays: { one: 'Tous les %{count} jour', other: 'Tous les %{count} jours' },
+    cadencePinned: { one: 'Réglé sur tous les %{count} jour', other: 'Réglé sur tous les %{count} jours' },
+    cadenceLearned: { one: 'Korb a appris environ %{count} jour', other: 'Korb a appris environ %{count} jours' },
+    cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
+  },
   pantry: {
     subtitleEmpty: 'Ce que Korb suit',
     subtitleTracked: '%{count} suivis · %{low} bientôt épuisés',

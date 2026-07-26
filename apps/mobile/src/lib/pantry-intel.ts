@@ -51,6 +51,16 @@ export interface ItemStat {
   sampleCount: number;
   /** "Still good" pushes this out so the item leaves the deck for a while. */
   snoozeUntil: number | null;
+  /**
+   * A staple: something the household wants to always have. Doesn't change when
+   * the item comes due — only how prominently it's surfaced once it does.
+   */
+  keepStocked?: boolean;
+  /**
+   * A user-stated restock interval in days, which overrides whatever we learned.
+   * Null/undefined means "keep learning" — the absence of an override, not zero.
+   */
+  cadenceDays?: number | null;
 }
 
 export type StatMap = Record<string, ItemStat>;
@@ -61,14 +71,59 @@ export interface DeckCard {
   category: ItemCategory;
   /** When it was last bought — rendered to a localized subtitle by the caller. */
   lastPurchasedAt: number;
+  /** Marked as a staple, so the card can say so. */
+  keepStocked: boolean;
 }
 
 export const normalizeKey = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, ' ');
 
-/** Personal interval once we have samples; otherwise the category default. */
+/**
+ * The interval to predict against, in days, most authoritative first:
+ *
+ *   1. a cadence the user set — they know their household better than we do;
+ *   2. the rate we learned from their own check-offs;
+ *   3. the category default, for an item with no history yet.
+ *
+ * This one function is the whole mechanism behind recurring staples: the due
+ * date, the Vibe Check deck, the pantry bar and the weekly list builder all read
+ * the interval through here, so a user-set cadence reaches every one of them
+ * without any of them knowing the feature exists.
+ */
 export function effectiveInterval(stat: ItemStat): number {
+  if (stat.cadenceDays != null && stat.cadenceDays > 0) return stat.cadenceDays;
   if (stat.sampleCount > 0 && stat.intervalDays > 0) return stat.intervalDays;
   return DEFAULT_INTERVALS[stat.category] ?? DEFAULT_INTERVALS.other;
+}
+
+/** Whether the interval came from the user rather than from learning. */
+export function hasUserCadence(stat: ItemStat): boolean {
+  return stat.cadenceDays != null && stat.cadenceDays > 0;
+}
+
+/** Cadence presets offered in the UI, in days. */
+export const CADENCE_PRESETS = [3, 7, 14, 30] as const;
+
+/**
+ * Mark (or unmark) a staple, and optionally pin its cadence.
+ *
+ * Setting a cadence clears any active snooze: the user has just told us the
+ * interval, and leaving a "still good" snooze in place would suppress the very
+ * prediction they came here to correct.
+ */
+export function applyStaple(
+  stats: StatMap,
+  key: string,
+  patch: { keepStocked?: boolean; cadenceDays?: number | null },
+): StatMap {
+  const s = stats[key];
+  if (!s) return stats;
+  const next: ItemStat = { ...s };
+  if (patch.keepStocked !== undefined) next.keepStocked = patch.keepStocked;
+  if (patch.cadenceDays !== undefined) {
+    next.cadenceDays = patch.cadenceDays;
+    next.snoozeUntil = null;
+  }
+  return { ...stats, [key]: next };
 }
 
 /** Epoch ms at which the item becomes due (90% of lifespan, respecting snooze). */
@@ -118,17 +173,27 @@ export function lastBoughtLabel(lastPurchasedAt: number, now: number, t: Transla
  * shopping list are excluded — no point reminding you to buy what's queued.
  */
 export function buildDeck(stats: StatMap, excludeKeys: Set<string>, now: number): DeckCard[] {
-  return Object.values(stats)
-    .filter((s) => isDue(s, now) && !excludeKeys.has(s.key))
-    .map((s) => ({ stat: s, overdue: now - dueAt(s) }))
-    .sort((a, b) => b.overdue - a.overdue)
-    .slice(0, DECK_CAP)
-    .map(({ stat }) => ({
-      key: stat.key,
-      display: stat.display,
-      category: stat.category,
-      lastPurchasedAt: stat.lastPurchasedAt,
-    }));
+  return (
+    Object.values(stats)
+      .filter((s) => isDue(s, now) && !excludeKeys.has(s.key))
+      .map((s) => ({ stat: s, overdue: now - dueAt(s) }))
+      // Staples first, then by how overdue. Running out of something the user
+      // explicitly said to always keep is the failure they asked us to prevent,
+      // so it outranks a merely-more-overdue incidental item — and the deck is
+      // capped, so without this a staple can be pushed off the end entirely.
+      .sort((a, b) => {
+        const staple = Number(b.stat.keepStocked ?? false) - Number(a.stat.keepStocked ?? false);
+        return staple !== 0 ? staple : b.overdue - a.overdue;
+      })
+      .slice(0, DECK_CAP)
+      .map(({ stat }) => ({
+        key: stat.key,
+        display: stat.display,
+        category: stat.category,
+        lastPurchasedAt: stat.lastPurchasedAt,
+        keepStocked: stat.keepStocked ?? false,
+      }))
+  );
 }
 
 /**
@@ -161,6 +226,11 @@ export function recordPurchase(
   return {
     ...stats,
     [key]: {
+      // Spread the previous row first: this runs on *every* check-off, and
+      // rebuilding the stat from scratch would silently wipe the user's own
+      // settings (staple flag, pinned cadence) the first time they bought the
+      // item — the feature quietly undoing itself.
+      ...prev,
       key,
       display: name.trim(),
       category,

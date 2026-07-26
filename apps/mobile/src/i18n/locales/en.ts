@@ -180,6 +180,18 @@ const en = {
     importIosLimit:
       'On iPhone, only QR codes can be read from a saved image. Scan the card with the camera, or type the number.',
   },
+  staple: {
+    badge: 'Staple',
+    openFor: 'Restock settings for %{item}',
+    keepTitle: 'Always keep in stock',
+    keepHint: 'Comes first in the Vibe Check when it’s due, so it never quietly runs out.',
+    cadenceTitle: 'How often you restock',
+    cadenceAuto: 'Let Korb learn',
+    everyDays: { one: 'Every %{count} day', other: 'Every %{count} days' },
+    cadencePinned: { one: 'Set to every %{count} day', other: 'Set to every %{count} days' },
+    cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
+    cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
+  },
   pantry: {
     subtitleEmpty: 'What Korb is tracking',
     subtitleTracked: '%{count} tracked · %{low} running low',

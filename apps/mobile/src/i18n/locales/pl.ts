@@ -197,6 +197,33 @@ const pl = {
     importIosLimit:
       'Na iPhone’ie z zapisanego obrazu można odczytać tylko kody QR. Zeskanuj kartę kamerą albo wpisz numer.',
   },
+  staple: {
+    badge: 'Podstawa',
+    openFor: 'Ustawienia uzupełniania dla %{item}',
+    keepTitle: 'Zawsze miej w domu',
+    keepHint: 'Trafia na początek Przeglądu spiżarni, gdy przyjdzie czas — żeby nigdy nie skończyło się niepostrzeżenie.',
+    cadenceTitle: 'Jak często to uzupełniasz',
+    cadenceAuto: 'Niech Korb się nauczy',
+    everyDays: {
+      one: 'Co %{count} dzień',
+      few: 'Co %{count} dni',
+      many: 'Co %{count} dni',
+      other: 'Co %{count} dni',
+    },
+    cadencePinned: {
+      one: 'Ustawiono co %{count} dzień',
+      few: 'Ustawiono co %{count} dni',
+      many: 'Ustawiono co %{count} dni',
+      other: 'Ustawiono co %{count} dni',
+    },
+    cadenceLearned: {
+      one: 'Korb nauczył się około %{count} dnia',
+      few: 'Korb nauczył się około %{count} dni',
+      many: 'Korb nauczył się około %{count} dni',
+      other: 'Korb nauczył się około %{count} dni',
+    },
+    cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
+  },
   pantry: {
     subtitleEmpty: 'Co śledzi Korb',
     subtitleTracked: '%{count} śledzonych · %{low} się kończy',

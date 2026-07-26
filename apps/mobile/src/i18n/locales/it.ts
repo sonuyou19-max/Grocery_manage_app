@@ -169,6 +169,18 @@ const it = {
     importIosLimit:
       'Su iPhone da un’immagine salvata si possono leggere solo i codici QR. Scansiona la carta con la fotocamera, oppure scrivi il numero.',
   },
+  staple: {
+    badge: 'Essenziale',
+    openFor: 'Impostazioni di riacquisto per %{item}',
+    keepTitle: 'Tienilo sempre in casa',
+    keepHint: 'Arriva per primo nel Check dispensa quando è il momento, così non finisce mai di nascosto.',
+    cadenceTitle: 'Ogni quanto lo ricompri',
+    cadenceAuto: 'Lascia imparare a Korb',
+    everyDays: { one: 'Ogni %{count} giorno', other: 'Ogni %{count} giorni' },
+    cadencePinned: { one: 'Impostato ogni %{count} giorno', other: 'Impostato ogni %{count} giorni' },
+    cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
+    cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
+  },
   pantry: {
     subtitleEmpty: 'Cosa segue Korb',
     subtitleTracked: '%{count} monitorati · %{low} in esaurimento',

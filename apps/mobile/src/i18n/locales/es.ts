@@ -169,6 +169,18 @@ const es = {
     importIosLimit:
       'En iPhone solo se pueden leer códigos QR de una imagen guardada. Escanea la tarjeta con la cámara o escribe el número.',
   },
+  staple: {
+    badge: 'Básico',
+    openFor: 'Ajustes de reposición de %{item}',
+    keepTitle: 'Tenerlo siempre en casa',
+    keepHint: 'Aparece primero en el Repaso de despensa cuando toca, así nunca se acaba sin avisar.',
+    cadenceTitle: 'Cada cuánto lo repones',
+    cadenceAuto: 'Que lo aprenda Korb',
+    everyDays: { one: 'Cada %{count} día', other: 'Cada %{count} días' },
+    cadencePinned: { one: 'Ajustado a cada %{count} día', other: 'Ajustado a cada %{count} días' },
+    cadenceLearned: { one: 'Korb ha aprendido unos %{count} día', other: 'Korb ha aprendido unos %{count} días' },
+    cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
+  },
   pantry: {
     subtitleEmpty: 'Lo que Korb controla',
     subtitleTracked: '%{count} controlados · %{low} agotándose',

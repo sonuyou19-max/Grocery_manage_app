@@ -169,6 +169,18 @@ const nl = {
     importIosLimit:
       'Op de iPhone kunnen uit een opgeslagen afbeelding alleen QR-codes worden gelezen. Scan de kaart met de camera of typ het nummer.',
   },
+  staple: {
+    badge: 'Basis',
+    openFor: 'Aanvulinstellingen voor %{item}',
+    keepTitle: 'Altijd op voorraad houden',
+    keepHint: 'Komt als eerste in de Voorraadcheck wanneer het tijd is, zodat het nooit stil opraakt.',
+    cadenceTitle: 'Hoe vaak je het aanvult',
+    cadenceAuto: 'Korb laten leren',
+    everyDays: { one: 'Elke %{count} dag', other: 'Elke %{count} dagen' },
+    cadencePinned: { one: 'Ingesteld op elke %{count} dag', other: 'Ingesteld op elke %{count} dagen' },
+    cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
+    cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
+  },
   pantry: {
     subtitleEmpty: 'Wat Korb bijhoudt',
     subtitleTracked: '%{count} bijgehouden · %{low} bijna op',

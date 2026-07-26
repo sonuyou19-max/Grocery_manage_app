@@ -170,6 +170,18 @@ const de = {
     importIosLimit:
       'Auf dem iPhone lassen sich aus einem gespeicherten Bild nur QR-Codes lesen. Scanne die Karte mit der Kamera oder gib die Nummer ein.',
   },
+  staple: {
+    badge: 'Basis',
+    openFor: 'Nachkauf-Einstellungen für %{item}',
+    keepTitle: 'Immer vorrätig halten',
+    keepHint: 'Kommt im Vorrats-Check zuerst, wenn es fällig ist — damit es nie unbemerkt ausgeht.',
+    cadenceTitle: 'Wie oft du nachkaufst',
+    cadenceAuto: 'Korb lernen lassen',
+    everyDays: { one: 'Alle %{count} Tag', other: 'Alle %{count} Tage' },
+    cadencePinned: { one: 'Auf alle %{count} Tag gesetzt', other: 'Auf alle %{count} Tage gesetzt' },
+    cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
+    cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
+  },
   pantry: {
     subtitleEmpty: 'Was Korb im Blick hat',
     subtitleTracked: '%{count} erfasst · %{low} gehen zur Neige',

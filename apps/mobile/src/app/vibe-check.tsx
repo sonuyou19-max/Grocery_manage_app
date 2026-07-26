@@ -304,6 +304,14 @@ function VibeCard({ card }: { card: DeckCard }) {
   const t = useT();
   return (
     <GlassView radius={24} style={styles.card}>
+      {/* Staples say so, so it's clear why this one is at the front of the deck.
+          Word plus icon, never the icon alone. */}
+      {card.keepStocked && (
+        <View style={styles.stapleTag}>
+          <Ionicons name="bookmark" size={12} color={colors.accent} />
+          <Text style={[type.sub, { color: colors.accent }]}>{t('staple.badge')}</Text>
+        </View>
+      )}
       <Text style={[styles.itemName, { color: colors.ink }]} numberOfLines={3} adjustsFontSizeToFit>
         {card.display}
       </Text>
@@ -448,6 +456,7 @@ const styles = StyleSheet.create({
   },
   itemName: { fontSize: 46, fontWeight: '800', letterSpacing: -1.4, textAlign: 'center' },
   itemSub: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
+  stapleTag: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
 
   revealIcon: { position: 'absolute', alignItems: 'center', gap: spacing.xs },
   revealLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },

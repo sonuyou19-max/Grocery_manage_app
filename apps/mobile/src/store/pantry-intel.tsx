@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import {
   applyAlmostOut,
+  applyStaple,
   applyStillGood,
   buildDeck,
   normalizeKey,
@@ -68,6 +69,11 @@ interface PantryIntelContext {
   markAlmostOut: (key: string) => void;
   /** Swipe right: user says it's still good; the model learns to wait longer. */
   markStillGood: (key: string) => void;
+  /**
+   * Mark a staple and/or pin its restock cadence. Pass `cadenceDays: null` to
+   * hand the interval back to the learning engine.
+   */
+  setStaple: (key: string, patch: { keepStocked?: boolean; cadenceDays?: number | null }) => void;
   /** Dev-only: inject back-dated stats so the deck is populated for testing. */
   seedDemo: () => void;
 }
@@ -249,6 +255,7 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       },
       markAlmostOut: (key) => setStats((prev) => applyAlmostOut(prev, key)),
       markStillGood: (key) => setStats((prev) => applyStillGood(prev, key)),
+      setStaple: (key, patch) => setStats((prev) => applyStaple(prev, key, patch)),
       seedDemo: () => setStats((prev) => seededDemoStats(prev)),
     }),
     [stats, purchases],
@@ -270,6 +277,8 @@ interface DbPantryRow {
   avg_purchase_interval_days: number | null;
   sample_count: number | null;
   snooze_until: string | null;
+  keep_stocked: boolean | null;
+  cadence_days: number | null;
 }
 
 const mapRow = (r: DbPantryRow): ItemStat => ({
@@ -280,6 +289,8 @@ const mapRow = (r: DbPantryRow): ItemStat => ({
   intervalDays: r.avg_purchase_interval_days ?? 0,
   sampleCount: r.sample_count ?? 0,
   snoozeUntil: r.snooze_until ? Date.parse(r.snooze_until) : null,
+  keepStocked: r.keep_stocked ?? false,
+  cadenceDays: r.cadence_days ?? null,
 });
 
 const toRow = (householdId: string, s: ItemStat) => ({
@@ -293,6 +304,8 @@ const toRow = (householdId: string, s: ItemStat) => ({
   avg_purchase_interval_days: s.sampleCount > 0 ? s.intervalDays : null,
   sample_count: s.sampleCount,
   snooze_until: s.snoozeUntil ? new Date(s.snoozeUntil).toISOString() : null,
+  keep_stocked: s.keepStocked ?? false,
+  cadence_days: s.cadenceDays ?? null,
 });
 
 interface DbPriceRow {
@@ -344,7 +357,7 @@ function CloudPantryIntelProvider({
     const { data, error } = await supabase
       .from('pantry_items')
       .select(
-        'item_key, name, display_name, category, last_purchased_at, avg_purchase_interval_days, sample_count, snooze_until',
+        'item_key, name, display_name, category, last_purchased_at, avg_purchase_interval_days, sample_count, snooze_until, keep_stocked, cadence_days',
       )
       .eq('household_id', householdId);
     if (!error && data) {
@@ -479,6 +492,11 @@ function CloudPantryIntelProvider({
       },
       markStillGood: (key) => {
         const next = applyStillGood(statsRef.current, key);
+        apply(next);
+        upsert([key], next);
+      },
+      setStaple: (key, patch) => {
+        const next = applyStaple(statsRef.current, key, patch);
         apply(next);
         upsert([key], next);
       },
