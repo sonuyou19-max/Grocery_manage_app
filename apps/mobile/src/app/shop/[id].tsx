@@ -62,7 +62,14 @@ export default function ShoppingModeScreen() {
     // Checking = putting it in the cart → a purchase (feeds the pantry). The
     // burn-rate engine's same-day guard makes an accidental re-tick harmless.
     if (!item.checked) {
-      logPurchase(item.name, item.category);
+      // Same detail as the list screen, so a shop done in Shopping Mode lands
+      // in the spend history rather than logging a purchase with no price.
+      logPurchase(item.name, item.category, {
+        priceCents: item.priceCents,
+        store: item.store ?? list.store ?? null,
+        quantity: item.quantity,
+        unit: item.unit,
+      });
       haptics.success();
     } else {
       haptics.tick();

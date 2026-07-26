@@ -38,7 +38,7 @@ import { useAuth } from '@/store/auth';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { useLocale } from '@/store/locale';
-import { usePantryIntel } from '@/store/pantry-intel';
+import { usePantryIntel, type PurchaseDetail } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 // Set this to the store/app link at launch. While empty, the invite tells the
@@ -79,15 +79,23 @@ export default function ListDetailScreen() {
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
   // the burn-rate engine. Anything still pending is flushed on leaving.
-  const purchaseTimers = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; name: string; category: Item['category'] }>>(
-    new Map(),
-  );
+  const purchaseTimers = useRef<
+    Map<
+      string,
+      {
+        timer: ReturnType<typeof setTimeout>;
+        name: string;
+        category: Item['category'];
+        detail: PurchaseDetail;
+      }
+    >
+  >(new Map());
   useEffect(() => {
     const timers = purchaseTimers.current;
     return () => {
-      for (const { timer, name, category } of timers.values()) {
+      for (const { timer, name, category, detail } of timers.values()) {
         clearTimeout(timer);
-        logPurchase(name, category); // flush: they left it checked
+        logPurchase(name, category, detail); // flush: they left it checked
       }
       timers.clear();
     };
@@ -153,11 +161,22 @@ export default function ListDetailScreen() {
     if (pending) clearTimeout(pending.timer);
     if (willCheck) {
       const { name, category } = item;
+      // Snapshot the price/store/amount as they are at check-off. Read now
+      // rather than when the timer fires, so editing the row in between can't
+      // rewrite what the log says was paid — and the list's own store fills in
+      // when the item doesn't carry one.
+      const detail: PurchaseDetail = {
+        priceCents: item.priceCents,
+        store: item.store ?? list.store ?? null,
+        quantity: item.quantity,
+        unit: item.unit,
+      };
       timers.set(item.id, {
         name,
         category,
+        detail,
         timer: setTimeout(() => {
-          logPurchase(name, category);
+          logPurchase(name, category, detail);
           timers.delete(item.id);
         }, PURCHASE_DEBOUNCE),
       });

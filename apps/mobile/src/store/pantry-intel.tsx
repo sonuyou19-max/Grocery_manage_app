@@ -24,6 +24,7 @@ import {
   type ItemStat,
   type StatMap,
 } from '@/lib/pantry-intel';
+import type { Purchase } from '@/lib/purchase-log';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -41,9 +42,28 @@ import { useHousehold } from '@/store/household';
  * reused by both backends unchanged.
  */
 
+/**
+ * What was bought, beyond the name — recorded on the purchase log so Insights
+ * can show trends across weeks. All optional, because pricing an item is
+ * optional in this app and most never are.
+ */
+export interface PurchaseDetail {
+  priceCents?: number | null;
+  store?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+}
+
 interface PantryIntelContext {
   stats: StatMap;
-  logPurchase: (name: string, category: ItemCategory) => void;
+  /**
+   * An item was checked off. Always updates the burn rate; additionally appends
+   * to the purchase log when a price is attached, since an unpriced purchase has
+   * nothing to say about spending.
+   */
+  logPurchase: (name: string, category: ItemCategory, detail?: PurchaseDetail) => void;
+  /** Purchases with prices, newest first. Empty until something priced is bought. */
+  purchases: Purchase[];
   /** Swipe left: user confirms it's running low (caller adds it to a list). */
   markAlmostOut: (key: string) => void;
   /** Swipe right: user says it's still good; the model learns to wait longer. */
@@ -53,6 +73,58 @@ interface PantryIntelContext {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * How far back the purchase log is kept and read.
+ *
+ * Bounded on purpose at both backends: the cloud query asks only for this
+ * window (so a household shopping for years doesn't grow the response without
+ * limit), and the local mirror trims to it on write. Insights never looks
+ * further back than a couple of months, so anything older is weight without
+ * readers.
+ */
+const PURCHASE_WINDOW_WEEKS = 16;
+const PURCHASE_WINDOW_MS = PURCHASE_WINDOW_WEEKS * 7 * DAY;
+
+/**
+ * Belt-and-braces cap on the local mirror. The time window normally keeps this
+ * small, but a heavy user with a device clock that jumped could otherwise
+ * accumulate rows indefinitely.
+ */
+const LOCAL_PURCHASE_CAP = 1000;
+
+/** Build a log entry, or null when there's no price worth logging. */
+function toPurchase(
+  name: string,
+  detail: PurchaseDetail | undefined,
+  now: number,
+): Purchase | null {
+  const priceCents = detail?.priceCents;
+  // No price means nothing to say about spend. The burn-rate side of
+  // logPurchase still runs — only the money log skips it.
+  if (priceCents == null || !Number.isFinite(priceCents) || priceCents < 0) return null;
+  const display = name.trim();
+  const key = normalizeKey(display);
+  if (!key) return null;
+  return {
+    key,
+    name: display,
+    store: detail?.store ?? null,
+    priceCents: Math.round(priceCents),
+    at: now,
+    quantity: detail?.quantity ?? null,
+    unit: detail?.unit ?? null,
+  };
+}
+
+/** Newest first, inside the window, capped. */
+function trimPurchases(all: Purchase[], now: number): Purchase[] {
+  const cutoff = now - PURCHASE_WINDOW_MS;
+  return all
+    .filter((p) => p.at >= cutoff)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, LOCAL_PURCHASE_CAP);
+}
 
 // Back-dated sample items (name, category, days since "purchase") whose windows
 // have already elapsed, so they land in the deck immediately. Dev preview only.
@@ -111,9 +183,12 @@ export function PantryIntelProvider({ children }: PropsWithChildren) {
 // ---------------------------------------------------------------------------
 
 const LOCAL_KEY = 'korb.pantryIntel.v1';
+/** The on-device purchase log, mirroring the cloud price_entries table. */
+const LOCAL_PURCHASES_KEY = 'korb.purchaseLog.v1';
 
 function LocalPantryIntelProvider({ children }: PropsWithChildren) {
   const [stats, setStats] = useState<StatMap>({});
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const hydrated = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -128,6 +203,19 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       .catch(() => {})
       .finally(() => {
         hydrated.current = true;
+      });
+
+    AsyncStorage.getItem(LOCAL_PURCHASES_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        // Trim on read as well as write: entries age out of the window while
+        // the app is closed, so a log untouched for months would otherwise come
+        // back oversized and stale.
+        if (Array.isArray(parsed)) setPurchases(trimPurchases(parsed as Purchase[], Date.now()));
+      })
+      .catch(() => {
+        // A corrupt log costs history, not function — start empty.
       });
   }, []);
 
@@ -145,12 +233,25 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
   const value = useMemo<PantryIntelContext>(
     () => ({
       stats,
-      logPurchase: (name, category) => setStats((prev) => recordPurchase(prev, name, category)),
+      purchases,
+      logPurchase: (name, category, detail) => {
+        setStats((prev) => recordPurchase(prev, name, category));
+        const entry = toPurchase(name, detail, Date.now());
+        if (!entry) return;
+        setPurchases((prev) => {
+          const next = trimPurchases([entry, ...prev], entry.at);
+          // Written straight through rather than on the debounced stats timer:
+          // this is append-only history, and losing an entry to a kill mid-timer
+          // means a purchase that silently never happened.
+          AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+      },
       markAlmostOut: (key) => setStats((prev) => applyAlmostOut(prev, key)),
       markStillGood: (key) => setStats((prev) => applyStillGood(prev, key)),
       seedDemo: () => setStats((prev) => seededDemoStats(prev)),
     }),
-    [stats],
+    [stats, purchases],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -194,15 +295,41 @@ const toRow = (householdId: string, s: ItemStat) => ({
   snooze_until: s.snoozeUntil ? new Date(s.snoozeUntil).toISOString() : null,
 });
 
+interface DbPriceRow {
+  item_key: string | null;
+  item_name: string;
+  store: string | null;
+  price_cents: number;
+  quantity: number | null;
+  unit: string | null;
+  recorded_at: string;
+}
+
+const mapPriceRow = (r: DbPriceRow): Purchase => ({
+  key: r.item_key ?? normalizeKey(r.item_name),
+  name: r.item_name,
+  store: r.store,
+  priceCents: r.price_cents,
+  at: Date.parse(r.recorded_at),
+  quantity: r.quantity == null ? null : Number(r.quantity),
+  unit: r.unit,
+});
+
 function CloudPantryIntelProvider({
   householdId,
   children,
 }: PropsWithChildren<{ householdId: string }>) {
   const appActive = useAppActive();
   const [stats, setStats] = useState<StatMap>({});
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const statsRef = useRef<StatMap>({});
   statsRef.current = stats;
+  // Read inside logPurchase so two check-offs in the same tick both land —
+  // reading the `purchases` closure would let the second overwrite the first.
+  const purchasesRef = useRef<Purchase[]>([]);
+  purchasesRef.current = purchases;
   const cacheKey = `korb.pantryIntel.cloud.${householdId}`;
+  const purchaseCacheKey = `korb.purchaseLog.cloud.${householdId}`;
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const apply = useCallback(
@@ -230,6 +357,31 @@ function CloudPantryIntelProvider({
     }
   }, [householdId, apply]);
 
+  const applyPurchases = useCallback(
+    (list: Purchase[]) => {
+      setPurchases(list);
+      AsyncStorage.setItem(purchaseCacheKey, JSON.stringify(list)).catch(() => {});
+    },
+    [purchaseCacheKey],
+  );
+
+  /**
+   * The household's recent priced purchases. Windowed in the query rather than
+   * client-side, so the response stays bounded however long the household has
+   * been shopping.
+   */
+  const fetchPurchases = useCallback(async () => {
+    const since = new Date(Date.now() - PURCHASE_WINDOW_MS).toISOString();
+    const { data, error } = await supabase
+      .from('price_entries')
+      .select('item_key, item_name, store, price_cents, quantity, unit, recorded_at')
+      .eq('household_id', householdId)
+      .gte('recorded_at', since)
+      .order('recorded_at', { ascending: false })
+      .limit(LOCAL_PURCHASE_CAP);
+    if (!error && data) applyPurchases((data as DbPriceRow[]).map(mapPriceRow));
+  }, [householdId, applyPurchases]);
+
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
     refetchTimer.current = setTimeout(() => void fetchStats(), 300);
@@ -244,9 +396,21 @@ function CloudPantryIntelProvider({
         if (alive && raw) setStats(JSON.parse(raw) as StatMap);
       })
       .catch(() => {});
+    AsyncStorage.getItem(purchaseCacheKey)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setPurchases(trimPurchases(parsed as Purchase[], Date.now()));
+      })
+      .catch(() => {});
     if (!appActive) return () => { alive = false; };
 
     void fetchStats();
+    // Not on the realtime path (price_entries is deliberately unpublished — see
+    // migration 0013), so this is refreshed on open and on returning to the
+    // foreground. A member's purchase landing mid-session changes no decision
+    // currently on screen.
+    void fetchPurchases();
 
     const channel = supabase
       .channel(`pantry-${householdId}`)
@@ -262,7 +426,7 @@ function CloudPantryIntelProvider({
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
       supabase.removeChannel(channel);
     };
-  }, [householdId, cacheKey, fetchStats, scheduleRefetch, appActive]);
+  }, [householdId, cacheKey, purchaseCacheKey, fetchStats, fetchPurchases, scheduleRefetch, appActive]);
 
   const value = useMemo<PantryIntelContext>(() => {
     const upsert = (keys: string[], map: StatMap) => {
@@ -278,10 +442,35 @@ function CloudPantryIntelProvider({
 
     return {
       stats,
-      logPurchase: (name, category) => {
+      purchases,
+      logPurchase: (name, category, detail) => {
         const next = recordPurchase(statsRef.current, name, category);
         apply(next);
         upsert([normalizeKey(name)], next);
+
+        const entry = toPurchase(name, detail, Date.now());
+        if (!entry) return;
+        // Optimistic locally so Insights reflects the shop immediately, then
+        // appended server-side. An insert, never an upsert: one row per
+        // purchase is the entire point of a history.
+        applyPurchases(trimPurchases([entry, ...purchasesRef.current], entry.at));
+        supabase
+          .from('price_entries')
+          .insert({
+            household_id: householdId,
+            item_key: entry.key,
+            item_name: entry.name,
+            store: entry.store,
+            price_cents: entry.priceCents,
+            quantity: entry.quantity,
+            unit: entry.unit,
+            recorded_at: new Date(entry.at).toISOString(),
+          })
+          .then(({ error }) => {
+            // Re-sync on failure so the optimistic row doesn't linger as a
+            // purchase that only this device believes in.
+            if (error) void fetchPurchases();
+          });
       },
       markAlmostOut: (key) => {
         const next = applyAlmostOut(statsRef.current, key);
@@ -302,7 +491,7 @@ function CloudPantryIntelProvider({
         );
       },
     };
-  }, [stats, householdId, apply, scheduleRefetch]);
+  }, [stats, purchases, householdId, apply, applyPurchases, fetchPurchases, scheduleRefetch]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

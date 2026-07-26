@@ -8,9 +8,11 @@ import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
+import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
+import { priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -28,7 +30,15 @@ export default function InsightsScreen() {
   const { colors } = useTheme();
   const { t, money } = useLocale();
   const { lists } = useGroceries();
-  const { stats } = usePantryIntel();
+  const { stats, purchases } = usePantryIntel();
+
+  // The purchase log outlives the lists it came from, so these are the only
+  // figures here that describe weeks rather than what's on a list right now.
+  // Recomputed against a single `now` so the chart and the copy agree.
+  const now = Date.now();
+  const trend = useMemo(() => spendTrend(purchases, now, 8), [purchases, now]);
+  const moves = useMemo(() => priceMoves(purchases), [purchases]);
+  const hasTrend = trend.weeks.some((w) => w.count > 0);
 
   const cart = useMemo(
     () => basketBalance(lists.flatMap((l) => l.items).map((it) => ({ name: it.name, category: it.category }))),
@@ -100,6 +110,74 @@ export default function InsightsScreen() {
               </Text>
               <Text style={[type.sub, { color: colors.muted }]}>
                 {t('insights.boughtTimes', { count: s.sampleCount + 1 })}
+              </Text>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      {/* Spend across weeks, from the purchase log — this is the only card that
+          survives deleting the list the prices were logged on. */}
+      {hasTrend && (
+        <Card>
+          <CardHead
+            icon="stats-chart-outline"
+            title={t('insights.trendTitle')}
+            hint={t('insights.trendWeeks', { count: trend.weeks.length })}
+          />
+          <View style={styles.heroRow}>
+            <Text style={[type.h1, { color: colors.ink }]}>{money(trend.averageCents)}</Text>
+            <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendPerWeek')}</Text>
+          </View>
+          {trend.weekOverWeek != null && (
+            <View style={styles.deltaRow}>
+              <Ionicons
+                name={trend.weekOverWeek >= 0 ? 'arrow-up' : 'arrow-down'}
+                size={14}
+                // Neither direction is good or bad — spending more isn't a
+                // failure — so this stays ink, not a status colour.
+                color={colors.muted}
+              />
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t(trend.weekOverWeek >= 0 ? 'insights.trendUp' : 'insights.trendDown', {
+                  percent: Math.abs(Math.round(trend.weekOverWeek * 100)),
+                })}
+              </Text>
+            </View>
+          )}
+          <SpendTrendChart
+            weeks={trend.weeks}
+            currentWeekStart={weekStartOf(now)}
+            peakWeekStart={trend.peak?.weekStart ?? null}
+          />
+          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendCaveat')}</Text>
+        </Card>
+      )}
+
+      {/* Items that cost more (or less) than they usually do. */}
+      {moves.length > 0 && (
+        <Card>
+          <CardHead
+            icon="swap-vertical-outline"
+            title={t('insights.movesTitle')}
+            hint={t('insights.movesHint')}
+          />
+          {moves.slice(0, 5).map((m) => (
+            <View key={m.key} style={styles.row}>
+              <Ionicons
+                name={m.change > 0 ? 'trending-up' : 'trending-down'}
+                size={18}
+                color={m.change > 0 ? colors.warn : colors.accent}
+              />
+              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
+                {m.name}
+              </Text>
+              <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                {t(m.change > 0 ? 'insights.moveUp' : 'insights.moveDown', {
+                  percent: Math.abs(Math.round(m.change * 100)),
+                  price: money(m.latestCents),
+                  usual: money(m.baselineCents),
+                })}
               </Text>
             </View>
           ))}
@@ -225,6 +303,8 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
   spendTotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.xs },
+  heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, flexWrap: 'wrap' },
+  deltaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
   hintRow: { gap: spacing.xs, paddingVertical: spacing.xs },
   hintDetail: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
 });

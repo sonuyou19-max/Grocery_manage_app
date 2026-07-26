@@ -11,7 +11,9 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "check:locales": "node scripts/check-locales.mjs",
-    "check:barcode": "node scripts/check-barcode.mjs"
+    "check:barcode": "node scripts/check-barcode.mjs",
+    "check:purchase-log": "node scripts/check-purchase-log.mjs",
+    "check:purchase-log:tz": "for tz in UTC Europe/Brussels Europe/Warsaw America/Los_Angeles Pacific/Kiritimati; do echo \"— $tz\"; TZ=$tz node scripts/check-purchase-log.mjs | tail -1; done"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
