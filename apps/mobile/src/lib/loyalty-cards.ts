@@ -1,7 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
-import { guessSymbology, normalizeForSymbology, type Symbology } from '@/lib/barcode';
+import {
+  guessSymbology,
+  normalizeForSymbology,
+  symbologyForFormat,
+  type CardFormat,
+  type Symbology,
+} from '@/lib/barcode';
 import { uuidv4 } from '@/lib/uuid';
 
 /**
@@ -172,6 +178,14 @@ export interface LoyaltyCardsApi {
   removeCard: (id: string) => void;
   /** Change the store a card is filed under. */
   renameCardStore: (id: string, store: string) => void;
+  /**
+   * Switch a saved card between barcode and QR.
+   *
+   * Needed at the till, not just at setup: whether a chain reads 1D or 2D can't
+   * be inferred from the number, so the first sign of a wrong guess is often a
+   * scanner refusing it — at which point the fix has to be one tap away.
+   */
+  setCardFormat: (id: string, format: CardFormat) => void;
 }
 
 /**
@@ -248,6 +262,25 @@ export function useLoyaltyCards(userId: string | null | undefined): LoyaltyCards
     [scope],
   );
 
+  const setCardFormat = useCallback(
+    (id: string, format: CardFormat) => {
+      if (!scope || cache?.scope !== scope) return;
+      persist(
+        scope,
+        cache.cards.map((c) => {
+          if (c.id !== id) return c;
+          const symbology = symbologyForFormat(format, c.value);
+          // Re-normalize: the stored value was cleaned for the *old* format, and
+          // the rules differ (QR keeps every character, a printed number loses
+          // its spacing). Skipping this would leave value and symbology
+          // disagreeing about what the payload is.
+          return { ...c, symbology, value: normalizeForSymbology(symbology, c.value) };
+        }),
+      );
+    },
+    [scope],
+  );
+
   return {
     cards,
     // Signed out isn't "loading" — there is nothing to wait for, so the screen
@@ -256,6 +289,7 @@ export function useLoyaltyCards(userId: string | null | undefined): LoyaltyCards
     needsSignIn: !authPending && scope === null,
     addCard,
     removeCard,
+    setCardFormat,
     renameCardStore,
   };
 }

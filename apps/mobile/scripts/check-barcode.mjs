@@ -21,20 +21,22 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
+
 const BARCODE_TS = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'barcode.ts');
 
-const src = readFileSync(BARCODE_TS, 'utf8');
-// Strip TS types so Node can run it directly.
-const js = src
-  .replace(/^export type .*$/gm, '')
-  .replace(/^export interface [\s\S]*?^}$/gm, '')
-  .replace(/: Symbology|: string|: number\[\]|: number|: boolean|: EncodedBarcode \| null|: EncodedBarcode/g, '')
-  .replace(/ as const/g, '');
+// Let the real compiler strip the types. This started as a hand-rolled set of
+// regexes and broke the first time a function took a union-typed parameter — a
+// check that can't load the module it checks is worse than no check.
+const { outputText } = ts.transpileModule(readFileSync(BARCODE_TS, 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+});
+
 // barcode.ts asserts its Code 128 table at module load under __DEV__, so
 // loading the module here also exercises that guard.
 globalThis.__DEV__ = true;
 const mod = await import(
-  'data:text/javascript;base64,' + Buffer.from(js).toString('base64')
+  'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 );
 
 let failures = 0;
@@ -379,6 +381,36 @@ check('scanner datamatrix -> qr', mod.symbologyFromScanner('datamatrix', 'x'), '
 // itf14 claimed but odd length: must degrade rather than render nothing.
 check('scanner odd itf degrades', mod.symbologyFromScanner('itf14', '1234567'), 'code128');
 check('scanner ean13 wrong length degrades', mod.symbologyFromScanner('ean13', '12345'), 'code128');
+
+/* ------------------------------------------------ the user-chosen 1D/2D format */
+
+// The bug this guards: guessSymbology has no path that returns 'qr', so a
+// manually-typed card number always came out as a barcode. Chains differ —
+// Colruyt issues QR, Delhaize a barcode — and nothing in the digits says which,
+// so the format has to be selectable and must round-trip.
+check('guessSymbology alone never yields qr', mod.guessSymbology('4006381333931') === 'qr', false);
+check('choosing qr yields qr', mod.symbologyForFormat('qr', '4006381333931'), 'qr');
+check(
+  'choosing barcode picks the best linear symbology',
+  mod.symbologyForFormat('barcode', '4006381333931'),
+  'ean13',
+);
+check('choosing barcode falls back to code128', mod.symbologyForFormat('barcode', 'AB-1234'), 'code128');
+
+// formatOf must classify every symbology the encoder supports, so the toggle
+// always shows a defined state rather than defaulting to the wrong side.
+for (const sym of ['ean13', 'ean8', 'upca', 'code128', 'itf14']) {
+  check(`formatOf(${sym}) is barcode`, mod.formatOf(sym), 'barcode');
+}
+check('formatOf(qr) is qr', mod.formatOf('qr'), 'qr');
+
+// Round-trip: toggling to QR and back must land on the same symbology, or a
+// user experimenting at the till would silently degrade their card.
+const original = 'ean13';
+const value = '4006381333931';
+const toQr = mod.symbologyForFormat('qr', value);
+const back = mod.symbologyForFormat(mod.formatOf(original), value);
+check('barcode -> qr -> barcode round-trips', [toQr, back], ['qr', 'ean13']);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

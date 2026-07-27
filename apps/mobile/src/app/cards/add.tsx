@@ -18,14 +18,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/card';
 import { CardCode } from '@/components/card-code';
 import { CardsSignInGate } from '@/components/cards-sign-in-gate';
+import { FormatToggle } from '@/components/format-toggle';
 import { PrimaryButton } from '@/components/form';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { useToast } from '@/components/toast';
 import {
+  formatOf,
   guessSymbology,
   normalizeCardValue,
   normalizeForSymbology,
+  symbologyForFormat,
   symbologyFromScanner,
   type Symbology,
 } from '@/lib/barcode';
@@ -300,6 +303,15 @@ export default function AddCardScreen() {
             <View style={styles.preview}>
               <CardCode symbology={symbology} value={value} width={280} />
             </View>
+            {/* Barcode vs QR can't be inferred from a number — Colruyt issues QR,
+                Delhaize a barcode — and a typed number would otherwise always
+                come out as a barcode. Sits under the preview so switching shows
+                the result immediately, against the card in the user's hand. */}
+            <FormatToggle
+              label={t('cards.formatLabel')}
+              value={formatOf(symbology)}
+              onChange={(format) => setSymbology(symbologyForFormat(format, value))}
+            />
           </Card>
           {/* Held until the wallet knows whose it is, so saving can't quietly
               no-op during the launch-time auth race. */}

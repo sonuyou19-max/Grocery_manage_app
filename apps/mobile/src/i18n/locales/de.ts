@@ -134,6 +134,10 @@ const de = {
     signInBody:
       'Eine Kundenkarte gehört dir, nicht dem Handy — deshalb speichert Korb sie unter deinem Konto. So sieht niemand sonst, der dieses Handy in die Hand nimmt, deine Karten. Sie bleiben trotzdem auf diesem Gerät und werden nie hochgeladen.',
     signInCta: 'Anmelden',
+    formatLabel: 'Code-Format',
+    formatBarcode: 'Barcode',
+    formatQr: 'QR-Code',
+    wontScanLabel: 'Wird nicht erkannt? Probier das andere Format',
     showAtTill: 'Halte das an der Kasse vor den Scanner.',
     removeTitle: 'Karte entfernen?',
     removeBody: 'Deine %{store}-Karte wird von diesem Handy gelöscht.',

@@ -133,6 +133,10 @@ const nl = {
     signInBody:
       'Een klantenkaart is van jou, niet van het toestel — daarom bewaart Korb die onder jouw account. Zo kan niemand anders die dit toestel oppakt jouw kaarten zien. Ze blijven wel op dit toestel staan en worden nooit geüpload.',
     signInCta: 'Aanmelden',
+    formatLabel: 'Codeformaat',
+    formatBarcode: 'Barcode',
+    formatQr: 'QR-code',
+    wontScanLabel: 'Wordt niet gescand? Probeer het andere formaat',
     showAtTill: 'Houd dit bij de kassa voor de scanner.',
     removeTitle: 'Kaart verwijderen?',
     removeBody: 'Je %{store}-kaart wordt van dit toestel verwijderd.',

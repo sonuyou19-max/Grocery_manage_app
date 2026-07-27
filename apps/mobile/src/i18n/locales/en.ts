@@ -144,6 +144,11 @@ const en = {
     signInBody:
       'A loyalty card belongs to you, not to the phone — so Korb keeps it under your account. That way nobody else who picks up this phone can see your cards. They still stay on this device and are never uploaded.',
     signInCta: 'Sign in',
+    // Barcode vs QR — not inferable from a number, so the user decides
+    formatLabel: 'Code format',
+    formatBarcode: 'Barcode',
+    formatQr: 'QR code',
+    wontScanLabel: 'Not scanning? Try the other format',
     showAtTill: 'Hold this up to the scanner at the till.',
     removeTitle: 'Remove card?',
     removeBody: 'Your %{store} card will be deleted from this phone.',

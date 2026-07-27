@@ -161,6 +161,10 @@ const pl = {
     signInBody:
       'Karta lojalnościowa należy do Ciebie, nie do telefonu — dlatego Korb trzyma ją na Twoim koncie. Nikt inny, kto weźmie ten telefon, nie zobaczy Twoich kart. Nadal zostają na tym urządzeniu i nigdy nie są wysyłane.',
     signInCta: 'Zaloguj się',
+    formatLabel: 'Format kodu',
+    formatBarcode: 'Kod kreskowy',
+    formatQr: 'Kod QR',
+    wontScanLabel: 'Nie skanuje się? Wypróbuj drugi format',
     showAtTill: 'Pokaż to skanerowi przy kasie.',
     removeTitle: 'Usunąć kartę?',
     removeBody: 'Twoja karta %{store} zostanie usunięta z tego telefonu.',

@@ -133,6 +133,10 @@ const es = {
     signInBody:
       'Una tarjeta de fidelidad es tuya, no del teléfono, así que Korb la guarda en tu cuenta. De ese modo nadie más que coja este teléfono podrá ver tus tarjetas. Aun así se quedan en este dispositivo y nunca se suben.',
     signInCta: 'Iniciar sesión',
+    formatLabel: 'Formato del código',
+    formatBarcode: 'Código de barras',
+    formatQr: 'Código QR',
+    wontScanLabel: '¿No lo lee? Prueba el otro formato',
     showAtTill: 'Muéstralo al escáner en la caja.',
     removeTitle: '¿Eliminar la tarjeta?',
     removeBody: 'Tu tarjeta de %{store} se eliminará de este teléfono.',

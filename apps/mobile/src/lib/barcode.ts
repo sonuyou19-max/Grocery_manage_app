@@ -334,6 +334,27 @@ export function symbologyFromScanner(scannedType: string, value: string): Symbol
   return canEncode('code128', value) ? 'code128' : 'qr';
 }
 
+/**
+ * The two formats a user actually chooses between.
+ *
+ * Which *linear* symbology a barcode uses is a detail we can infer from the
+ * digits, but 1D-vs-2D cannot be inferred at all: the same twelve digits are a
+ * barcode on one chain's card and a QR on another's. Colruyt issues QR, Delhaize
+ * issues a barcode. So this is the one decision that has to be the user's.
+ */
+export type CardFormat = 'barcode' | 'qr';
+
+export const formatOf = (symbology: Symbology): CardFormat =>
+  symbology === 'qr' ? 'qr' : 'barcode';
+
+/**
+ * Resolve a chosen format to a concrete symbology for a value: QR as-is, or the
+ * best-fitting linear symbology from the digits.
+ */
+export function symbologyForFormat(format: CardFormat, value: string): Symbology {
+  return format === 'qr' ? 'qr' : guessSymbology(value);
+}
+
 /** True when `value` can be drawn as `symbology`. */
 export function canEncode(symbology: Symbology, value: string): boolean {
   const clean = normalizeCardValue(value);

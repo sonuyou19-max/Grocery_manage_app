@@ -22,10 +22,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CardCode } from '@/components/card-code';
 import { CardsSignInGate } from '@/components/cards-sign-in-gate';
 import { EmptyState } from '@/components/empty-state';
+import { FormatToggle } from '@/components/format-toggle';
 import { Fab } from '@/components/fab';
 import { GlassView } from '@/components/glass';
 import { MeshBackground } from '@/components/mesh-background';
-import { formatCardValue } from '@/lib/barcode';
+import { formatCardValue, formatOf } from '@/lib/barcode';
 import { haptics } from '@/lib/haptics';
 import { useLoyaltyCards, type LoyaltyCard } from '@/lib/loyalty-cards';
 import { customInitials, getSupermarket, supermarketLabel } from '@/lib/supermarkets';
@@ -62,7 +63,7 @@ export default function CardsScreen() {
   const { user, initializing } = useAuth();
   // undefined while the session is still being restored, so someone who *is*
   // signed in never gets flashed the sign-in prompt on the way in.
-  const { cards, loading, needsSignIn, removeCard } = useLoyaltyCards(
+  const { cards, loading, needsSignIn, removeCard, setCardFormat } = useLoyaltyCards(
     initializing ? undefined : user?.id ?? null,
   );
   const { width } = useWindowDimensions();
@@ -194,6 +195,19 @@ export default function CardsScreen() {
                 <Text style={[type.sub, { color: colors.muted, textAlign: 'center' }]}>
                   {t('cards.showAtTill')}
                 </Text>
+
+                {/* Fixable at the till, which is the point. Whether a chain reads
+                    1D or 2D isn't in the number, so the first sign of a wrong
+                    guess is usually a scanner refusing the card — and standing at
+                    a checkout is the worst possible moment to have to re-add it. */}
+                <FormatToggle
+                  label={t('cards.wontScanLabel')}
+                  value={formatOf(open.symbology)}
+                  onChange={(format) => {
+                    haptics.tick();
+                    setCardFormat(open.id, format);
+                  }}
+                />
 
                 <View style={styles.openActions}>
                   <Pressable onPress={() => confirmRemove(open)} hitSlop={8} style={styles.openAction}>
