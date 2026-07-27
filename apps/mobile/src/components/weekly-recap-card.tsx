@@ -7,7 +7,7 @@ import type { ItemCategory } from '@korb/shared';
 import { Card } from '@/components/card';
 import { categoryLabel } from '@/lib/categorize';
 import { basketBalance } from '@/lib/nutrition';
-import { dueAt } from '@/lib/pantry-intel';
+import { dueAt, isResting } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import {
@@ -58,14 +58,19 @@ export function WeeklyRecapCard() {
       .slice(0, 3)
       .map(([c, count]) => ({ label: categoryLabel(c as ItemCategory, t), count }));
 
-    const staples = Object.values(stats)
+    // Resting items are excluded throughout: the recap describes what the
+    // household actually shops for, and a retired item is neither a staple nor
+    // something anyone is running low on.
+    const active = Object.values(stats).filter((s) => !isResting(s));
+
+    const staples = active
       .filter((s) => s.sampleCount >= 1)
       .sort((a, b) => b.sampleCount - a.sampleCount)
       .slice(0, 4)
       .map((s) => s.display);
 
     const now = Date.now();
-    const lowItems = Object.values(stats)
+    const lowItems = active
       .filter((s) => s.lastPurchasedAt > 0 && dueAt(s) - now < 5 * DAY)
       .sort((a, b) => dueAt(a) - dueAt(b))
       .slice(0, 4)

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ItemEmoji } from '@/components/item-emoji';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
@@ -84,6 +85,7 @@ export function WeeklyListSheet({ visible, suggestions, onClose, onBuild }: Week
                     size={22}
                     color={on ? colors.accent : colors.muted}
                   />
+                  <ItemEmoji name={s.display} category={s.category} />
                   <View style={styles.grow}>
                     <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
                       {s.display}

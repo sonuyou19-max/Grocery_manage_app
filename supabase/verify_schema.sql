@@ -93,6 +93,27 @@ checks as (
                  where pubname = 'supabase_realtime' and schemaname = 'public'
                    and tablename = 'list_items')
 
+  -- 0017 · resting (pantry archive)
+  union all select '0017 pantry_items.archived_at',
+         exists (select 1 from col where table_name = 'pantry_items' and column_name = 'archived_at')
+  union all select '0017 index idx_pantry_active',
+         exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'idx_pantry_active')
+
+  -- 0018 · no duplicate open items
+  union all select '0018 list_items.item_key',
+         exists (select 1 from col where table_name = 'list_items' and column_name = 'item_key')
+  union all select '0018 index idx_items_unique_open',
+         exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'idx_items_unique_open')
+  -- The index is only a fix if it is actually UNIQUE and actually PARTIAL:
+  -- non-unique lets the duplicate through, non-partial blocks re-buying an item
+  -- ticked off last week. Both are silent failures, so both are checked.
+  union all select '0018 idx_items_unique_open is unique + partial',
+         coalesce((select i.indisunique and i.indpred is not null
+                   from pg_index i
+                   join pg_class c on c.oid = i.indexrelid
+                   join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relname = 'idx_items_unique_open'), false)
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',

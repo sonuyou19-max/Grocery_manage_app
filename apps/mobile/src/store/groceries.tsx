@@ -409,6 +409,25 @@ function CloudGroceriesProvider({
     refetchTimer.current = setTimeout(() => void fetchLists(), 300);
   }, [fetchLists]);
 
+  /**
+   * Handle a failed write by re-syncing with the server.
+   *
+   * A unique-violation (23505) is not really a failure: it means another member
+   * won a race to add the same item, and migration 0018 refused our duplicate.
+   * The right answer is the row they created, so we resync at once rather than
+   * on the debounce — the optimistic row we already painted is the phantom, and
+   * it should disappear in the same beat the user sees, not a third of a second
+   * later. Everything else keeps the debounce, which coalesces bursts.
+   */
+  const recoverFrom = useCallback(
+    (error: { code?: string } | null) => {
+      if (!error) return;
+      if (error.code === '23505') void fetchLists();
+      else scheduleRefetch();
+    },
+    [fetchLists, scheduleRefetch],
+  );
+
   // Initial load (cache first for instant paint), then live subscription.
   // While backgrounded we drop the socket; on return we refetch to catch up and
   // re-open it (see useAppActive).
@@ -528,7 +547,7 @@ function CloudGroceriesProvider({
           added_by: user?.id ?? null,
         })
         .then(({ error }) => {
-          if (error) scheduleRefetch();
+          recoverFrom(error);
         });
       rememberItemList(p.name, listId);
     };
@@ -596,7 +615,7 @@ function CloudGroceriesProvider({
             added_by: user?.id ?? null,
           })
           .then(({ error }) => {
-            if (error) scheduleRefetch();
+            recoverFrom(error);
           });
         rememberItemList(clean, listId);
         if (category === 'other' && !isKnown(clean)) {
@@ -628,7 +647,7 @@ function CloudGroceriesProvider({
             .update({ checked: false })
             .eq('id', existing.id)
             .then(({ error }) => {
-              if (error) scheduleRefetch();
+              recoverFrom(error);
             });
           rememberItemList(p.name, listId);
           return 'revived';
@@ -647,7 +666,7 @@ function CloudGroceriesProvider({
           .update({ checked: next })
           .eq('id', itemId)
           .then(({ error }) => {
-            if (error) scheduleRefetch();
+            recoverFrom(error);
           });
       },
       updateItem: (listId, itemId, patch) => {
@@ -657,7 +676,7 @@ function CloudGroceriesProvider({
           .update(dbPatch(patch))
           .eq('id', itemId)
           .then(({ error }) => {
-            if (error) scheduleRefetch();
+            recoverFrom(error);
           });
         if (patch.category) {
           const target = lists.find((l) => l.id === listId)?.items.find((it) => it.id === itemId);
@@ -707,7 +726,7 @@ function CloudGroceriesProvider({
       },
       shoppersOnline: shoppers,
     };
-  }, [lists, shoppers, householdId, user, patchLocalItem, setCheckedLocal, scheduleRefetch]);
+  }, [lists, shoppers, householdId, user, patchLocalItem, setCheckedLocal, scheduleRefetch, recoverFrom]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

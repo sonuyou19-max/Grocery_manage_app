@@ -4,6 +4,19 @@
  * still pick any supported language. `suggestedLanguage` always resolves to a
  * shipped language code (falls back to English until that language is added).
  */
+/**
+ * Flag emoji for an ISO 3166-1 alpha-2 code.
+ *
+ * Built from regional indicator symbols (U+1F1E6–U+1F1FF): 'BE' becomes 🇧🇪 by
+ * offsetting each letter from 'A'. No asset, no lookup table, and it renders
+ * from the system font on both platforms.
+ */
+export function flagFor(code: string): string {
+  return code
+    .toUpperCase()
+    .replace(/[A-Z]/g, (c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
 export interface Region {
   /** ISO 3166-1 alpha-2 country code. */
   code: string;

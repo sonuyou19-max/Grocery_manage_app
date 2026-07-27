@@ -9,7 +9,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 
-import { LocaleSetup } from '@/components/locale-setup';
+import { LocaleGreeting, LocaleSetup } from '@/components/locale-setup';
 import { i18n } from '@/i18n';
 import { DEFAULT_LANGUAGE } from '@/i18n/languages';
 import { DEFAULT_REGION, formatMoney, regionByCode } from '@/i18n/regions';
@@ -35,6 +35,8 @@ const Ctx = createContext<LocaleValue | null>(null);
 export function LocaleProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<{ region: string; language: string } | null>(null);
   const [ready, setReady] = useState(false);
+  /** Language to greet in, set the moment first-run setup completes. */
+  const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORE_KEY)
@@ -81,7 +83,24 @@ export function LocaleProvider({ children }: PropsWithChildren) {
   if (!ready) return null;
 
   // First launch (or after a data reset): choose region + language first.
-  if (!state) return <LocaleSetup onDone={setLocale} />;
+  if (!state) {
+    return (
+      <LocaleSetup
+        onDone={(r, l) => {
+          // Hold the greeting before handing over, so the choice is acknowledged
+          // in the language just picked rather than disappearing into a gap.
+          setPendingGreeting(l);
+          setLocale(r, l);
+        }}
+      />
+    );
+  }
+
+  // The held beat. Rendered instead of the app, not over it, so nothing behind
+  // it is mounting and competing for the first frame.
+  if (pendingGreeting) {
+    return <LocaleGreeting language={pendingGreeting} onDone={() => setPendingGreeting(null)} />;
+  }
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

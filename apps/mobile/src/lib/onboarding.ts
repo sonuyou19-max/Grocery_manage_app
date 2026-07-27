@@ -7,13 +7,38 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 const KEY = 'korb.onboarded.v1';
 
-export async function hasSeenOnboarding(): Promise<boolean> {
+/**
+ * Cached answer, so the dashboard can decide on its first render.
+ *
+ * Reading this from storage *after* mounting is what made the tour appear a beat
+ * late — the dashboard painted, the promise resolved, and only then did the tour
+ * slide over the top of it. Hydrated at app start alongside the other on-device
+ * caches; `null` means we haven't found out yet.
+ */
+let seenCache: boolean | null = null;
+
+export async function hydrateOnboarding(): Promise<void> {
   try {
-    return (await AsyncStorage.getItem(KEY)) === '1';
+    seenCache = (await AsyncStorage.getItem(KEY)) === '1';
   } catch {
     // Fail closed — if storage is unreadable, don't nag with the tour.
-    return true;
+    seenCache = true;
   }
+}
+
+/**
+ * Whether the tour is still owed, decided synchronously. `null` while the
+ * hydration above is in flight; callers should do nothing until it resolves
+ * rather than guessing, since guessing wrong shows the tour twice.
+ */
+export function onboardingSeen(): boolean | null {
+  return seenCache;
+}
+
+export async function hasSeenOnboarding(): Promise<boolean> {
+  if (seenCache !== null) return seenCache;
+  await hydrateOnboarding();
+  return seenCache ?? true;
 }
 
 export async function markOnboardingSeen(): Promise<void> {

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   LayoutAnimation,
   Platform,
@@ -23,17 +23,21 @@ import Animated, {
 
 import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
+import { ItemEmoji } from '@/components/item-emoji';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
 import { StapleSheet } from '@/components/staple-sheet';
 import { TextPromptModal } from '@/components/text-prompt-modal';
+import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import {
   dueAt,
   hasUserCadence,
+  isResting,
   lastBoughtLabel,
   lifeRemaining,
+  normalizeKey,
   statusLabel,
   type ItemStat,
 } from '@/lib/pantry-intel';
@@ -64,8 +68,11 @@ type Colors = ReturnType<typeof useTheme>['colors'];
 export default function PantryScreen() {
   const { colors } = useTheme();
   const t = useT();
-  const { stats, logPurchase, markAlmostOut, markStillGood, setStaple } = usePantryIntel();
+  const { stats, logPurchase, markAlmostOut, markStillGood, setStaple, setResting } =
+    usePantryIntel();
   const { addToHomeList, addToChosenList } = useHomeListAdd();
+  const { lists } = useGroceries();
+  const { showToast } = useToast();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [lowOpen, setLowOpen] = useState(true);
@@ -75,15 +82,41 @@ export default function PantryScreen() {
   // The item whose restock settings are open. Held by key, not by value, so the
   // sheet re-reads from `stats` and reflects each change as it's made.
   const [stapleKey, setStapleKey] = useState<string | null>(null);
+  const [restOpen, setRestOpen] = useState(false);
 
   const now = Date.now();
-  const items = useMemo(
-    () => Object.values(stats).sort((a, b) => dueAt(a) - dueAt(b)),
-    [stats],
-  );
+  // Resting items are split off before anything else: every count, section and
+  // prediction on this screen is about what Korb is actively tracking.
+  const { items, resting } = useMemo(() => {
+    const all = Object.values(stats);
+    return {
+      items: all.filter((s) => !isResting(s)).sort((a, b) => dueAt(a) - dueAt(b)),
+      resting: all
+        .filter(isResting)
+        .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
+    };
+  }, [stats]);
 
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
+
+  // Anything sitting unticked on a shopping list is, by the user's own hand,
+  // running low — that's what putting it on the list *means*. Deriving it from
+  // the lists rather than storing a flag means every add path agrees for free
+  // (pantry swipe, Vibe Check, typing it straight onto a list), and it clears
+  // itself the moment the item is ticked off.
+  const queued = useMemo(() => {
+    const keys = new Set<string>();
+    for (const l of lists) {
+      for (const it of l.items) if (!it.checked) keys.add(normalizeKey(it.name));
+    }
+    return keys;
+  }, [lists]);
+
+  const isLow = useCallback(
+    (s: ItemStat) => queued.has(s.key) || lifeRemaining(s, now) < LOW_THRESHOLD,
+    [queued, now],
+  );
 
   const { low, stocked } = useMemo(() => {
     const matches = (s: ItemStat) => !q || s.display.toLowerCase().includes(q);
@@ -91,21 +124,44 @@ export default function PantryScreen() {
     const stocked: ItemStat[] = [];
     for (const s of items) {
       if (!matches(s)) continue;
-      (lifeRemaining(s, now) < LOW_THRESHOLD ? low : stocked).push(s);
+      (isLow(s) ? low : stocked).push(s);
     }
     return { low, stocked };
-  }, [items, q, now]);
+  }, [items, q, isLow]);
 
-  // While searching, force both sections open so a match is never hidden.
+  const restingMatches = useMemo(
+    () => (q ? resting.filter((s) => s.display.toLowerCase().includes(q)) : resting),
+    [resting, q],
+  );
+
+  // While searching, force every section open so a match is never hidden —
+  // including Resting, which is exactly where you look for "where did that go?".
   const lowExpanded = searching ? true : lowOpen;
   const stockExpanded = searching ? true : stockOpen;
+  const restExpanded = searching ? true : restOpen;
 
-  const toggle = (which: 'low' | 'stock') => {
+  const toggle = (which: 'low' | 'stock' | 'rest') => {
     if (searching) return;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     haptics.tick();
     if (which === 'low') setLowOpen((v) => !v);
-    else setStockOpen((v) => !v);
+    else if (which === 'stock') setStockOpen((v) => !v);
+    else setRestOpen((v) => !v);
+  };
+
+  // Let it rest: retire the item from every prediction, keeping its history.
+  const onRest = (item: ItemStat) => {
+    setStapleKey(null);
+    setResting(item.key, true);
+    haptics.success();
+    showToast(t('rest.toastResting', { item: item.display }));
+  };
+
+  const onWake = (item: ItemStat) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setResting(item.key, false);
+    haptics.success();
+    showToast(t('rest.toastAwake', { item: item.display }));
   };
 
   // Swipe right: the item's fine — teach the model to wait longer (no delete).
@@ -142,6 +198,7 @@ export default function PantryScreen() {
           key={item.key}
           item={item}
           now={now}
+          queued={queued.has(item.key)}
           colors={colors}
           onStillGood={() => onStillGood(item)}
           onAddToList={() => onAddToList(item)}
@@ -177,7 +234,7 @@ export default function PantryScreen() {
     </Pressable>
   );
 
-  const lowCount = items.filter((s) => lifeRemaining(s, now) < LOW_THRESHOLD).length;
+  const lowCount = items.filter(isLow).length;
 
   return (
     <>
@@ -190,7 +247,7 @@ export default function PantryScreen() {
         }
         hasFab
       >
-        {items.length === 0 ? (
+        {items.length === 0 && resting.length === 0 ? (
           <EmptyState
             icon="file-tray-full-outline"
             title={t('pantry.emptyTitle')}
@@ -221,7 +278,7 @@ export default function PantryScreen() {
               <Text style={[type.sub, { color: colors.muted }]}>{t('pantry.swipeHint')}</Text>
             )}
 
-            {searching && low.length === 0 && stocked.length === 0 ? (
+            {searching && low.length === 0 && stocked.length === 0 && restingMatches.length === 0 ? (
               <EmptyState
                 icon="search-outline"
                 title={t('pantry.noMatchesTitle')}
@@ -229,8 +286,18 @@ export default function PantryScreen() {
               />
             ) : (
               <>
+                {/* Everything is resting: say so rather than showing two empty
+                    sections above a shelf the user can actually act on. */}
+                {items.length === 0 && !searching && (
+                  <EmptyState
+                    icon="moon-outline"
+                    title={t('rest.allRestingTitle')}
+                    body={t('rest.allRestingBody')}
+                  />
+                )}
+
                 {/* Running low — expanded by default. Hidden while searching if empty. */}
-                {(!searching || low.length > 0) && (
+                {items.length > 0 && (!searching || low.length > 0) && (
                   <View style={styles.section}>
                     <SectionHeader
                       title={t('pantry.runningLow')}
@@ -251,7 +318,7 @@ export default function PantryScreen() {
                 )}
 
                 {/* In stock — collapsed by default. */}
-                {(!searching || stocked.length > 0) && (
+                {items.length > 0 && (!searching || stocked.length > 0) && (
                   <View style={styles.section}>
                     <SectionHeader
                       title={t('pantry.inStock')}
@@ -268,6 +335,36 @@ export default function PantryScreen() {
                           {t('pantry.nothingHere')}
                         </Text>
                       ))}
+                  </View>
+                )}
+
+                {/* Resting — the quiet shelf. Only appears once something is on
+                    it, so it never adds noise for people who don't use it. */}
+                {restingMatches.length > 0 && (
+                  <View style={styles.section}>
+                    <SectionHeader
+                      title={t('rest.section')}
+                      tone={colors.muted}
+                      count={restingMatches.length}
+                      expanded={restExpanded}
+                      onPress={() => toggle('rest')}
+                    />
+                    {restExpanded && (
+                      <View style={styles.rowStack}>
+                        <Text style={[type.sub, { color: colors.muted }]}>
+                          {t('rest.sectionHint')}
+                        </Text>
+                        {restingMatches.map((item) => (
+                          <RestingRow
+                            key={item.key}
+                            item={item}
+                            now={now}
+                            colors={colors}
+                            onWake={() => onWake(item)}
+                          />
+                        ))}
+                      </View>
+                    )}
                   </View>
                 )}
               </>
@@ -295,6 +392,10 @@ export default function PantryScreen() {
         onChange={(patch) => {
           if (stapleKey) setStaple(stapleKey, patch);
         }}
+        onRest={() => {
+          const item = stapleKey ? stats[stapleKey] : null;
+          if (item) onRest(item);
+        }}
       />
       <ListPickerSheet
         visible={pendingAdd != null}
@@ -303,6 +404,54 @@ export default function PantryScreen() {
         onPick={pickList}
       />
     </>
+  );
+}
+
+/**
+ * A row on the Resting shelf. Deliberately not a swipe row: a resting item has
+ * no prediction to correct and no reason to be added to a list, so the two
+ * swipe actions would both be lies. It has exactly one control — bring it back
+ * — and it's a plain, visible button rather than a hidden gesture, because this
+ * is the page you land on when you're trying to undo something.
+ *
+ * Dimmed rather than greyed to a different palette: same row, asleep.
+ */
+function RestingRow({
+  item,
+  now,
+  colors,
+  onWake,
+}: {
+  item: ItemStat;
+  now: number;
+  colors: Colors;
+  onWake: () => void;
+}) {
+  const t = useT();
+  return (
+    <View style={[styles.restRow, { backgroundColor: colors.surface }]}>
+      <Ionicons name="moon-outline" size={18} color={colors.muted} />
+      <ItemEmoji name={item.display} category={item.category} size={15} dim />
+      <View style={styles.grow}>
+        <Text style={[type.body, { color: colors.muted }]} numberOfLines={1}>
+          {item.display}
+        </Text>
+        <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+          {categoryLabel(item.category, t)} · {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onWake}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('rest.wakeFor', { item: item.display })}
+        style={[styles.wakeBtn, { borderColor: colors.accent }]}
+      >
+        <Text style={[type.sub, { color: colors.accent, fontWeight: '700' }]}>
+          {t('rest.wake')}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -320,6 +469,7 @@ const MAX_TRAVEL = 130;
 function PantrySwipeRow({
   item,
   now,
+  queued,
   colors,
   onStillGood,
   onAddToList,
@@ -327,6 +477,8 @@ function PantrySwipeRow({
 }: {
   item: ItemStat;
   now: number;
+  /** Currently sitting unticked on a shopping list. */
+  queued: boolean;
   colors: Colors;
   onStillGood: () => void;
   onAddToList: () => void;
@@ -390,6 +542,7 @@ function PantrySwipeRow({
             accessibilityLabel={t('staple.openFor', { item: item.display })}
           >
             <View style={styles.nameRow}>
+              <ItemEmoji name={item.display} category={item.category} />
               {/* Staples carry a mark, and the accessible name says so too —
                   never colour or icon alone. */}
               {item.keepStocked && (
@@ -400,12 +553,21 @@ function PantrySwipeRow({
                   accessibilityLabel={t('staple.badge')}
                 />
               )}
+              {queued && (
+                <Ionicons
+                  name="cart"
+                  size={13}
+                  color={colors.warn}
+                  accessibilityLabel={t('pantry.onList')}
+                />
+              )}
               <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
                 {item.display}
               </Text>
             </View>
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-              {categoryLabel(item.category, t)} · {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+              {queued ? t('pantry.onList') : categoryLabel(item.category, t)} ·{' '}
+              {lastBoughtLabel(item.lastPurchasedAt, now, t)}
               {hasUserCadence(item) ? ` · ${t('staple.everyDays', { count: item.cadenceDays ?? 0 })}` : ''}
             </Text>
           </Pressable>
@@ -450,6 +612,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowStack: { gap: spacing.sm },
+  restRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    opacity: 0.72,
+  },
+  wakeBtn: {
+    borderWidth: 1,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
   swipeWrap: { borderRadius: radii.md, overflow: 'hidden' },
   actionPanel: {
     ...StyleSheet.absoluteFillObject,

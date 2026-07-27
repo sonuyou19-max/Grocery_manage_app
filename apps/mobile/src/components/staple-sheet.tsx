@@ -34,9 +34,11 @@ interface StapleSheetProps {
   item: ItemStat | null;
   onClose: () => void;
   onChange: (patch: { keepStocked?: boolean; cadenceDays?: number | null }) => void;
+  /** Retire the item from prediction. The caller closes the sheet. */
+  onRest: () => void;
 }
 
-export function StapleSheet({ item, onClose, onChange }: StapleSheetProps) {
+export function StapleSheet({ item, onClose, onChange, onRest }: StapleSheetProps) {
   const { colors } = useTheme();
   const t = useT();
 
@@ -103,6 +105,23 @@ export function StapleSheet({ item, onClose, onChange }: StapleSheetProps) {
                 <Text style={[type.sub, { color: colors.muted }]}>{t('staple.cadenceNote')}</Text>
               </View>
 
+              {/* Let it rest — the way out that isn't a delete. Placed last and
+                  in muted tones because it's the rarest choice on this sheet;
+                  it should be findable, not inviting. */}
+              <Pressable
+                onPress={onRest}
+                accessibilityRole="button"
+                accessibilityHint={t('rest.hint')}
+                style={[styles.row, styles.restRow, { borderColor: colors.line }]}
+              >
+                <Ionicons name="moon-outline" size={22} color={colors.muted} />
+                <View style={styles.grow}>
+                  <Text style={[type.body, { color: colors.ink }]}>{t('rest.action')}</Text>
+                  <Text style={[type.sub, { color: colors.muted }]}>{t('rest.hint')}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </Pressable>
+
               <Pressable onPress={onClose} style={styles.done} hitSlop={8}>
                 <Text style={[type.body, { color: colors.accent }]}>{t('common.done')}</Text>
               </Pressable>
@@ -164,6 +183,9 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  // Shares the bordered `row` layout but drops the top rule, so it reads as the
+  // sheet's closing action rather than another setting in the stack.
+  restRow: { borderTopWidth: 0 },
   grow: { flex: 1, minWidth: 0 },
   // Wraps, because translated cadence labels ("alle 14 Tage") run much longer
   // than the English.

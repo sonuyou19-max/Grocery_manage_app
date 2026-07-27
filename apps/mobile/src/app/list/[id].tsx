@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { GlassView } from '@/components/glass';
+import { ItemEmoji } from '@/components/item-emoji';
 import { ItemSheet } from '@/components/item-sheet';
 import { ListPantryStrip } from '@/components/list-pantry-strip';
 import { MeshBackground } from '@/components/mesh-background';
@@ -551,15 +552,19 @@ function SwipeableItemRow({
           </Pressable>
 
           <Pressable style={styles.grow} onPress={guard(onEdit)}>
-            <Text
-              style={[
-                type.body,
-                { color: it.checked ? colors.muted : colors.ink },
-                it.checked && styles.struck,
-              ]}
-            >
-              {it.name}
-            </Text>
+            <View style={styles.nameRow}>
+              <ItemEmoji name={it.name} category={it.category} dim={it.checked} />
+              <Text
+                style={[
+                  type.body,
+                  styles.grow,
+                  { color: it.checked ? colors.muted : colors.ink },
+                  it.checked && styles.struck,
+                ]}
+              >
+                {it.name}
+              </Text>
+            </View>
             {(it.quantity != null || it.store != null) && (
               <View style={styles.meta}>
                 {it.store != null && <SupermarketBadge store={it.store} size={16} />}
@@ -674,6 +679,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   struck: { textDecorationLine: 'line-through' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   swipeWrap: { overflow: 'hidden' },
   deleteLayer: {
     position: 'absolute',

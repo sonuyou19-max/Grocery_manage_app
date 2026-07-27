@@ -7,14 +7,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
+import { useProfileName } from '@/lib/profile-name';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-/** Create a new household or join an existing one with an invite code. */
+/**
+ * Create a new household or join an existing one with an invite code.
+ *
+ * Your own name is *not* asked here. It's captured once at sign-up and reused,
+ * because it's the same answer every time — creating five households used to
+ * mean typing it five times. The field only reappears for an account that
+ * predates that flow and has no name on record yet.
+ */
 export default function HouseholdSetupScreen() {
   const { colors } = useTheme();
-  const { createHousehold, joinHousehold } = useHousehold();
+  const { createHousehold, joinHousehold, myName } = useHousehold();
+  const { name: savedName, ready: nameReady, remember } = useProfileName();
   const t = useT();
 
   const [mode, setMode] = useState<'create' | 'join'>('create');
@@ -24,8 +33,15 @@ export default function HouseholdSetupScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // On device first, then whatever the user's memberships already call them.
+  const knownName = (savedName || myName || '').trim();
+  // Only ask once storage has answered — otherwise the field flashes in and
+  // out for the common case where we do know the name.
+  const askName = nameReady && !knownName;
+
   const submit = async () => {
-    if (!displayName.trim()) {
+    const finalName = knownName || displayName.trim();
+    if (!finalName) {
       setError(t('auth.addYourName'));
       return;
     }
@@ -33,11 +49,17 @@ export default function HouseholdSetupScreen() {
     setError(null);
     const result =
       mode === 'create'
-        ? await createHousehold(householdName, displayName)
-        : await joinHousehold(code, displayName);
+        ? await createHousehold(householdName, finalName)
+        : await joinHousehold(code, finalName);
     setBusy(false);
-    if (result.error) setError(result.error);
-    else router.back();
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    // A name typed here is still worth remembering, so the next household
+    // doesn't ask again either.
+    if (!knownName) await remember(finalName);
+    router.back();
   };
 
   return (
@@ -80,13 +102,20 @@ export default function HouseholdSetupScreen() {
             })}
           </View>
 
-          <FormField
-            label={t('auth.yourName')}
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder={t('auth.yourNamePlaceholder')}
-            autoCapitalize="words"
-          />
+          {askName && (
+            <FormField
+              label={t('auth.yourName')}
+              value={displayName}
+              onChangeText={setDisplayName}
+              placeholder={t('auth.yourNamePlaceholder')}
+              autoCapitalize="words"
+            />
+          )}
+          {knownName ? (
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t('auth.joiningAs', { name: knownName })}
+            </Text>
+          ) : null}
 
           {mode === 'create' ? (
             <FormField

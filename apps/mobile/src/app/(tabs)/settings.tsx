@@ -10,6 +10,7 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { languageByCode, regionByCode } from '@/i18n';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/legal';
 import { normalizeKey } from '@/lib/pantry-intel';
+import { useProfileName } from '@/lib/profile-name';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -22,6 +23,7 @@ export default function SettingsScreen() {
   const { user, signOut, deleteAccount } = useAuth();
   const { households, household, membersOf, myName, setDisplayName } = useHousehold();
   const { seedDemo } = usePantryIntel();
+  const { remember: rememberName } = useProfileName();
   const { lists, deleteItem } = useGroceries();
   const { region, language, setLocale, t } = useLocale();
   const [localeOpen, setLocaleOpen] = useState(false);
@@ -44,7 +46,13 @@ export default function SettingsScreen() {
   const submitOwnName = async (next: string) => {
     setRenamingSelf(false);
     const { error } = await setDisplayName(next);
-    if (error) Alert.alert(t('settings.renameFailTitle'), error);
+    if (error) {
+      Alert.alert(t('settings.renameFailTitle'), error);
+      return;
+    }
+    // Keep the on-device copy in step, or the next household you create would
+    // be filed under the old name.
+    await rememberName(next);
   };
 
   const confirmSignOut = () =>
@@ -304,6 +312,8 @@ export default function SettingsScreen() {
         onRequestClose={() => setLocaleOpen(false)}
       >
         <LocaleSetup
+          initialRegion={region}
+          initialLanguage={language}
           onCancel={() => setLocaleOpen(false)}
           onDone={(r, l) => {
             setLocale(r, l);

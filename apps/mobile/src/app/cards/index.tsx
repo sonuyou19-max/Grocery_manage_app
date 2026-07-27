@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -50,12 +51,39 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * lib/loyalty-cards.ts for why, and how that's enforced.
  */
 
-/** Vertical gap between resting cards: enough to read the store name. */
-const STEP = 78;
+/**
+ * Vertical gap between resting cards.
+ *
+ * Sized to the header strip and nothing more: brand tile, store name, the line
+ * under it. Any taller and a five-card wallet needs scrolling to see cards that
+ * would otherwise all fit on screen; any shorter and the name starts colliding
+ * with the card above it in the languages with the longest chain names.
+ */
+const STEP = 66;
 /** Gap between cards once pinned at the top — a tight, overlapping pile. */
-const PIN_STEP = 12;
+const PIN_STEP = 10;
 /** Credit-card proportions, so it reads as a card at a glance. */
 const CARD_ASPECT = 1.6;
+
+/**
+ * Shift a hex colour towards black by `amount` (0–1); a negative amount
+ * lightens it instead. Out-of-range channels clamp, so extremes stay valid.
+ *
+ * Card faces are a gradient of the chain's own colour rather than two picked
+ * shades, so a new chain added to lib/supermarkets gets a correct-looking card
+ * with only its one brand colour — no second colour to choose, and no chance of
+ * the pair being chosen badly.
+ */
+function shade(hex: string, amount: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c * (1 - amount))));
+  const r = mix((n >> 16) & 0xff);
+  const g = mix((n >> 8) & 0xff);
+  const b = mix(n & 0xff);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
 
 export default function CardsScreen() {
   const { colors } = useTheme();
@@ -184,7 +212,7 @@ export default function CardsScreen() {
             <Pressable onPress={() => {}}>
               <GlassView radius={radii.lg} style={styles.openCard}>
                 <View style={styles.openHead}>
-                  <BrandMark store={open.store} size={34} />
+                  <BrandMark store={open.store} size={38} onColor={false} />
                   <Text style={[type.h2, { color: colors.ink, flex: 1 }]} numberOfLines={2}>
                     {supermarketLabel(open.store) ?? open.store}
                   </Text>
@@ -250,10 +278,16 @@ function StackedCard({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
+  const t = useT();
   const chain = getSupermarket(card.store);
   const label = supermarketLabel(card.store) ?? card.store;
-  const brand = chain?.color ?? colors.surface;
-  const ink = chain ? (chain.darkText ? '#1B2417' : '#FFFFFF') : colors.ink;
+  // A card the user typed a store name for has no brand colour, so it wears the
+  // app's own green. That keeps an unbranded card a first-class card rather than
+  // a grey placeholder among coloured ones.
+  const base = chain?.color ?? colors.accent;
+  const ink = chain?.darkText ? '#1B2417' : '#FFFFFF';
+  // Light diagonal wash: the brand colour into a deeper version of itself.
+  const gradient = [shade(base, -0.06), base, shade(base, 0.28)] as const;
 
   const animated = useAnimatedStyle(() => {
     const rest = index * STEP;
@@ -281,19 +315,39 @@ function StackedCard({
       ]}
     >
       <Pressable onPress={onPress} style={styles.fill}>
-        <View style={[styles.face, { backgroundColor: brand, borderColor: colors.line }]}>
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.face}
+        >
+          {/* Everything above the fold — this strip is all you see of a card
+              that isn't the bottom one, so it carries the whole identity. */}
           <View style={styles.faceHead}>
-            <BrandMark store={card.store} size={28} />
-            <Text style={[type.body, { color: ink, flex: 1 }]} numberOfLines={1}>
-              {label}
-            </Text>
+            <BrandMark store={card.store} size={38} />
+            <View style={styles.grow}>
+              <Text style={[styles.faceName, { color: ink }]} numberOfLines={1}>
+                {label}
+              </Text>
+              <Text style={[type.sub, { color: ink, opacity: 0.75 }]} numberOfLines={1}>
+                {t(formatOf(card.symbology) === 'qr' ? 'cards.faceQr' : 'cards.faceBarcode')}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={ink} style={styles.faceChevron} />
           </View>
-          {/* The number sits below the fold, visible only once this card is the
-              bottom-most (fully revealed) one. */}
-          <Text style={[type.price, { color: ink, opacity: 0.85 }]} numberOfLines={1}>
+
+          {/* Below the fold, so only the fully-revealed card shows its number. */}
+          <Text style={[styles.faceValue, { color: ink }]} numberOfLines={1}>
             {formatCardValue(card.symbology, card.value)}
           </Text>
-        </View>
+
+          {/* Ticket notch. Two half-circles bitten out of the side edges in the
+              page colour — the detail that makes a rectangle read as a card
+              rather than a coloured box. Sits at the fold line so it lands on
+              the visible strip of every card in the stack, not just the last. */}
+          <View style={[styles.notch, styles.notchLeft, { backgroundColor: colors.bg }]} />
+          <View style={[styles.notch, styles.notchRight, { backgroundColor: colors.bg }]} />
+        </LinearGradient>
       </Pressable>
     </Animated.View>
   );
@@ -303,32 +357,45 @@ function StackedCard({
  * Brand monogram on a plate that works on top of the brand colour itself —
  * SupermarketBadge fills with the brand colour, which would vanish against a
  * card face painted the same colour.
+ *
+ * A rounded square rather than a circle: it echoes the card's own corner radius
+ * and gives the monogram more room, which matters for the two-letter chains
+ * ("AH", "Im") that a circle crops tight.
  */
-function BrandMark({ store, size }: { store: string; size: number }) {
+function BrandMark({
+  store,
+  size,
+  /**
+   * True on a coloured card face, false on the pale glass of the open-card
+   * modal. A near-white plate is right on colour and invisible on glass, so the
+   * caller has to say which surface it's landing on.
+   */
+  onColor = true,
+}: {
+  store: string;
+  size: number;
+  onColor?: boolean;
+}) {
+  const { colors } = useTheme();
   const chain = getSupermarket(store);
   const initials = chain?.initials ?? customInitials(store);
-  const { colors } = useTheme();
-  const onBrand = Boolean(chain);
+  const plate = onColor ? 'rgba(255,255,255,0.92)' : chain?.color ?? colors.accentSoft;
+  const text = onColor
+    ? '#1B2417'
+    : chain
+      ? chain.darkText
+        ? '#1B2417'
+        : '#FFFFFF'
+      : colors.accent;
 
   return (
     <View
       style={[
         styles.mark,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: onBrand ? 'rgba(255,255,255,0.9)' : colors.accentSoft,
-        },
+        { width: size, height: size, borderRadius: size * 0.3, backgroundColor: plate },
       ]}
     >
-      <Text
-        style={[
-          styles.markText,
-          { fontSize: size * 0.4, color: onBrand ? '#1B2417' : colors.accent },
-        ]}
-        numberOfLines={1}
-      >
+      <Text style={[styles.markText, { fontSize: size * 0.4, color: text }]} numberOfLines={1}>
         {initials}
       </Text>
     </View>
@@ -355,9 +422,11 @@ const styles = StyleSheet.create({
   face: {
     flex: 1,
     borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     padding: spacing.lg,
     justifyContent: 'space-between',
+    // Clips the notches to the rounded rectangle, so the one on a card's edge
+    // can't paint outside the corner radius.
+    overflow: 'hidden',
     // A real shadow is what separates one card from the next in the pile.
     shadowColor: '#000000',
     shadowOpacity: 0.22,
@@ -365,9 +434,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     elevation: 6,
   },
-  faceHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  faceHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  faceName: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
+  // Nudged down so it optically centres against the two-line block beside it.
+  faceChevron: { opacity: 0.6 },
+  // Monospaced-ish spacing so a long card number reads in groups rather than as
+  // one run of digits.
+  faceValue: { fontSize: 15, fontWeight: '600', letterSpacing: 1.4, opacity: 0.9 },
   mark: { alignItems: 'center', justifyContent: 'center' },
   markText: { fontWeight: '800' },
+
+  // Half of each circle hangs outside the card and is clipped away by the
+  // face's overflow:hidden, leaving a clean bite in the edge.
+  notch: { position: 'absolute', width: 18, height: 18, borderRadius: 9, top: STEP - 9 },
+  notchLeft: { left: -9 },
+  notchRight: { right: -9 },
 
   backdrop: {
     flex: 1,

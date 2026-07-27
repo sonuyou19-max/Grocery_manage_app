@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
+import { ItemEmoji } from '@/components/item-emoji';
 import { MeshBackground } from '@/components/mesh-background';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
@@ -144,16 +145,22 @@ export default function ShoppingModeScreen() {
                     {it.checked && <Ionicons name="checkmark" size={22} color={colors.accentInk} />}
                   </View>
                   <View style={styles.grow}>
-                    <Text
-                      style={[
-                        styles.name,
-                        { color: it.checked ? colors.muted : colors.ink },
-                        it.checked && styles.struck,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {it.name}
-                    </Text>
+                    <View style={styles.nameRow}>
+                      {/* Bigger here than on the list screen — this is the
+                          arm's-length, one-glance-per-aisle view. */}
+                      <ItemEmoji name={it.name} category={it.category} size={22} dim={it.checked} />
+                      <Text
+                        style={[
+                          styles.name,
+                          styles.grow,
+                          { color: it.checked ? colors.muted : colors.ink },
+                          it.checked && styles.struck,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {it.name}
+                      </Text>
+                    </View>
                     {/* Claiming matters most here — this is the screen you're
                         holding while walking the aisles. */}
                     {(shoppersOnline.length > 0 || it.claimedBy != null) && !it.checked && (
@@ -247,6 +254,7 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 18, fontWeight: '600' },
   struck: { textDecorationLine: 'line-through' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
   done: { alignItems: 'center', gap: spacing.xs, paddingTop: spacing.xl },
   doneEmoji: { fontSize: 44 },

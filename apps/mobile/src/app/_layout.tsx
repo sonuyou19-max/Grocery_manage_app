@@ -17,6 +17,7 @@ import { hydrateCategoryCache } from '@/lib/categorize';
 import { hydrateItemHomeLists } from '@/lib/item-home-list';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring } from '@/lib/monitoring';
+import { hydrateOnboarding } from '@/lib/onboarding';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
@@ -61,6 +62,9 @@ export default function RootLayout() {
     void hydrateStorePrefs();
     void hydrateItemMemory();
     void hydrateItemHomeLists();
+    // Read before the dashboard mounts, so the tour can be decided on its first
+    // render instead of sliding in a beat later.
+    void hydrateOnboarding();
   }, []);
 
   return (

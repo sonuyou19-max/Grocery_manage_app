@@ -19,6 +19,7 @@ import { GlassView } from '@/components/glass';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { MeshBackground } from '@/components/mesh-background';
 import { haptics } from '@/lib/haptics';
+import { emojiFor } from '@/lib/item-emoji';
 import { isDue, lastBoughtLabel, normalizeKey } from '@/lib/pantry-intel';
 import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useT } from '@/store/locale';
@@ -312,6 +313,11 @@ function VibeCard({ card }: { card: DeckCard }) {
           <Text style={[type.sub, { color: colors.accent }]}>{t('staple.badge')}</Text>
         </View>
       )}
+      {/* Big and above the name, not inline: this card is the whole screen, and
+          the picture is what you read from across the kitchen. */}
+      <Text style={styles.cardEmoji} accessibilityElementsHidden importantForAccessibility="no">
+        {emojiFor(card.display, card.category)}
+      </Text>
       <Text style={[styles.itemName, { color: colors.ink }]} numberOfLines={3} adjustsFontSizeToFit>
         {card.display}
       </Text>
@@ -454,6 +460,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderColor: 'rgba(255,255,255,0.18)',
   },
+  cardEmoji: { fontSize: 64, textAlign: 'center', lineHeight: 74 },
   itemName: { fontSize: 46, fontWeight: '800', letterSpacing: -1.4, textAlign: 'center' },
   itemSub: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
   stapleTag: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },

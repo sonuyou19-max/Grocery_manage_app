@@ -13,7 +13,7 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { HouseholdSwitcher } from '@/components/household-switcher';
 import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
 import { WeeklyListSheet } from '@/components/weekly-list-sheet';
-import { hasSeenOnboarding } from '@/lib/onboarding';
+import { onboardingSeen } from '@/lib/onboarding';
 import { normalizeKey } from '@/lib/pantry-intel';
 import { buildWeeklySuggestions, type WeeklySuggestion } from '@/lib/weekly-list';
 import { useAuth } from '@/store/auth';
@@ -68,16 +68,17 @@ export default function ListsScreen() {
     [stats, excludeKeys],
   );
 
-  // On first launch, show the feature tour over the home screen (once per
-  // install). The ref guards against the effect firing twice.
+  // On first launch, show the feature tour (once per install). The flag is
+  // hydrated at app start, so this fires on the first render that knows the
+  // answer rather than after a storage round-trip — which is what made the tour
+  // arrive a beat after the dashboard had already painted.
   const tourChecked = useRef(false);
+  const seen = onboardingSeen();
   useEffect(() => {
-    if (tourChecked.current) return;
+    if (tourChecked.current || seen === null) return;
     tourChecked.current = true;
-    void hasSeenOnboarding().then((seen) => {
-      if (!seen) router.push('/onboarding');
-    });
-  }, []);
+    if (!seen) router.push('/onboarding');
+  }, [seen]);
 
   // Who can see these lists. Household-wide for now, so every card shows the
   // same faces; once lists carry their own membership (see

@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { wipeLoyaltyCards } from '@/lib/loyalty-cards';
+import { forgetProfileName } from '@/lib/profile-name';
 import { supabase } from '@/lib/supabase';
 import { useT } from '@/store/locale';
 
@@ -28,8 +29,12 @@ interface AuthContext {
   initializing: boolean;
   /** Send a 6-digit login code to the email. */
   sendCode: (email: string) => Promise<{ error?: string }>;
-  /** Verify the code and start a session. */
-  verifyCode: (email: string, token: string) => Promise<{ error?: string }>;
+  /**
+   * Verify the code and start a session. Returns the signed-in user's id on
+   * success, so a caller can look up per-user on-device state (the remembered
+   * profile name) without waiting for this context to re-render.
+   */
+  verifyCode: (email: string, token: string) => Promise<{ error?: string; userId?: string }>;
   /** Create an account with email + password. */
   signUpPassword: (email: string, password: string) => Promise<{ error?: string }>;
   /** Sign in with email + password. */
@@ -94,7 +99,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
       verifyCode: async (email, token) => {
         try {
-          const { error } = await supabase.auth.verifyOtp({
+          const { data, error } = await supabase.auth.verifyOtp({
             email: email.trim(),
             token: token.trim(),
             type: 'email',
@@ -102,7 +107,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           if (error) {
             return { error: cleanError(error, t('authError.codeWrong'), t) };
           }
-          return {};
+          return { userId: data.user?.id };
         } catch (e) {
           return { error: cleanError(e, t('authError.network'), t) };
         }
@@ -139,7 +144,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
       deleteAccount: async () => {
         // Grab the id before anything signs us out — it's the key the local
-        // loyalty cards are filed under, and the session is gone afterwards.
+        // loyalty cards and the remembered profile name are filed under, and
+        // the session is gone afterwards.
         const deletedUserId = session?.user.id ?? null;
         try {
           const { error } = await supabase.rpc('delete_account');
@@ -147,6 +153,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           // Loyalty cards live only on this device, so the server-side delete
           // can't reach them — clear them here or they'd outlive the account.
           await wipeLoyaltyCards(deletedUserId);
+          if (deletedUserId) await forgetProfileName(deletedUserId);
           // The account is gone; drop the now-invalid session locally.
           await supabase.auth.signOut();
           return {};

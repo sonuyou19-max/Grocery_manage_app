@@ -61,6 +61,20 @@ export interface ItemStat {
    * Null/undefined means "keep learning" — the absence of an override, not zero.
    */
   cadenceDays?: number | null;
+  /**
+   * Resting since this moment, or null/undefined while actively tracked.
+   *
+   * A resting item keeps all of its history but is not predicted: it's out of
+   * the Vibe Check deck, out of Running low and In stock, and out of the weekly
+   * list builder. A timestamp rather than a flag because the Pantry shows
+   * "Resting since …", which is what tells you whether to bring it back.
+   */
+  archivedAt?: number | null;
+}
+
+/** Retired from prediction — see `archivedAt`. */
+export function isResting(stat: ItemStat): boolean {
+  return stat.archivedAt != null;
 }
 
 export type StatMap = Record<string, ItemStat>;
@@ -126,6 +140,28 @@ export function applyStaple(
   return { ...stats, [key]: next };
 }
 
+/**
+ * Put an item to rest, or bring it back.
+ *
+ * Bringing it back restarts the clock (`lastPurchasedAt = now`, snooze cleared)
+ * instead of resuming the old one. An item asleep for six months would
+ * otherwise wake up wildly overdue and shout on the very first Vibe Check —
+ * the opposite of what "bring it back" sounds like. The learned interval and
+ * sample count survive untouched, so the rate it had is the rate it resumes
+ * with; only the countdown starts fresh.
+ */
+export function applyResting(
+  stats: StatMap,
+  key: string,
+  resting: boolean,
+  now: number = Date.now(),
+): StatMap {
+  const s = stats[key];
+  if (!s) return stats;
+  if (resting) return { ...stats, [key]: { ...s, archivedAt: now } };
+  return { ...stats, [key]: { ...s, archivedAt: null, lastPurchasedAt: now, snoozeUntil: null } };
+}
+
 /** Epoch ms at which the item becomes due (90% of lifespan, respecting snooze). */
 export function dueAt(stat: ItemStat): number {
   const base = stat.lastPurchasedAt + DUE_FRACTION * effectiveInterval(stat) * DAY;
@@ -133,6 +169,9 @@ export function dueAt(stat: ItemStat): number {
 }
 
 export function isDue(stat: ItemStat, now: number): boolean {
+  // Resting items never come due — that is the whole point of resting, and
+  // enforcing it here means every caller inherits it for free.
+  if (isResting(stat)) return false;
   return stat.lastPurchasedAt > 0 && now >= dueAt(stat);
 }
 

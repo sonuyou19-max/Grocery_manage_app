@@ -11,6 +11,7 @@ import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
+import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
 import { priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
@@ -44,18 +45,22 @@ export default function InsightsScreen() {
     () => basketBalance(lists.flatMap((l) => l.items).map((it) => ({ name: it.name, category: it.category }))),
     [lists],
   );
+  // Resting items are out of every reading here: they're history Korb keeps but
+  // no longer tracks, so counting them would describe a pantry you don't have.
+  const tracked = useMemo(() => Object.values(stats).filter((s) => !isResting(s)), [stats]);
+
   const pantry = useMemo(
-    () => basketBalance(Object.values(stats).map((s) => ({ name: s.display, category: s.category }))),
-    [stats],
+    () => basketBalance(tracked.map((s) => ({ name: s.display, category: s.category }))),
+    [tracked],
   );
 
   const staples = useMemo(
     () =>
-      Object.values(stats)
+      tracked
         .filter((s) => s.sampleCount >= 1)
         .sort((a, b) => b.sampleCount - a.sampleCount)
         .slice(0, 5),
-    [stats],
+    [tracked],
   );
 
   const priced = useMemo(

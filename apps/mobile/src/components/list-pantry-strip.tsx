@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ItemEmoji } from '@/components/item-emoji';
 import { recallItemList } from '@/lib/item-home-list';
 import { dueAt, isDue, normalizeKey, type ItemStat } from '@/lib/pantry-intel';
 import { useGroceries, type List } from '@/store/groceries';
@@ -78,6 +79,7 @@ export function ListPantryStrip({ list }: { list: List }) {
             style={[styles.chip, { borderColor: colors.line, backgroundColor: colors.surface }]}
           >
             <Ionicons name="add" size={15} color={colors.accent} />
+            <ItemEmoji name={item.display} category={item.category} size={14} />
             <Text style={[type.sub, { color: colors.ink }]} numberOfLines={1}>
               {item.display}
             </Text>
