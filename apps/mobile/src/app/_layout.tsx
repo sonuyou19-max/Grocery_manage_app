@@ -15,6 +15,8 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { ToastProvider } from '@/components/toast';
 import { hydrateCategoryCache } from '@/lib/categorize';
 import { hydrateItemHomeLists } from '@/lib/item-home-list';
+import { setEmojiLexicon } from '@/lib/item-emoji';
+import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring } from '@/lib/monitoring';
 import { hydrateOnboarding } from '@/lib/onboarding';
@@ -65,6 +67,14 @@ export default function RootLayout() {
     // Read before the dashboard mounts, so the tour can be decided on its first
     // render instead of sliding in a beat later.
     void hydrateOnboarding();
+
+    // The shared item lexicon: read the device copy first so the very first
+    // render already has it, then pull whatever has been published since. The
+    // resolver is wired before hydration on purpose — it reads the live map, so
+    // it is correct whenever it happens to be called, and item-emoji stays a
+    // pure module that knows nothing about storage.
+    setEmojiLexicon((term) => lexiconLookup(term)?.emoji);
+    void hydrateLexicon().then(() => syncLexicon());
   }, []);
 
   return (

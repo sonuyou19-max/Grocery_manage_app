@@ -14,8 +14,14 @@ const CAPS: Record<string, number> = {
   'weekly-recap': 60,
 };
 
-/** Best-effort client IP from the proxy headers Supabase forwards. */
-function clientIp(req: Request): string {
+/**
+ * Best-effort client IP from the proxy headers Supabase forwards.
+ *
+ * Exported because the lexicon needs the same value: it is the only stable
+ * per-caller identifier this function has, and it is hashed with a secret salt
+ * before it goes anywhere near the database (see _shared/lexicon.ts).
+ */
+export function clientIp(req: Request): string {
   const xff = req.headers.get('x-forwarded-for');
   if (xff) return xff.split(',')[0].trim();
   return req.headers.get('cf-connecting-ip') ?? req.headers.get('x-real-ip') ?? 'unknown';

@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { FoodGroup, ItemCategory } from '@korb/shared';
 
+import { fold } from '@/lib/item-emoji';
+import { learnLexiconEntry } from '@/lib/item-lexicon';
 import { supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
 /** Display labels + store-aisle ordering for categories. */
@@ -153,7 +155,14 @@ export function categorizeSync(name: string): ItemCategory {
  * Ask the categorize edge function to classify an unknown item. Returns the
  * category plus a coarse food group (for the basket-balance insight) in one
  * call, or null when the backend isn't reachable so the caller leaves the item
- * under 'Other'. Older deployments return only a category — group is optional.
+ * under 'Other'. Older deployments return only a category — group and emoji are
+ * both optional, so a client that has been updated ahead of the function keeps
+ * working exactly as it did.
+ *
+ * The same response also carries an emoji, which is filed into the on-device
+ * lexicon here rather than by every caller. The server may not publish that
+ * term to other customers for a while — it waits for three independent
+ * sightings — but the person who paid for this call should never pay twice.
  */
 export async function resolveCategoryAsync(
   name: string,
@@ -165,8 +174,20 @@ export async function resolveCategoryAsync(
       body: JSON.stringify({ name }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { category?: ItemCategory; group?: FoodGroup | null };
+    const data = (await res.json()) as {
+      category?: ItemCategory;
+      group?: FoodGroup | null;
+      emoji?: string | null;
+    };
     if (!data.category) return null;
+    // Structural sanity only. The allowlist check that actually matters ran
+    // server-side before this value was allowed anywhere near the shared table
+    // (functions/_shared/emoji-allowlist.ts); re-listing 200 glyphs here would
+    // just be a second copy to drift out of step. This guards against a
+    // malformed response, not against a hostile one.
+    if (typeof data.emoji === 'string' && data.emoji.length > 0 && data.emoji.length <= 8) {
+      learnLexiconEntry(fold(name), data.emoji, data.category);
+    }
     return { category: data.category, group: data.group ?? null };
   } catch {
     return null;

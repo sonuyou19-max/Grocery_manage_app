@@ -15,6 +15,7 @@
     "check:purchase-log": "node scripts/check-purchase-log.mjs",
     "check:pantry-intel": "node scripts/check-pantry-intel.mjs",
     "check:item-emoji": "node scripts/check-item-emoji.mjs",
+    "check:lexicon": "node scripts/check-lexicon.mjs",
     "check:purchase-log:tz": "for tz in UTC Europe/Brussels Europe/Warsaw America/Los_Angeles Pacific/Kiritimati; do echo \"— $tz\"; TZ=$tz node scripts/check-purchase-log.mjs | tail -1; done"
   },
   "dependencies": {

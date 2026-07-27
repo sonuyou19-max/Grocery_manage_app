@@ -119,6 +119,30 @@ check('"pear" is not stemmed to "pea"', mod.emojiFor('Pear', 'fruit_veg'), '🍐
 check('"beans" resolves', mod.emojiFor('Beans', 'pantry'), '🫘');
 check('"bacon" is not matched by "ba"', mod.emojiFor('Bacon', 'meat_fish'), '🥓');
 
+/* ----------------------------------------- every table key must be reachable */
+
+// A key that fold() can never produce is dead code that looks alive. This bit
+// the Polish and Spanish entries for toothpaste and toilet paper, which were
+// written with underscores ("pasta_de_dientes") and so could never match the
+// space-separated string fold() actually emits — the feature silently didn't
+// work in two languages, and nothing failed. Re-derive every key through fold()
+// and demand it comes back unchanged.
+{
+  const source = readFileSync(SRC, 'utf8');
+  const body = source.slice(
+    source.indexOf('const ITEM_EMOJI'),
+    source.indexOf('const LIGATURES'),
+  );
+  const tableKeys = [...body.matchAll(/(?:^|[,{]\s*)'?([A-Za-z_][A-Za-z_ '-]*?)'?\s*:\s*'/gm)]
+    .map((m) => m[1]);
+  check('the key regex actually found the table', tableKeys.length > 200, true);
+  // Joined, not compared as arrays: this file's `check` uses ===, and two empty
+  // arrays are never identical — the assertion would "fail" with both sides
+  // printing as nothing, which is worse than no test at all.
+  const unreachable = tableKeys.filter((k) => mod.fold(k) !== k);
+  check('every ITEM_EMOJI key survives fold() unchanged', unreachable.join(', '), '');
+}
+
 /* ------------------------------------------------------ table sanity checks */
 
 const values = Object.values(mod.CATEGORY_EMOJI);

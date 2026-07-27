@@ -97,7 +97,7 @@ const ITEM_EMOJI: Record<string, string> = {
   aubergine: '🍆', eggplant: '🍆', berenjena: '🍆', melanzana: '🍆', baklazan: '🍆',
   basil: '🌿', basilikum: '🌿', basilic: '🌿', basilicum: '🌿', albahaca: '🌿',
   basilico: '🌿', bazylia: '🌿', herbs: '🌿', krauter: '🌿', herbes: '🌿', kruiden: '🌿',
-  olive: '🫒', olives: '🫒', oliven: '🫒', aceitunas: '🫒', olive_it: '🫒', oliwki: '🫒',
+  olive: '🫒', olives: '🫒', oliven: '🫒', aceitunas: '🫒', oliwki: '🫒',
 
   // --- meat & fish ---------------------------------------------------------
   chicken: '🍗', hahnchen: '🍗', huhn: '🍗', poulet: '🍗', kip: '🍗', pollo: '🍗', kurczak: '🍗',
@@ -138,7 +138,7 @@ const ITEM_EMOJI: Record<string, string> = {
   tea: '🍵', tee: '🍵', the: '🍵', thee: '🍵', te: '🍵', herbata: '🍵',
   cereal: '🥣', cornflakes: '🥣', muesli: '🥣', granola: '🥣', platki: '🥣',
   honey: '🍯', honig: '🍯', miel: '🍯', honing: '🍯', miele: '🍯', miod: '🍯',
-  jam: '🍓', marmelade: '🍓', confiture: '🍓', jam_nl: '🍓', mermelada: '🍓',
+  jam: '🍓', marmelade: '🍓', confiture: '🍓', mermelada: '🍓',
   marmellata: '🍓', dzem: '🍓',
   peanut: '🥜', nuts: '🥜', nusse: '🥜', noten: '🥜', nueces: '🥜', noci: '🥜', orzechy: '🥜',
   chocolate: '🍫', schokolade: '🍫', chocolat: '🍫', chocolade: '🍫', cioccolato: '🍫', czekolada: '🍫',
@@ -164,7 +164,8 @@ const ITEM_EMOJI: Record<string, string> = {
   fries: '🍟', frites: '🍟', frieten: '🍟', patatine: '🍟', frytki: '🍟',
 
   // --- household ------------------------------------------------------------
-  toilet: '🧻', klopapier: '🧻', papier: '🧻', wc: '🧻', papel: '🧻', carta: '🧻', papier_toaletowy: '🧻',
+  toilet: '🧻', klopapier: '🧻', papier: '🧻', wc: '🧻', papel: '🧻', carta: '🧻',
+  'papier toaletowy': '🧻', 'toilet paper': '🧻', 'papier toilette': '🧻', 'toiletpapier': '🧻',
   detergent: '🧼', waschmittel: '🧼', lessive: '🧼', wasmiddel: '🧼', detergente: '🧼', proszek: '🧼',
   soap: '🧼', seife: '🧼', savon: '🧼', zeep: '🧼', jabon: '🧼', sapone: '🧼', mydlo: '🧼',
   sponge: '🧽', schwamm: '🧽', eponge: '🧽', spons: '🧽', esponja: '🧽', spugna: '🧽', gabka: '🧽',
@@ -175,8 +176,8 @@ const ITEM_EMOJI: Record<string, string> = {
 
   // --- personal care --------------------------------------------------------
   shampoo: '🧴', champu: '🧴', szampon: '🧴',
-  toothpaste: '🪥', zahnpasta: '🪥', dentifrice: '🪥', tandpasta: '🪥',
-  pasta_de_dientes: '🪥', dentifricio: '🪥', pasta_do_zebow: '🪥',
+  toothpaste: '🪥', zahnpasta: '🪥', dentifrice: '🪥', tandpasta: '🪥', dentifricio: '🪥',
+  'pasta de dientes': '🪥', 'pasta do zebow': '🪥',
   toothbrush: '🪥', zahnburste: '🪥', tandenborstel: '🪥',
   deodorant: '🧴', deodorante: '🧴', dezodorant: '🧴',
   razor: '🪒', rasierer: '🪒', rasoir: '🪒', scheermes: '🪒', maquinilla: '🪒',
@@ -210,13 +211,33 @@ const LIGATURES: Record<string, string> = {
  * today, but this runs on every row and the explicit range has no engine
  * caveats.
  */
-const fold = (s: string): string =>
+export const fold = (s: string): string =>
   s
     .toLowerCase()
     .replace(/[łøœæßđðþı]/g, (c) => LIGATURES[c] ?? c)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
+
+/**
+ * The shared lexicon (migration 0019), injected rather than imported.
+ *
+ * This module is pure on purpose — no storage, no network, no React — so it can
+ * be exercised standalone by check-item-emoji.mjs and called freely during
+ * render. The lexicon cache needs AsyncStorage and Supabase, and importing it
+ * here would drag both onto a hot pure path and break that check script.
+ *
+ * So the app wires the resolver in at startup (see _layout.tsx). Unwired — in
+ * tests, or before hydration finishes — it returns undefined and every lookup
+ * falls through to exactly the behaviour that existed before it.
+ */
+type LexiconResolver = (foldedTerm: string) => string | undefined;
+let lexicon: LexiconResolver = () => undefined;
+
+export function setEmojiLexicon(resolver: LexiconResolver): void {
+  lexicon = resolver;
+}
 
 /**
  * Very light plural/inflection trimming, tried only after the exact word misses.
@@ -253,14 +274,23 @@ export function emojiFor(name: string, category: ItemCategory = 'other'): string
   const folded = fold(name);
   if (!folded) return CATEGORY_EMOJI[category] ?? CATEGORY_EMOJI.other;
 
-  // Whole name, with spaces collapsed and also joined — "ice cream" / "icecream".
-  const collapsed = folded.replace(/\s+/g, ' ');
-  const whole = lookupWord(collapsed) ?? lookupWord(collapsed.replace(/\s+/g, ''));
+  // 1. Curated table, whole name — "ice cream" / "icecream" both spellings.
+  const whole = lookupWord(folded) ?? lookupWord(folded.replace(/\s+/g, ''));
   if (whole) return whole;
 
-  for (const word of collapsed.split(/[\s,./-]+/)) {
+  // 2. Shared lexicon, whole term. Ordered above the word scan deliberately:
+  //    an exact match on the full string is more specific than a partial match
+  //    on one of its words, whichever source it came from. "Coconut water"
+  //    known in full beats matching "coconut" and calling it a 🥥.
+  const learned = lexicon(folded);
+  if (learned) return learned;
+
+  // 3. Curated table, word by word.
+  for (const word of folded.split(/[\s,./-]+/)) {
     const hit = lookupWord(word);
     if (hit) return hit;
   }
+
+  // 4. The category, which always has an answer.
   return CATEGORY_EMOJI[category] ?? CATEGORY_EMOJI.other;
 }

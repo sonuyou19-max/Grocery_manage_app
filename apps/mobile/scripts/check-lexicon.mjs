@@ -1,0 +1,194 @@
+/**
+ * Shared item-lexicon check.
+ *
+ * Three invariants, none of which fail loudly in production:
+ *
+ *  1. **The two fold() implementations must agree.** The client folds a name
+ *     before asking the lexicon; the edge function folds it before storing it.
+ *     If they ever disagree by one character, nothing crashes — terms are just
+ *     filed under keys nobody will ever look up, and the whole shared
+ *     dictionary silently stops paying off. This loads BOTH and diffs them.
+ *
+ *  2. **The shareability filter must be strict in the right direction.** It is
+ *     the gate that keeps "call dr rutten about the rash" out of a table every
+ *     customer reads. A false negative costs one unshared word; a false
+ *     positive is a privacy incident. Both directions are asserted.
+ *
+ *  3. **The emoji allowlist must be clean.** No duplicates (wasted prompt
+ *     tokens and an ambiguous set), no flags or people, and every entry short
+ *     enough to render as a single glyph.
+ *
+ * Run with `pnpm --filter mobile check:lexicon`.
+ */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const CLIENT = join(here, '..', 'src', 'lib', 'item-emoji.ts');
+const SERVER_FOLD = join(here, '..', '..', '..', 'supabase', 'functions', '_shared', 'fold.ts');
+const ALLOWLIST = join(
+  here, '..', '..', '..', 'supabase', 'functions', '_shared', 'emoji-allowlist.ts',
+);
+
+async function load(path, strip = []) {
+  let source = readFileSync(path, 'utf8');
+  for (const re of strip) source = source.replace(re, '');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  });
+  return import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
+}
+
+const client = await load(CLIENT, [/^import .*from '@korb\/shared';$/gm]);
+const server = await load(SERVER_FOLD);
+const allow = await load(ALLOWLIST);
+
+let failures = 0;
+const check = (name, actual, expected) => {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  if (!ok) {
+    failures += 1;
+    console.log(`FAIL ${name}\n  expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}`);
+  }
+  return ok;
+};
+
+/* ------------------------------------------- 1. the two folds must agree */
+
+const FOLD_CASES = [
+  'Milk', 'MILK', '  milk  ', 'Milch', 'Käse', 'KÄSE', 'Œufs', 'œufs',
+  'Masło', 'Mydło', 'Jabłka', 'Pêche', 'jalapeño', 'Crème fraîche',
+  'Smørrebrød', 'Straße', 'Ærter', 'Ðill', 'Þyme', 'ısırgan',
+  'Olive   oil', 'ice\tcream', 'Red \n onion', 'Café au lait',
+  '', '   ', 'a', 'Żurek', 'Grüne Bohnen', 'Aardappelen',
+];
+let foldMismatches = 0;
+for (const input of FOLD_CASES) {
+  const a = client.fold(input);
+  const b = server.fold(input);
+  if (a !== b) {
+    foldMismatches += 1;
+    console.log(`FAIL fold drift on ${JSON.stringify(input)}\n  client ${JSON.stringify(a)}\n  server ${JSON.stringify(b)}`);
+  }
+}
+if (foldMismatches) failures += foldMismatches;
+check('client and server fold() agree on every case', foldMismatches, 0);
+
+// And the folds must actually do the job, not just agree on doing nothing.
+check('fold lowercases', client.fold('MILK'), 'milk');
+check('fold strips accents', client.fold('Pêche'), 'peche');
+check('fold maps ligatures NFD cannot', client.fold('Masło'), 'maslo');
+check('fold expands œ', client.fold('Œufs'), 'oeufs');
+check('fold collapses inner whitespace', client.fold('Olive   oil'), 'olive oil');
+check('fold trims', client.fold('  milk  '), 'milk');
+
+/* --------------------------------------- 2. the shareability gate, both ways */
+
+// Real grocery words, in every language the app ships. These MUST be shareable
+// or the feature never accumulates a useful dictionary.
+const SHAREABLE = [
+  'sriracha', 'speculoos', 'kefir', 'harissa', 'quinoa', 'kombucha',
+  'oat milk', 'creme fraiche', 'sun-dried tomatoes',
+  'zwiebeln', 'aardappelen', 'pomodori', 'czosnek', 'mantequilla',
+  'brotchen', "creme d'or", 'pasta de dientes',
+];
+for (const term of SHAREABLE) {
+  check(`shareable: ${JSON.stringify(term)}`, allow.isShareableTerm(term), true);
+}
+
+// The shape filter's actual contract: no digits, no punctuation beyond a
+// hyphen or apostrophe, 2-24 characters, at most three words.
+const REFUSED_BY_SHAPE = [
+  'gift for anna birthday',                        // 4 words
+  'order 4412',                                    // digits
+  'sarah@example.com',                             // an email
+  'pick up at 5pm',                                // digits + 4 words
+  'flat 3b keys',                                  // digits
+  'a',                                             // too short
+  'the very long shopping note here that goes on', // too long
+  'medication-2mg',                                // digits
+  'tel 0475 22 11 90',                             // digits
+  'https://foo',                                   // punctuation
+];
+for (const term of REFUSED_BY_SHAPE) {
+  check(`refused by shape: ${JSON.stringify(term)}`, allow.isShareableTerm(term), false);
+}
+
+// And the honest limit, asserted rather than assumed. A short, letters-only
+// private phrase sails through the shape filter — "call dr rutten" is three
+// words of plain letters and is indistinguishable, on shape alone, from "sun
+// dried tomatoes". The shape filter is a cheap pre-filter, NOT the privacy
+// control. What actually stops these is the model's `generic` judgement, and
+// behind that the requirement that three unrelated callers type the identical
+// string. Pinning this here so nobody later reads the filter as a guarantee it
+// does not provide.
+for (const term of ['call dr rutten', 'see whatsapp', 'ring mum']) {
+  check(
+    `shape filter alone does NOT catch ${JSON.stringify(term)} (generic + k-anonymity do)`,
+    allow.isShareableTerm(term),
+    true,
+  );
+}
+
+check('empty term refused', allow.isShareableTerm(''), false);
+check('25 chars refused', allow.isShareableTerm('a'.repeat(25)), false);
+check('24 chars accepted', allow.isShareableTerm('a'.repeat(24)), true);
+check('leading space refused', allow.isShareableTerm(' milk'), false);
+check('trailing hyphen refused', allow.isShareableTerm('milk-'), false);
+
+/* ------------------------------------------------ 3. the allowlist is clean */
+
+const list = allow.EMOJI_ALLOWLIST;
+check('allowlist is non-trivial', list.length > 100, true);
+check('no duplicates', list.length, new Set(list).size);
+check('every entry is a non-empty string', list.every((e) => typeof e === 'string' && e.length > 0), true);
+// Two codepoints max: a base glyph plus an optional variation selector. Longer
+// means a ZWJ sequence or a flag, which is what we said we would not ship.
+check(
+  'no multi-codepoint sequences (ZWJ / flags)',
+  list.filter((e) => [...e].length > 2),
+  [],
+);
+check(
+  'no regional indicators (flags)',
+  list.filter((e) => [...e].some((c) => c.codePointAt(0) >= 0x1f1e6 && c.codePointAt(0) <= 0x1f1ff)),
+  [],
+);
+// Skin-tone modifiers and the person ranges — identity, not groceries.
+check(
+  'no skin-tone modifiers',
+  list.filter((e) => [...e].some((c) => c.codePointAt(0) >= 0x1f3fb && c.codePointAt(0) <= 0x1f3ff)),
+  [],
+);
+
+check('isAllowedEmoji accepts a member', allow.isAllowedEmoji('🍎'), true);
+check('isAllowedEmoji rejects a non-member', allow.isAllowedEmoji('💀'), false);
+check('isAllowedEmoji rejects a flag', allow.isAllowedEmoji('🇧🇪'), false);
+check('isAllowedEmoji rejects prose', allow.isAllowedEmoji('an apple'), false);
+check('isAllowedEmoji rejects undefined', allow.isAllowedEmoji(undefined), false);
+check('isAllowedEmoji rejects empty', allow.isAllowedEmoji(''), false);
+
+/* ------------------------------- 4. the lexicon tier sits in the right place */
+
+// Injected resolver: a whole-term lexicon hit must beat the curated table's
+// word-by-word scan, but must NOT beat a curated whole-name match.
+client.setEmojiLexicon((term) => (term === 'coconut water' ? '💧' : undefined));
+check('lexicon whole-term beats a curated word match', client.emojiFor('Coconut water', 'drinks'), '💧');
+// 'pasta de dientes' is a genuine multi-word key in the curated table, so this
+// exercises the real precedence: a curated whole-name match outranks anything
+// the lexicon learned. (An earlier version of this test used 'olive oil', which
+// is NOT a curated whole-name entry — it resolves via the word scan — and so
+// asserted the opposite of what it claimed to.)
+client.setEmojiLexicon((term) => (term === 'pasta de dientes' ? '💀' : undefined));
+check('curated whole-name still beats the lexicon', client.emojiFor('Pasta de dientes', 'personal_care'), '🪥');
+client.setEmojiLexicon((term) => (term === 'olive oil' ? '🛢️' : undefined));
+check('lexicon whole-term beats the curated WORD scan', client.emojiFor('Olive oil', 'pantry'), '🛢️');
+client.setEmojiLexicon(() => undefined);
+check('unwired lexicon changes nothing', client.emojiFor('Milk', 'dairy_eggs'), '🥛');
+check('unknown term still falls back to its category', client.emojiFor('zzzqq', 'bakery'), '🍞');
+
+console.log(failures === 0 ? 'ALL PASS' : `\n${failures} FAILURE(S)`);
+process.exit(failures === 0 ? 0 : 1);

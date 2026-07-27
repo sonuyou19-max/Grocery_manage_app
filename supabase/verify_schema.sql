@@ -114,6 +114,39 @@ checks as (
                    join pg_namespace n on n.oid = c.relnamespace
                    where n.nspname = 'public' and c.relname = 'idx_items_unique_open'), false)
 
+  -- 0019 · shared item lexicon
+  union all select '0019 item_lexicon exists',
+         exists (select 1 from col where table_name = 'item_lexicon' and column_name = 'term')
+  union all select '0019 item_lexicon_sightings exists',
+         exists (select 1 from col where table_name = 'item_lexicon_sightings'
+                   and column_name = 'caller_hash')
+  union all select '0019 index idx_lexicon_published_updated',
+         exists (select 1 from pg_indexes where schemaname = 'public'
+                   and indexname = 'idx_lexicon_published_updated')
+  -- RLS off here would expose every customer's unpublished terms to every other
+  -- customer. This is the single most important row in this file.
+  union all select '0019 RLS on item_lexicon',
+         coalesce((select c.relrowsecurity from pg_class c
+                   join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relname = 'item_lexicon'), false)
+  union all select '0019 RLS on item_lexicon_sightings',
+         coalesce((select c.relrowsecurity from pg_class c
+                   join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relname = 'item_lexicon_sightings'), false)
+  -- Exactly one policy, and it must be SELECT. An INSERT/UPDATE/DELETE policy
+  -- appearing here means someone gave clients write access to the dictionary
+  -- every customer reads — the absence of those policies IS the control.
+  union all select '0019 item_lexicon has exactly one policy',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'item_lexicon') = 1
+  union all select '0019 that policy is SELECT-only',
+         exists (select 1 from pg_policies
+                 where schemaname = 'public' and tablename = 'item_lexicon'
+                   and cmd = 'SELECT')
+  union all select '0019 sightings ledger has NO policies (service role only)',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'item_lexicon_sightings') = 0
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',
