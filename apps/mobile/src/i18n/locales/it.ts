@@ -155,6 +155,12 @@ const it = {
     enterManuallyHint: 'Inserisci il numero stampato sulla carta.',
     numberLabel: 'Numero della carta',
     numberPlaceholder: 'es. 4006381333931',
+    warnCheckDigit:
+      'Queste cifre non superano il controllo %{format}: una potrebbe essere sbagliata. Confrontale con la tua carta.',
+    warnNonStandard:
+      '%{count} cifre non corrispondono a un codice a barre commerciale standard. Molte carte stampano un numero più lungo di quello nel codice: solo la scansione dà quello giusto.',
+    storeExpects:
+      'Le carte %{store} usano di solito %{format}. Se non viene letta, prova a scansionare la carta invece di digitarla.',
     numberHint: 'Scrivilo esattamente come è stampato, senza spazi.',
     checkTitle: 'Controlla il codice',
     checkBody:

@@ -16,13 +16,29 @@ export interface Supermarket {
   initials: string;
   /** Use dark text on light brand colors. */
   darkText?: boolean;
+  /**
+   * The barcode format this chain's loyalty cards are known to use, when we know
+   * it. Purely a **hint**: it warns the user when what they typed can't be drawn
+   * that way, and never overrides their choice.
+   *
+   * Left undefined unless observed, and even then treat it as soft — these
+   * chains operate across many countries and a format confirmed in Belgium may
+   * differ in Poland. A wrong hint should only ever cost a dismissible warning.
+   */
+  cardFormat?: 'ean13' | 'ean8' | 'upca' | 'itf14' | 'code128' | 'qr';
+  /** Digits the printed card number has, when it differs from the barcode's. */
+  cardDigits?: number;
 }
 
 export const SUPERMARKETS: Supermarket[] = [
-  { id: 'carrefour', name: 'Carrefour', color: '#004E9F', initials: 'C' },
+  // Observed in testing: the printed account number is longer than the barcode,
+  // which encodes 13 digits as EAN-13. Reported for one market — hence a hint,
+  // not a rule.
+  { id: 'carrefour', name: 'Carrefour', color: '#004E9F', initials: 'C', cardFormat: 'ean13' },
   { id: 'lidl', name: 'Lidl', color: '#0050AA', initials: 'L' },
   { id: 'aldi', name: 'Aldi', color: '#001E5A', initials: 'A' },
-  { id: 'colruyt', name: 'Colruyt', color: '#E2001A', initials: 'Co' },
+  // Observed in testing: Colruyt issues QR loyalty cards.
+  { id: 'colruyt', name: 'Colruyt', color: '#E2001A', initials: 'Co', cardFormat: 'qr' },
   { id: 'delhaize', name: 'Delhaize', color: '#B01E23', initials: 'D' },
   { id: 'albert_heijn', name: 'Albert Heijn', color: '#00ADE6', initials: 'AH' },
   { id: 'jumbo', name: 'Jumbo', color: '#EDB700', initials: 'J', darkText: true },

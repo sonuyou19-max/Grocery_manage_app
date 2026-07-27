@@ -168,6 +168,12 @@ const en = {
     enterManuallyHint: 'Enter the number printed on the card.',
     numberLabel: 'Card number',
     numberPlaceholder: 'e.g. 4006381333931',
+    warnCheckDigit:
+      'Those digits don’t pass the %{format} check, so one may be mistyped. Compare them with your card.',
+    warnNonStandard:
+      '%{count} digits doesn’t match a standard retail barcode. Many cards print a longer number than the barcode holds — scanning the card is the only way to get the right one.',
+    storeExpects:
+      '%{store} cards normally use %{format}. If this doesn’t scan, try scanning the card instead of typing it.',
     numberHint: 'Type it exactly as printed, without spaces.',
     checkTitle: 'Check the code',
     checkBody: 'Compare this with your card before saving. The number should match exactly.',

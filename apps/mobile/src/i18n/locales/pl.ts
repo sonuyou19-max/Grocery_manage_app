@@ -183,6 +183,12 @@ const pl = {
     enterManuallyHint: 'Wpisz numer wydrukowany na karcie.',
     numberLabel: 'Numer karty',
     numberPlaceholder: 'np. 4006381333931',
+    warnCheckDigit:
+      'Te cyfry nie przechodzą kontroli %{format} — być może jedna jest wpisana błędnie. Porównaj je ze swoją kartą.',
+    warnNonStandard:
+      'Liczba cyfr (%{count}) nie odpowiada standardowemu kodowi handlowemu. Wiele kart ma wydrukowany dłuższy numer niż zawiera kod — tylko zeskanowanie daje właściwy.',
+    storeExpects:
+      'Karty %{store} zwykle używają %{format}. Jeśli kod się nie skanuje, zeskanuj kartę, zamiast wpisywać numer.',
     numberHint: 'Wpisz go dokładnie tak, jak jest wydrukowany, bez spacji.',
     checkTitle: 'Sprawdź kod',
     checkBody:

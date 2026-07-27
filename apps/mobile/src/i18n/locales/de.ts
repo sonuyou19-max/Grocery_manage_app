@@ -156,6 +156,12 @@ const de = {
     enterManuallyHint: 'Gib die Nummer ein, die auf der Karte steht.',
     numberLabel: 'Kartennummer',
     numberPlaceholder: 'z. B. 4006381333931',
+    warnCheckDigit:
+      'Diese Ziffern bestehen die %{format}-Prüfung nicht — eine davon ist womöglich falsch. Vergleiche sie mit deiner Karte.',
+    warnNonStandard:
+      '%{count} Ziffern passen zu keinem üblichen Handels-Barcode. Viele Karten drucken eine längere Nummer, als der Barcode enthält — nur Scannen liefert die richtige.',
+    storeExpects:
+      '%{store}-Karten nutzen normalerweise %{format}. Wenn das nicht erkannt wird, scanne die Karte statt sie einzugeben.',
     numberHint: 'Gib sie genau wie aufgedruckt ein, ohne Leerzeichen.',
     checkTitle: 'Code prüfen',
     checkBody:

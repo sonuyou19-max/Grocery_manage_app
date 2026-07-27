@@ -156,6 +156,12 @@ const fr = {
     enterManuallyHint: 'Entre le numéro imprimé sur la carte.',
     numberLabel: 'Numéro de carte',
     numberPlaceholder: 'ex. 4006381333931',
+    warnCheckDigit:
+      'Ces chiffres ne passent pas le contrôle %{format} — l’un d’eux est peut-être mal saisi. Compare-les avec ta carte.',
+    warnNonStandard:
+      '%{count} chiffres ne correspondent à aucun code-barres commercial standard. Beaucoup de cartes impriment un numéro plus long que le code-barres — seul le scan donne le bon.',
+    storeExpects:
+      'Les cartes %{store} utilisent normalement %{format}. Si ça ne passe pas, scanne la carte au lieu de la saisir.',
     numberHint: 'Saisis-le exactement comme imprimé, sans espaces.',
     checkTitle: 'Vérifie le code',
     checkBody:

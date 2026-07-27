@@ -155,6 +155,12 @@ const nl = {
     enterManuallyHint: 'Voer het nummer in dat op de kaart staat.',
     numberLabel: 'Kaartnummer',
     numberPlaceholder: 'bijv. 4006381333931',
+    warnCheckDigit:
+      'Deze cijfers komen niet door de %{format}-controle — misschien is er één verkeerd getypt. Vergelijk ze met je kaart.',
+    warnNonStandard:
+      '%{count} cijfers passen bij geen standaard winkelbarcode. Veel kaarten drukken een langer nummer af dan de barcode bevat — alleen scannen geeft het juiste.',
+    storeExpects:
+      '%{store}-kaarten gebruiken normaal %{format}. Als dit niet gescand wordt, scan de kaart dan in plaats van hem te typen.',
     numberHint: 'Typ het precies zoals het gedrukt staat, zonder spaties.',
     checkTitle: 'Controleer de code',
     checkBody:

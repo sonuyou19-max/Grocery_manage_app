@@ -412,5 +412,68 @@ const toQr = mod.symbologyForFormat('qr', value);
 const back = mod.symbologyForFormat(mod.formatOf(original), value);
 check('barcode -> qr -> barcode round-trips', [toQr, back], ['qr', 'ean13']);
 
+/* ------------------------------------------------------------ value diagnosis */
+
+// The reported failure: a Carrefour card whose printed number is 16 digits, drawn
+// as Code 128, refused by a till that reads EAN-13. Encoding is correct; the
+// silence was the bug. A 16-digit value must be *flagged*, not quietly accepted.
+const sixteen = mod.diagnoseValue('1234567890123456');
+check('16 digits warns nonStandardLength', sixteen.warning, 'nonStandardLength');
+check('16 digits reports its length', sixteen.digits, 16);
+check('16 digits still encodes as code128', sixteen.recommended, 'code128');
+
+// A valid retail number is clean — no warning, and the retail format wins.
+const ean = mod.diagnoseValue('4006381333931');
+check('valid EAN-13 has no warning', ean.warning, null);
+check('valid EAN-13 recommends ean13', ean.recommended, 'ean13');
+check('valid EAN-13 offers ean13 first', ean.options[0], 'ean13');
+
+// A 13-digit value with a bad check digit is almost always a typo, since the
+// check digit is part of the standard. Previously this silently became Code 128.
+const typo = mod.diagnoseValue('4006381333930');
+check('13 digits + bad check warns', typo.warning, 'ean13CheckFailed');
+// Still offered, because a retailer can issue non-conforming numbers.
+check('13 digits + bad check still offers ean13', typo.options.includes('ean13'), true);
+
+check('12 digits + bad check warns as upca', mod.diagnoseValue('036000291453').warning, 'upcaCheckFailed');
+check('8 digits + bad check warns as ean8', mod.diagnoseValue('96385075').warning, 'ean8CheckFailed');
+check('valid UPC-A is clean', mod.diagnoseValue('036000291452').warning, null);
+check('valid EAN-8 is clean', mod.diagnoseValue('96385074').warning, null);
+check('14 digits recommends itf', mod.diagnoseValue('15400141288763').recommended, 'itf14');
+check('14 digits has no warning', mod.diagnoseValue('15400141288763').warning, null);
+
+// Alphanumeric is normal for Code 128 — not a warning.
+const alnum = mod.diagnoseValue('AB-1234');
+check('alphanumeric has no warning', alnum.warning, null);
+check('alphanumeric reports 0 digits', alnum.digits, 0);
+check('alphanumeric recommends code128', alnum.recommended, 'code128');
+
+// Every diagnosis must offer at least one drawable option, and QR always.
+for (const v of ['1234567890123456', '4006381333931', 'AB-1234', '96385074', '7']) {
+  const d = mod.diagnoseValue(v);
+  check(`options non-empty for ${v}`, d.options.length > 0, true);
+  check(`qr always offered for ${v}`, d.options.includes('qr'), true);
+  // Every offered option must actually encode, or the picker would show a
+  // choice that renders nothing.
+  check(
+    `every option encodable for ${v}`,
+    d.options.every((s) => s === 'qr' || mod.encodeBarcode(s, v) !== null),
+    true,
+  );
+}
+
+// Options must be de-duplicated, or the picker renders the same chip twice.
+for (const v of ['15400141288763', '1234', '4006381333931']) {
+  const opts = mod.diagnoseValue(v).options;
+  check(`options unique for ${v}`, opts.length, new Set(opts).size);
+}
+
+// Labels must cover every symbology, or a chip would render blank.
+check(
+  'every symbology has a label',
+  ['ean13', 'ean8', 'upca', 'itf14', 'code128', 'qr'].every((s) => Boolean(mod.SYMBOLOGY_LABELS[s])),
+  true,
+);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

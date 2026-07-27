@@ -334,6 +334,107 @@ export function symbologyFromScanner(scannedType: string, value: string): Symbol
   return canEncode('code128', value) ? 'code128' : 'qr';
 }
 
+/* --------------------------------------------------------------- diagnosis */
+
+/**
+ * Why a hand-typed value deserves a second look before it's saved.
+ *
+ * - `ean13CheckFailed` / `upcaCheckFailed` / `ean8CheckFailed` — the length is
+ *   right for a retail barcode but the check digit doesn't agree. A genuine
+ *   EAN/UPC *always* validates, because the check digit is part of the standard,
+ *   so this is a mistyped digit far more often than it is an exotic format.
+ * - `nonStandardLength` — all digits, but not 8, 12, 13 or 14 of them. It will
+ *   encode fine as Code 128, and a till expecting EAN-13 will still refuse it.
+ *   This is the 16-digits-printed-on-a-13-digit-card case: loyalty cards
+ *   routinely print a longer account number than the barcode encodes, and there
+ *   is no way to know which digits were dropped. Scanning is the only fix.
+ */
+export type ValueWarning =
+  | 'ean13CheckFailed'
+  | 'upcaCheckFailed'
+  | 'ean8CheckFailed'
+  | 'nonStandardLength';
+
+export interface ValueDiagnosis {
+  /** Every symbology that can encode this value, most likely first. */
+  options: Symbology[];
+  recommended: Symbology;
+  warning: ValueWarning | null;
+  /** Digit count, for messages. 0 when the value isn't purely numeric. */
+  digits: number;
+}
+
+/** Retail linear symbologies keyed by the digit count they require. */
+const RETAIL_LENGTHS: Record<number, Symbology> = { 8: 'ean8', 12: 'upca', 13: 'ean13', 14: 'itf14' };
+
+/**
+ * Work out what a value could be drawn as, and whether the user should look
+ * again before trusting it.
+ *
+ * Deliberately advisory. It never rewrites the value or forces a symbology —
+ * only the user can know that the 16 digits printed on their card correspond to
+ * a 13-digit barcode, and guessing which three to drop would produce a
+ * confidently wrong code.
+ */
+export function diagnoseValue(value: string): ValueDiagnosis {
+  const clean = normalizeCardValue(value);
+  const numeric = /^\d+$/.test(clean);
+  const digits = numeric ? clean.length : 0;
+
+  const options: Symbology[] = [];
+  let warning: ValueWarning | null = null;
+
+  if (numeric) {
+    const retail = RETAIL_LENGTHS[clean.length];
+    if (retail === 'itf14') {
+      // ITF has no check digit we verify, so length alone qualifies it.
+      options.push('itf14');
+    } else if (retail) {
+      if (hasValidEanCheck(clean)) {
+        options.push(retail);
+      } else {
+        warning =
+          retail === 'ean13'
+            ? 'ean13CheckFailed'
+            : retail === 'upca'
+              ? 'upcaCheckFailed'
+              : 'ean8CheckFailed';
+        // Still offered: the user may know their card better than the checksum
+        // suggests, and a retailer can issue non-conforming numbers.
+        options.push(retail);
+      }
+    } else {
+      warning = 'nonStandardLength';
+    }
+  }
+
+  // Code 128 encodes any printable ASCII and is the most widely read format on
+  // retail POS hardware, so it ranks above the specialist options — it is the
+  // right default for a numeric value of non-standard length.
+  if (canEncode('code128', clean)) options.push('code128');
+
+  // ITF is drawable for any even-length digit string and a few loyalty schemes
+  // use it, but it's primarily a logistics format. Offered, never recommended,
+  // unless the length is exactly 14 (handled above, where it ranks first).
+  if (numeric && clean.length !== 14 && clean.length % 2 === 0 && clean.length > 0) {
+    options.push('itf14');
+  }
+
+  options.push('qr');
+
+  return { options, recommended: options[0] ?? 'qr', warning, digits };
+}
+
+/** Human-facing name for a symbology, for a picker. */
+export const SYMBOLOGY_LABELS: Record<Symbology, string> = {
+  ean13: 'EAN-13',
+  ean8: 'EAN-8',
+  upca: 'UPC-A',
+  itf14: 'ITF',
+  code128: 'Code 128',
+  qr: 'QR',
+};
+
 /**
  * The two formats a user actually chooses between.
  *

@@ -18,24 +18,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '@/components/card';
 import { CardCode } from '@/components/card-code';
 import { CardsSignInGate } from '@/components/cards-sign-in-gate';
-import { FormatToggle } from '@/components/format-toggle';
 import { PrimaryButton } from '@/components/form';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { useToast } from '@/components/toast';
 import {
-  formatOf,
-  guessSymbology,
+  diagnoseValue,
   normalizeCardValue,
   normalizeForSymbology,
-  symbologyForFormat,
   symbologyFromScanner,
+  SYMBOLOGY_LABELS,
   type Symbology,
 } from '@/lib/barcode';
 import { haptics } from '@/lib/haptics';
 import { useLoyaltyCards } from '@/lib/loyalty-cards';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
-import { supermarketLabel } from '@/lib/supermarkets';
+import { getSupermarket, supermarketLabel } from '@/lib/supermarkets';
 import { useAuth } from '@/store/auth';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -104,6 +102,23 @@ export default function AddCardScreen() {
   const [manualReason, setManualReason] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
+  // Recomputed as the user types, so the warnings are live.
+  const diagnosis = diagnoseValue(value);
+
+  /**
+   * What this chain's cards are known to use, when it disagrees with what we'd
+   * draw. Advisory only — a hint confirmed in one country can be wrong in
+   * another, so it never blocks saving.
+   */
+  const expected = store ? getSupermarket(store)?.cardFormat : undefined;
+  const storeExpectation =
+    expected && expected !== symbology && !diagnosis.options.includes(expected)
+      ? t('cards.storeExpects', {
+          store: supermarketLabel(store ?? '') ?? '',
+          format: SYMBOLOGY_LABELS[expected],
+        })
+      : null;
+
   const chooseStore = (name: string) => {
     setStore(name);
     setStep('method');
@@ -170,7 +185,9 @@ export default function AddCardScreen() {
   const confirmManual = () => {
     const clean = normalizeCardValue(value);
     if (!clean) return;
-    setSymbology(guessSymbology(clean));
+    // Take the diagnosis' pick, which agrees with guessSymbology but also
+    // surfaces the options list the confirm step offers.
+    setSymbology(diagnoseValue(clean).recommended);
     setStep('confirm');
   };
 
@@ -282,6 +299,35 @@ export default function AddCardScreen() {
               ]}
             />
             <Text style={[type.sub, { color: colors.muted }]}>{t('cards.numberHint')}</Text>
+            {/* Live diagnosis. The point is to catch, before saving, the two
+                cases that otherwise only surface as a refused card at the till:
+                a mistyped check digit, and a printed number longer than the
+                barcode actually encodes. */}
+            {diagnosis.warning && (
+              <View style={styles.noticeRow}>
+                <Ionicons name="alert-circle-outline" size={18} color={colors.warn} />
+                <Text style={[type.sub, { color: colors.ink, flex: 1 }]}>
+                  {diagnosis.warning === 'nonStandardLength'
+                    ? t('cards.warnNonStandard', { count: diagnosis.digits })
+                    : t('cards.warnCheckDigit', {
+                        format: SYMBOLOGY_LABELS[
+                          diagnosis.warning === 'ean13CheckFailed'
+                            ? 'ean13'
+                            : diagnosis.warning === 'upcaCheckFailed'
+                              ? 'upca'
+                              : 'ean8'
+                        ],
+                      })}
+                </Text>
+              </View>
+            )}
+            {/* Chain-specific expectation, when we have one and it disagrees. */}
+            {storeExpectation && (
+              <View style={styles.noticeRow}>
+                <Ionicons name="information-circle-outline" size={18} color={colors.accent} />
+                <Text style={[type.sub, { color: colors.ink, flex: 1 }]}>{storeExpectation}</Text>
+              </View>
+            )}
           </Card>
           <PrimaryButton
             label={t('common.continue')}
@@ -303,15 +349,43 @@ export default function AddCardScreen() {
             <View style={styles.preview}>
               <CardCode symbology={symbology} value={value} width={280} />
             </View>
-            {/* Barcode vs QR can't be inferred from a number — Colruyt issues QR,
-                Delhaize a barcode — and a typed number would otherwise always
-                come out as a barcode. Sits under the preview so switching shows
-                the result immediately, against the card in the user's hand. */}
-            <FormatToggle
-              label={t('cards.formatLabel')}
-              value={formatOf(symbology)}
-              onChange={(format) => setSymbology(symbologyForFormat(format, value))}
-            />
+            {/* The exact symbology, not just barcode-vs-QR. A till expecting
+                EAN-13 rejects the same digits drawn as Code 128, so when a value
+                qualifies for a retail format the user has to be able to say so.
+                Only formats this value can actually encode are offered. */}
+            <View style={styles.formatBlock}>
+              <Text style={[type.label, { color: colors.muted }]}>{t('cards.formatLabel')}</Text>
+              <View style={styles.chips}>
+                {diagnosis.options.map((option) => {
+                  const active = option === symbology;
+                  return (
+                    <Pressable
+                      key={option}
+                      onPress={() => setSymbology(option)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: active }}
+                      style={[
+                        styles.chip,
+                        {
+                          borderColor: active ? colors.accent : colors.line,
+                          backgroundColor: active ? colors.accentSoft : colors.surface,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[type.sub, { color: active ? colors.accent : colors.ink }]}
+                        numberOfLines={1}
+                      >
+                        {SYMBOLOGY_LABELS[option]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {storeExpectation && (
+                <Text style={[type.sub, { color: colors.muted }]}>{storeExpectation}</Text>
+              )}
+            </View>
           </Card>
           {/* Held until the wallet knows whose it is, so saving can't quietly
               no-op during the launch-time auth race. */}
@@ -541,6 +615,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   preview: { alignItems: 'center', paddingTop: spacing.sm },
+  formatBlock: { gap: spacing.sm, paddingTop: spacing.sm },
 
   camRoot: { flex: 1, backgroundColor: '#000000' },
   camFallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },

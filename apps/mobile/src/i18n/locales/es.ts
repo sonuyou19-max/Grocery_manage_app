@@ -155,6 +155,12 @@ const es = {
     enterManuallyHint: 'Introduce el número impreso en la tarjeta.',
     numberLabel: 'Número de tarjeta',
     numberPlaceholder: 'p. ej. 4006381333931',
+    warnCheckDigit:
+      'Esos dígitos no pasan la comprobación %{format}, así que puede haber uno mal escrito. Compáralos con tu tarjeta.',
+    warnNonStandard:
+      '%{count} dígitos no coinciden con un código de barras comercial estándar. Muchas tarjetas imprimen un número más largo que el del código: solo escaneando obtienes el correcto.',
+    storeExpects:
+      'Las tarjetas de %{store} suelen usar %{format}. Si no la lee, prueba a escanear la tarjeta en vez de escribirla.',
     numberHint: 'Escríbelo exactamente como está impreso, sin espacios.',
     checkTitle: 'Comprueba el código',
     checkBody:
