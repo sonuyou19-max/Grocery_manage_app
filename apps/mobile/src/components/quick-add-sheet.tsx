@@ -13,22 +13,23 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   cancelAnimation,
-  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
+  withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ParsedItem } from '@korb/shared';
 
 import { categoryLabel } from '@/lib/categorize';
+import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { parseQuickAdd } from '@/lib/quick-add';
 import { useGroceries, useList } from '@/store/groceries';
 import { useT } from '@/store/locale';
@@ -88,19 +89,37 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
       sheetY.value = screenH;
       // Slide the sheet fully up first, THEN raise the keyboard — decoupling the
       // two motions is what makes the entrance read as smooth.
-      sheetY.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }, (finished) => {
+      sheetY.value = withSpring(0, SPRING.sheet, (finished) => {
         if (finished) runOnJS(focusInput)();
       });
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const requestClose = () => {
+  const requestClose = (velocity = 0) => {
     Keyboard.dismiss();
     cancelAnimation(sheetY);
-    sheetY.value = withTiming(screenH, { duration: 240, easing: Easing.in(Easing.cubic) }, (finished) => {
+    sheetY.value = withSpring(screenH, { ...SPRING.sheet, velocity }, (finished) => {
       if (finished) runOnJS(onClose)();
     });
   };
+
+  /**
+   * Pull down on the grab handle to dismiss — the same gesture the item sheet
+   * has, so every sheet in the app answers to the same movement.
+   *
+   * Scoped to the handle and header rather than the whole sheet on purpose:
+   * this one holds a TextInput and a scrolling review list, and a pan over
+   * those would fight text selection and scrolling.
+   */
+  const dragGesture = Gesture.Pan()
+    .activeOffsetY(8)
+    .onUpdate((e) => {
+      sheetY.value = e.translationY >= 0 ? e.translationY : -rubberBand(-e.translationY, 0, 44);
+    })
+    .onEnd((e) => {
+      if (sheetY.value > 110 || e.velocityY > 800) runOnJS(requestClose)(e.velocityY);
+      else sheetY.value = springTo(0, e.velocityY, SPRING.sheet);
+    });
 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
   const backdropStyle = useAnimatedStyle(() => ({
@@ -140,10 +159,10 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const canParse = hasText && phase !== 'loading';
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => requestClose()}>
       <View style={styles.fill}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={styles.fillPlain} onPress={requestClose} />
+          <Pressable style={styles.fillPlain} onPress={() => requestClose()} />
         </Animated.View>
 
         <Animated.View style={[styles.sheet, sheetStyle]}>
@@ -157,15 +176,20 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
             style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]}
             pointerEvents="none"
           />
-          <View style={[styles.grab, { backgroundColor: colors.line }]} />
+          {/* Drag zone: grab handle + header — pull down to dismiss */}
+          <GestureDetector gesture={dragGesture}>
+            <View>
+              <View style={[styles.grab, { backgroundColor: colors.line }]} />
 
-          <View style={styles.header}>
-            <Ionicons name="sparkles" size={20} color={colors.accent} />
-            <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>{t('quickAdd.title')}</Text>
-            <Pressable onPress={requestClose} hitSlop={10}>
-              <Ionicons name="close" size={24} color={colors.muted} />
-            </Pressable>
-          </View>
+              <View style={styles.header}>
+                <Ionicons name="sparkles" size={20} color={colors.accent} />
+                <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>{t('quickAdd.title')}</Text>
+                <Pressable onPress={() => requestClose()} hitSlop={10}>
+                  <Ionicons name="close" size={24} color={colors.muted} />
+                </Pressable>
+              </View>
+            </View>
+          </GestureDetector>
 
           {phase === 'review' ? (
             <ScrollView style={styles.scrollArea} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">

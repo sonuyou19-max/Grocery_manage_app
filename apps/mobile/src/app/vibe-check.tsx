@@ -20,6 +20,7 @@ import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { MeshBackground } from '@/components/mesh-background';
 import { haptics } from '@/lib/haptics';
 import { emojiFor } from '@/lib/item-emoji';
+import { SPRING, springTo } from '@/lib/motion';
 import { isDue, lastBoughtLabel, normalizeKey } from '@/lib/pantry-intel';
 import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useT } from '@/store/locale';
@@ -158,19 +159,28 @@ export default function VibeCheckScreen() {
       const flung = Math.abs(tx.value) > THRESHOLD || Math.abs(e.velocityX) > 800;
       if (flung) {
         const dir = tx.value < 0 ? 'left' : 'right';
-        ty.value = withTiming(ty.value + 40, { duration: 240 });
+        ty.value = withSpring(ty.value + 40, { ...SPRING.fling, velocity: e.velocityY });
+        // Carries the throw: a hard fling snaps off screen, a gentle push past
+        // the threshold drifts out. Under the old fixed 240ms both left at
+        // exactly the same speed, which is the single clearest tell that a
+        // gesture stopped being physical the moment the finger lifted.
+        //
         // Advance only once the card is fully gone and tx is reset, so the next
         // card appears centered instead of flashing in from off-screen.
-        tx.value = withTiming(dir === 'left' ? -width * 1.5 : width * 1.5, { duration: 240 }, (fin) => {
-          if (fin) {
-            tx.value = 0;
-            ty.value = 0;
-            runOnJS(commit)(dir);
-          }
-        });
+        tx.value = withSpring(
+          dir === 'left' ? -width * 1.5 : width * 1.5,
+          { ...SPRING.fling, velocity: e.velocityX },
+          (fin) => {
+            if (fin) {
+              tx.value = 0;
+              ty.value = 0;
+              runOnJS(commit)(dir);
+            }
+          },
+        );
       } else {
-        tx.value = withSpring(0, { damping: 18, stiffness: 160 });
-        ty.value = withSpring(0, { damping: 18, stiffness: 160 });
+        tx.value = springTo(0, e.velocityX);
+        ty.value = springTo(0, e.velocityY);
       }
     });
 

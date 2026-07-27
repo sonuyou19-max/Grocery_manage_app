@@ -16,13 +16,12 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { KeyboardAvoidingView, KeyboardController } from 'react-native-keyboard-controller';
 import Animated, {
-  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
+  withSpring,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -36,6 +35,7 @@ import { QuickAddSheet } from '@/components/quick-add-sheet';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
+import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { useAuth } from '@/store/auth';
 import { useGroceries, useList, type Item } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -478,12 +478,11 @@ function SwipeableItemRow({
     swipingRef.current = v;
   };
 
-  // Gentle, unhurried settle — the "small and slow" the design calls for.
-  const settle = { duration: 300, easing: Easing.out(Easing.cubic) };
-
   const close = () => {
     'worklet';
-    tx.value = withTiming(0, settle);
+    // No gesture behind this one (it's a tap elsewhere closing the row), so
+    // there is no velocity to carry — spring from rest.
+    tx.value = withSpring(0, SPRING.settle);
     runOnJS(setOpen)(false);
   };
 
@@ -496,7 +495,10 @@ function SwipeableItemRow({
     })
     .onUpdate((e) => {
       const next = startX.value + e.translationX;
-      tx.value = Math.min(0, Math.max(-DELETE_WIDTH, next));
+      // Elastic past the reveal width, and elastic past closed in the other
+      // direction — dragging right on a closed row now pushes back instead of
+      // sitting inert under the finger.
+      tx.value = next > 0 ? rubberBand(next, 0, 22) : -rubberBand(-next, DELETE_WIDTH);
       // Rigid snap the instant the swipe crosses the open/close threshold.
       const beyond = tx.value < -DELETE_WIDTH / 2;
       if (beyond !== pastThreshold.value) {
@@ -504,9 +506,13 @@ function SwipeableItemRow({
         runOnJS(haptics.snap)();
       }
     })
-    .onEnd(() => {
-      const shouldOpen = tx.value < -DELETE_WIDTH / 2;
-      tx.value = withTiming(shouldOpen ? -DELETE_WIDTH : 0, settle);
+    .onEnd((e) => {
+      // Decide on velocity as well as position: a quick flick should open the
+      // row even if the finger never travelled past the halfway mark, which is
+      // what "shouldOpen = position only" got wrong.
+      const flung = Math.abs(e.velocityX) > 600;
+      const shouldOpen = flung ? e.velocityX < 0 : tx.value < -DELETE_WIDTH / 2;
+      tx.value = springTo(shouldOpen ? -DELETE_WIDTH : 0, e.velocityX, SPRING.settle);
       runOnJS(setOpen)(shouldOpen);
     })
     .onFinalize(() => {
@@ -516,7 +522,7 @@ function SwipeableItemRow({
   const guard = (fn: () => void) => () => {
     if (swipingRef.current) return;
     if (openRef.current) {
-      tx.value = withTiming(0, settle);
+      tx.value = withSpring(0, SPRING.settle);
       openRef.current = false;
       return;
     }
@@ -598,7 +604,7 @@ function SwipeableItemRow({
       <Animated.View style={[styles.deleteLayer, deleteStyle]} pointerEvents="box-none">
         <Pressable
           onPress={() => {
-            tx.value = withTiming(0, settle);
+            tx.value = withSpring(0, SPRING.settle);
             openRef.current = false;
             onDelete();
           }}

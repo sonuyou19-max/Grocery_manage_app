@@ -20,7 +20,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
+  withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,6 +29,7 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { currencySymbolFor } from '@/i18n';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
+import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
 import { parsePriceToCents } from '@/lib/money';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
@@ -88,7 +89,10 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     setQtyText(liveItem.quantity != null ? String(liveItem.quantity) : '');
     setPriceText(liveItem.priceCents != null ? (liveItem.priceCents / 100).toFixed(2) : '');
     cancelAnimation(sheetY);
-    sheetY.value = withTiming(0, { duration: 260 });
+    // Entrance has no gesture behind it, but a spring still reads better than a
+    // curve here because the sheet is heavy — it arrives and settles rather
+    // than gliding to a stop. Clamped, so it never overshoots past its edge.
+    sheetY.value = withSpring(0, SPRING.sheet);
   }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On close, snapshot the item's final quantity/unit/store into per-item
@@ -103,13 +107,24 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     });
   };
 
-  /** Animate the sheet off-screen, then tell the parent to unmount. */
-  const requestClose = () => {
+  /**
+   * Animate the sheet off-screen, then tell the parent to unmount.
+   *
+   * `velocity` is the speed the finger was travelling when it let go, so a hard
+   * flick throws the sheet off screen fast and a lazy drag past the threshold
+   * eases it out. Defaulted to 0 for the close paths with no gesture (the X
+   * button, the backdrop tap).
+   */
+  const requestClose = (velocity = 0) => {
     rememberUsuals();
     cancelAnimation(sheetY);
-    sheetY.value = withTiming(screenH, { duration: 220 }, (finished) => {
-      if (finished) runOnJS(onClose)();
-    });
+    sheetY.value = withSpring(
+      screenH,
+      { ...SPRING.sheet, velocity },
+      (finished) => {
+        if (finished) runOnJS(onClose)();
+      },
+    );
   };
 
   // Pull-down on the grab handle / header dismisses the sheet. Routing the
@@ -118,13 +133,17 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const dragGesture = Gesture.Pan()
     .activeOffsetY(8)
     .onUpdate((e) => {
-      sheetY.value = Math.max(0, e.translationY);
+      // Downward tracks the finger exactly; upward rubber-bands, so dragging a
+      // sheet that is already fully open pushes back instead of doing nothing.
+      sheetY.value = e.translationY >= 0 ? e.translationY : -rubberBand(-e.translationY, 0, 44);
     })
     .onEnd((e) => {
       if (sheetY.value > 110 || e.velocityY > 800) {
-        runOnJS(requestClose)();
+        runOnJS(requestClose)(e.velocityY);
       } else {
-        sheetY.value = withTiming(0, { duration: 160 });
+        // Spring back carrying the velocity, so releasing mid-drag continues
+        // the motion rather than restarting it.
+        sheetY.value = springTo(0, e.velocityY, SPRING.sheet);
       }
     });
 
@@ -147,13 +166,13 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={requestClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => requestClose()}>
       <KeyboardAvoidingView
         behavior="padding"
         style={styles.fill}
       >
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={styles.fillPlain} onPress={requestClose} />
+          <Pressable style={styles.fillPlain} onPress={() => requestClose()} />
         </Animated.View>
         <Animated.View style={[styles.sheet, sheetStyle]}>
           <BlurView
@@ -183,7 +202,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                     {t('itemSheet.editItem')}
                   </Text>
                 )}
-                <Pressable onPress={requestClose} hitSlop={10}>
+                <Pressable onPress={() => requestClose()} hitSlop={10}>
                   <Ionicons name="close" size={24} color={colors.muted} />
                 </Pressable>
               </View>
@@ -348,7 +367,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             ]}
           >
             <Pressable
-              onPress={requestClose}
+              onPress={() => requestClose()}
               style={[styles.done, { backgroundColor: colors.accent }]}
             >
               <Text style={[type.body, { color: colors.accentInk }]}>{t('common.done')}</Text>

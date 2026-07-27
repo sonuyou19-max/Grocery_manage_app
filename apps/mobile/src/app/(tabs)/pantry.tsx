@@ -12,13 +12,11 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
 } from 'react-native-reanimated';
 
 import { EmptyState } from '@/components/empty-state';
@@ -31,6 +29,7 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
+import { rubberBand, springTo } from '@/lib/motion';
 import {
   dueAt,
   hasUserCadence,
@@ -487,23 +486,27 @@ function PantrySwipeRow({
   const t = useT();
   const tx = useSharedValue(0);
   const armed = useSharedValue(0); // -1/0/1: which side is past threshold (for haptic)
-  const settle = { duration: 260, easing: Easing.out(Easing.cubic) };
 
   const pan = Gesture.Pan()
     .activeOffsetX([-12, 12])
     .failOffsetY([-10, 10])
     .onUpdate((e) => {
-      tx.value = Math.max(-MAX_TRAVEL, Math.min(MAX_TRAVEL, e.translationX));
+      // Rubber-band rather than clamp: past MAX_TRAVEL the row keeps moving,
+      // just less per pixel of finger. A hard clamp stops the row dead while
+      // the finger carries on, which reads as the gesture having broken.
+      tx.value = rubberBand(e.translationX, MAX_TRAVEL);
       const dir = tx.value > ACTION_THRESHOLD ? 1 : tx.value < -ACTION_THRESHOLD ? -1 : 0;
       if (dir !== armed.value) {
         armed.value = dir;
         if (dir !== 0) runOnJS(haptics.snap)();
       }
     })
-    .onEnd(() => {
+    .onEnd((e) => {
       if (tx.value > ACTION_THRESHOLD) runOnJS(onStillGood)();
       else if (tx.value < -ACTION_THRESHOLD) runOnJS(onAddToList)();
-      tx.value = withTiming(0, settle);
+      // Carries the release velocity, so a flung row leaves the finger at the
+      // speed the finger was moving instead of stopping and restarting.
+      tx.value = springTo(0, e.velocityX);
       armed.value = 0;
     });
 
