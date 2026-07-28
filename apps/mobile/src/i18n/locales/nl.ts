@@ -227,7 +227,6 @@ const nl = {
     emptyBody:
       'Terwijl je items van je lijsten afvinkt, leert Korb hoe snel je ze opmaakt en houdt ze hier bij. Of tik op “Item volgen” om een vaste voorraad toe te voegen die je altijd in huis hebt.',
     search: 'Zoek in je voorraad',
-    swipeHint: 'Veeg een rij: → nog goed · ← naar een lijst',
     noMatchesTitle: 'Geen resultaten',
     noMatchesBody: 'Niets in je voorraad komt overeen met “%{query}”.',
     runningLow: 'Bijna op',
@@ -426,6 +425,15 @@ const nl = {
     allSetSub: 'Mooi — dat kostte tien seconden.',
     emptyTitle: 'Niets te bekijken',
     emptySub: 'Je voorraad ziet er goed uit.',
+  },
+  getStarted: {
+    title: 'Samen boodschappen doen?',
+    subtitle: 'Korb werkt prima zonder account. Een account voegt alleen delen toe.',
+    reasonSync: 'Je lijsten en voorraad op elk apparaat dat je gebruikt.',
+    reasonShare: 'Deel een lijst met je huisgenoten en zie hun vinkjes live.',
+    noAccountNote: 'Geen account? Alles blijft werken — het staat alleen op deze telefoon.',
+    createAccount: 'Account aanmaken',
+    later: 'Misschien later',
   },
   auth: {
     signInTitle: 'Aanmelden',

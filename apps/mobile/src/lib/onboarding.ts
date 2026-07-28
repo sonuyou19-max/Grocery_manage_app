@@ -42,8 +42,53 @@ export async function hasSeenOnboarding(): Promise<boolean> {
 }
 
 export async function markOnboardingSeen(): Promise<void> {
+  // Update the cache FIRST, and synchronously.
+  //
+  // Without this the tour showed twice: storage was written, but `seenCache`
+  // stayed false for the rest of the session, so the very next component that
+  // asked `onboardingSeen()` was told the tour was still owed. The await below
+  // is far too late — the dashboard re-reads the answer within the same frame
+  // the tour dismisses.
+  seenCache = true;
   try {
     await AsyncStorage.setItem(KEY, '1');
+  } catch {
+    // best-effort: the in-memory answer is right for this session either way,
+    // and a failed write only means the tour returns on the next cold start.
+  }
+}
+
+/**
+ * The "get started" prompt shown once, straight after the tour.
+ *
+ * A separate flag from the tour's, not a second meaning bolted onto it: the two
+ * can be dismissed independently, and someone who skips the tour still deserves
+ * to be told once that an account exists. Same cache-first shape as above so the
+ * decision is available on the first render.
+ */
+const START_KEY = 'korb.getStarted.v1';
+
+let startCache: boolean | null = null;
+
+export async function hydrateGetStarted(): Promise<void> {
+  try {
+    startCache = (await AsyncStorage.getItem(START_KEY)) === '1';
+  } catch {
+    // Fail closed — never nag on a device whose storage is unreadable.
+    startCache = true;
+  }
+}
+
+/** Whether the prompt is still owed. `null` while hydration is in flight. */
+export function getStartedSeen(): boolean | null {
+  return startCache;
+}
+
+export async function markGetStartedSeen(): Promise<void> {
+  // Synchronously first, for the same reason as markOnboardingSeen.
+  startCache = true;
+  try {
+    await AsyncStorage.setItem(START_KEY, '1');
   } catch {
     // best-effort
   }

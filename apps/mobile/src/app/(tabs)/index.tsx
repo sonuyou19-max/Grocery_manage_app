@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
@@ -33,6 +33,12 @@ function greetingKey(date = new Date()): 'morning' | 'afternoon' | 'evening' {
 
 /** Deterministic 1..3 that advances once per day, for the rotating "all set" copy. */
 const vibeEmptyVariant = () => (Math.floor(Date.now() / 86_400_000) % 3) + 1;
+
+/**
+ * Set once the tour route has been pushed this launch. Deliberately outside the
+ * component so a remount cannot clear it — see the comment at its only use.
+ */
+let tourRouted = false;
 
 export default function ListsScreen() {
   const { colors } = useTheme();
@@ -72,11 +78,17 @@ export default function ListsScreen() {
   // hydrated at app start, so this fires on the first render that knows the
   // answer rather than after a storage round-trip — which is what made the tour
   // arrive a beat after the dashboard had already painted.
-  const tourChecked = useRef(false);
+  //
+  // The "have we already routed" latch is MODULE-level, not a ref, because the
+  // tour is presented as a fullScreenModal and Android detaches the screen
+  // underneath it. Dismissing the tour remounts this component, which reset a
+  // component-scoped ref and fired the push a second time — the tour appeared,
+  // you skipped it, and it appeared again. A latch outside the component
+  // survives that remount, so the route can only ever be pushed once per launch.
   const seen = onboardingSeen();
   useEffect(() => {
-    if (tourChecked.current || seen === null) return;
-    tourChecked.current = true;
+    if (tourRouted || seen === null) return;
+    tourRouted = true;
     if (!seen) router.push('/onboarding');
   }, [seen]);
 

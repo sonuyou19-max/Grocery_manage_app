@@ -227,7 +227,6 @@ const es = {
     emptyBody:
       'A medida que marcas artículos de tus listas, Korb aprende lo rápido que los gastas y los controla aquí. O toca «Seguir artículo» para añadir un básico que siempre tienes en casa.',
     search: 'Busca en tu despensa',
-    swipeHint: 'Desliza una fila: → aún bien · ← a una lista',
     noMatchesTitle: 'Sin resultados',
     noMatchesBody: 'Nada en tu despensa coincide con «%{query}».',
     runningLow: 'Agotándose',
@@ -427,6 +426,15 @@ const es = {
     allSetSub: 'Genial — han sido diez segundos.',
     emptyTitle: 'Nada que revisar',
     emptySub: 'Tu despensa parece bien surtida.',
+  },
+  getStarted: {
+    title: '¿Compráis juntos?',
+    subtitle: 'Korb funciona perfectamente sin cuenta. Una cuenta solo añade compartir.',
+    reasonSync: 'Tus listas y tu despensa en todos tus dispositivos.',
+    reasonShare: 'Comparte una lista con tu hogar y ve sus marcas al instante.',
+    noAccountNote: '¿Sin cuenta? Todo sigue funcionando — solo se queda en este móvil.',
+    createAccount: 'Crear una cuenta',
+    later: 'Quizá más tarde',
   },
   auth: {
     signInTitle: 'Iniciar sesión',

@@ -228,7 +228,6 @@ const de = {
     emptyBody:
       'Während du Artikel von deinen Listen abhakst, lernt Korb, wie schnell du sie verbrauchst, und erfasst sie hier. Oder tippe auf „Artikel verfolgen“, um einen Vorrat hinzuzufügen, den du immer zu Hause hast.',
     search: 'Vorrat durchsuchen',
-    swipeHint: 'Zeile wischen: → noch gut · ← auf eine Liste',
     noMatchesTitle: 'Keine Treffer',
     noMatchesBody: 'Nichts in deinem Vorrat passt zu „%{query}“.',
     runningLow: 'Geht zur Neige',
@@ -430,6 +429,15 @@ const de = {
     allSetSub: 'Schön — das hat zehn Sekunden gedauert.',
     emptyTitle: 'Nichts zu prüfen',
     emptySub: 'Dein Vorrat sieht gut gefüllt aus.',
+  },
+  getStarted: {
+    title: 'Zusammen einkaufen?',
+    subtitle: 'Korb funktioniert auch ganz ohne Konto. Ein Konto bringt nur das Teilen dazu.',
+    reasonSync: 'Deine Listen und Vorräte auf jedem Gerät, das du nutzt.',
+    reasonShare: 'Teile eine Liste mit deinem Haushalt und sieh Haken live.',
+    noAccountNote: 'Kein Konto? Alles funktioniert trotzdem — es bleibt nur auf diesem Handy.',
+    createAccount: 'Konto erstellen',
+    later: 'Vielleicht später',
   },
   auth: {
     signInTitle: 'Anmelden',

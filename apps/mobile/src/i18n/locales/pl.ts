@@ -270,7 +270,6 @@ const pl = {
     emptyBody:
       'Gdy odhaczasz produkty ze swoich list, Korb uczy się, jak szybko je zużywasz, i śledzi je tutaj. Albo dotknij „Śledź produkt”, aby dodać zapas, który zawsze masz w domu.',
     search: 'Szukaj w spiżarni',
-    swipeHint: 'Przesuń wiersz: → wciąż dobre · ← na listę',
     noMatchesTitle: 'Brak wyników',
     noMatchesBody: 'Nic w Twojej spiżarni nie pasuje do „%{query}”.',
     runningLow: 'Kończy się',
@@ -500,6 +499,15 @@ const pl = {
     allSetSub: 'Nieźle — zajęło to dziesięć sekund.',
     emptyTitle: 'Nie ma czego sprawdzać',
     emptySub: 'Twoja spiżarnia wygląda na dobrze zaopatrzoną.',
+  },
+  getStarted: {
+    title: 'Robicie zakupy razem?',
+    subtitle: 'Korb działa w pełni bez konta. Konto dodaje tylko udostępnianie.',
+    reasonSync: 'Twoje listy i spiżarnia na każdym urządzeniu, którego używasz.',
+    reasonShare: 'Udostępnij listę domownikom i widź ich odhaczenia na żywo.',
+    noAccountNote: 'Bez konta? Wszystko nadal działa — zostaje tylko na tym telefonie.',
+    createAccount: 'Załóż konto',
+    later: 'Może później',
   },
   auth: {
     signInTitle: 'Zaloguj się',

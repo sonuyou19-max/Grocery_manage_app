@@ -19,7 +19,7 @@ import { setEmojiLexicon } from '@/lib/item-emoji';
 import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring } from '@/lib/monitoring';
-import { hydrateOnboarding } from '@/lib/onboarding';
+import { hydrateGetStarted, hydrateOnboarding } from '@/lib/onboarding';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
@@ -67,6 +67,7 @@ export default function RootLayout() {
     // Read before the dashboard mounts, so the tour can be decided on its first
     // render instead of sliding in a beat later.
     void hydrateOnboarding();
+    void hydrateGetStarted();
 
     // The shared item lexicon: read the device copy first so the very first
     // render already has it, then pull whatever has been published since. The
@@ -106,6 +107,12 @@ export default function RootLayout() {
                   />
                   <Stack.Screen
                     name="onboarding"
+                    options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }}
+                  />
+                  {/* Same treatment as the tour it follows: no swipe-back, no
+                      slide, so the two read as one uninterrupted first run. */}
+                  <Stack.Screen
+                    name="get-started"
                     options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }}
                   />
                 </Stack>

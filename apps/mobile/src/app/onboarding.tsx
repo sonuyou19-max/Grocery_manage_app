@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassView } from '@/components/glass';
 import { MeshBackground } from '@/components/mesh-background';
 import { haptics } from '@/lib/haptics';
-import { markOnboardingSeen } from '@/lib/onboarding';
+import { getStartedSeen, markOnboardingSeen } from '@/lib/onboarding';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -49,6 +49,14 @@ export default function OnboardingScreen() {
 
   const finish = () => {
     void markOnboardingSeen();
+    // Hand straight over to the account prompt rather than returning to the
+    // dashboard first — going tour → dashboard → prompt would flash the app
+    // behind, which reads as the prompt interrupting rather than following on.
+    // `replace` so Back from there cannot walk into the tour again.
+    if (getStartedSeen() === false) {
+      router.replace('/get-started');
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace('/');
   };

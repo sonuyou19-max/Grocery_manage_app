@@ -228,7 +228,6 @@ const fr = {
     emptyBody:
       'À mesure que tu coches des articles sur tes listes, Korb apprend à quelle vitesse tu les consommes et les suit ici. Ou appuie sur « Suivre un article » pour ajouter un produit que tu gardes toujours chez toi.',
     search: 'Rechercher dans ton garde-manger',
-    swipeHint: 'Balaie une ligne : → encore bon · ← vers une liste',
     noMatchesTitle: 'Aucun résultat',
     noMatchesBody: 'Rien dans ton garde-manger ne correspond à « %{query} ».',
     runningLow: 'Bientôt épuisé',
@@ -428,6 +427,15 @@ const fr = {
     allSetSub: 'Parfait — ça a pris dix secondes.',
     emptyTitle: 'Rien à vérifier',
     emptySub: 'Ton garde-manger a l’air bien rempli.',
+  },
+  getStarted: {
+    title: 'Faire les courses ensemble ?',
+    subtitle: 'Korb fonctionne très bien sans compte. Un compte ajoute seulement le partage.',
+    reasonSync: 'Tes listes et ton garde-manger sur tous tes appareils.',
+    reasonShare: 'Partage une liste avec ton foyer et vois les coches en direct.',
+    noAccountNote: 'Pas de compte ? Tout marche quand même — ça reste sur ce téléphone.',
+    createAccount: 'Créer un compte',
+    later: 'Plus tard',
   },
   auth: {
     signInTitle: 'Se connecter',

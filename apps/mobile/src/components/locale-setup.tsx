@@ -52,7 +52,12 @@ export function LocaleSetup({
   // Chrome follows the current best guess: English until a country is picked,
   // then the language being previewed. Choosing a country changes the words on
   // screen, which is itself the confirmation that the choice registered.
-  const t = (key: string) => i18n.t(key, { locale: region ? language : 'en' });
+  // Options are forwarded, not applied afterwards. Doing `t(key).replace(...)`
+  // is too late: i18n-js has already seen the unfilled %{placeholder} and
+  // substituted its own "[missing … value]" marker, so the replace finds
+  // nothing and the marker ships to the user.
+  const t = (key: string, options?: Record<string, unknown>) =>
+    i18n.t(key, { locale: region ? language : 'en', ...options });
 
   const pickRegion = (code: string) => {
     setRegion(code);
@@ -148,7 +153,7 @@ export function LocaleSetup({
                 })}
               </View>
               <Text style={[type.sub, { color: colors.muted }]}>
-                {t('setup.currencyNote').replace('%{currency}', chosenRegion?.currency ?? '')}
+                {t('setup.currencyNote', { currency: chosenRegion?.currency ?? '' })}
               </Text>
             </Animated.View>
           )}

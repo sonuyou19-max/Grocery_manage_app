@@ -227,7 +227,6 @@ const it = {
     emptyBody:
       'Mentre spunti gli articoli dalle tue liste, Korb impara quanto in fretta li consumi e li monitora qui. Oppure tocca “Monitora articolo” per aggiungere una scorta che tieni sempre in casa.',
     search: 'Cerca nella dispensa',
-    swipeHint: 'Scorri una riga: → ancora buono · ← in una lista',
     noMatchesTitle: 'Nessun risultato',
     noMatchesBody: 'Nulla nella tua dispensa corrisponde a “%{query}”.',
     runningLow: 'In esaurimento',
@@ -428,6 +427,15 @@ const it = {
     allSetSub: 'Bene — ci sono voluti dieci secondi.',
     emptyTitle: 'Nulla da controllare',
     emptySub: 'La tua dispensa sembra ben fornita.',
+  },
+  getStarted: {
+    title: 'Fate la spesa insieme?',
+    subtitle: 'Korb funziona benissimo senza account. Un account aggiunge solo la condivisione.',
+    reasonSync: 'Le tue liste e la dispensa su ogni dispositivo che usi.',
+    reasonShare: 'Condividi una lista con la famiglia e vedi le spunte in tempo reale.',
+    noAccountNote: 'Niente account? Funziona tutto lo stesso — resta solo su questo telefono.',
+    createAccount: 'Crea un account',
+    later: 'Forse più tardi',
   },
   auth: {
     signInTitle: 'Accedi',

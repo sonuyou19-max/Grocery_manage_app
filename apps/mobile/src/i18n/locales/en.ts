@@ -239,7 +239,6 @@ const en = {
     emptyBody:
       'As you tick items off your lists, Korb learns how fast you get through them and tracks them here. Or tap “Track item” to add a staple you always keep at home.',
     search: 'Search your pantry',
-    swipeHint: 'Swipe a row: → still good · ← add to a list',
     noMatchesTitle: 'No matches',
     noMatchesBody: 'Nothing in your pantry matches “%{query}”.',
     runningLow: 'Running low',
@@ -436,6 +435,15 @@ const en = {
     allSetSub: 'Nice — that took ten seconds.',
     emptyTitle: 'Nothing to review',
     emptySub: 'Your pantry looks stocked.',
+  },
+  getStarted: {
+    title: 'Shop together?',
+    subtitle: 'Korb works fully without an account. One only adds sharing.',
+    reasonSync: 'Your lists and pantry, on every device you use.',
+    reasonShare: 'Share a list with your household and see their ticks live.',
+    noAccountNote: 'No account? Everything still works — it just stays on this phone.',
+    createAccount: 'Create an account',
+    later: 'Maybe later',
   },
   auth: {
     signInTitle: 'Sign in',
