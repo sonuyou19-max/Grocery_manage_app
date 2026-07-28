@@ -4,7 +4,7 @@ import { asUnit, type FoodGroup, type ItemCategory, type ItemUnit } from '@korb/
 
 import { fold } from '@/lib/item-emoji';
 import { learnLexiconEntry } from '@/lib/item-lexicon';
-import { supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
+import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
 
 /** Display labels + store-aisle ordering for categories. */
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
@@ -171,7 +171,7 @@ export async function resolveCategoryAsync(
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/categorize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
+      headers: await aiFunctionHeaders(),
       body: JSON.stringify({ name }),
     });
     if (!res.ok) return null;

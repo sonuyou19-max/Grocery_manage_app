@@ -185,6 +185,38 @@ checks as (
          and (select count(*) from pg_policies
               where schemaname = 'public' and tablename = 'item_lexicon') = 1
 
+  -- 0022 · AI spend cap
+  union all select '0022 ai_usage.cost_micros',
+         exists (select 1 from col where table_name = 'ai_usage' and column_name = 'cost_micros')
+  union all select '0022 ai_usage_global exists',
+         exists (select 1 from col where table_name = 'ai_usage_global' and column_name = 'cost_micros')
+  union all select '0022 adjust_ai_budget() exists',
+         exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.proname = 'adjust_ai_budget')
+  -- The single most important row here. A user who can call this directly can
+  -- refund their own spend to zero, which turns the cap into decoration.
+  union all select '0022 adjust_ai_budget NOT executable by anon or authenticated',
+         not has_function_privilege('anon',
+           'adjust_ai_budget(text,text,bigint,bigint,bigint,integer)', 'execute')
+         and not has_function_privilege('authenticated',
+           'adjust_ai_budget(text,text,bigint,bigint,bigint,integer)', 'execute')
+  -- Both ledgers must stay closed to clients: one leaks other people's usage,
+  -- the other is the cap itself.
+  union all select '0022 RLS on ai_usage_global',
+         coalesce((select c.relrowsecurity from pg_class c
+                   join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relname = 'ai_usage_global'), false)
+  union all select '0022 ai_usage_global has NO policies (service role only)',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'ai_usage_global') = 0
+  union all select '0022 ai_usage has NO policies (service role only)',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'ai_usage') = 0
+  -- The aggregate view would hand any client the platform's total usage.
+  union all select '0022 ai_spend_daily not readable by anon or authenticated',
+         not has_table_privilege('anon', 'ai_spend_daily', 'select')
+         and not has_table_privilege('authenticated', 'ai_spend_daily', 'select')
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',

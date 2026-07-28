@@ -8,7 +8,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 
-import { rateLimit } from '../_shared/rate-limit.ts';
+import { reserveBudget } from '../_shared/rate-limit.ts';
 
 const SYSTEM_PROMPT = `You write a short weekly grocery recap for a household grocery app.
 Voice: warm, casual, second person, like a friendly check-in text — never corporate.
@@ -43,27 +43,41 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Body must be a recap payload object' }, { status: 400 });
   }
 
-  const limited = await rateLimit(req, 'weekly-recap');
-  if (limited) return limited;
-
   // `language` steers the prose only — it is not part of the shopping data, so
   // pull it out before the payload is handed to the model.
   const { language, ...data } = payload as Record<string, unknown> & { language?: string };
   const languageName = LANGUAGE_NAMES[String(language ?? 'en')] ?? 'English';
 
+  // This payload goes into the prompt verbatim, and until now nothing bounded
+  // it: the other two endpoints cap their input (1 name, 1000 chars) but this
+  // one accepted whatever JSON was posted. A megabyte of it is a megabyte of
+  // billed input tokens, which made this the cheapest token-abuse vector in the
+  // app despite having the smallest output ceiling. A real recap payload is a
+  // few hundred bytes; 8 KB is generous and still bounds the damage.
+  const serialized = JSON.stringify(data);
+  if (serialized.length > 8192) {
+    return Response.json({ error: 'Recap payload too large' }, { status: 413 });
+  }
+
+  const MAX_TOKENS = 220;
+  const guard = await reserveBudget(req, 'weekly-recap', SYSTEM_PROMPT + serialized, MAX_TOKENS);
+  if (guard.denied) return guard.denied;
+
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
   const message = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 220,
+    max_tokens: MAX_TOKENS,
     system: `${SYSTEM_PROMPT}\n- Write the recap in ${languageName}. Output only ${languageName}.`,
     messages: [
       {
         role: 'user',
-        content: `This week's shopping data as JSON:\n${JSON.stringify(data)}\n\nWrite the recap in ${languageName}.`,
+        content: `This week's shopping data as JSON:\n${serialized}\n\nWrite the recap in ${languageName}.`,
       },
     ],
   });
+
+  await guard.settle(message.usage);
 
   const recap = message.content[0]?.type === 'text' ? message.content[0].text.trim() : '';
   if (!recap) return Response.json({ error: 'empty response' }, { status: 502 });

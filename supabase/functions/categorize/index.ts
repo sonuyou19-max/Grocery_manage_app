@@ -24,7 +24,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 
 import { EMOJI_ALLOWLIST, isAllowedEmoji } from '../_shared/emoji-allowlist.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
-import { clientIp, rateLimit } from '../_shared/rate-limit.ts';
+import { clientIp, reserveBudget } from '../_shared/rate-limit.ts';
 
 const CATEGORIES = [
   'fruit_veg', 'dairy_eggs', 'meat_fish', 'bakery', 'pantry',
@@ -90,19 +90,27 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Body must be {"name": string}' }, { status: 400 });
   }
 
-  const limited = await rateLimit(req, 'categorize');
-  if (limited) return limited;
+  // Five short fields plus JSON punctuation. Generous on purpose: a truncated
+  // response parses as nothing and costs a whole call. Declared here rather
+  // than inline because the budget guard has to know the ceiling before the
+  // call, and the two must never drift apart.
+  const MAX_TOKENS = 140;
+  const guard = await reserveBudget(req, 'categorize', SYSTEM_PROMPT + name, MAX_TOKENS);
+  if (guard.denied) return guard.denied;
 
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
   const message = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    // Five short fields plus JSON punctuation. Generous on purpose: a truncated
-    // response parses as nothing and costs a whole call.
-    max_tokens: 140,
+    max_tokens: MAX_TOKENS,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: name.trim() }],
   });
+
+  // Refund the unused part of the reservation before anything else can throw:
+  // a parse failure below must not leave the caller charged the worst case for
+  // a call that cost a fraction of it.
+  await guard.settle(message.usage);
 
   const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
   let category: Category = 'other';

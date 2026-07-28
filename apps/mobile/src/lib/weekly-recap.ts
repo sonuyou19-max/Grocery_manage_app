@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
+import { aiFunctionHeaders, supabase, supabaseUrl } from '@/lib/supabase';
 
 /**
  * The AI weekly recap: the client aggregates a snapshot (no raw history, just
@@ -28,7 +28,7 @@ export async function generateRecap(
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/weekly-recap`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
+      headers: await aiFunctionHeaders(),
       body: JSON.stringify({ ...payload, language }),
     });
     if (!res.ok) return null;

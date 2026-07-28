@@ -9,7 +9,7 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 import { z } from 'npm:zod@3.24.1';
 
-import { rateLimit } from '../_shared/rate-limit.ts';
+import { reserveBudget } from '../_shared/rate-limit.ts';
 
 // Keep in sync with packages/shared/src/schemas.ts. Lenient on purpose: bad
 // units/quantities become null rather than failing the whole parse.
@@ -60,17 +60,28 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Body must be {"text": string} (1-1000 chars)' }, { status: 400 });
   }
 
-  const limited = await rateLimit(req, 'quick-add-parse');
-  if (limited) return limited;
+  // Sized for the schema's own ceiling, not picked loosely: the parser accepts
+  // at most 30 items, and one item serialises to roughly 28 tokens, so a full
+  // 30-item list plus JSON framing lands just under this. Cutting it would
+  // truncate a legitimate long list into unparseable JSON — a call paid for and
+  // wasted — which is why the answer to this endpoint being expensive is the
+  // spend cap below rather than a smaller ceiling.
+  const MAX_TOKENS = 1024;
+  const guard = await reserveBudget(req, 'quick-add-parse', SYSTEM_PROMPT + text, MAX_TOKENS);
+  if (guard.denied) return guard.denied;
 
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
   const message = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
+    max_tokens: MAX_TOKENS,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: text }],
   });
+
+  // Settle before parsing: this endpoint reserves by far the largest worst case
+  // of the three, and a validation failure below must not leave that standing.
+  await guard.settle(message.usage);
 
   const rawText = message.content[0]?.type === 'text' ? message.content[0].text : '';
   const jsonStr = extractJson(rawText);

@@ -1,6 +1,6 @@
 import type { ParsedItem } from '@korb/shared';
 
-import { supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
+import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
 
 /**
  * Machine-readable failure reasons. The caller maps these to a localized
@@ -20,7 +20,7 @@ export async function parseQuickAdd(
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/quick-add-parse`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
+      headers: await aiFunctionHeaders(),
       body: JSON.stringify({ text }),
     });
     if (res.status === 422) return { error: 'noItems' };
