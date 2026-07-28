@@ -17,19 +17,93 @@ import { normalizeKey } from '@/lib/pantry-intel';
 const DAY = 24 * 60 * 60 * 1000;
 const WEEK = 7 * DAY;
 
-/** One logged purchase. Matches a price_entries row and the local mirror. */
+/**
+ * One logged purchase — an immutable transaction, not the item's current state.
+ *
+ * Checking an item off records what was true at that moment. Editing the row on
+ * the list afterwards changes the list, never this. Buying the same thing again
+ * next week writes a second Purchase; the two coexist, which is what makes
+ * "Eggs at Aldi" and "Eggs at Carrefour" separately answerable.
+ */
 export interface Purchase {
+  /**
+   * Stable per-transaction identity.
+   *
+   * Required because a record can be *targeted* after it is written: corrected
+   * inside the session window, or removed when a check-off turns out to have
+   * been a mistap. Without an id the only way to address a row is by
+   * (item, time), which stops being unique the moment two people shop at once.
+   */
+  id: string;
   /** Normalized item name — the identity across spellings. */
   key: string;
   /** Display spelling as logged. */
   name: string;
   store: string | null;
-  priceCents: number;
+  /**
+   * Null when the item was bought without a price.
+   *
+   * Pricing is optional in this app and most items never get one, so an
+   * unpriced purchase still has to be a transaction — it happened, it belongs
+   * in the history, and it feeds the burn-rate model. Only the money figures
+   * skip it, and each of them filters explicitly rather than assuming a number.
+   */
+  priceCents: number | null;
   /** Epoch ms. */
   at: number;
   /** Amount bought, when known — needed to compare like with like. */
   quantity: number | null;
   unit: string | null;
+}
+
+/**
+ * How long a just-written record stays correctable.
+ *
+ * Unticking inside this window means "I tapped the wrong row", so the record is
+ * deleted rather than left as a purchase the user has to hunt down and clean up
+ * later. Outside it, unticking means "we need this again" — a new shopping
+ * cycle — and the past transaction stands.
+ */
+export const MISTAKE_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * How long an item's most recent record stays *open* to replacement.
+ *
+ * Mid-aisle corrections — untick, change the quantity, retick — should update
+ * the transaction rather than append a second one, or a single trip inflates
+ * the week's spend. Two hours comfortably covers one shop without reaching the
+ * next one; beyond it a re-tick is a genuinely separate purchase.
+ */
+export const SESSION_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+/** Purchases carrying a price. The only ones any money figure may count. */
+export const priced = (purchases: Purchase[]): Purchase[] =>
+  purchases.filter((p) => p.priceCents != null);
+
+/**
+ * The item's most recent record, if it is still inside `window`.
+ *
+ * One function serves both time rules — the caller supplies the window, so the
+ * 10-minute delete and the 2-hour replace cannot drift apart in how they decide
+ * what "most recent" means.
+ */
+export function recentRecordFor(
+  purchases: Purchase[],
+  key: string,
+  now: number,
+  window: number,
+): Purchase | null {
+  let best: Purchase | null = null;
+  for (const p of purchases) {
+    if (p.key !== key) continue;
+    // Guard against a clock that jumped: a record stamped in the future is not
+    // "recent", it is broken, and treating it as open would let it swallow
+    // every subsequent purchase of that item.
+    if (p.at > now) continue;
+    if (now - p.at > window) continue;
+    if (!best || p.at > best.at) best = p;
+  }
+  return best;
 }
 
 /* --------------------------------------------------------------- spend trend */
@@ -76,6 +150,10 @@ export function weeklySpend(purchases: Purchase[], now: number, weeks = 8): Week
   }
 
   for (const p of purchases) {
+    // Unpriced purchases are real transactions but contribute no money. Adding
+    // them to `count` would make an empty week look active and drag the
+    // active-weeks average toward zero.
+    if (p.priceCents == null) continue;
     const start = weekStartOf(p.at);
     const bucket = buckets.get(start);
     if (!bucket) continue; // outside the window
@@ -152,6 +230,7 @@ export interface PriceMove {
  * as a unit price is how "milk doubled!" gets reported for a 2L bottle.
  */
 function unitPrice(p: Purchase): number | null {
+  if (p.priceCents == null) return null;
   if (p.quantity == null) return null;
   if (p.quantity <= 0) return null;
   return p.priceCents / p.quantity;
@@ -186,7 +265,7 @@ export function priceMoves(
 ): PriceMove[] {
   const byKey = new Map<string, Purchase[]>();
   for (const p of purchases) {
-    if (!p.key) continue;
+    if (!p.key || p.priceCents == null) continue;
     const existing = byKey.get(p.key);
     if (existing) existing.push(p);
     else byKey.set(p.key, [p]);
@@ -201,10 +280,10 @@ export function priceMoves(
     const comparable = sorted.filter((p) => comparisonBucket(p) === bucket);
     if (comparable.length < minSamples + 1) continue;
 
-    const latestUnit = unitPrice(latest) ?? latest.priceCents;
+    const latestUnit = unitPrice(latest) ?? (latest.priceCents as number);
     const earlier = comparable
       .slice(1)
-      .map((p) => unitPrice(p) ?? p.priceCents)
+      .map((p) => unitPrice(p) ?? (p.priceCents as number))
       .filter((n) => n > 0);
     if (earlier.length < minSamples) continue;
 
@@ -234,12 +313,89 @@ export function priceMoves(
 /** Chronological price history for one item, oldest first. */
 export function historyFor(purchases: Purchase[], name: string): Purchase[] {
   const key = normalizeKey(name);
-  return purchases.filter((p) => p.key === key).sort((a, b) => a.at - b.at);
+  // Newest first: this is rendered as a ledger, and the most recent purchase is
+  // the one being checked against ("did I really pay that much last time?").
+  return purchases.filter((p) => p.key === key).sort((a, b) => b.at - a.at);
+}
+
+/* ------------------------------------------------------- item x store rollup */
+
+export interface ItemStoreStat {
+  /** Composite identity — the same item at two chains is two rows. */
+  id: string;
+  key: string;
+  name: string;
+  store: string | null;
+  /** Mean of the priced purchases in this group. */
+  avgCents: number;
+  cheapestCents: number;
+  dearestCents: number;
+  /** Priced purchases only — what the average is actually built from. */
+  pricedCount: number;
+  /** Every purchase, priced or not. What the ledger will show. */
+  totalCount: number;
+  /** Most recent purchase in the group. */
+  lastAt: number;
+}
+
+/**
+ * Group the log by item **and store**, so the same product bought in two places
+ * is two answerable rows rather than one blended average.
+ *
+ * This is the shape behind "Eggs — €3.00 at Aldi vs €3.80 at Carrefour". A
+ * single average across both stores would hide exactly the comparison the user
+ * opened Insights to make.
+ *
+ * Unpriced purchases still count toward `totalCount` — they happened, and the
+ * ledger shows them — but never toward the average. A group with no priced
+ * purchase at all is dropped, since a price card with no price says nothing.
+ */
+export function byItemStore(purchases: Purchase[]): ItemStoreStat[] {
+  const groups = new Map<string, Purchase[]>();
+  for (const p of purchases) {
+    if (!p.key) continue;
+    // `store ?? ''` keeps unattributed purchases as their own group rather than
+    // silently folding them into whichever chain happens to sort first.
+    const id = `${p.key}\u0000${p.store ?? ''}`;
+    const existing = groups.get(id);
+    if (existing) existing.push(p);
+    else groups.set(id, [p]);
+  }
+
+  const out: ItemStoreStat[] = [];
+  for (const [id, all] of groups) {
+    const withPrice = all.filter((p) => p.priceCents != null);
+    if (withPrice.length === 0) continue;
+    const cents = withPrice.map((p) => p.priceCents as number);
+    const latest = all.reduce((a, b) => (b.at > a.at ? b : a));
+    out.push({
+      id,
+      key: latest.key,
+      name: latest.name,
+      store: latest.store,
+      avgCents: Math.round(cents.reduce((sum, c) => sum + c, 0) / cents.length),
+      cheapestCents: Math.min(...cents),
+      dearestCents: Math.max(...cents),
+      pricedCount: withPrice.length,
+      totalCount: all.length,
+      lastAt: latest.at,
+    });
+  }
+  // Most-bought first, then most recent — the rows a user recognises come top.
+  return out.sort((a, b) => b.totalCount - a.totalCount || b.lastAt - a.lastAt);
 }
 
 /** Total logged spend in the window, for the "of what you logged" caveat. */
 export function totalLogged(purchases: Purchase[]): { cents: number; count: number } {
   let cents = 0;
-  for (const p of purchases) cents += p.priceCents;
-  return { cents, count: purchases.length };
+  let count = 0;
+  for (const p of purchases) {
+    if (p.priceCents == null) continue;
+    cents += p.priceCents;
+    count += 1;
+  }
+  // `count` is the number of PRICED purchases, not of all of them: it exists to
+  // qualify the total ("across 34 priced buys"), and counting unpriced ones
+  // there would describe a total they contributed nothing to.
+  return { cents, count };
 }

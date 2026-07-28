@@ -274,9 +274,85 @@ const hist = mod.historyFor(
   'milk',
 );
 check('history matches on normalized name', hist.length, 2);
-check('history is oldest first', hist.map((p) => p.priceCents), [200, 300]);
+// Newest first, deliberately changed: this feeds the transaction ledger, and a
+// ledger is read from the top. The most recent purchase is the one being
+// checked against ("did I really pay that much last time?").
+check('history is newest first', hist.map((p) => p.priceCents), [300, 200]);
 check('totalLogged sums', mod.totalLogged([buy('A', 100, '2026-07-01T10:00:00'), buy('B', 250, '2026-07-02T10:00:00')]), { cents: 350, count: 2 });
 check('totalLogged on empty', mod.totalLogged([]), { cents: 0, count: 0 });
+
+/* ------------------------------------------- unpriced purchases are invisible
+ * to money, visible to history.
+ *
+ * Every check-off is now a transaction, and most items are never priced — so
+ * the single most likely regression is an unpriced row being counted as zero
+ * somewhere and quietly dragging an average down. */
+
+const unpriced = { ...buy('Milk', 0, '2026-07-08T10:00:00'), priceCents: null };
+const pricedMilk = buy('Milk', 300, '2026-07-08T10:00:00');
+check('totalLogged ignores unpriced', mod.totalLogged([pricedMilk, unpriced]), { cents: 300, count: 1 });
+check(
+  'weeklySpend does not count an unpriced week as active',
+  mod.weeklySpend([unpriced], Date.parse('2026-07-08T10:00:00'), 1)[0].count,
+  0,
+);
+check('history DOES include unpriced', mod.historyFor([unpriced], 'milk').length, 1);
+check('priced() filters', mod.priced([pricedMilk, unpriced]).length, 1);
+
+/* ------------------------------------------------- the two correction windows */
+
+const NOW = Date.parse('2026-07-08T12:00:00');
+// `at` is already the ISO->epoch helper above; this one builds a purchase N
+// minutes in the past.
+const ago = (mins) => ({ ...buy('Milk', 300, '2026-07-08T12:00:00'), at: NOW - mins * 60000 });
+
+// The 10-minute mistake window: unticking inside it deletes the record.
+check('5 min ago is inside the mistake window',
+  mod.recentRecordFor([ago(5)], 'milk', NOW, mod.MISTAKE_WINDOW_MS) !== null, true);
+check('11 min ago is outside it',
+  mod.recentRecordFor([ago(11)], 'milk', NOW, mod.MISTAKE_WINDOW_MS), null);
+
+// The 2-hour session window: re-ticking inside it replaces rather than appends.
+check('90 min ago is inside the session window',
+  mod.recentRecordFor([ago(90)], 'milk', NOW, mod.SESSION_WINDOW_MS) !== null, true);
+check('3 h ago is a new shopping cycle',
+  mod.recentRecordFor([ago(180)], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
+
+check('picks the MOST recent of several',
+  mod.recentRecordFor([ago(5), ago(60), ago(90)], 'milk', NOW, mod.SESSION_WINDOW_MS).at, NOW - 5 * 60000);
+check('another item is never returned',
+  mod.recentRecordFor([ago(5)], 'bread', NOW, mod.SESSION_WINDOW_MS), null);
+// A record stamped in the future means a clock jump, not a recent purchase.
+// Treating it as open would let it swallow every later buy of that item.
+check('a future-stamped record is not "recent"',
+  mod.recentRecordFor([{ ...ago(0), at: NOW + 60000 }], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
+check('empty log is handled', mod.recentRecordFor([], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
+
+/* --------------------------------------------------------- item x store rollup */
+
+const eggsAldi = { ...buy('Eggs', 300, '2026-07-01T10:00:00'), store: 'aldi' };
+const eggsAldi2 = { ...buy('Eggs', 320, '2026-07-05T10:00:00'), store: 'aldi' };
+const eggsCarrefour = { ...buy('Eggs', 380, '2026-07-06T10:00:00'), store: 'carrefour' };
+const rollup = mod.byItemStore([eggsAldi, eggsAldi2, eggsCarrefour]);
+check('same item at two stores is two rows', rollup.length, 2);
+const aldi = rollup.find((r) => r.store === 'aldi');
+const carrefour = rollup.find((r) => r.store === 'carrefour');
+check('Aldi average is its own', aldi.avgCents, 310);
+check('Carrefour average is its own', carrefour.avgCents, 380);
+check('Aldi cheapest', aldi.cheapestCents, 300);
+check('Aldi dearest', aldi.dearestCents, 320);
+check('counts are per group', aldi.totalCount, 2);
+// An unattributed purchase must not be folded into a named store.
+const rollup2 = mod.byItemStore([eggsAldi, { ...buy('Eggs', 500, '2026-07-07T10:00:00'), store: null }]);
+check('no-store purchases are their own group', rollup2.length, 2);
+// A group with nothing priced says nothing, so it is dropped.
+check('an all-unpriced group is dropped',
+  mod.byItemStore([{ ...eggsAldi, priceCents: null }]).length, 0);
+// but its unpriced members still count toward the group total when it survives
+const mixed = mod.byItemStore([eggsAldi, { ...eggsAldi, priceCents: null }])[0];
+check('unpriced members count toward totalCount', mixed.totalCount, 2);
+check('...but not toward pricedCount', mixed.pricedCount, 1);
+check('...and never drag the average toward zero', mixed.avgCents, 300);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

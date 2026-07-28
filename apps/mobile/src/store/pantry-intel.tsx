@@ -13,6 +13,7 @@ import {
 import type { ItemCategory } from '@korb/shared';
 
 import { supabase } from '@/lib/supabase';
+import { uuidv4 } from '@/lib/uuid';
 import { useAppActive } from '@/lib/use-app-active';
 import {
   applyAlmostOut,
@@ -106,24 +107,38 @@ const PURCHASE_WINDOW_MS = PURCHASE_WINDOW_WEEKS * 7 * DAY;
  */
 const LOCAL_PURCHASE_CAP = 1000;
 
-/** Build a log entry, or null when there's no price worth logging. */
+/**
+ * Build a log entry, or null when there is nothing identifiable to log.
+ *
+ * The id is generated here rather than left to the database, for the same
+ * reason list items generate theirs: an optimistic row has to carry the
+ * identity the server row will have, or the client cannot address what it just
+ * wrote. Addressing a specific transaction is the whole point — a record gets
+ * corrected inside the session window, or removed when a check-off turns out
+ * to have been a mistap.
+ */
 function toPurchase(
   name: string,
   detail: PurchaseDetail | undefined,
   now: number,
 ): Purchase | null {
-  const priceCents = detail?.priceCents;
-  // No price means nothing to say about spend. The burn-rate side of
-  // logPurchase still runs — only the money log skips it.
-  if (priceCents == null || !Number.isFinite(priceCents) || priceCents < 0) return null;
+  const raw = detail?.priceCents;
+  // A price is optional in the TYPE already, ahead of the schema: price_cents
+  // is still `not null` in the database until migration 0020 lands, so sending
+  // a null would be rejected at insert time. Until then an unpriced check-off
+  // is still skipped by the money log, exactly as before — the type is widened
+  // here so the client is ready, not so the behaviour changes early.
+  if (raw == null || !Number.isFinite(raw) || raw < 0) return null;
+  const priceCents = Math.round(raw);
   const display = name.trim();
   const key = normalizeKey(display);
   if (!key) return null;
   return {
+    id: uuidv4(),
     key,
     name: display,
     store: detail?.store ?? null,
-    priceCents: Math.round(priceCents),
+    priceCents,
     at: now,
     quantity: detail?.quantity ?? null,
     unit: detail?.unit ?? null,
@@ -320,16 +335,18 @@ const toRow = (householdId: string, s: ItemStat) => ({
 });
 
 interface DbPriceRow {
+  id: string;
   item_key: string | null;
   item_name: string;
   store: string | null;
-  price_cents: number;
+  price_cents: number | null;
   quantity: number | null;
   unit: string | null;
   recorded_at: string;
 }
 
 const mapPriceRow = (r: DbPriceRow): Purchase => ({
+  id: r.id,
   key: r.item_key ?? normalizeKey(r.item_name),
   name: r.item_name,
   store: r.store,
@@ -398,7 +415,7 @@ function CloudPantryIntelProvider({
     const since = new Date(Date.now() - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('item_key, item_name, store, price_cents, quantity, unit, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, unit, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .order('recorded_at', { ascending: false })
@@ -481,6 +498,7 @@ function CloudPantryIntelProvider({
         supabase
           .from('price_entries')
           .insert({
+            id: entry.id,
             household_id: householdId,
             item_key: entry.key,
             item_name: entry.name,
