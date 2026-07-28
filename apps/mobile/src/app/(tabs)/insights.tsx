@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
+import { InsightsTeaser } from '@/components/insights-teaser';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
@@ -15,6 +16,7 @@ import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
 import { priced, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
+import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
@@ -26,8 +28,28 @@ type IconName = keyof typeof Ionicons.glyphMap;
  * Insights: a feed of what the app has learned about your shopping. Basket
  * balance (a rough food-group mix), your staples, and — once you log prices —
  * spending. Everything degrades gracefully while there isn't much data yet.
+ *
+ * The gate. Signed out, the whole tab is a teaser.
+ *
+ * Split into two components rather than an early return inside one, because
+ * the screen below is full of useMemo and a conditional return above them
+ * would change the hook count between renders — React throws "rendered fewer
+ * hooks than expected" the moment a guest signs in, which is precisely the
+ * transition this feature exists to encourage.
+ *
+ * The split also buys the stronger property: a guest's figures are never
+ * computed at all, so no rendering slip can leak them through the blur.
  */
 export default function InsightsScreen() {
+  const { user } = useAuth();
+  const { purchases } = usePantryIntel();
+  // Whether they HAVE a history decides whether the invitation says "unlock"
+  // or the honest "keep" — see components/insights-teaser.tsx.
+  if (!user) return <InsightsTeaser hasLocalHistory={purchases.length > 0} />;
+  return <SignedInInsights />;
+}
+
+function SignedInInsights() {
   const { colors } = useTheme();
   const { t, money } = useLocale();
   const { lists } = useGroceries();

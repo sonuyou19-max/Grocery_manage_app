@@ -220,6 +220,14 @@ const nl = {
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
   },
+  teaser: {
+    title: 'Je inzichten, zodra je inlogt',
+    body: 'Korb maakt van je boodschappen uitgaventrends, prijswijzigingen en de winkels die je het minst kosten.',
+    keepTitle: 'Behoud je inzichten',
+    keepBody: 'Je hebt al een boodschappengeschiedenis op dit toestel. Log in en die gaat mee — en wordt bewaard.',
+    cta: 'Inloggen of account maken',
+    sampleNote: 'Voorbeeldbedragen, niet jouw gegevens',
+  },
   ledger: {
     openTitle: 'Aankoopgeschiedenis',
     subtitle: { one: '%{count} aankoop', other: '%{count} aankopen' },

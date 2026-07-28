@@ -221,6 +221,14 @@ const de = {
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
   },
+  teaser: {
+    title: 'Deine Auswertungen, sobald du dich anmeldest',
+    body: 'Korb macht aus deinem Einkauf Ausgabentrends, Preisänderungen und die Läden, die dich am wenigsten kosten.',
+    keepTitle: 'Behalte deine Auswertungen',
+    keepBody: 'Du hast bereits einen Einkaufsverlauf auf diesem Gerät. Melde dich an – er kommt mit und wird gesichert.',
+    cta: 'Anmelden oder Konto erstellen',
+    sampleNote: 'Beispielwerte, nicht deine Daten',
+  },
   ledger: {
     openTitle: 'Kaufhistorie',
     subtitle: { one: '%{count} Kauf', other: '%{count} Käufe' },

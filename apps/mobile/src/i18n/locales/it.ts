@@ -220,6 +220,14 @@ const it = {
     cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
   },
+  teaser: {
+    title: 'Le tue analisi, appena accedi',
+    body: 'Korb trasforma la tua spesa in andamenti, variazioni di prezzo e i negozi che ti costano meno.',
+    keepTitle: 'Conserva le tue analisi',
+    keepBody: 'Hai già uno storico della spesa su questo dispositivo. Accedi: viene con te e inizia a essere salvato.',
+    cta: 'Accedi o crea un account',
+    sampleNote: 'Cifre di esempio, non i tuoi dati',
+  },
   ledger: {
     openTitle: 'Cronologia acquisti',
     subtitle: { one: '%{count} acquisto', other: '%{count} acquisti' },

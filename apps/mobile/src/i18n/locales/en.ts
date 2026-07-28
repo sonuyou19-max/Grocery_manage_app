@@ -232,6 +232,14 @@ const en = {
     cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
     cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
   },
+  teaser: {
+    title: 'Your insights, once you sign in',
+    body: 'Korb turns your shopping into spending trends, price changes and the shops that cost you least.',
+    keepTitle: 'Keep your insights',
+    keepBody: 'You already have a shopping history on this device. Sign in and it comes with you — and starts backing up.',
+    cta: 'Sign in or create an account',
+    sampleNote: 'Example figures, not your data',
+  },
   ledger: {
     openTitle: 'Purchase history',
     subtitle: { one: '%{count} purchase', other: '%{count} purchases' },

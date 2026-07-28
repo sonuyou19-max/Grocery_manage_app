@@ -221,6 +221,14 @@ const fr = {
     cadenceLearned: { one: 'Korb a appris environ %{count} jour', other: 'Korb a appris environ %{count} jours' },
     cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
   },
+  teaser: {
+    title: 'Tes analyses, dès que tu te connectes',
+    body: 'Korb transforme tes courses en tendances de dépenses, variations de prix et magasins les moins chers.',
+    keepTitle: 'Garde tes analyses',
+    keepBody: 'Tu as déjà un historique de courses sur cet appareil. Connecte-toi : il te suit et sera sauvegardé.',
+    cta: 'Se connecter ou créer un compte',
+    sampleNote: 'Chiffres d’exemple, pas tes données',
+  },
   ledger: {
     openTitle: 'Historique d’achats',
     subtitle: { one: '%{count} achat', other: '%{count} achats' },

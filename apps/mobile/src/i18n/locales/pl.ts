@@ -263,6 +263,14 @@ const pl = {
     },
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
   },
+  teaser: {
+    title: 'Twoje analizy, gdy się zalogujesz',
+    body: 'Korb zamienia Twoje zakupy w trendy wydatków, zmiany cen i sklepy, w których płacisz najmniej.',
+    keepTitle: 'Zachowaj swoje analizy',
+    keepBody: 'Masz już historię zakupów na tym urządzeniu. Zaloguj się — pójdzie z Tobą i zacznie być zapisywana.',
+    cta: 'Zaloguj się lub załóż konto',
+    sampleNote: 'Przykładowe kwoty, nie Twoje dane',
+  },
   ledger: {
     openTitle: 'Historia zakupów',
     subtitle: { one: '%{count} zakup', few: '%{count} zakupy', many: '%{count} zakupów', other: '%{count} zakupu' },

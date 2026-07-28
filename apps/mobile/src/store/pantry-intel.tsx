@@ -33,6 +33,7 @@ import {
   SESSION_WINDOW_MS,
   type Purchase,
 } from '@/lib/purchase-log';
+import { purchasesToMigrate } from '@/lib/purchase-migration';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -466,6 +467,86 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   unit: r.unit,
 });
 
+/** Marks this device's orphaned local log as re-homed. Device-wide, not
+ *  per-household: your history belongs in the FIRST household you bring it to,
+ *  and copying it into every household you later join would be inventing
+ *  spending that never happened there. */
+const LOCAL_MIGRATED_KEY = 'korb.purchaseLog.migrated.v1';
+
+/**
+ * Carry a guest's on-device purchase history into the household they just
+ * joined.
+ *
+ * Runs once per device, after the first cloud fetch so it can see what the
+ * household already has. Everything about it is best-effort: a failure leaves
+ * the local log untouched and the flag unset, so the next launch tries again.
+ *
+ * See lib/purchase-migration.ts for why this merges rather than moves, and why
+ * "already there" is same-item-same-day rather than an exact timestamp.
+ */
+async function migrateLocalPurchases(
+  householdId: string,
+  applyPurchases: (list: Purchase[]) => void,
+): Promise<void> {
+  try {
+    const [done, rawLocal] = await Promise.all([
+      AsyncStorage.getItem(LOCAL_MIGRATED_KEY),
+      AsyncStorage.getItem(LOCAL_PURCHASES_KEY),
+    ]);
+    if (done === '1') return;
+    const parsed = rawLocal ? JSON.parse(rawLocal) : [];
+    const local: Purchase[] = Array.isArray(parsed) ? parsed : [];
+    if (local.length === 0) {
+      // Nothing to carry — still mark it done, so a user who never shopped
+      // offline doesn't pay for this check on every launch forever.
+      await AsyncStorage.setItem(LOCAL_MIGRATED_KEY, '1');
+      return;
+    }
+
+    const now = Date.now();
+    const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
+    const { data, error } = await supabase
+      .from('price_entries')
+      .select('id, item_key, item_name, store, price_cents, quantity, unit, recorded_at')
+      .eq('household_id', householdId)
+      .gte('recorded_at', since)
+      .limit(LOCAL_PURCHASE_CAP);
+    // Without a reliable picture of what's already there we cannot tell a new
+    // row from a duplicate, and guessing wrong doubles someone's spend chart.
+    // Leave the flag unset and try again next launch.
+    if (error || !data) return;
+
+    const cloud = (data as DbPriceRow[]).map(mapPriceRow);
+    const missing = purchasesToMigrate(local, cloud, now, PURCHASE_WINDOW_MS);
+
+    if (missing.length > 0) {
+      const { error: insertError } = await supabase.from('price_entries').insert(
+        missing.map((p) => ({
+          id: p.id,
+          household_id: householdId,
+          item_key: p.key,
+          item_name: p.name,
+          store: p.store,
+          price_cents: p.priceCents,
+          quantity: p.quantity,
+          unit: p.unit,
+          recorded_at: new Date(p.at).toISOString(),
+        })),
+      );
+      if (insertError) return;
+    }
+
+    await AsyncStorage.setItem(LOCAL_MIGRATED_KEY, '1');
+    // The local log is deliberately NOT deleted. It costs a few kilobytes, and
+    // it is the only copy of this history if the upload turns out to have gone
+    // somewhere the user didn't intend — a household they joined by mistake,
+    // say. Signing out returns them to it intact.
+    applyPurchases(trimPurchases([...missing, ...cloud], now));
+  } catch {
+    // Corrupt local log, or offline. Either way the flag stays unset.
+  }
+}
+
 function CloudPantryIntelProvider({
   householdId,
   children,
@@ -580,7 +661,9 @@ function CloudPantryIntelProvider({
     // migration 0013), so this is refreshed on open and on returning to the
     // foreground. A member's purchase landing mid-session changes no decision
     // currently on screen.
-    void fetchPurchases();
+    void fetchPurchases().then(() => {
+      if (alive) void migrateLocalPurchases(householdId, applyPurchases);
+    });
 
     const channel = supabase
       .channel(`pantry-${householdId}`)

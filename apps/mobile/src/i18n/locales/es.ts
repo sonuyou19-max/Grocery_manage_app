@@ -220,6 +220,14 @@ const es = {
     cadenceLearned: { one: 'Korb ha aprendido unos %{count} día', other: 'Korb ha aprendido unos %{count} días' },
     cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
   },
+  teaser: {
+    title: 'Tus estadísticas, en cuanto inicies sesión',
+    body: 'Korb convierte tu compra en tendencias de gasto, cambios de precio y las tiendas que menos te cuestan.',
+    keepTitle: 'Conserva tus estadísticas',
+    keepBody: 'Ya tienes un historial de compra en este dispositivo. Inicia sesión y se viene contigo, con copia de seguridad.',
+    cta: 'Inicia sesión o crea una cuenta',
+    sampleNote: 'Cifras de ejemplo, no tus datos',
+  },
   ledger: {
     openTitle: 'Historial de compras',
     subtitle: { one: '%{count} compra', other: '%{count} compras' },
