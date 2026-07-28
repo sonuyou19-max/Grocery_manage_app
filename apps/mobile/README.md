@@ -40,36 +40,31 @@ eas build --profile preview --platform android
 
 `preview` builds an installable APK (not an AAB) with Sentry upload disabled.
 
-## Gotcha: typed routes and a stale `.expo/types/router.d.ts`
+## Typed routes: generated, and regenerated for you
 
-`app.json` sets `experiments.typedRoutes: true`, which makes `router.push()`
-accept only real routes. The route union is **generated** into
-`.expo/types/router.d.ts` — and `.expo/` is gitignored, so it is per-machine and
-not covered by a fresh clone.
+`app.json` sets `experiments.typedRoutes: true`, which narrows `router.push()`
+to the app's real routes. That union lives in a **generated** file,
+`.expo/types/router.d.ts`, which is gitignored and therefore per-machine.
 
-The dev server writes that file on boot. A machine that pulls new screens and
-runs `typecheck` **without** having started the dev server since then keeps an
-old manifest, and typecheck fails on routes that are perfectly valid:
+Expo's dev server writes it on boot. That leaves anyone who pulls new screens
+and goes straight to `typecheck` holding a manifest from before those screens
+existed — and typecheck then fails on routes that are perfectly valid:
 
 ```
-error TS2345: Argument of type '"/cards"' is not assignable to parameter of
-type 'RelativePathString | ExternalPathString | "/legal" | ...'
+error TS2345: Argument of type '"/get-started"' is not assignable to
+parameter of type 'RelativePathString | ... | "/legal" | ...'
 ```
 
-That list is the manifest's idea of the routes, from before those screens
-existed. Fix by regenerating:
+The error names the route it rejects but never says the *type* is the stale
+part, so it reads as a typo in working code.
 
-```bash
-cd apps/mobile
-rm -rf .expo/types
-pnpm --filter mobile start     # wait for "Waiting on http://localhost:8081"
-                               # then Ctrl+C
-```
+`typecheck` now regenerates the manifest first (`scripts/gen-routes.mjs`, which
+calls the same generator the dev server uses — no Metro, ~100ms), so this cannot
+happen. Run it alone with `pnpm --filter mobile gen:routes` if you ever want to.
 
-Then typecheck again. Deleting `.expo/types` **without** regenerating also makes
-typecheck pass, but for the wrong reason: with no manifest the route union is
-never narrowed and `router.push()` stops being checked at all. Prefer
-regenerating, so the check keeps its value.
+Do **not** "fix" a route error by deleting `.expo/types`. Typecheck will pass,
+but for the wrong reason: with no manifest the union is never narrowed and route
+strings stop being checked at all.
 
-This never blocks a build. EAS does not run `tsc`, and Metro strips types — a
-stale manifest is a local type-checking artifact only.
+A stale manifest never blocked a build in any case — EAS does not run `tsc`, and
+Metro strips types.
