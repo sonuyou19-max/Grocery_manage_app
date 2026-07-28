@@ -318,6 +318,7 @@ const fr = {
     gone: 'Cette liste n’existe plus.',
     anyStore: 'N’importe quel magasin',
     inCartCount: '%{checked}/%{total} dans le panier',
+    inCartSection: { one: '%{count} dans le panier', other: '%{count} dans le panier' },
     toBuy: 'À acheter',
     inCartLabel: 'Dans le panier',
     priced: 'Avec prix',

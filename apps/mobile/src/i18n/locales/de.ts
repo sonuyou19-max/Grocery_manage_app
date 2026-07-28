@@ -319,6 +319,7 @@ const de = {
     gone: 'Diese Liste gibt es nicht mehr.',
     anyStore: 'Beliebiges Geschäft',
     inCartCount: '%{checked}/%{total} im Wagen',
+    inCartSection: { one: '%{count} im Wagen', other: '%{count} im Wagen' },
     toBuy: 'Zu kaufen',
     inCartLabel: 'Im Wagen',
     priced: 'Mit Preis',

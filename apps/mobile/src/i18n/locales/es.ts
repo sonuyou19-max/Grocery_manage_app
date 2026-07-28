@@ -318,6 +318,7 @@ const es = {
     gone: 'Esta lista ya no existe.',
     anyStore: 'Cualquier tienda',
     inCartCount: '%{checked}/%{total} en el carrito',
+    inCartSection: { one: '%{count} en el carrito', other: '%{count} en el carrito' },
     toBuy: 'Por comprar',
     inCartLabel: 'En el carrito',
     priced: 'Con precio',

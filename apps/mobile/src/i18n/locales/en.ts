@@ -329,6 +329,7 @@ const en = {
     gone: 'This list no longer exists.',
     anyStore: 'Any store',
     inCartCount: '%{checked}/%{total} in cart',
+    inCartSection: { one: '%{count} in cart', other: '%{count} in cart' },
     toBuy: 'To buy',
     inCartLabel: 'In cart',
     priced: 'Priced',

@@ -317,6 +317,7 @@ const nl = {
     gone: 'Deze lijst bestaat niet meer.',
     anyStore: 'Elke winkel',
     inCartCount: '%{checked}/%{total} in mandje',
+    inCartSection: { one: '%{count} in de kar', other: '%{count} in de kar' },
     toBuy: 'Te kopen',
     inCartLabel: 'In mandje',
     priced: 'Met prijs',

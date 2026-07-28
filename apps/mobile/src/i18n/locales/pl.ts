@@ -390,6 +390,7 @@ const pl = {
     gone: 'Ta lista już nie istnieje.',
     anyStore: 'Dowolny sklep',
     inCartCount: '%{checked}/%{total} w koszyku',
+    inCartSection: { one: '%{count} w koszyku', few: '%{count} w koszyku', many: '%{count} w koszyku', other: '%{count} w koszyku' },
     toBuy: 'Do kupienia',
     inCartLabel: 'W koszyku',
     priced: 'Z ceną',

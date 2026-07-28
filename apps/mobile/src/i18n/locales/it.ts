@@ -318,6 +318,7 @@ const it = {
     gone: 'Questa lista non esiste più.',
     anyStore: 'Qualsiasi negozio',
     inCartCount: '%{checked}/%{total} nel carrello',
+    inCartSection: { one: '%{count} nel carrello', other: '%{count} nel carrello' },
     toBuy: 'Da comprare',
     inCartLabel: 'Nel carrello',
     priced: 'Con prezzo',

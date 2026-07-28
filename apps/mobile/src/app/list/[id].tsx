@@ -4,13 +4,16 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  LayoutAnimation,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -21,11 +24,13 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
+import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
 import { GlassView } from '@/components/glass';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ItemSheet } from '@/components/item-sheet';
@@ -34,6 +39,7 @@ import { MeshBackground } from '@/components/mesh-background';
 import { QuickAddSheet } from '@/components/quick-add-sheet';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
+import { emojiFor } from '@/lib/item-emoji';
 import { haptics } from '@/lib/haptics';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { useAuth } from '@/store/auth';
@@ -42,6 +48,11 @@ import { useHousehold } from '@/store/household';
 import { useLocale } from '@/store/locale';
 import { usePantryIntel, type PurchaseDetail } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
+
+// Enable the collapse/expand animation on Android too (same guard as Pantry).
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Set this to the store/app link at launch. While empty, the invite tells the
 // recipient how to join by code inside the app.
@@ -74,6 +85,8 @@ export default function ListDetailScreen() {
   const { household, members } = useHousehold();
   const { logPurchase } = usePantryIntel();
   const [draft, setDraft] = useState('');
+  /** The cart section is a footer, not the list — closed until asked for. */
+  const [cartOpen, setCartOpen] = useState(false);
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'added' | 'edit'>('added');
   const [quickAdd, setQuickAdd] = useState(false);
@@ -81,6 +94,15 @@ export default function ListDetailScreen() {
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
   // the burn-rate engine. Anything still pending is flushed on leaving.
+  /** Row views, so a check-off can measure where its item currently sits. */
+  const rowRefs = useRef(new Map<string, View>());
+  const flightRef = useRef<FlyToCartHandle>(null);
+  /** The bag's centre in window coords — the destination every flight aims at. */
+  const bagPoint = useRef<{ x: number; y: number } | null>(null);
+  const bagRef = useRef<View>(null);
+  /** Bumps when a glyph lands, so the bag acknowledges the arrival. */
+  const bagScale = useSharedValue(1);
+
   const purchaseTimers = useRef<
     Map<
       string,
@@ -115,13 +137,24 @@ export default function ListDetailScreen() {
     [shoppersOnline, members, t],
   );
 
+  /**
+   * Category groups hold ONLY what is still to buy.
+   *
+   * A checked item has left the list in the user's head the moment it goes in
+   * the trolley, so it leaves the list on screen too — it lands in the cart
+   * section below instead. Keeping it in place, struck through, meant the list
+   * grew longer as you shopped, which is backwards.
+   */
   const grouped = useMemo(() => {
     if (!list) return [];
     return CATEGORY_ORDER.map((cat) => ({
       category: cat,
-      items: list.items.filter((it) => it.category === cat),
+      items: list.items.filter((it) => it.category === cat && !it.checked),
     })).filter((g) => g.items.length > 0);
   }, [list]);
+
+  /** What's in the cart, newest first, for the collapsed section at the end. */
+  const inCartItems = useMemo(() => (list ? list.items.filter((it) => it.checked) : []), [list]);
 
   const budget = useMemo(() => {
     const items = list?.items ?? [];
@@ -159,6 +192,58 @@ export default function ListDetailScreen() {
   // in the cart — the shopping trip is done.
   const PURCHASE_DEBOUNCE = 3500;
 
+  /**
+   * Send the item's emoji arcing to the bag, then let the row collapse.
+   *
+   * Both endpoints are measured at the moment of the tap rather than cached:
+   * the list scrolls, rows reflow as earlier items leave, and a stale origin
+   * would launch the glyph from wherever the row used to be.
+   *
+   * Everything here is best-effort. If a measurement comes back null — the row
+   * unmounted between the tap and the callback, which a fast double-tap can do
+   * — the flight is skipped and the check-off proceeds exactly as before. The
+   * animation is decoration; it must never be able to block the actual action.
+   */
+  const flyToCart = (item: Item) => {
+    const row = rowRefs.current.get(item.id);
+    const overlay = flightRef.current;
+    if (!row || !overlay || !bagPoint.current) return;
+    row.measureInWindow((x, y, w, h) => {
+      if (w === 0 && h === 0) return;
+      const from = overlay.toLocal(x + 34, y + h / 2);
+      const to = overlay.toLocal(bagPoint.current!.x, bagPoint.current!.y);
+      overlay.launch(emojiFor(item.name, item.category), from, to);
+    });
+  };
+
+  /**
+   * Remember where the bag is, in window coords.
+   *
+   * Re-measured on every layout rather than once: the header reflows when the
+   * shoppers badge appears or a long list name wraps to two lines, and a
+   * destination fixed at mount would then be a few points out for the rest of
+   * the session.
+   */
+  const measureBag = () => {
+    requestAnimationFrame(() => {
+      bagRef.current?.measureInWindow((x, y, w, h) => {
+        if (w === 0 && h === 0) return;
+        bagPoint.current = { x: x + w / 2, y: y + h / 2 };
+      });
+    });
+  };
+
+  const bagStyle = useAnimatedStyle(() => ({ transform: [{ scale: bagScale.value }] }));
+
+  /** The bag acknowledging a landing — a short squash and settle. */
+  const onGlyphArrive = () => {
+    haptics.tick();
+    bagScale.value = withSequence(
+      withSpring(1.28, { damping: 12, stiffness: 320 }),
+      withSpring(1, SPRING.settle),
+    );
+  };
+
   const handleToggle = (item: Item) => {
     const wasComplete = list.items.length > 0 && checkedCount === list.items.length;
     const completing = !item.checked && !wasComplete && checkedCount + 1 === list.items.length;
@@ -166,6 +251,13 @@ export default function ListDetailScreen() {
     else haptics.tick();
 
     const willCheck = !item.checked;
+    // Launch BEFORE the state change: the row still exists to be measured, and
+    // the glyph leaves as the gap closes rather than after it.
+    if (willCheck) flyToCart(item);
+    // One configureNext covers the row leaving its category group and the cart
+    // section growing, so the two halves of the move animate together instead
+    // of as two separate jumps.
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     toggleItem(list.id, item.id);
 
     // Checking an item = you bought it → feed the burn-rate model, but only if
@@ -308,12 +400,29 @@ export default function ListDetailScreen() {
           <ShoppersBadge names={shopperNames} />
         </View>
         {list.items.length > 0 && (
-          <Pressable
-            onPress={() => router.push({ pathname: '/shop/[id]', params: { id: list.id } })}
-            hitSlop={12}
-          >
-            <Ionicons name="bag-check-outline" size={22} color={colors.accent} />
-          </Pressable>
+          <Animated.View ref={bagRef} onLayout={measureBag} style={bagStyle}>
+            <Pressable
+              onPress={() => router.push({ pathname: '/shop/[id]', params: { id: list.id } })}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t('listDetail.inCartCount', {
+                checked: checkedCount,
+                total: list.items.length,
+              })}
+            >
+              <Ionicons name="bag-check-outline" size={22} color={colors.accent} />
+              {/* The count is what makes the destination legible: the glyph
+                  arrives somewhere that visibly changes, rather than just
+                  vanishing behind an icon. */}
+              {checkedCount > 0 && (
+                <View style={[styles.bagBadge, { backgroundColor: colors.accent }]}>
+                  <Text style={[styles.bagBadgeText, { color: colors.accentInk }]}>
+                    {checkedCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </Animated.View>
         )}
         <Pressable onPress={inviteFamily} hitSlop={12}>
           <Ionicons name="person-add-outline" size={22} color={colors.accent} />
@@ -364,6 +473,10 @@ export default function ListDetailScreen() {
               <SwipeableItemRow
                 key={it.id}
                 item={it}
+                rowRef={(v) => {
+                  if (v) rowRefs.current.set(it.id, v);
+                  else rowRefs.current.delete(it.id);
+                }}
                 onToggle={() => handleToggle(it)}
                 onEdit={() => openEdit(it)}
                 onDelete={() => deleteItem(list.id, it.id)}
@@ -386,7 +499,56 @@ export default function ListDetailScreen() {
             {t('listDetail.emptyItems')}
           </Text>
         )}
+
+        {/* In the cart.
+            Collapsed by default and sitting after everything else, so the list
+            proper is what's still to buy. It exists at all because unticking has
+            to stay reachable: a mistap must be correctable here, not only from
+            another screen. */}
+        {inCartItems.length > 0 && (
+          <View style={styles.cartSection}>
+            <Pressable
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                haptics.tick();
+                setCartOpen((v) => !v);
+              }}
+              style={styles.catRow}
+              hitSlop={6}
+            >
+              <Ionicons name="bag-check" size={15} color={colors.muted} />
+              <Text style={[type.label, { color: colors.muted }]}>
+                {t('listDetail.inCartSection', { count: inCartItems.length })}
+              </Text>
+              <View style={[styles.catLine, { backgroundColor: colors.line }]} />
+              <Ionicons
+                name={cartOpen ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.muted}
+              />
+            </Pressable>
+
+            {cartOpen &&
+              inCartItems.map((it) => (
+                <SwipeableItemRow
+                  key={it.id}
+                  item={it}
+                  onToggle={() => handleToggle(it)}
+                  onEdit={() => openEdit(it)}
+                  onDelete={() => deleteItem(list.id, it.id)}
+                  claimable={false}
+                  claimedByName={null}
+                  claimMine={false}
+                  onToggleClaim={() => {}}
+                />
+              ))}
+          </View>
+        )}
       </ScrollView>
+
+      {/* Flight layer. Outside the ScrollView so an arc is never clipped by it,
+          and last in the tree so it paints above the header it flies toward. */}
+      <FlyToCart ref={flightRef} onArrive={onGlyphArrive} />
 
       {/* Add bar — pinned above the keyboard by the screen-level
           KeyboardAvoidingView (padding on iOS, height on Android). */}
@@ -446,6 +608,7 @@ const DELETE_WIDTH = 92;
  */
 function SwipeableItemRow({
   item: it,
+  rowRef,
   onToggle,
   claimable,
   claimedByName,
@@ -454,6 +617,8 @@ function SwipeableItemRow({
   onEdit,
   onDelete,
 }: {
+  /** Registered so a check-off can measure where this row currently sits. */
+  rowRef?: (v: View | null) => void;
   item: Item;
   onToggle: () => void;
   claimable: boolean;
@@ -540,7 +705,7 @@ function SwipeableItemRow({
   }));
 
   return (
-    <View style={styles.swipeWrap}>
+    <View ref={rowRef} style={styles.swipeWrap}>
       <GestureDetector gesture={pan}>
         <Animated.View
           style={[styles.itemRow, { borderBottomColor: colors.glassBorder }, rowStyle]}
@@ -685,6 +850,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   struck: { textDecorationLine: 'line-through' },
+  bagBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bagBadgeText: { fontSize: 10, fontWeight: '800' },
+  cartSection: { marginTop: spacing.lg },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   swipeWrap: { overflow: 'hidden' },
   deleteLayer: {
