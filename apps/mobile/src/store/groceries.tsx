@@ -13,6 +13,7 @@ import {
 import type { ItemCategory, ParsedItem } from '@korb/shared';
 
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
+import { unitFor } from '@/lib/item-unit';
 import { forgetHomeList, rememberItemList } from '@/lib/item-home-list';
 import { recallItemDetails } from '@/lib/item-memory';
 import { normalizeKey } from '@/lib/pantry-intel';
@@ -118,6 +119,32 @@ const Ctx = createContext<GroceriesContext | null>(null);
  */
 const EMPTY_SHOPPERS: string[] = [];
 
+/**
+ * The unit an item starts life with.
+ *
+ * Strict precedence, most-specific first:
+ *
+ *   1. `explicit` — what this add actually said. "2L milk" through quick-add
+ *      means litres regardless of what any table thinks.
+ *   2. `usual` — what YOU chose last time you bought it (item-memory.ts). If
+ *      you buy milk by the bottle, no suggestion gets to overrule that.
+ *   3. `unitFor` — the curated table, the shared lexicon, then the category.
+ *      Returns null rather than guessing when none of them is confident, and
+ *      null is the right answer there: an empty picker asks a question, a
+ *      wrong prefill makes a claim the user has to notice and undo.
+ *
+ * Note `??` throughout, not `||` — 'pcs' is truthy but 0 and '' are not the
+ * concern here; what matters is that a deliberate null from a higher tier is
+ * not a value, so it falls through, while a real unit from any tier stops the
+ * search.
+ */
+const seedUnit = (
+  name: string,
+  category: ItemCategory,
+  explicit: string | null | undefined,
+  usual: string | null | undefined,
+): string | null => explicit ?? usual ?? unitFor(name, category);
+
 const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {}): Item => ({
   id: uuidv4(),
   name,
@@ -199,6 +226,31 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
     );
   }, []);
 
+  /**
+   * Set the unit only if the item still hasn't got one.
+   *
+   * Written as a state updater rather than a read-then-patch because the check
+   * and the write have to be atomic against the user: this lands seconds after
+   * the add, while the item sheet is open, and reading `lists` from the closure
+   * would test a snapshot taken before they touched the picker — overwriting a
+   * choice they just made.
+   */
+  const fillUnitIfEmpty = useCallback((listId: string, itemId: string, unit: string | null) => {
+    if (!unit) return;
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId
+          ? {
+              ...l,
+              items: l.items.map((it) =>
+                it.id === itemId && it.unit == null ? { ...it, unit } : it,
+              ),
+            }
+          : l,
+      ),
+    );
+  }, []);
+
   const setChecked = useCallback((listId: string, itemId: string, checked: boolean) => {
     setLists((prev) =>
       prev.map((l) =>
@@ -220,7 +272,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
     const usual = recallItemDetails(p.name);
     const opts = {
       quantity: p.quantity ?? usual?.quantity ?? null,
-      unit: p.unit ?? usual?.unit ?? null,
+      unit: seedUnit(p.name, p.category, p.unit, usual?.unit),
       store: usual?.store ?? null,
     };
     setLists((prev) =>
@@ -256,11 +308,15 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         const id = uuidv4();
         if (!clean) return id;
         const category = categorizeSync(clean);
-        // Prefill the quantity/unit/store last used for this item (see #3).
-        const usual = recallItemDetails(clean) ?? {};
+        // Prefill the quantity/unit/store last used for this item (see #3),
+        // falling back to the suggested unit when there's no history.
+        const usual = recallItemDetails(clean);
+        const unit = seedUnit(clean, category, null, usual?.unit);
         setLists((prev) =>
           prev.map((l) =>
-            l.id === listId ? { ...l, items: [...l.items, { ...newItem(clean, category, usual), id }] } : l,
+            l.id === listId
+              ? { ...l, items: [...l.items, { ...newItem(clean, category, usual ?? {}), id, unit }] }
+              : l,
           ),
         );
         rememberItemList(clean, listId);
@@ -268,6 +324,11 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
           resolveCategoryAsync(clean).then((res) => {
             if (!res || res.category === 'other') return;
             patchItem(listId, id, { category: res.category });
+            // The real category may bring a unit with it — either the model's
+            // own answer or the category default now that we know the category.
+            // Only if the row still has none: the AI takes seconds to come
+            // back, and by then the user may have set one in the item sheet.
+            fillUnitIfEmpty(listId, id, seedUnit(clean, res.category, res.unit, null));
             void learnCategory(clean, res.category);
           });
         }
@@ -487,6 +548,23 @@ function CloudGroceriesProvider({
     );
   }, []);
 
+  /** Local half of the late unit fill. See the same helper in the local store. */
+  const fillUnitIfEmpty = useCallback((listId: string, itemId: string, unit: string | null) => {
+    if (!unit) return;
+    setLists((prev) =>
+      prev.map((l) =>
+        l.id === listId
+          ? {
+              ...l,
+              items: l.items.map((it) =>
+                it.id === itemId && it.unit == null ? { ...it, unit } : it,
+              ),
+            }
+          : l,
+      ),
+    );
+  }, []);
+
   const setCheckedLocal = useCallback((listId: string, itemId: string, checked: boolean) => {
     setLists((prev) =>
       prev.map((l) =>
@@ -519,7 +597,7 @@ function CloudGroceriesProvider({
       // always prefill the usual store (the AI never parses it).
       const usual = recallItemDetails(p.name);
       const quantity = p.quantity ?? usual?.quantity ?? null;
-      const unit = p.unit ?? usual?.unit ?? null;
+      const unit = seedUnit(p.name, p.category, p.unit, usual?.unit);
       const store = usual?.store ?? null;
       setLists((prev) =>
         prev.map((l) =>
@@ -595,10 +673,11 @@ function CloudGroceriesProvider({
         // Prefill the quantity/unit/store last used for this item (see #3),
         // in both the optimistic row and the persisted insert.
         const usual = recallItemDetails(clean);
+        const unit = seedUnit(clean, category, null, usual?.unit);
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
-              ? { ...l, items: [...l.items, { ...newItem(clean, category, usual ?? {}), id }] }
+              ? { ...l, items: [...l.items, { ...newItem(clean, category, usual ?? {}), id, unit }] }
               : l,
           ),
         );
@@ -610,7 +689,7 @@ function CloudGroceriesProvider({
             name: clean,
             category,
             quantity: usual?.quantity ?? null,
-            unit: usual?.unit ?? null,
+            unit,
             store: usual?.store ?? null,
             added_by: user?.id ?? null,
           })
@@ -623,6 +702,19 @@ function CloudGroceriesProvider({
             if (!res || res.category === 'other') return;
             patchLocalItem(listId, id, { category: res.category });
             void supabase.from('list_items').update({ category: res.category }).eq('id', id);
+            // See the local backend: only when the row still has no unit, since
+            // the user may have picked one while the call was in flight. The
+            // `is('unit', null)` on the update is the same guard applied to the
+            // row another member might have edited from their phone.
+            const learnedUnit = seedUnit(clean, res.category, res.unit, null);
+            if (learnedUnit && unit == null) {
+              fillUnitIfEmpty(listId, id, learnedUnit);
+              void supabase
+                .from('list_items')
+                .update({ unit: learnedUnit })
+                .eq('id', id)
+                .is('unit', null);
+            }
             void learnCategory(clean, res.category);
           });
         }

@@ -24,6 +24,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { UNITS } from '@korb/shared';
+
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { currencySymbolFor } from '@/i18n';
@@ -37,7 +39,10 @@ import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-const UNITS: (string | null)[] = [null, 'pcs', 'g', 'kg', 'ml', 'L'];
+// Every unit stays one tap away, including "none". A unit suggested on add
+// (lib/item-unit.ts) is only ever a prefill — this picker is the override, and
+// whatever is chosen here is remembered per item and wins on every later add.
+const UNIT_OPTIONS: (string | null)[] = [null, ...UNITS];
 
 interface ItemSheetProps {
   listId: string;
@@ -269,7 +274,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
                   style={[styles.input, styles.qtyInput, inputColors(colors)]}
                 />
                 <View style={styles.chips}>
-                  {UNITS.map((u) => {
+                  {UNIT_OPTIONS.map((u) => {
                     const active = (itemObj.unit ?? null) === u;
                     return (
                       <Pressable

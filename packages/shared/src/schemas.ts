@@ -15,6 +15,26 @@ export const itemCategorySchema = z.enum([
 ]);
 
 /**
+ * The units an item can be measured in. Metric only — this ships in the EU.
+ *
+ * The single source for all of them: the item sheet's picker, the quick-add
+ * parser, the unit-suggestion table, and the SQL check constraint on
+ * item_lexicon.unit all read this list. It used to be written out separately in
+ * each place, which is fine right up until one of them gains a unit and the
+ * others silently reject it.
+ */
+export const UNITS = ['g', 'kg', 'ml', 'L', 'pcs'] as const;
+export type ItemUnit = (typeof UNITS)[number];
+
+export const itemUnitSchema = z.enum(UNITS);
+
+/** Narrow an arbitrary string to a known unit, or null. */
+export const asUnit = (value: unknown): ItemUnit | null =>
+  typeof value === 'string' && (UNITS as readonly string[]).includes(value)
+    ? (value as ItemUnit)
+    : null;
+
+/**
  * The contract for AI quick-add: the model's raw output is validated against
  * this schema before anything is written to the database. Never trust
  * unvalidated LLM output for writes.
@@ -23,7 +43,7 @@ export const parsedItemSchema = z.object({
   name: z.string().min(1).max(120),
   category: itemCategorySchema.catch('other'),
   quantity: z.number().positive().nullable().default(null),
-  unit: z.enum(['g', 'kg', 'ml', 'L', 'pcs']).nullable().default(null),
+  unit: itemUnitSchema.nullable().default(null),
 });
 
 export const quickAddResultSchema = z.object({

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { ItemCategory } from '@korb/shared';
+import { asUnit, type ItemCategory, type ItemUnit } from '@korb/shared';
 
 import { supabase } from '@/lib/supabase';
 
@@ -27,10 +27,20 @@ import { supabase } from '@/lib/supabase';
 interface LexiconEntry {
   emoji: string;
   category: ItemCategory | null;
+  /**
+   * How the item is normally bought, or null when the model declined to guess.
+   * Present-but-null is meaningful and different from the term being absent —
+   * see unitFor() in item-unit.ts, which stops rather than falling back.
+   */
+  unit: ItemUnit | null;
 }
 
-const CACHE_KEY = 'korb.itemLexicon.v1';
-const CURSOR_KEY = 'korb.itemLexicon.cursor.v1';
+// v2 adds `unit` to each cached entry. The cursor is versioned alongside it and
+// not carried over: the unit arrives as a new column on rows this device may
+// already have synced, and a delta keyed on updated_at would never fetch them
+// again. Bumping both costs one full re-sync, once.
+const CACHE_KEY = 'korb.itemLexicon.v2';
+const CURSOR_KEY = 'korb.itemLexicon.cursor.v2';
 
 /**
  * Ceiling on what we keep locally.
@@ -96,11 +106,12 @@ export function learnLexiconEntry(
   foldedTerm: string,
   emoji: string,
   category: ItemCategory | null,
+  unit: ItemUnit | null = null,
 ): void {
   if (!foldedTerm || !emoji) return;
   const existing = entries.get(foldedTerm);
-  if (existing?.emoji === emoji && existing.category === category) return;
-  entries.set(foldedTerm, { emoji, category });
+  if (existing?.emoji === emoji && existing.category === category && existing.unit === unit) return;
+  entries.set(foldedTerm, { emoji, category, unit });
   changed();
   void persist();
 }
@@ -110,8 +121,8 @@ function persist(): Promise<void> {
   if (saveTimer) clearTimeout(saveTimer);
   return new Promise((resolve) => {
     saveTimer = setTimeout(() => {
-      const flat: Record<string, [string, ItemCategory | null]> = {};
-      for (const [term, e] of entries) flat[term] = [e.emoji, e.category];
+      const flat: Record<string, [string, ItemCategory | null, ItemUnit | null]> = {};
+      for (const [term, e] of entries) flat[term] = [e.emoji, e.category, e.unit];
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(flat)).catch(() => {}).finally(resolve);
     }, 400);
   });
@@ -128,10 +139,10 @@ export async function hydrateLexicon(): Promise<void> {
     ]);
     cursor = savedCursor;
     if (raw) {
-      const flat = JSON.parse(raw) as Record<string, [string, ItemCategory | null]>;
+      const flat = JSON.parse(raw) as Record<string, [string, ItemCategory | null, ItemUnit | null]>;
       const next = new Map<string, LexiconEntry>();
-      for (const [term, [emoji, category]] of Object.entries(flat)) {
-        next.set(term, { emoji, category });
+      for (const [term, [emoji, category, unit]] of Object.entries(flat)) {
+        next.set(term, { emoji, category, unit: unit ?? null });
       }
       entries = next;
       changed();
@@ -163,7 +174,7 @@ export async function syncLexicon(): Promise<void> {
     for (let page = 0; page < 25; page += 1) {
       let q = supabase
         .from('item_lexicon')
-        .select('term, emoji, category, updated_at')
+        .select('term, emoji, category, unit, updated_at')
         .order('updated_at', { ascending: true })
         .limit(PAGE);
       if (cursor) q = q.gt('updated_at', cursor);
@@ -175,10 +186,14 @@ export async function syncLexicon(): Promise<void> {
         term: string;
         emoji: string;
         category: ItemCategory | null;
+        unit: string | null;
         updated_at: string;
       }>) {
         if (entries.size >= MAX_ENTRIES && !entries.has(row.term)) continue;
-        entries.set(row.term, { emoji: row.emoji, category: row.category });
+        // asUnit rather than a cast: the column is plain text with a CHECK, and
+        // a client running against an older or hand-edited database shouldn't
+        // be able to put an unknown string into the item sheet's picker.
+        entries.set(row.term, { emoji: row.emoji, category: row.category, unit: asUnit(row.unit) });
         cursor = row.updated_at;
         moved = true;
       }

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { FoodGroup, ItemCategory } from '@korb/shared';
+import { asUnit, type FoodGroup, type ItemCategory, type ItemUnit } from '@korb/shared';
 
 import { fold } from '@/lib/item-emoji';
 import { learnLexiconEntry } from '@/lib/item-lexicon';
@@ -159,14 +159,15 @@ export function categorizeSync(name: string): ItemCategory {
  * both optional, so a client that has been updated ahead of the function keeps
  * working exactly as it did.
  *
- * The same response also carries an emoji, which is filed into the on-device
- * lexicon here rather than by every caller. The server may not publish that
- * term to other customers for a while — it waits for three independent
- * sightings — but the person who paid for this call should never pay twice.
+ * The same response also carries an emoji and a unit, which are filed into the
+ * on-device lexicon here rather than by every caller. The server may not
+ * publish that term to other customers for a while — it waits for three
+ * independent sightings — but the person who paid for this call should never
+ * pay twice.
  */
 export async function resolveCategoryAsync(
   name: string,
-): Promise<{ category: ItemCategory; group: FoodGroup | null } | null> {
+): Promise<{ category: ItemCategory; group: FoodGroup | null; unit: ItemUnit | null } | null> {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/categorize`, {
       method: 'POST',
@@ -178,17 +179,22 @@ export async function resolveCategoryAsync(
       category?: ItemCategory;
       group?: FoodGroup | null;
       emoji?: string | null;
+      unit?: string | null;
     };
     if (!data.category) return null;
+    // A function deployed before units existed simply omits the field, which
+    // lands as null — "not established" — and the caller falls through to the
+    // curated table. No version negotiation needed.
+    const unit = asUnit(data.unit);
     // Structural sanity only. The allowlist check that actually matters ran
     // server-side before this value was allowed anywhere near the shared table
     // (functions/_shared/emoji-allowlist.ts); re-listing 200 glyphs here would
     // just be a second copy to drift out of step. This guards against a
     // malformed response, not against a hostile one.
     if (typeof data.emoji === 'string' && data.emoji.length > 0 && data.emoji.length <= 8) {
-      learnLexiconEntry(fold(name), data.emoji, data.category);
+      learnLexiconEntry(fold(name), data.emoji, data.category, unit);
     }
-    return { category: data.category, group: data.group ?? null };
+    return { category: data.category, group: data.group ?? null, unit };
   } catch {
     return null;
   }

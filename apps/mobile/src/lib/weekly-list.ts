@@ -1,6 +1,7 @@
-import type { ItemCategory, ParsedItem } from '@korb/shared';
+import { asUnit, type ItemCategory, type ParsedItem } from '@korb/shared';
 
 import { recallItemDetails } from '@/lib/item-memory';
+import { unitFor } from '@/lib/item-unit';
 import { buildDeck, type StatMap } from '@/lib/pantry-intel';
 
 /**
@@ -19,10 +20,6 @@ export interface WeeklySuggestion {
   store: string | null;
 }
 
-const UNITS = ['g', 'kg', 'ml', 'L', 'pcs'] as const;
-const asUnit = (u: string | null): ParsedItem['unit'] =>
-  u && (UNITS as readonly string[]).includes(u) ? (u as ParsedItem['unit']) : null;
-
 export function buildWeeklySuggestions(
   stats: StatMap,
   excludeKeys: Set<string>,
@@ -35,7 +32,10 @@ export function buildWeeklySuggestions(
       display: c.display,
       category: c.category,
       quantity: usual?.quantity ?? null,
-      unit: asUnit(usual?.unit ?? null),
+      // Your own choice first, then the suggestion — same precedence as the
+      // add paths in the groceries store, so an item suggested here and an
+      // item typed by hand arrive with the same unit.
+      unit: asUnit(usual?.unit) ?? unitFor(c.display, c.category),
       store: usual?.store ?? null,
     };
   });

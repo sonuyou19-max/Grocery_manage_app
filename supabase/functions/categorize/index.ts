@@ -35,6 +35,12 @@ type Category = (typeof CATEGORIES)[number];
 const GROUPS = ['protein', 'carbs', 'produce', 'fats', 'other', 'nonfood'] as const;
 type Group = (typeof GROUPS)[number];
 
+// Kept in step with UNITS in packages/shared and the CHECK on
+// item_lexicon.unit (migration 0021). Deno can't import from the workspace, so
+// this is a copy — the CHECK is what stops the two drifting silently.
+const UNITS = ['g', 'kg', 'ml', 'L', 'pcs'] as const;
+type Unit = (typeof UNITS)[number];
+
 const SYSTEM_PROMPT = `You classify a single grocery item.
 Return ONLY a JSON object, no prose, no code fences: {"category": "...", "group": "..."}.
 category is one of: ${CATEGORIES.join(', ')}.
@@ -58,7 +64,15 @@ generic is a boolean: true if this is an ordinary grocery product that any
 shopper in Europe might write on a list, in any language. false for anything
 personal, one-off, or not really a product — a person's name, a note to self, a
 specific shop or address, a medication brand, a gift description, gibberish.
-When in doubt, false.`;
+When in doubt, false.
+unit is how a European shopper normally BUYS this item, one of: ${UNITS.join(', ')},
+or null. Answer with a unit ONLY when one is clearly standard for the product:
+milk -> L, potatoes -> kg, bread -> pcs, coffee -> g, olive oil -> ml.
+Use null whenever it is genuinely a toss-up — yoghurt sold in both small pots
+and big tubs, sauces that come in bottles and jars, anything you would have to
+guess at. null is a good answer and is expected often; the app leaves the choice
+to the user, which is much better than a confident wrong unit they have to
+notice and undo. Do not pick a unit just because the category usually uses it.`;
 
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
@@ -83,9 +97,9 @@ Deno.serve(async (req) => {
 
   const message = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    // Four short fields plus JSON punctuation. Raised from 40 with room to
-    // spare: a truncated response parses as nothing and costs a whole call.
-    max_tokens: 120,
+    // Five short fields plus JSON punctuation. Generous on purpose: a truncated
+    // response parses as nothing and costs a whole call.
+    max_tokens: 140,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: name.trim() }],
   });
@@ -95,12 +109,14 @@ Deno.serve(async (req) => {
   let group: Group | null = null;
   let emoji: string | null = null;
   let generic = false;
+  let unit: Unit | null = null;
   try {
     const parsed = JSON.parse(extractJson(raw)) as {
       category?: string;
       group?: string;
       emoji?: string;
       generic?: boolean;
+      unit?: string | null;
     };
     if (parsed.category && (CATEGORIES as readonly string[]).includes(parsed.category)) {
       category = parsed.category as Category;
@@ -114,6 +130,13 @@ Deno.serve(async (req) => {
     // screen. See _shared/emoji-allowlist.ts.
     if (isAllowedEmoji(parsed.emoji)) emoji = parsed.emoji;
     generic = parsed.generic === true;
+    // Membership test again, and anything else — including the model deciding
+    // to answer "piece" or "litre" — collapses to null, which is the same
+    // outcome as it saying it wasn't sure. Falling back to a guess would
+    // undo the whole point of letting it decline.
+    if (typeof parsed.unit === 'string' && (UNITS as readonly string[]).includes(parsed.unit)) {
+      unit = parsed.unit as Unit;
+    }
   } catch {
     // leave defaults
   }
@@ -124,7 +147,7 @@ Deno.serve(async (req) => {
   // where it isn't available the promise is simply left to run.
   if (emoji) {
     const write = offerToLexicon(
-      { term: name.trim(), emoji, category, generic },
+      { term: name.trim(), emoji, category, generic, unit },
       `ip:${clientIp(req)}`,
     );
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })
@@ -133,5 +156,5 @@ Deno.serve(async (req) => {
     else void write;
   }
 
-  return Response.json({ category, group, emoji });
+  return Response.json({ category, group, emoji, unit });
 });

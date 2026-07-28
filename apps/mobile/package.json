@@ -18,8 +18,9 @@
     "check:item-emoji": "node scripts/check-item-emoji.mjs",
     "check:lexicon": "node scripts/check-lexicon.mjs",
     "check:motion": "node scripts/check-motion.mjs",
-    "check:all": "pnpm typecheck && pnpm check:locales && pnpm check:barcode && pnpm check:purchase-log && pnpm check:pantry-intel && pnpm check:item-emoji && pnpm check:lexicon && pnpm check:motion && echo \"\n✓ all checks passed\"",
-    "check:purchase-log:tz": "for tz in UTC Europe/Brussels Europe/Warsaw America/Los_Angeles Pacific/Kiritimati; do echo \"— $tz\"; TZ=$tz node scripts/check-purchase-log.mjs | tail -1; done"
+    "check:all": "pnpm typecheck && pnpm check:locales && pnpm check:barcode && pnpm check:purchase-log && pnpm check:pantry-intel && pnpm check:item-emoji && pnpm check:item-unit && pnpm check:lexicon && pnpm check:motion && echo \"\n\u2713 all checks passed\"",
+    "check:purchase-log:tz": "for tz in UTC Europe/Brussels Europe/Warsaw America/Los_Angeles Pacific/Kiritimati; do echo \"\u2014 $tz\"; TZ=$tz node scripts/check-purchase-log.mjs | tail -1; done",
+    "check:item-unit": "node scripts/check-item-unit.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

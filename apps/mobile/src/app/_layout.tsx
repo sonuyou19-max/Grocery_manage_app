@@ -17,6 +17,7 @@ import { hydrateCategoryCache } from '@/lib/categorize';
 import { hydrateItemHomeLists } from '@/lib/item-home-list';
 import { setEmojiLexicon } from '@/lib/item-emoji';
 import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
+import { setUnitLexicon } from '@/lib/item-unit';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring } from '@/lib/monitoring';
 import { hydrateGetStarted, hydrateOnboarding } from '@/lib/onboarding';
@@ -75,6 +76,15 @@ export default function RootLayout() {
     // it is correct whenever it happens to be called, and item-emoji stays a
     // pure module that knows nothing about storage.
     setEmojiLexicon((term) => lexiconLookup(term)?.emoji);
+    // Units come from the same rows. Note the shape: this returns `undefined`
+    // for a term the lexicon has never heard of and `null` for one it knows and
+    // has no confident unit for. unitFor() treats those differently — the first
+    // keeps looking, the second stops — so the optional chain must not collapse
+    // them into one.
+    setUnitLexicon((term) => {
+      const entry = lexiconLookup(term);
+      return entry ? entry.unit : undefined;
+    });
     void hydrateLexicon().then(() => syncLexicon());
   }, []);
 

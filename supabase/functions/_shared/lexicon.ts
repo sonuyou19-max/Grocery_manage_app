@@ -62,6 +62,11 @@ export interface LexiconCandidate {
   category: string | null;
   /** The model's own judgement: is this a common grocery product? */
   generic: boolean;
+  /**
+   * How this item is normally bought, or null when the model wasn't confident.
+   * Null is stored as null — an absent answer, not a wrong one; see 0021.
+   */
+  unit?: string | null;
 }
 
 /**
@@ -88,6 +93,13 @@ export async function offerToLexicon(
   if (!isAllowedEmoji(candidate.emoji)) return;
 
   const db = adminClient();
+  // Same closed set as UNITS in packages/shared and the CHECK in 0021. Callers
+  // are expected to have validated already; this is the helper refusing to be
+  // the way something unvalidated reaches a table every customer reads.
+  const unit =
+    typeof candidate.unit === 'string' && ['g', 'kg', 'ml', 'L', 'pcs'].includes(candidate.unit)
+      ? candidate.unit
+      : null;
 
   try {
     // Ensure the row exists without disturbing an existing one. ignoreDuplicates
@@ -101,12 +113,22 @@ export async function offerToLexicon(
           term,
           emoji: candidate.emoji,
           category: candidate.category,
+          unit,
           sightings: 0,
           published: false,
         },
         { onConflict: 'term', ignoreDuplicates: true },
       );
     if (upsertError) return;
+
+    // Fill in a unit the row doesn't have yet.
+    //
+    // The upsert above deliberately never touches an existing row, which is
+    // right for emoji and category — but every term learned before migration
+    // 0021 has unit NULL, and under that rule it would stay NULL forever. The
+    // `is('unit', null)` filter is what keeps the two rules compatible: an
+    // established unit is still immutable, an absent one gets written once.
+    if (unit) await db.from('item_lexicon').update({ unit }).eq('term', term).is('unit', null);
 
     const hash = await callerHash(caller, salt);
     // The composite primary key is what makes this count distinct — the same

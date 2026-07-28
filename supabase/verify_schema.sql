@@ -163,6 +163,28 @@ checks as (
                  where n.nspname = 'public' and t.relname = 'price_entries'
                    and c.contype = 'c' and pg_get_constraintdef(c.oid) ilike '%price_cents%>=%0%')
 
+  -- 0021 · the lexicon learns units
+  union all select '0021 item_lexicon.unit',
+         exists (select 1 from col where table_name = 'item_lexicon' and column_name = 'unit')
+  -- The CHECK is the only thing standing between a stray model output and a
+  -- junk unit in front of every customer, since the edge function's own
+  -- validation lives in a different repo from this table.
+  union all select '0021 item_lexicon.unit is constrained to the known units',
+         exists (select 1 from pg_constraint c
+                 join pg_class t on t.oid = c.conrelid
+                 join pg_namespace n on n.oid = t.relnamespace
+                 where n.nspname = 'public' and t.relname = 'item_lexicon'
+                   and c.contype = 'c' and pg_get_constraintdef(c.oid) like '%unit%'
+                   and pg_get_constraintdef(c.oid) like '%pcs%')
+  -- Adding a column must not have introduced a write policy. Re-checked here
+  -- rather than trusting the 0019 rows above, because "we added a column and
+  -- opened the table" is exactly the mistake this file exists to catch.
+  union all select '0021 item_lexicon still has exactly one (SELECT) policy',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'item_lexicon' and cmd = 'SELECT') = 1
+         and (select count(*) from pg_policies
+              where schemaname = 'public' and tablename = 'item_lexicon') = 1
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',
