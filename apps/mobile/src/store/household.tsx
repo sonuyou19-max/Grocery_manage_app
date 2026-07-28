@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 
 import { setHomeListScope } from '@/lib/item-home-list';
+import { useProfileName } from '@/lib/profile-name';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
@@ -200,7 +201,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   );
 
   // One name in every household, so any membership row answers this.
-  const myName = useMemo(() => {
+  const membershipName = useMemo(() => {
     if (!user) return null;
     for (const rows of Object.values(byHousehold)) {
       const mine = rows.find((r) => r.user_id === user.id)?.display_name?.trim();
@@ -208,6 +209,30 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     }
     return null;
   }, [byHousehold, user]);
+
+  /**
+   * Your name belongs to you, not to a household.
+   *
+   * This used to read membership rows only, so the dashboard greeted you by
+   * name only once you'd created or joined a household — despite the name being
+   * asked for at sign-up, well before that. Signing up and landing on "Good
+   * afternoon" made it look like the answer had been thrown away.
+   *
+   * Membership still wins when there is one: it's the server's copy and the one
+   * other members see, so it's authoritative and it reaches a second device.
+   * The on-device copy fills the gap before any household exists, and on a
+   * fresh install with no household it is simply absent — same as before.
+   */
+  const { name: deviceName, remember: rememberName } = useProfileName();
+  const myName = membershipName ?? (deviceName.trim() || null);
+
+  // Keep the device copy current. Renaming yourself on another phone only
+  // reaches this one through the membership rows, and without this the stale
+  // local copy would resurface the old name the moment you left your last
+  // household.
+  useEffect(() => {
+    if (membershipName && membershipName !== deviceName.trim()) void rememberName(membershipName);
+  }, [membershipName, deviceName, rememberName]);
 
   // Membership changes (e.g. being removed by the owner) have no realtime
   // path that reaches the removed member, so keep it fresh by re-checking when
@@ -294,10 +319,17 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       },
       setDisplayName: async (name) => {
         if (!user) return { error: t('householdError.signInFirst') };
+        const clean = name.trim();
+        if (!clean) return { error: t('householdError.nameRequired') };
         // Applies to every membership at once — household_members has no UPDATE
         // policy, so this has to go through the definer RPC.
-        const { error } = await supabase.rpc('set_display_name', { p_name: name });
+        const { error } = await supabase.rpc('set_display_name', { p_name: clean });
         if (error) return { error: friendlyError(error.message, t) };
+        // ...and to the device copy, which is the *only* copy until you're in a
+        // household: the RPC updates membership rows, so with none it succeeds
+        // having changed nothing and the new name would vanish on the next
+        // render.
+        await rememberName(clean);
         sigRef.current = '';
         await refresh();
         return {};
@@ -319,6 +351,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       members,
       byHousehold,
       myName,
+      rememberName,
       loading,
       refresh,
       user,

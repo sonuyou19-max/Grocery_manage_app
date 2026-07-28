@@ -21,6 +21,20 @@ import { useAuth } from '@/store/auth';
 const keyFor = (userId: string) => `korb.profileName.v1.${userId}`;
 
 /**
+ * Everyone currently reading the name.
+ *
+ * Each useProfileName() call owns its own useState, so without this a write
+ * from one caller is invisible to the others until something remounts them.
+ * That is not hypothetical: the name is typed on the sign-in screen but the
+ * dashboard greeting reads it through the household store, and the two are
+ * different instances of this hook — the greeting would have stayed nameless
+ * until the next launch. AsyncStorage has no change event, so the broadcast
+ * has to be ours.
+ */
+type Listener = (userId: string, name: string) => void;
+const listeners = new Set<Listener>();
+
+/**
  * Read a user's remembered name outside React.
  *
  * Used the instant a sign-in completes, when the auth context hasn't re-rendered
@@ -44,6 +58,9 @@ export async function writeProfileName(userId: string, name: string): Promise<vo
   } catch {
     // Best-effort: losing the cache costs one extra prompt, not the account.
   }
+  // Told even if the write threw: the name is right in memory for this session
+  // either way, and a silently un-greeted user is the worse failure.
+  for (const notify of listeners) notify(userId, clean);
 }
 
 export interface ProfileName {
@@ -86,10 +103,24 @@ export function useProfileName(): ProfileName {
     };
   }, [userId]);
 
+  // Stay in step with writes made through any other instance of this hook.
+  useEffect(() => {
+    if (!userId) return;
+    const notify: Listener = (id, next) => {
+      if (id === userId) setName(next);
+    };
+    listeners.add(notify);
+    return () => {
+      listeners.delete(notify);
+    };
+  }, [userId]);
+
   const remember = useCallback(
     async (next: string) => {
-      setName(next.trim());
+      // Signed out there is nowhere to persist it, so the local state is all
+      // there is; signed in, writeProfileName broadcasts and sets it for us.
       if (userId) await writeProfileName(userId, next);
+      else setName(next.trim());
     },
     [userId],
   );
@@ -97,11 +128,13 @@ export function useProfileName(): ProfileName {
   return { name, ready, remember };
 }
 
-/** Drop a user's remembered name — called on sign-out and account deletion. */
+/**
+ * Drop a user's remembered name — called on sign-out and account deletion.
+ *
+ * Goes through writeProfileName so the clear is broadcast like any other
+ * change; a listener still holding the old name would greet the next person to
+ * sign in on this device by the previous one's name.
+ */
 export async function forgetProfileName(userId: string): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(keyFor(userId));
-  } catch {
-    // best-effort
-  }
+  await writeProfileName(userId, '');
 }

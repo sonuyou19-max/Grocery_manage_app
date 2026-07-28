@@ -10,7 +10,6 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { languageByCode, regionByCode } from '@/i18n';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/legal';
 import { normalizeKey } from '@/lib/pantry-intel';
-import { useProfileName } from '@/lib/profile-name';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -23,7 +22,6 @@ export default function SettingsScreen() {
   const { user, signOut, deleteAccount } = useAuth();
   const { households, household, membersOf, myName, setDisplayName } = useHousehold();
   const { seedDemo } = usePantryIntel();
-  const { remember: rememberName } = useProfileName();
   const { lists, deleteItem } = useGroceries();
   const { region, language, setLocale, t } = useLocale();
   const [localeOpen, setLocaleOpen] = useState(false);
@@ -43,16 +41,13 @@ export default function SettingsScreen() {
   // Your own name — one name, shown in every household, so this edits them all.
   const [renamingSelf, setRenamingSelf] = useState(false);
 
+  // setDisplayName writes both copies — the memberships and the on-device one.
+  // Doing the local write here as well used to be necessary and is now the kind
+  // of duplication that drifts.
   const submitOwnName = async (next: string) => {
     setRenamingSelf(false);
     const { error } = await setDisplayName(next);
-    if (error) {
-      Alert.alert(t('settings.renameFailTitle'), error);
-      return;
-    }
-    // Keep the on-device copy in step, or the next household you create would
-    // be filed under the old name.
-    await rememberName(next);
+    if (error) Alert.alert(t('settings.renameFailTitle'), error);
   };
 
   const confirmSignOut = () =>
@@ -118,8 +113,9 @@ export default function SettingsScreen() {
               <Text style={[type.body, { color: colors.crit }]}>{t('settings.signOut')}</Text>
             </Pressable>
           </View>
-          {/* One name, shown in every household — so it only appears once you're
-              in one, which is where it's stored. */}
+          {/* One name, shown in every household — and editable before you're in
+              one, since it's asked for at sign-up and kept on the device until
+              there's a membership row to carry it. */}
           {myName && (
             <>
               <View style={[styles.divider, { backgroundColor: colors.line }]} />
