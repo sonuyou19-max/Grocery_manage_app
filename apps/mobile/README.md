@@ -13,6 +13,14 @@ pnpm --filter mobile typecheck
 
 ## Before a build: the pre-flight gate
 
+One command runs all eight and stops at the first failure:
+
+```bash
+pnpm --filter mobile check:all
+```
+
+Individually, if you want to see which is which:
+
 ```bash
 pnpm --filter mobile typecheck
 pnpm --filter mobile check:locales        # 7 locales in parity, placeholders intact
