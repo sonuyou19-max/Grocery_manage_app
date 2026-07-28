@@ -289,8 +289,6 @@ const fr = {
     pantryMixTitle: 'Ton profil de garde-manger',
     pantryMixHint: '%{count} suivis',
     staplesTitle: 'Tes incontournables',
-    byStoreTitle: 'Le prix, par magasin',
-    byStoreHint: 'Le même article dans deux magasins fait deux lignes. Touche pour tout voir.',
     staplesHint: 'Les plus achetés',
     boughtTimes: 'acheté %{count}×',
     spendingTitle: 'Dépenses',

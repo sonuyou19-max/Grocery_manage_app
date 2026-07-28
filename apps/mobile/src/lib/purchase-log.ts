@@ -310,79 +310,20 @@ export function priceMoves(
 
 /* ------------------------------------------------------------------- history */
 
-/** Chronological price history for one item, oldest first. */
+/**
+ * Every purchase of one item, newest first.
+ *
+ * This is the whole drill-down: it powers the ledger behind a Pantry item, and
+ * it is the only per-item history in the app. Insights briefly had a second
+ * one grouped by item-and-store; it was the same data a second time and grew a
+ * row per shop, so it's gone.
+ *
+ * Newest first because it's read as a ledger — the most recent purchase is the
+ * one being checked ("did I really pay that much last time?").
+ */
 export function historyFor(purchases: Purchase[], name: string): Purchase[] {
   const key = normalizeKey(name);
-  // Newest first: this is rendered as a ledger, and the most recent purchase is
-  // the one being checked against ("did I really pay that much last time?").
   return purchases.filter((p) => p.key === key).sort((a, b) => b.at - a.at);
-}
-
-/* ------------------------------------------------------- item x store rollup */
-
-export interface ItemStoreStat {
-  /** Composite identity — the same item at two chains is two rows. */
-  id: string;
-  key: string;
-  name: string;
-  store: string | null;
-  /** Mean of the priced purchases in this group. */
-  avgCents: number;
-  cheapestCents: number;
-  dearestCents: number;
-  /** Priced purchases only — what the average is actually built from. */
-  pricedCount: number;
-  /** Every purchase, priced or not. What the ledger will show. */
-  totalCount: number;
-  /** Most recent purchase in the group. */
-  lastAt: number;
-}
-
-/**
- * Group the log by item **and store**, so the same product bought in two places
- * is two answerable rows rather than one blended average.
- *
- * This is the shape behind "Eggs — €3.00 at Aldi vs €3.80 at Carrefour". A
- * single average across both stores would hide exactly the comparison the user
- * opened Insights to make.
- *
- * Unpriced purchases still count toward `totalCount` — they happened, and the
- * ledger shows them — but never toward the average. A group with no priced
- * purchase at all is dropped, since a price card with no price says nothing.
- */
-export function byItemStore(purchases: Purchase[]): ItemStoreStat[] {
-  const groups = new Map<string, Purchase[]>();
-  for (const p of purchases) {
-    if (!p.key) continue;
-    // `store ?? ''` keeps unattributed purchases as their own group rather than
-    // silently folding them into whichever chain happens to sort first.
-    const id = `${p.key}\u0000${p.store ?? ''}`;
-    const existing = groups.get(id);
-    if (existing) existing.push(p);
-    else groups.set(id, [p]);
-  }
-
-  const out: ItemStoreStat[] = [];
-  for (const [id, all] of groups) {
-    const withPrice = all.filter((p) => p.priceCents != null);
-    if (withPrice.length === 0) continue;
-    const cents = withPrice.map((p) => p.priceCents as number);
-    const latest = all.reduce((a, b) => (b.at > a.at ? b : a));
-    out.push({
-      id,
-      key: latest.key,
-      name: latest.name,
-      store: latest.store,
-      avgCents: Math.round(cents.reduce((sum, c) => sum + c, 0) / cents.length),
-      cheapestCents: Math.min(...cents),
-      dearestCents: Math.max(...cents),
-      pricedCount: withPrice.length,
-      totalCount: all.length,
-      lastAt: latest.at,
-    });
-  }
-  // Most-bought first, then most recent — the rows a user recognises come top.
-  return out.sort((a, b) => b.totalCount - a.totalCount || b.lastAt - a.lastAt);
 }
 
 /** Total logged spend in the window, for the "of what you logged" caveat. */

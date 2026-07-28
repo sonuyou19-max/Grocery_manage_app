@@ -288,8 +288,6 @@ const nl = {
     pantryMixTitle: 'Je voorraadmix',
     pantryMixHint: '%{count} bijgehouden',
     staplesTitle: 'Je vaste producten',
-    byStoreTitle: 'Wat het kost, per winkel',
-    byStoreHint: 'Hetzelfde product in twee winkels is twee regels. Tik voor elke aankoop.',
     staplesHint: 'Meest gekocht',
     boughtTimes: '%{count}× gekocht',
     spendingTitle: 'Uitgaven',

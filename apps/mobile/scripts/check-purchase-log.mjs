@@ -328,31 +328,5 @@ check('a future-stamped record is not "recent"',
   mod.recentRecordFor([{ ...ago(0), at: NOW + 60000 }], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
 check('empty log is handled', mod.recentRecordFor([], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
 
-/* --------------------------------------------------------- item x store rollup */
-
-const eggsAldi = { ...buy('Eggs', 300, '2026-07-01T10:00:00'), store: 'aldi' };
-const eggsAldi2 = { ...buy('Eggs', 320, '2026-07-05T10:00:00'), store: 'aldi' };
-const eggsCarrefour = { ...buy('Eggs', 380, '2026-07-06T10:00:00'), store: 'carrefour' };
-const rollup = mod.byItemStore([eggsAldi, eggsAldi2, eggsCarrefour]);
-check('same item at two stores is two rows', rollup.length, 2);
-const aldi = rollup.find((r) => r.store === 'aldi');
-const carrefour = rollup.find((r) => r.store === 'carrefour');
-check('Aldi average is its own', aldi.avgCents, 310);
-check('Carrefour average is its own', carrefour.avgCents, 380);
-check('Aldi cheapest', aldi.cheapestCents, 300);
-check('Aldi dearest', aldi.dearestCents, 320);
-check('counts are per group', aldi.totalCount, 2);
-// An unattributed purchase must not be folded into a named store.
-const rollup2 = mod.byItemStore([eggsAldi, { ...buy('Eggs', 500, '2026-07-07T10:00:00'), store: null }]);
-check('no-store purchases are their own group', rollup2.length, 2);
-// A group with nothing priced says nothing, so it is dropped.
-check('an all-unpriced group is dropped',
-  mod.byItemStore([{ ...eggsAldi, priceCents: null }]).length, 0);
-// but its unpriced members still count toward the group total when it survives
-const mixed = mod.byItemStore([eggsAldi, { ...eggsAldi, priceCents: null }])[0];
-check('unpriced members count toward totalCount', mixed.totalCount, 2);
-check('...but not toward pricedCount', mixed.pricedCount, 1);
-check('...and never drag the average toward zero', mixed.avgCents, 300);
-
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

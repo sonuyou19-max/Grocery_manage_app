@@ -290,8 +290,6 @@ const de = {
     pantryMixTitle: 'Dein Vorratsmix',
     pantryMixHint: '%{count} erfasst',
     staplesTitle: 'Deine Basics',
-    byStoreTitle: 'Was es kostet, pro Laden',
-    byStoreHint: 'Derselbe Artikel in zwei Läden sind zwei Zeilen. Tippen für alle Käufe.',
     staplesHint: 'Am häufigsten gekauft',
     boughtTimes: '%{count}× gekauft',
     spendingTitle: 'Ausgaben',

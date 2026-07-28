@@ -289,8 +289,6 @@ const es = {
     pantryMixTitle: 'La mezcla de tu despensa',
     pantryMixHint: '%{count} controlados',
     staplesTitle: 'Tus básicos',
-    byStoreTitle: 'Lo que cuesta, por tienda',
-    byStoreHint: 'El mismo artículo en dos tiendas son dos filas. Toca para ver todas.',
     staplesHint: 'Los más comprados',
     boughtTimes: 'comprado %{count}×',
     spendingTitle: 'Gasto',

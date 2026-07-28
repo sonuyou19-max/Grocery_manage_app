@@ -289,8 +289,6 @@ const it = {
     pantryMixTitle: 'Il mix della tua dispensa',
     pantryMixHint: '%{count} monitorati',
     staplesTitle: 'I tuoi immancabili',
-    byStoreTitle: 'Quanto costa, per negozio',
-    byStoreHint: 'Lo stesso articolo in due negozi sono due righe. Tocca per vederle tutte.',
     staplesHint: 'Comprati più spesso',
     boughtTimes: 'comprato %{count}×',
     spendingTitle: 'Spese',

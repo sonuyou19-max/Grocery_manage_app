@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/glass';
 import { ItemEmoji } from '@/components/item-emoji';
@@ -37,6 +38,7 @@ export function PurchaseLedger({
 }) {
   const { colors } = useTheme();
   const { t, money } = useLocale();
+  const insets = useSafeAreaInsets();
 
   if (!name) return null;
   const rows = historyFor(purchases, name);
@@ -51,7 +53,13 @@ export function PurchaseLedger({
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable onPress={() => {}} style={styles.sheetWrap}>
+        {/* The sheet floats clear of the gesture bar. Without the inset its
+            bottom edge sits directly on the Android navigation area, which is
+            what made a one-row history look wedged into the corner. */}
+        <Pressable
+          onPress={() => {}}
+          style={[styles.sheetWrap, { paddingBottom: spacing.md + insets.bottom }]}
+        >
           <GlassView radius={radii.lg} style={styles.sheet}>
             <View style={styles.head}>
               <ItemEmoji name={name} category={category} size={22} />
@@ -68,9 +76,27 @@ export function PurchaseLedger({
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-              {rows.map((p) => (
-                <View key={p.id} style={[styles.row, { borderBottomColor: colors.line }]}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.list}
+              // The sheet is only as tall as its rows (up to the cap), so a
+              // short history must not leave the ScrollView stretched over
+              // empty space with the rows stranded at the top.
+              style={styles.scroll}
+              bounces={false}
+            >
+              {rows.map((p, i) => (
+                <View
+                  key={p.id}
+                  style={[
+                    styles.row,
+                    { borderBottomColor: colors.line },
+                    // No rule under the last row: a divider with nothing beneath
+                    // it reads as the list having been cut off rather than
+                    // having ended.
+                    i === rows.length - 1 && styles.lastRow,
+                  ]}
+                >
                   <View style={styles.grow}>
                     <Text style={[type.body, { color: colors.ink }]}>{dateOf(p.at)}</Text>
                     <View style={styles.meta}>
@@ -112,17 +138,24 @@ export function PurchaseLedger({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(12,18,10,0.45)', justifyContent: 'flex-end' },
-  sheetWrap: { padding: spacing.md },
+  // paddingBottom is applied inline — it carries the safe-area inset.
+  sheetWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
+  // Capped so a long history scrolls instead of covering the whole screen;
+  // shorter than the cap it shrinks to fit, because flexShrink on the scroll
+  // view lets the sheet size to its content.
   sheet: { maxHeight: '80%' },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   head: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   grow: { flex: 1, minWidth: 0 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
+  // Generous at the bottom: this is the sheet's closing edge and the last row
+  // needs room to breathe under it, not a hairline against the rim.
+  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -130,5 +163,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  lastRow: { borderBottomWidth: 0 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
 });

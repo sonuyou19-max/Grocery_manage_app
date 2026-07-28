@@ -300,8 +300,6 @@ const en = {
     pantryMixTitle: 'Your pantry mix',
     pantryMixHint: '%{count} tracked',
     staplesTitle: 'Your staples',
-    byStoreTitle: 'What it costs, per shop',
-    byStoreHint: 'The same item at two shops is two rows. Tap for every purchase.',
     staplesHint: 'Bought most often',
     boughtTimes: '%{count}× bought',
     spendingTitle: 'Spending',

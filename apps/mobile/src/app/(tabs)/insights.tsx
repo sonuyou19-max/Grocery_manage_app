@@ -1,22 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
-import { ItemEmoji } from '@/components/item-emoji';
-import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
-import { haptics } from '@/lib/haptics';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
-import { byItemStore, priced, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
+import { priced, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -35,8 +32,6 @@ export default function InsightsScreen() {
   const { t, money } = useLocale();
   const { lists } = useGroceries();
   const { stats, purchases } = usePantryIntel();
-  /** Which item's transaction history is open, if any. */
-  const [ledgerFor, setLedgerFor] = useState<{ name: string; category: ItemCategory } | null>(null);
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
@@ -102,7 +97,6 @@ export default function InsightsScreen() {
     [purchases, statsByKey],
   );
 
-  const byItemStoreStats = useMemo(() => byItemStore(purchases), [purchases]);
   const spendTotal = pricedItems.reduce((sum, it) => sum + it.priceCents, 0);
   const spendByCat = useMemo(() => {
     const m = new Map<ItemCategory, number>();
@@ -157,59 +151,12 @@ export default function InsightsScreen() {
         </Card>
       )}
 
-      {/* What each thing costs, per shop.
-          The card that answers "Eggs — €3.00 at Aldi vs €3.80 at Carrefour":
-          the same product at two chains is two rows, because averaging them
-          together would hide exactly the comparison worth making. Tapping one
-          opens every individual purchase behind it. */}
-      {byItemStoreStats.length > 0 && (
-        <Card>
-          <CardHead
-            icon="pricetags-outline"
-            title={t('insights.byStoreTitle')}
-            hint={t('insights.byStoreHint')}
-          />
-          {byItemStoreStats.slice(0, 8).map((g) => (
-            <Pressable
-              key={g.id}
-              onPress={() => {
-                haptics.tick();
-                setLedgerFor({ name: g.name, category: statsByKey.get(g.key)?.category ?? 'other' });
-              }}
-              style={styles.row}
-            >
-              <ItemEmoji name={g.name} category={statsByKey.get(g.key)?.category ?? 'other'} />
-              <View style={styles.grow}>
-                <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                  {g.name}
-                </Text>
-                <View style={styles.storeLine}>
-                  {g.store != null ? (
-                    <SupermarketBadge store={g.store} size={15} />
-                  ) : (
-                    <Text style={[type.sub, { color: colors.muted }]}>
-                      {t('ledger.noStore')}
-                    </Text>
-                  )}
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {t('insights.boughtTimes', { count: g.totalCount })}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.priceCol}>
-                <Text style={[type.price, { color: colors.ink }]}>{money(g.avgCents)}</Text>
-                {/* Only worth showing a range when there IS one. */}
-                {g.cheapestCents !== g.dearestCents && (
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {money(g.cheapestCents)}–{money(g.dearestCents)}
-                  </Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-            </Pressable>
-          ))}
-        </Card>
-      )}
+      {/* No per-item purchase history here. The Pantry already gives every item
+          a history behind a tap, and a second copy on this tab was the same
+          data twice — one row per item-and-shop, which also grew without bound
+          and made Insights unreadable the more you shopped. Insights answers
+          "where is my money going"; the Pantry answers "what happened with this
+          one thing". See components/purchase-ledger.tsx for the surviving one. */}
 
       {/* Spend across weeks, from the purchase log — this is the only card that
           survives deleting the list the prices were logged on. */}
@@ -349,13 +296,6 @@ export default function InsightsScreen() {
           ))}
         </Card>
       )}
-
-      <PurchaseLedger
-        name={ledgerFor?.name ?? null}
-        category={ledgerFor?.category ?? 'other'}
-        purchases={purchases}
-        onClose={() => setLedgerFor(null)}
-      />
     </Screen>
   );
 }
@@ -397,8 +337,6 @@ function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
 }
 
 const styles = StyleSheet.create({
-  storeLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
-  priceCol: { alignItems: 'flex-end' },
   grow: { flex: 1, minWidth: 0 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   bar: { flexDirection: 'row', height: 16, borderRadius: radii.sm, overflow: 'hidden' },

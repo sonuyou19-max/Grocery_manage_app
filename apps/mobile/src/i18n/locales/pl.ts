@@ -356,8 +356,6 @@ const pl = {
     pantryMixTitle: 'Skład Twojej spiżarni',
     pantryMixHint: '%{count} śledzonych',
     staplesTitle: 'Twoje podstawy',
-    byStoreTitle: 'Ile kosztuje, wg sklepu',
-    byStoreHint: 'Ten sam produkt w dwóch sklepach to dwa wiersze. Dotknij, by zobaczyć wszystkie.',
     staplesHint: 'Kupowane najczęściej',
     boughtTimes: 'kupione %{count}×',
     spendingTitle: 'Wydatki',
