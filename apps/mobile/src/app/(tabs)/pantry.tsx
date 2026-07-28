@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import type { ItemCategory } from '@korb/shared';
 import { useCallback, useMemo, useState } from 'react';
 import {
   LayoutAnimation,
@@ -23,6 +24,7 @@ import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
+import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
 import { StapleSheet } from '@/components/staple-sheet';
 import { TextPromptModal } from '@/components/text-prompt-modal';
@@ -67,7 +69,7 @@ type Colors = ReturnType<typeof useTheme>['colors'];
 export default function PantryScreen() {
   const { colors } = useTheme();
   const t = useT();
-  const { stats, logPurchase, markAlmostOut, markStillGood, setStaple, setResting } =
+  const { stats, purchases, logPurchase, markAlmostOut, markStillGood, setStaple, setResting } =
     usePantryIntel();
   const { addToHomeList, addToChosenList } = useHomeListAdd();
   const { lists } = useGroceries();
@@ -82,6 +84,7 @@ export default function PantryScreen() {
   // sheet re-reads from `stats` and reflects each change as it's made.
   const [stapleKey, setStapleKey] = useState<string | null>(null);
   const [restOpen, setRestOpen] = useState(false);
+  const [ledgerFor, setLedgerFor] = useState<{ name: string; category: ItemCategory } | null>(null);
 
   const now = Date.now();
   // Resting items are split off before anything else: every count, section and
@@ -393,6 +396,22 @@ export default function PantryScreen() {
           const item = stapleKey ? stats[stapleKey] : null;
           if (item) onRest(item);
         }}
+        purchases={purchases}
+        onOpenHistory={() => {
+          const item = stapleKey ? stats[stapleKey] : null;
+          if (!item) return;
+          // Close the settings sheet first: two stacked modals on Android leave
+          // the lower one visible through the upper's backdrop.
+          setStapleKey(null);
+          setLedgerFor({ name: item.display, category: item.category });
+        }}
+      />
+
+      <PurchaseLedger
+        name={ledgerFor?.name ?? null}
+        category={ledgerFor?.category ?? 'other'}
+        purchases={purchases}
+        onClose={() => setLedgerFor(null)}
       />
       <ListPickerSheet
         visible={pendingAdd != null}

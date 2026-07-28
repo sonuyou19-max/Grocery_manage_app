@@ -220,6 +220,11 @@ const it = {
     cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
   },
+  ledger: {
+    openTitle: 'Cronologia acquisti',
+    subtitle: { one: '%{count} acquisto', other: '%{count} acquisti' },
+    noStore: 'Nessun negozio',
+  },
   pantry: {
     subtitleEmpty: 'Cosa segue Korb',
     subtitleTracked: '%{count} monitorati · %{low} in esaurimento',
@@ -284,6 +289,8 @@ const it = {
     pantryMixTitle: 'Il mix della tua dispensa',
     pantryMixHint: '%{count} monitorati',
     staplesTitle: 'I tuoi immancabili',
+    byStoreTitle: 'Quanto costa, per negozio',
+    byStoreHint: 'Lo stesso articolo in due negozi sono due righe. Tocca per vederle tutte.',
     staplesHint: 'Comprati più spesso',
     boughtTimes: 'comprato %{count}×',
     spendingTitle: 'Spese',

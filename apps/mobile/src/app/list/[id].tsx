@@ -83,7 +83,7 @@ export default function ListDetailScreen() {
   const { addItem, toggleItem, deleteItem, setClaim, shoppersOnline } = useGroceries();
   const { user } = useAuth();
   const { household, members } = useHousehold();
-  const { logPurchase } = usePantryIntel();
+  const { logPurchase, unlogRecent } = usePantryIntel();
   const [draft, setDraft] = useState('');
   /** The cart section is a footer, not the list — closed until asked for. */
   const [cartOpen, setCartOpen] = useState(false);
@@ -287,7 +287,15 @@ export default function ListDetailScreen() {
         }, PURCHASE_DEBOUNCE),
       });
     } else {
+      // Unticking. Two cases, and the debounce decides which:
+      //  - the timer was still pending, so nothing was ever written and
+      //    dropping it is the whole cleanup;
+      //  - it had already fired, so a transaction exists. unlogRecent removes
+      //    it only if it is younger than the mistake window; an older one is a
+      //    real past purchase and stands, with the untick meaning "we need this
+      //    again" rather than "that never happened".
       timers.delete(item.id);
+      unlogRecent(item.name);
     }
   };
 

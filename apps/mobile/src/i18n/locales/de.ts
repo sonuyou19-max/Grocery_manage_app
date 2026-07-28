@@ -221,6 +221,11 @@ const de = {
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
   },
+  ledger: {
+    openTitle: 'Kaufhistorie',
+    subtitle: { one: '%{count} Kauf', other: '%{count} Käufe' },
+    noStore: 'Kein Laden gesetzt',
+  },
   pantry: {
     subtitleEmpty: 'Was Korb im Blick hat',
     subtitleTracked: '%{count} erfasst · %{low} gehen zur Neige',
@@ -285,6 +290,8 @@ const de = {
     pantryMixTitle: 'Dein Vorratsmix',
     pantryMixHint: '%{count} erfasst',
     staplesTitle: 'Deine Basics',
+    byStoreTitle: 'Was es kostet, pro Laden',
+    byStoreHint: 'Derselbe Artikel in zwei Läden sind zwei Zeilen. Tippen für alle Käufe.',
     staplesHint: 'Am häufigsten gekauft',
     boughtTimes: '%{count}× gekauft',
     spendingTitle: 'Ausgaben',

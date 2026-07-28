@@ -147,6 +147,22 @@ checks as (
          (select count(*) from pg_policies
           where schemaname = 'public' and tablename = 'item_lexicon_sightings') = 0
 
+  -- 0020 · every check-off is a transaction
+  -- Nullable price is what lets an UNPRICED check-off be logged at all. If this
+  -- reverts, most shopping silently stops being recorded — the insert fails and
+  -- the client only refetches.
+  union all select '0020 price_entries.price_cents is nullable',
+         exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'price_entries'
+                   and column_name = 'price_cents' and is_nullable = 'YES')
+  -- ...but a negative price must still be refused.
+  union all select '0020 price_cents >= 0 check survives',
+         exists (select 1 from pg_constraint c
+                 join pg_class t on t.oid = c.conrelid
+                 join pg_namespace n on n.oid = t.relnamespace
+                 where n.nspname = 'public' and t.relname = 'price_entries'
+                   and c.contype = 'c' and pg_get_constraintdef(c.oid) ilike '%price_cents%>=%0%')
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',

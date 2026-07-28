@@ -232,6 +232,11 @@ const en = {
     cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
     cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
   },
+  ledger: {
+    openTitle: 'Purchase history',
+    subtitle: { one: '%{count} purchase', other: '%{count} purchases' },
+    noStore: 'No store set',
+  },
   pantry: {
     subtitleEmpty: 'What Korb is tracking',
     subtitleTracked: '%{count} tracked · %{low} running low',
@@ -295,6 +300,8 @@ const en = {
     pantryMixTitle: 'Your pantry mix',
     pantryMixHint: '%{count} tracked',
     staplesTitle: 'Your staples',
+    byStoreTitle: 'What it costs, per shop',
+    byStoreHint: 'The same item at two shops is two rows. Tap for every purchase.',
     staplesHint: 'Bought most often',
     boughtTimes: '%{count}× bought',
     spendingTitle: 'Spending',

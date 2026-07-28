@@ -263,6 +263,11 @@ const pl = {
     },
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
   },
+  ledger: {
+    openTitle: 'Historia zakupów',
+    subtitle: { one: '%{count} zakup', few: '%{count} zakupy', many: '%{count} zakupów', other: '%{count} zakupu' },
+    noStore: 'Bez sklepu',
+  },
   pantry: {
     subtitleEmpty: 'Co śledzi Korb',
     subtitleTracked: '%{count} śledzonych · %{low} się kończy',
@@ -351,6 +356,8 @@ const pl = {
     pantryMixTitle: 'Skład Twojej spiżarni',
     pantryMixHint: '%{count} śledzonych',
     staplesTitle: 'Twoje podstawy',
+    byStoreTitle: 'Ile kosztuje, wg sklepu',
+    byStoreHint: 'Ten sam produkt w dwóch sklepach to dwa wiersze. Dotknij, by zobaczyć wszystkie.',
     staplesHint: 'Kupowane najczęściej',
     boughtTimes: 'kupione %{count}×',
     spendingTitle: 'Wydatki',

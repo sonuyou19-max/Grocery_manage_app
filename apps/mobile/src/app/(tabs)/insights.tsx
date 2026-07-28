@@ -1,19 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
+import { ItemEmoji } from '@/components/item-emoji';
+import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
+import { haptics } from '@/lib/haptics';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
-import { priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
+import { byItemStore, priced, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -32,6 +35,8 @@ export default function InsightsScreen() {
   const { t, money } = useLocale();
   const { lists } = useGroceries();
   const { stats, purchases } = usePantryIntel();
+  /** Which item's transaction history is open, if any. */
+  const [ledgerFor, setLedgerFor] = useState<{ name: string; category: ItemCategory } | null>(null);
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
@@ -63,20 +68,51 @@ export default function InsightsScreen() {
     [tracked],
   );
 
-  const priced = useMemo(
-    () => lists.flatMap((l) => l.items).filter((it) => it.priceCents != null),
-    [lists],
+  /** Category per item, looked up from the pantry — the log doesn't carry one. */
+  const statsByKey = useMemo(() => {
+    const m = new Map<string, (typeof tracked)[number]>();
+    for (const s of tracked) m.set(s.key, s);
+    return m;
+  }, [tracked]);
+
+  /**
+   * Money comes from the PURCHASE LOG, never from the lists.
+   *
+   * This read `lists.flatMap(...)` — the items currently sitting on a list —
+   * which meant editing a price after checking off silently rewrote history,
+   * and deleting a list erased the spending that happened on it. What you spent
+   * last Tuesday is a fact about last Tuesday; it must not move because a row
+   * was edited today.
+   *
+   * The shape is mapped to what the aggregation helpers expect, so
+   * spendByStore and cheaperStoreHints keep working unchanged — they were
+   * always right about *how* to aggregate, only wrong about what they were
+   * given.
+   */
+  const pricedItems = useMemo(
+    () =>
+      // `priced` has already dropped every null price, so the narrowing is a
+      // fact about the filter rather than an assumption about the data.
+      priced(purchases).map((p) => ({
+        name: p.name,
+        category: statsByKey.get(p.key)?.category ?? ('other' as ItemCategory),
+        priceCents: p.priceCents as number,
+        store: p.store,
+      })),
+    [purchases, statsByKey],
   );
-  const spendTotal = priced.reduce((sum, it) => sum + (it.priceCents ?? 0), 0);
+
+  const byItemStoreStats = useMemo(() => byItemStore(purchases), [purchases]);
+  const spendTotal = pricedItems.reduce((sum, it) => sum + it.priceCents, 0);
   const spendByCat = useMemo(() => {
     const m = new Map<ItemCategory, number>();
-    for (const it of priced) m.set(it.category, (m.get(it.category) ?? 0) + (it.priceCents ?? 0));
+    for (const it of pricedItems) m.set(it.category, (m.get(it.category) ?? 0) + it.priceCents);
     return CATEGORY_ORDER.map((c) => ({ category: c, cents: m.get(c) ?? 0 }))
       .filter((x) => x.cents > 0)
       .sort((a, b) => b.cents - a.cents);
-  }, [priced]);
-  const storeSpend = useMemo(() => spendByStore(priced), [priced]);
-  const cheaper = useMemo(() => cheaperStoreHints(priced), [priced]);
+  }, [pricedItems]);
+  const storeSpend = useMemo(() => spendByStore(pricedItems), [pricedItems]);
+  const cheaper = useMemo(() => cheaperStoreHints(pricedItems), [pricedItems]);
 
   return (
     <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
@@ -117,6 +153,60 @@ export default function InsightsScreen() {
                 {t('insights.boughtTimes', { count: s.sampleCount + 1 })}
               </Text>
             </View>
+          ))}
+        </Card>
+      )}
+
+      {/* What each thing costs, per shop.
+          The card that answers "Eggs — €3.00 at Aldi vs €3.80 at Carrefour":
+          the same product at two chains is two rows, because averaging them
+          together would hide exactly the comparison worth making. Tapping one
+          opens every individual purchase behind it. */}
+      {byItemStoreStats.length > 0 && (
+        <Card>
+          <CardHead
+            icon="pricetags-outline"
+            title={t('insights.byStoreTitle')}
+            hint={t('insights.byStoreHint')}
+          />
+          {byItemStoreStats.slice(0, 8).map((g) => (
+            <Pressable
+              key={g.id}
+              onPress={() => {
+                haptics.tick();
+                setLedgerFor({ name: g.name, category: statsByKey.get(g.key)?.category ?? 'other' });
+              }}
+              style={styles.row}
+            >
+              <ItemEmoji name={g.name} category={statsByKey.get(g.key)?.category ?? 'other'} />
+              <View style={styles.grow}>
+                <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                  {g.name}
+                </Text>
+                <View style={styles.storeLine}>
+                  {g.store != null ? (
+                    <SupermarketBadge store={g.store} size={15} />
+                  ) : (
+                    <Text style={[type.sub, { color: colors.muted }]}>
+                      {t('ledger.noStore')}
+                    </Text>
+                  )}
+                  <Text style={[type.sub, { color: colors.muted }]}>
+                    {t('insights.boughtTimes', { count: g.totalCount })}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.priceCol}>
+                <Text style={[type.price, { color: colors.ink }]}>{money(g.avgCents)}</Text>
+                {/* Only worth showing a range when there IS one. */}
+                {g.cheapestCents !== g.dearestCents && (
+                  <Text style={[type.sub, { color: colors.muted }]}>
+                    {money(g.cheapestCents)}–{money(g.dearestCents)}
+                  </Text>
+                )}
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+            </Pressable>
           ))}
         </Card>
       )}
@@ -259,6 +349,13 @@ export default function InsightsScreen() {
           ))}
         </Card>
       )}
+
+      <PurchaseLedger
+        name={ledgerFor?.name ?? null}
+        category={ledgerFor?.category ?? 'other'}
+        purchases={purchases}
+        onClose={() => setLedgerFor(null)}
+      />
     </Screen>
   );
 }
@@ -300,6 +397,8 @@ function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
 }
 
 const styles = StyleSheet.create({
+  storeLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
+  priceCol: { alignItems: 'flex-end' },
   grow: { flex: 1, minWidth: 0 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   bar: { flexDirection: 'row', height: 16, borderRadius: radii.sm, overflow: 'hidden' },

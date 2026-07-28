@@ -221,6 +221,11 @@ const fr = {
     cadenceLearned: { one: 'Korb a appris environ %{count} jour', other: 'Korb a appris environ %{count} jours' },
     cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
   },
+  ledger: {
+    openTitle: 'Historique d’achats',
+    subtitle: { one: '%{count} achat', other: '%{count} achats' },
+    noStore: 'Aucun magasin',
+  },
   pantry: {
     subtitleEmpty: 'Ce que Korb suit',
     subtitleTracked: '%{count} suivis · %{low} bientôt épuisés',
@@ -284,6 +289,8 @@ const fr = {
     pantryMixTitle: 'Ton profil de garde-manger',
     pantryMixHint: '%{count} suivis',
     staplesTitle: 'Tes incontournables',
+    byStoreTitle: 'Le prix, par magasin',
+    byStoreHint: 'Le même article dans deux magasins fait deux lignes. Touche pour tout voir.',
     staplesHint: 'Les plus achetés',
     boughtTimes: 'acheté %{count}×',
     spendingTitle: 'Dépenses',

@@ -9,6 +9,7 @@ import {
   hasUserCadence,
   type ItemStat,
 } from '@/lib/pantry-intel';
+import { historyFor, type Purchase } from '@/lib/purchase-log';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -36,13 +37,25 @@ interface StapleSheetProps {
   onChange: (patch: { keepStocked?: boolean; cadenceDays?: number | null }) => void;
   /** Retire the item from prediction. The caller closes the sheet. */
   onRest: () => void;
+  /** Every logged purchase, so the sheet can offer this item's history. */
+  purchases: Purchase[];
+  onOpenHistory: () => void;
 }
 
-export function StapleSheet({ item, onClose, onChange, onRest }: StapleSheetProps) {
+export function StapleSheet({
+  item,
+  onClose,
+  onChange,
+  onRest,
+  purchases,
+  onOpenHistory,
+}: StapleSheetProps) {
   const { colors } = useTheme();
   const t = useT();
 
   if (!item) return null;
+
+  const history = historyFor(purchases, item.display);
 
   const learned = Math.round(effectiveInterval(item));
   const pinned = hasUserCadence(item);
@@ -104,6 +117,28 @@ export function StapleSheet({ item, onClose, onChange, onRest }: StapleSheetProp
                 </View>
                 <Text style={[type.sub, { color: colors.muted }]}>{t('staple.cadenceNote')}</Text>
               </View>
+
+              {/* Every time you bought this. The pantry knows the rhythm; the
+                  ledger is the evidence behind it, and the place a wrong price
+                  or a purchase at the wrong shop becomes visible. */}
+              {history.length > 0 && (
+                <Pressable
+                  onPress={onOpenHistory}
+                  accessibilityRole="button"
+                  style={[styles.row, { borderColor: colors.line }]}
+                >
+                  <Ionicons name="receipt-outline" size={22} color={colors.accent} />
+                  <View style={styles.grow}>
+                    <Text style={[type.body, { color: colors.ink }]}>
+                      {t('ledger.openTitle')}
+                    </Text>
+                    <Text style={[type.sub, { color: colors.muted }]}>
+                      {t('ledger.subtitle', { count: history.length })}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                </Pressable>
+              )}
 
               {/* Let it rest — the way out that isn't a delete. Placed last and
                   in muted tones because it's the rarest choice on this sheet;

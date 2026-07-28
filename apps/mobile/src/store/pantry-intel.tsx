@@ -27,7 +27,12 @@ import {
   type ItemStat,
   type StatMap,
 } from '@/lib/pantry-intel';
-import type { Purchase } from '@/lib/purchase-log';
+import {
+  MISTAKE_WINDOW_MS,
+  recentRecordFor,
+  SESSION_WINDOW_MS,
+  type Purchase,
+} from '@/lib/purchase-log';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -65,8 +70,15 @@ interface PantryIntelContext {
    * nothing to say about spending.
    */
   logPurchase: (name: string, category: ItemCategory, detail?: PurchaseDetail) => void;
-  /** Purchases with prices, newest first. Empty until something priced is bought. */
+  /** Every logged purchase, newest first — priced or not. */
   purchases: Purchase[];
+  /**
+   * An item was UNchecked. Removes the transaction only if it is younger than
+   * MISTAKE_WINDOW_MS, on the reasoning that unticking seconds after ticking is
+   * a mistap, while unticking hours later is "we need this again" — a new
+   * shopping cycle, which must leave the earlier purchase standing.
+   */
+  unlogRecent: (name: string) => void;
   /** Swipe left: user confirms it's running low (caller adds it to a list). */
   markAlmostOut: (key: string) => void;
   /** Swipe right: user says it's still good; the model learns to wait longer. */
@@ -97,7 +109,10 @@ const DAY = 24 * 60 * 60 * 1000;
  * further back than a couple of months, so anything older is weight without
  * readers.
  */
-const PURCHASE_WINDOW_WEEKS = 16;
+// A year. Sixteen weeks could not answer "what did Christmas cost last year?"
+// or show a seasonal swing, which is most of why anyone opens a spend history.
+// These are short text rows — a year of them is kilobytes per household.
+const PURCHASE_WINDOW_WEEKS = 52;
 const PURCHASE_WINDOW_MS = PURCHASE_WINDOW_WEEKS * 7 * DAY;
 
 /**
@@ -105,7 +120,10 @@ const PURCHASE_WINDOW_MS = PURCHASE_WINDOW_WEEKS * 7 * DAY;
  * small, but a heavy user with a device clock that jumped could otherwise
  * accumulate rows indefinitely.
  */
-const LOCAL_PURCHASE_CAP = 1000;
+// Raised with the window: a year of shopping comfortably exceeds a thousand
+// check-offs now that EVERY one is logged, not just the priced minority, and a
+// cap below the window would silently truncate the history the window promises.
+const LOCAL_PURCHASE_CAP = 4000;
 
 /**
  * Build a log entry, or null when there is nothing identifiable to log.
@@ -123,13 +141,12 @@ function toPurchase(
   now: number,
 ): Purchase | null {
   const raw = detail?.priceCents;
-  // A price is optional in the TYPE already, ahead of the schema: price_cents
-  // is still `not null` in the database until migration 0020 lands, so sending
-  // a null would be rejected at insert time. Until then an unpriced check-off
-  // is still skipped by the money log, exactly as before — the type is widened
-  // here so the client is ready, not so the behaviour changes early.
-  if (raw == null || !Number.isFinite(raw) || raw < 0) return null;
-  const priceCents = Math.round(raw);
+  // A price is optional; a nonsense one is dropped rather than stored, since a
+  // negative or non-finite value would poison every average it lands in. The
+  // purchase itself is logged either way — migration 0020 made price_cents
+  // nullable precisely so an unpriced check-off is still a transaction.
+  const priceCents =
+    raw == null || !Number.isFinite(raw) || raw < 0 ? null : Math.round(raw);
   const display = name.trim();
   const key = normalizeKey(display);
   if (!key) return null;
@@ -143,6 +160,29 @@ function toPurchase(
     quantity: detail?.quantity ?? null,
     unit: detail?.unit ?? null,
   };
+}
+
+/**
+ * Fold a new purchase into the log, replacing the item's open record when there
+ * is one.
+ *
+ * This is the "don't double-count a mid-aisle correction" rule: untick, change
+ * the quantity, retick, and you get one transaction updated rather than two
+ * appended. Outside the session window it appends, because that is a genuinely
+ * separate purchase.
+ *
+ * Shared by both backends deliberately — a local and a cloud copy of this would
+ * drift, and the drift would only show as one household's spend being subtly
+ * higher than another's.
+ */
+function foldPurchase(existing: Purchase[], entry: Purchase): Purchase[] {
+  const open = recentRecordFor(existing, entry.key, entry.at, SESSION_WINDOW_MS);
+  if (!open) return [entry, ...existing];
+  // Keep the ORIGINAL id and timestamp: this is the same transaction being
+  // corrected, not a new one. Moving the timestamp forward would let a long
+  // shop keep extending its own window indefinitely.
+  const merged: Purchase = { ...entry, id: open.id, at: open.at };
+  return existing.map((p) => (p.id === open.id ? merged : p));
 }
 
 /** Newest first, inside the window, capped. */
@@ -214,6 +254,47 @@ const LOCAL_KEY = 'korb.pantryIntel.v1';
 /** The on-device purchase log, mirroring the cloud price_entries table. */
 const LOCAL_PURCHASES_KEY = 'korb.purchaseLog.v1';
 
+/** Marks the local backfill spent, so it can never run twice. */
+const LOCAL_BACKFILL_KEY = 'korb.purchaseLog.backfilled.v1';
+
+/**
+ * The logged-out equivalent of migration 0020's backfill.
+ *
+ * The SQL migration only reaches households on the server. Someone who has
+ * never signed in has all their history in AsyncStorage, and without this their
+ * Insights would drop to near zero on upgrade — which reads as data loss, not
+ * as a new feature.
+ *
+ * Same shape as the SQL: one transaction per pantry item at its REAL
+ * last-purchased date, not today, so the spend chart shows a distributed year
+ * rather than one impossible spike in the current week. No price or store,
+ * because a local pantry stat carries neither.
+ */
+function backfillLocal(stats: StatMap, existing: Purchase[], now: number): Purchase[] {
+  const cutoff = now - PURCHASE_WINDOW_MS;
+  const seen = new Set(existing.map((p) => `${p.key}|${Math.floor(p.at / (24 * 60 * 60 * 1000))}`));
+  const added: Purchase[] = [];
+  for (const stat of Object.values(stats)) {
+    if (!stat.lastPurchasedAt || stat.lastPurchasedAt < cutoff) continue;
+    // Same day-granularity dedupe as the SQL, so a user who already has genuine
+    // entries doesn't get them doubled.
+    const slot = `${stat.key}|${Math.floor(stat.lastPurchasedAt / (24 * 60 * 60 * 1000))}`;
+    if (seen.has(slot)) continue;
+    seen.add(slot);
+    added.push({
+      id: uuidv4(),
+      key: stat.key,
+      name: stat.display,
+      store: null,
+      priceCents: null,
+      at: stat.lastPurchasedAt,
+      quantity: null,
+      unit: null,
+    });
+  }
+  return added.length > 0 ? trimPurchases([...added, ...existing], now) : existing;
+}
+
 function LocalPantryIntelProvider({ children }: PropsWithChildren) {
   const [stats, setStats] = useState<StatMap>({});
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -233,14 +314,33 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
         hydrated.current = true;
       });
 
-    AsyncStorage.getItem(LOCAL_PURCHASES_KEY)
-      .then((raw) => {
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
+    // Load the log and the stats together: the one-time backfill needs both,
+    // and running it against a half-loaded pair would write a partial history
+    // and then mark itself done.
+    Promise.all([
+      AsyncStorage.getItem(LOCAL_PURCHASES_KEY),
+      AsyncStorage.getItem(LOCAL_KEY),
+      AsyncStorage.getItem(LOCAL_BACKFILL_KEY),
+    ])
+      .then(([rawLog, rawStats, backfilled]) => {
+        const now = Date.now();
         // Trim on read as well as write: entries age out of the window while
         // the app is closed, so a log untouched for months would otherwise come
         // back oversized and stale.
-        if (Array.isArray(parsed)) setPurchases(trimPurchases(parsed as Purchase[], Date.now()));
+        const parsed = rawLog ? JSON.parse(rawLog) : [];
+        let log: Purchase[] = Array.isArray(parsed) ? trimPurchases(parsed as Purchase[], now) : [];
+
+        if (backfilled !== '1') {
+          const savedStats = rawStats ? (JSON.parse(rawStats) as StatMap) : {};
+          log = backfillLocal(savedStats && typeof savedStats === 'object' ? savedStats : {}, log, now);
+          // Persist both the result and the flag. Marking it done even when
+          // nothing was added is deliberate: a user with no pantry history has
+          // nothing to backfill, and re-checking on every launch forever would
+          // be work with a known answer.
+          AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(log)).catch(() => {});
+          AsyncStorage.setItem(LOCAL_BACKFILL_KEY, '1').catch(() => {});
+        }
+        setPurchases(log);
       })
       .catch(() => {
         // A corrupt log costs history, not function — start empty.
@@ -267,10 +367,20 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
         const entry = toPurchase(name, detail, Date.now());
         if (!entry) return;
         setPurchases((prev) => {
-          const next = trimPurchases([entry, ...prev], entry.at);
+          const next = trimPurchases(foldPurchase(prev, entry), entry.at);
           // Written straight through rather than on the debounced stats timer:
-          // this is append-only history, and losing an entry to a kill mid-timer
-          // means a purchase that silently never happened.
+          // this is history, and losing an entry to a kill mid-timer means a
+          // purchase that silently never happened.
+          AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+      },
+      unlogRecent: (name) => {
+        const key = normalizeKey(name);
+        setPurchases((prev) => {
+          const doomed = recentRecordFor(prev, key, Date.now(), MISTAKE_WINDOW_MS);
+          if (!doomed) return prev;
+          const next = prev.filter((p) => p.id !== doomed.id);
           AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(next)).catch(() => {});
           return next;
         });
@@ -423,10 +533,29 @@ function CloudPantryIntelProvider({
     if (!error && data) applyPurchases((data as DbPriceRow[]).map(mapPriceRow));
   }, [householdId, applyPurchases]);
 
+  /**
+   * Something changed in the household — pull both halves.
+   *
+   * This used to refresh only the stats, which is why two phones in one
+   * household showed different Insights: the money log was fetched on open and
+   * on foreground and never again, so each device saw its own optimistic writes
+   * plus whatever it happened to fetch at launch. The list-derived cards agreed
+   * (list_items is on realtime) while the log-derived one diverged, and once
+   * Insights reads the log for *everything* that divergence would cover the
+   * whole tab.
+   *
+   * Costs nothing extra: every check-off already upserts pantry_items, which IS
+   * published to realtime, so the socket message we are reacting to is one the
+   * other device was already sending. price_entries stays unpublished — see
+   * migration 0013 — because it does not need its own channel to stay fresh.
+   */
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
-    refetchTimer.current = setTimeout(() => void fetchStats(), 300);
-  }, [fetchStats]);
+    refetchTimer.current = setTimeout(() => {
+      void fetchStats();
+      void fetchPurchases();
+    }, 300);
+  }, [fetchStats, fetchPurchases]);
 
   // While backgrounded we drop the socket; on return we refetch to catch up and
   // re-open it (see useAppActive).
@@ -491,26 +620,47 @@ function CloudPantryIntelProvider({
 
         const entry = toPurchase(name, detail, Date.now());
         if (!entry) return;
-        // Optimistic locally so Insights reflects the shop immediately, then
-        // appended server-side. An insert, never an upsert: one row per
-        // purchase is the entire point of a history.
-        applyPurchases(trimPurchases([entry, ...purchasesRef.current], entry.at));
+        // Is this a correction to a transaction still inside its session
+        // window, or a genuinely new purchase? The answer decides insert vs
+        // update, and it is taken from the same helper the local backend uses
+        // so the two cannot disagree.
+        const open = recentRecordFor(purchasesRef.current, entry.key, entry.at, SESSION_WINDOW_MS);
+        // Optimistic either way, so Insights reflects the shop immediately.
+        applyPurchases(trimPurchases(foldPurchase(purchasesRef.current, entry), entry.at));
+
+        const row = {
+          household_id: householdId,
+          item_key: entry.key,
+          item_name: entry.name,
+          store: entry.store,
+          price_cents: entry.priceCents,
+          quantity: entry.quantity,
+          unit: entry.unit,
+        };
+        const write = open
+          // Correcting: keep the original row and its recorded_at, so a long
+          // shop cannot keep pushing its own window forward.
+          ? supabase.from('price_entries').update(row).eq('id', open.id)
+          : supabase
+              .from('price_entries')
+              .insert({ ...row, id: entry.id, recorded_at: new Date(entry.at).toISOString() });
+
+        write.then(({ error }) => {
+          // Re-sync on failure so the optimistic row doesn't linger as a
+          // purchase that only this device believes in.
+          if (error) void fetchPurchases();
+        });
+      },
+      unlogRecent: (name) => {
+        const key = normalizeKey(name);
+        const doomed = recentRecordFor(purchasesRef.current, key, Date.now(), MISTAKE_WINDOW_MS);
+        if (!doomed) return;
+        applyPurchases(purchasesRef.current.filter((p) => p.id !== doomed.id));
         supabase
           .from('price_entries')
-          .insert({
-            id: entry.id,
-            household_id: householdId,
-            item_key: entry.key,
-            item_name: entry.name,
-            store: entry.store,
-            price_cents: entry.priceCents,
-            quantity: entry.quantity,
-            unit: entry.unit,
-            recorded_at: new Date(entry.at).toISOString(),
-          })
+          .delete()
+          .eq('id', doomed.id)
           .then(({ error }) => {
-            // Re-sync on failure so the optimistic row doesn't linger as a
-            // purchase that only this device believes in.
             if (error) void fetchPurchases();
           });
       },

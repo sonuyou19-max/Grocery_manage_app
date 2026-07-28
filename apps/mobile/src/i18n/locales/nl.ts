@@ -220,6 +220,11 @@ const nl = {
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
   },
+  ledger: {
+    openTitle: 'Aankoopgeschiedenis',
+    subtitle: { one: '%{count} aankoop', other: '%{count} aankopen' },
+    noStore: 'Geen winkel ingesteld',
+  },
   pantry: {
     subtitleEmpty: 'Wat Korb bijhoudt',
     subtitleTracked: '%{count} bijgehouden · %{low} bijna op',
@@ -283,6 +288,8 @@ const nl = {
     pantryMixTitle: 'Je voorraadmix',
     pantryMixHint: '%{count} bijgehouden',
     staplesTitle: 'Je vaste producten',
+    byStoreTitle: 'Wat het kost, per winkel',
+    byStoreHint: 'Hetzelfde product in twee winkels is twee regels. Tik voor elke aankoop.',
     staplesHint: 'Meest gekocht',
     boughtTimes: '%{count}× gekocht',
     spendingTitle: 'Uitgaven',

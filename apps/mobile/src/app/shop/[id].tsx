@@ -43,7 +43,7 @@ export default function ShoppingModeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [shoppersOnline, members, t],
   );
-  const { logPurchase } = usePantryIntel();
+  const { logPurchase, unlogRecent } = usePantryIntel();
 
   const grouped = useMemo(() => {
     if (!list) return [];
@@ -88,6 +88,11 @@ export default function ShoppingModeScreen() {
       });
       haptics.success();
     } else {
+      // Unticking removes the transaction only if it is younger than the
+      // mistake window; an older one is a real past purchase and stands. Same
+      // rule as the list screen — this screen has no check-off debounce, so
+      // the record always exists by the time we get here.
+      unlogRecent(item.name);
       haptics.tick();
     }
     toggleItem(list.id, item.id);
