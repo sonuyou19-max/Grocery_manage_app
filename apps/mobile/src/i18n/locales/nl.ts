@@ -220,11 +220,18 @@ const nl = {
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
   },
+  household: {
+    defaultName: 'Huis van %{name}',
+  },
   teaser: {
     title: 'Je inzichten, zodra je inlogt',
     body: 'Korb maakt van je boodschappen uitgaventrends, prijswijzigingen en de winkels die je het minst kosten.',
     keepTitle: 'Behoud je inzichten',
     keepBody: 'Je hebt al een boodschappengeschiedenis op dit toestel. Log in en die gaat mee — en wordt bewaard.',
+    pantryTitle: 'Korb leert wat er opraakt',
+    pantryBody: 'Het kijkt wat je wanneer koopt en zegt wat bijna op is voordat jij het merkt.',
+    pantryKeepTitle: 'Je voorraadkast staat klaar',
+    pantryKeepBody: 'Je doet al een tijdje boodschappen op dit toestel. Log in en Korb maakt daar meteen je voorraadkast van.',
     cta: 'Inloggen of account maken',
     sampleNote: 'Voorbeeldbedragen, niet jouw gegevens',
   },

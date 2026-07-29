@@ -221,11 +221,18 @@ const fr = {
     cadenceLearned: { one: 'Korb a appris environ %{count} jour', other: 'Korb a appris environ %{count} jours' },
     cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
   },
+  household: {
+    defaultName: 'Chez %{name}',
+  },
   teaser: {
     title: 'Tes analyses, dès que tu te connectes',
     body: 'Korb transforme tes courses en tendances de dépenses, variations de prix et magasins les moins chers.',
     keepTitle: 'Garde tes analyses',
     keepBody: 'Tu as déjà un historique de courses sur cet appareil. Connecte-toi : il te suit et sera sauvegardé.',
+    pantryTitle: 'Korb apprend ce qui te manque',
+    pantryBody: 'Il observe ce que tu achètes et quand, puis te signale ce qui s’épuise avant que tu le remarques.',
+    pantryKeepTitle: 'Ton garde-manger est prêt',
+    pantryKeepBody: 'Tu fais tes courses sur cet appareil depuis un moment. Connecte-toi et Korb en fait ton garde-manger aussitôt.',
     cta: 'Se connecter ou créer un compte',
     sampleNote: 'Chiffres d’exemple, pas tes données',
   },

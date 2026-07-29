@@ -432,6 +432,98 @@ const mapList = (r: DbList): List => ({
     .map(mapItem),
 });
 
+/** Marks this device's local lists as re-homed. Device-wide, like the log's. */
+const LISTS_MIGRATED_KEY = 'korb.lists.migrated.v1';
+
+/**
+ * Carry a guest's lists into the household they just got.
+ *
+ * Korb works fully signed out, so someone can shop with it for months before
+ * making an account — and until now those lists lived under a different storage
+ * key from the cloud ones, with nothing bridging the two. Signing up switched
+ * the backend and left every list behind. The purchase history was already
+ * carried across (lib/purchase-migration.ts); the lists themselves were not,
+ * which meant the one thing the user actually looks at every day was the one
+ * thing that disappeared.
+ *
+ * Runs once per device, and only into a household that has no lists of its own.
+ * That condition is the whole safety argument: a brand-new account's household
+ * is empty, so this is a straight move; a household that already has lists is
+ * one the user joined, and dumping a stranger's shopping into it would be worse
+ * than losing it. Those users keep their local copy untouched and can move
+ * anything across by hand.
+ */
+async function migrateLocalLists(householdId: string, userId: string | null): Promise<void> {
+  try {
+    const [done, raw] = await Promise.all([
+      AsyncStorage.getItem(LISTS_MIGRATED_KEY),
+      AsyncStorage.getItem(LOCAL_KEY),
+    ]);
+    if (done === '1') return;
+
+    const parsed = raw ? JSON.parse(raw) : [];
+    const local: List[] = Array.isArray(parsed) ? parsed : [];
+    if (local.length === 0) {
+      // Nothing to carry. Still mark it done so a user who never shopped
+      // offline doesn't pay for this check on every launch forever.
+      await AsyncStorage.setItem(LISTS_MIGRATED_KEY, '1');
+      return;
+    }
+
+    const { count, error: countError } = await supabase
+      .from('shopping_lists')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', householdId);
+    if (countError) return;
+    if ((count ?? 0) > 0) {
+      // Joined an established household. Leave both sides alone, and stop
+      // asking — the answer will not change.
+      await AsyncStorage.setItem(LISTS_MIGRATED_KEY, '1');
+      return;
+    }
+
+    // Lists first, then items: the items carry a foreign key to the list, so a
+    // failure between the two leaves empty lists rather than orphaned rows.
+    const { error: listError } = await supabase.from('shopping_lists').insert(
+      local.map((l, i) => ({
+        id: l.id,
+        household_id: householdId,
+        name: l.name,
+        store: l.store ?? null,
+        position: i,
+      })),
+    );
+    if (listError) return;
+
+    const items = local.flatMap((l) =>
+      l.items.map((it, i) => ({
+        id: it.id,
+        list_id: l.id,
+        name: it.name,
+        category: it.category,
+        quantity: it.quantity,
+        unit: it.unit,
+        price_cents: it.priceCents,
+        store: it.store,
+        checked: it.checked,
+        position: i,
+        added_by: userId,
+      })),
+    );
+    if (items.length > 0) {
+      const { error: itemError } = await supabase.from('list_items').insert(items);
+      if (itemError) return;
+    }
+
+    await AsyncStorage.setItem(LISTS_MIGRATED_KEY, '1');
+    // The local copy is deliberately kept, exactly as the purchase log is: it
+    // is the only copy if this went somewhere the user didn't intend, and
+    // signing out returns them to it intact.
+  } catch {
+    // Corrupt local store, or offline. The flag stays unset; try again later.
+  }
+}
+
 function CloudGroceriesProvider({
   householdId,
   children,
@@ -464,6 +556,10 @@ function CloudGroceriesProvider({
       .order('position');
     if (!error && data) applyServer(data as unknown as DbList[]);
   }, [householdId, applyServer]);
+
+  // One-time: bring a guest's lists into their first household. Runs after the
+  // first fetch so it can see whether the household already has any.
+  const migrateOnce = useRef(false);
 
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
@@ -500,6 +596,17 @@ function CloudGroceriesProvider({
       })
       .catch(() => {});
     if (!appActive) return () => { alive = false; };
+
+    // Bring a guest's lists across on the first cloud mount, then reload so the
+    // just-uploaded rows are what the screen shows. Guarded by a ref as well as
+    // its own storage flag: this effect re-runs on every foreground, and the
+    // flag is only written after a round trip.
+    if (!migrateOnce.current) {
+      migrateOnce.current = true;
+      void migrateLocalLists(householdId, user?.id ?? null).then(() => {
+        if (alive) void fetchLists();
+      });
+    }
 
     void fetchLists();
 

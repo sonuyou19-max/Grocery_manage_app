@@ -152,7 +152,12 @@ export default function ListsScreen() {
         headerAction={<WalletButton />}
         hasFab
       >
+        {/* Signed out there is no pantry to report on, and the empty branch below
+            would cheerfully claim "nothing running low" about one that does not
+            exist. The weekly builder needs no such guard — it renders only when
+            it has suggestions, and a guest has none. */}
         {!editing &&
+          user &&
           (vibeCount > 0 ? (
             <Pressable onPress={() => router.push('/vibe-check')}>
               <Card accented>

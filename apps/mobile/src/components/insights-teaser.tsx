@@ -1,12 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
 import { Screen } from '@/components/screen';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
-import { haptics } from '@/lib/haptics';
+import { Teaser } from '@/components/teaser';
 import { weekStartOf, type WeekSpend } from '@/lib/purchase-log';
 import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -58,126 +56,64 @@ function sampleWeeks(now: number): WeekSpend[] {
 }
 
 export function InsightsTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }) {
-  const { colors, scheme } = useTheme();
+  const { colors } = useTheme();
   const { t, money } = useLocale();
 
-  const now = Date.now();
-  const weeks = sampleWeeks(now);
+  const weeks = sampleWeeks(Date.now());
   const peak = weeks.reduce((a, b) => (b.cents > a.cents ? b : a));
-
-  const open = () => {
-    haptics.tick();
-    router.push('/auth/sign-in');
-  };
 
   return (
     <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
-      {/* The whole tab is one target. The brief asked for "tapping anywhere",
-          and it is also the honest affordance: nothing behind the blur is
-          readable, so there is nothing else here to tap. */}
-      <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={t('teaser.title')}>
-        <View>
-          {/* Sample content, rendered through the real components so the shape
-              is what they will actually get. pointerEvents none so every touch
-              reaches the Pressable above. */}
-          <View pointerEvents="none">
-            <Card>
-              <View style={styles.head}>
-                <Ionicons name="stats-chart-outline" size={18} color={colors.accent} />
-                <Text style={[type.label, { color: colors.ink }]}>
-                  {t('insights.trendTitle')}
-                </Text>
-              </View>
-              <View style={styles.heroRow}>
-                <Text style={[type.h1, { color: colors.ink }]}>{money(4950)}</Text>
-                <Text style={[type.sub, { color: colors.muted }]}>
-                  {t('insights.trendPerWeek')}
-                </Text>
-              </View>
-              <SpendTrendChart
-                weeks={weeks}
-                currentWeekStart={weeks[weeks.length - 1].weekStart}
-                peakWeekStart={peak.weekStart}
-              />
-            </Card>
-
-            <Card>
-              <View style={styles.head}>
-                <Ionicons name="pricetag-outline" size={18} color={colors.accent} />
-                <Text style={[type.label, { color: colors.ink }]}>
-                  {t('insights.spendingTitle')}
-                </Text>
-              </View>
-              {[
-                [t('category.fruit_veg'), 12840],
-                [t('category.dairy_eggs'), 8210],
-                [t('category.pantry'), 6470],
-                [t('category.meat_fish'), 5930],
-              ].map(([label, cents]) => (
-                <View key={String(label)} style={styles.row}>
-                  <Text style={[type.body, styles.grow, { color: colors.ink }]}>{label}</Text>
-                  <Text style={[type.price, { color: colors.ink }]}>{money(Number(cents))}</Text>
-                </View>
-              ))}
-            </Card>
-
-            <Card>
-              <View style={styles.head}>
-                <Ionicons name="storefront-outline" size={18} color={colors.accent} />
-                <Text style={[type.label, { color: colors.ink }]}>
-                  {t('insights.whereTitle')}
-                </Text>
-              </View>
-              <View style={styles.bar}>
-                <View style={[styles.seg, { flex: 5, backgroundColor: colors.accent }]} />
-                <View style={[styles.seg, { flex: 3, backgroundColor: colors.accentSoft }]} />
-                <View style={[styles.seg, { flex: 2, backgroundColor: colors.line }]} />
-              </View>
-            </Card>
+      <Teaser
+        title={hasLocalHistory ? t('teaser.keepTitle') : t('teaser.title')}
+        body={hasLocalHistory ? t('teaser.keepBody') : t('teaser.body')}
+      >
+        <Card>
+          <View style={styles.head}>
+            <Ionicons name="stats-chart-outline" size={18} color={colors.accent} />
+            <Text style={[type.label, { color: colors.ink }]}>{t('insights.trendTitle')}</Text>
           </View>
-
-          {/* The blur, over everything above it. `dimezisBlurView` is the
-              Android implementation — the default one is a no-op there, which
-              would leave the sample numbers perfectly readable and turn an
-              invented household into an apparent claim about theirs. */}
-          <BlurView
-            intensity={scheme === 'dark' ? 28 : 34}
-            tint={colors.blurTint}
-            experimentalBlurMethod="dimezisBlurView"
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
+          <View style={styles.heroRow}>
+            <Text style={[type.h1, { color: colors.ink }]}>{money(4950)}</Text>
+            <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendPerWeek')}</Text>
+          </View>
+          <SpendTrendChart
+            weeks={weeks}
+            currentWeekStart={weeks[weeks.length - 1].weekStart}
+            peakWeekStart={peak.weekStart}
           />
-          {/* A wash over the blur. Blur alone still leaves shapes legible
-              enough to read as data; this pushes it to "clearly something,
-              clearly not for you yet". */}
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]}
-          />
+        </Card>
 
-          {/* The invitation, unblurred and centred over the top. */}
-          <View style={styles.ctaWrap} pointerEvents="none">
-            <View style={[styles.cta, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-              <View style={[styles.lockRing, { backgroundColor: colors.accentSoft }]}>
-                <Ionicons name="lock-closed-outline" size={22} color={colors.accent} />
-              </View>
-              <Text style={[type.h2, styles.centred, { color: colors.ink }]}>
-                {hasLocalHistory ? t('teaser.keepTitle') : t('teaser.title')}
-              </Text>
-              <Text style={[type.sub, styles.centred, { color: colors.muted }]}>
-                {hasLocalHistory ? t('teaser.keepBody') : t('teaser.body')}
-              </Text>
-              <View style={[styles.button, { backgroundColor: colors.accent }]}>
-                <Text style={[type.body, { color: colors.accentInk }]}>{t('teaser.cta')}</Text>
-              </View>
-              {/* Never let invented numbers pass as theirs. */}
-              <Text style={[type.sub, styles.centred, { color: colors.muted }]}>
-                {t('teaser.sampleNote')}
-              </Text>
+        <Card>
+          <View style={styles.head}>
+            <Ionicons name="pricetag-outline" size={18} color={colors.accent} />
+            <Text style={[type.label, { color: colors.ink }]}>{t('insights.spendingTitle')}</Text>
+          </View>
+          {[
+            [t('category.fruit_veg'), 12840],
+            [t('category.dairy_eggs'), 8210],
+            [t('category.pantry'), 6470],
+            [t('category.meat_fish'), 5930],
+          ].map(([label, cents]) => (
+            <View key={String(label)} style={styles.row}>
+              <Text style={[type.body, styles.grow, { color: colors.ink }]}>{label}</Text>
+              <Text style={[type.price, { color: colors.ink }]}>{money(Number(cents))}</Text>
             </View>
+          ))}
+        </Card>
+
+        <Card>
+          <View style={styles.head}>
+            <Ionicons name="storefront-outline" size={18} color={colors.accent} />
+            <Text style={[type.label, { color: colors.ink }]}>{t('insights.whereTitle')}</Text>
           </View>
-        </View>
-      </Pressable>
+          <View style={styles.bar}>
+            <View style={[styles.seg, { flex: 5, backgroundColor: colors.accent }]} />
+            <View style={[styles.seg, { flex: 3, backgroundColor: colors.accentSoft }]} />
+            <View style={[styles.seg, { flex: 2, backgroundColor: colors.line }]} />
+          </View>
+        </Card>
+      </Teaser>
     </Screen>
   );
 }
@@ -189,30 +125,4 @@ const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   bar: { flexDirection: 'row', height: 16, borderRadius: radii.sm, overflow: 'hidden' },
   seg: { height: '100%' },
-  // Centred over the blurred stack rather than pinned, so it sits in the
-  // optical middle whatever the sample cards measure at.
-  ctaWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  cta: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.xl,
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: 340,
-  },
-  centred: { textAlign: 'center' },
-  lockRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  button: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radii.pill,
-    marginTop: spacing.xs,
-  },
 });

@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/empty-state';
 import { Fab } from '@/components/fab';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
+import { PantryTeaser } from '@/components/pantry-teaser';
 import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
 import { StapleSheet } from '@/components/staple-sheet';
@@ -43,6 +44,7 @@ import {
   type ItemStat,
 } from '@/lib/pantry-intel';
 import { useHomeListAdd } from '@/lib/use-home-list-add';
+import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
@@ -66,7 +68,22 @@ type Colors = ReturnType<typeof useTheme>['colors'];
  * the list grows, and items split into "Running low" (open by default) and "In
  * stock" (collapsed). "Track item" seeds a staple manually (bought now).
  */
+/**
+ * The gate. Signed out, the whole tab is a teaser.
+ *
+ * Two components rather than an early return, for the same reason as Insights:
+ * the screen below is full of useMemo and a conditional return above them would
+ * change the hook count between renders, so React throws the moment a guest
+ * signs in — which is exactly the transition this exists to cause.
+ */
 export default function PantryScreen() {
+  const { user } = useAuth();
+  const { purchases } = usePantryIntel();
+  if (!user) return <PantryTeaser hasLocalHistory={purchases.length > 0} />;
+  return <SignedInPantry />;
+}
+
+function SignedInPantry() {
   const { colors } = useTheme();
   const t = useT();
   const { stats, purchases, logPurchase, markAlmostOut, markStillGood, setStaple, setResting } =

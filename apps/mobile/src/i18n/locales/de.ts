@@ -221,11 +221,18 @@ const de = {
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
   },
+  household: {
+    defaultName: 'Zuhause von %{name}',
+  },
   teaser: {
     title: 'Deine Auswertungen, sobald du dich anmeldest',
     body: 'Korb macht aus deinem Einkauf Ausgabentrends, Preisänderungen und die Läden, die dich am wenigsten kosten.',
     keepTitle: 'Behalte deine Auswertungen',
     keepBody: 'Du hast bereits einen Einkaufsverlauf auf diesem Gerät. Melde dich an – er kommt mit und wird gesichert.',
+    pantryTitle: 'Korb lernt, was dir ausgeht',
+    pantryBody: 'Es merkt sich, was du wann kaufst, und sagt dir, was zur Neige geht, bevor du es bemerkst.',
+    pantryKeepTitle: 'Deine Vorratskammer ist bereit',
+    pantryKeepBody: 'Du kaufst schon eine Weile mit diesem Gerät ein. Melde dich an – Korb macht daraus sofort deine Vorratskammer.',
     cta: 'Anmelden oder Konto erstellen',
     sampleNote: 'Beispielwerte, nicht deine Daten',
   },

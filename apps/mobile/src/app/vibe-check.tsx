@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -24,6 +24,7 @@ import { SPRING, springTo } from '@/lib/motion';
 import { isDue, lastBoughtLabel, normalizeKey } from '@/lib/pantry-intel';
 import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useT } from '@/store/locale';
+import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
 import { useVibeDeck, usePantryIntel, type DeckCard } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -34,7 +35,22 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * (teaches the model to wait longer). Weighty physics, soft haptics, then a glow
  * and "All Set." on the last card.
  */
+/**
+ * The gate. This route is reachable by deep link, so guarding the Pantry tab
+ * alone would leave a back door straight into the feature an account unlocks.
+ *
+ * A redirect rather than a teaser: arriving here is only ever the result of a
+ * link or a stale navigation state, never of a guest tapping something, so
+ * there is nothing to tease — the honest response is to put them where the
+ * invitation actually lives.
+ */
 export default function VibeCheckScreen() {
+  const { user } = useAuth();
+  if (!user) return <Redirect href="/(tabs)/pantry" />;
+  return <SignedInVibeCheck />;
+}
+
+function SignedInVibeCheck() {
   const { colors } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();

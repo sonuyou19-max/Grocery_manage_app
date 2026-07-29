@@ -12,6 +12,7 @@ import {
 
 import type { ItemCategory } from '@korb/shared';
 
+import { categorizeSync } from '@/lib/categorize';
 import { supabase } from '@/lib/supabase';
 import { uuidv4 } from '@/lib/uuid';
 import { useAppActive } from '@/lib/use-app-active';
@@ -23,6 +24,7 @@ import {
   buildDeck,
   normalizeKey,
   recordPurchase,
+  statsFromPurchases,
   type DeckCard,
   type ItemStat,
   type StatMap,
@@ -191,6 +193,15 @@ function foldPurchase(existing: Purchase[], entry: Purchase): Purchase[] {
   return existing.map((p) => (p.id === open.id ? merged : p));
 }
 
+/**
+ * Stable empty map for the signed-out backend.
+ *
+ * A fresh `{}` each render would change identity every time and defeat the
+ * memoization in every consumer — including useVibeDeck, which would then
+ * rebuild a deck of nothing on every single render.
+ */
+const EMPTY_STATS: StatMap = {};
+
 /** Newest first, inside the window, capped. */
 function trimPurchases(all: Purchase[], now: number): Purchase[] {
   const cutoff = now - PURCHASE_WINDOW_MS;
@@ -256,130 +267,59 @@ export function PantryIntelProvider({ children }: PropsWithChildren) {
 // LOCAL backend (AsyncStorage)
 // ---------------------------------------------------------------------------
 
-const LOCAL_KEY = 'korb.pantryIntel.v1';
+/**
+ * The device-local pantry model, RETIRED.
+ *
+ * Kept only as a name to delete. Builds before this one persisted a StatMap
+ * here for signed-out users; the pantry is now derived from the log and never
+ * stored, so any surviving copy is orphaned data describing someone's shopping
+ * habits. "We store nothing but the log when you are signed out" has to be true
+ * on disk, not just in new code, so it is actively removed rather than left to
+ * rot.
+ */
+const RETIRED_LOCAL_STATS_KEY = 'korb.pantryIntel.v1';
+/** Same: the flag for a backfill that no longer exists. */
+const RETIRED_LOCAL_BACKFILL_KEY = 'korb.purchaseLog.backfilled.v1';
 /** The on-device purchase log, mirroring the cloud price_entries table. */
 const LOCAL_PURCHASES_KEY = 'korb.purchaseLog.v1';
 
-/** Marks the local backfill spent, so it can never run twice. */
-const LOCAL_BACKFILL_KEY = 'korb.purchaseLog.backfilled.v1';
-
-/**
- * The logged-out equivalent of migration 0020's backfill.
- *
- * The SQL migration only reaches households on the server. Someone who has
- * never signed in has all their history in AsyncStorage, and without this their
- * Insights would drop to near zero on upgrade — which reads as data loss, not
- * as a new feature.
- *
- * Same shape as the SQL: one transaction per pantry item at its REAL
- * last-purchased date, not today, so the spend chart shows a distributed year
- * rather than one impossible spike in the current week. No price or store,
- * because a local pantry stat carries neither.
- */
-function backfillLocal(stats: StatMap, existing: Purchase[], now: number): Purchase[] {
-  const cutoff = now - PURCHASE_WINDOW_MS;
-  const seen = new Set(existing.map((p) => `${p.key}|${Math.floor(p.at / (24 * 60 * 60 * 1000))}`));
-  const added: Purchase[] = [];
-  for (const stat of Object.values(stats)) {
-    if (!stat.lastPurchasedAt || stat.lastPurchasedAt < cutoff) continue;
-    // Same day-granularity dedupe as the SQL, so a user who already has genuine
-    // entries doesn't get them doubled.
-    const slot = `${stat.key}|${Math.floor(stat.lastPurchasedAt / (24 * 60 * 60 * 1000))}`;
-    if (seen.has(slot)) continue;
-    seen.add(slot);
-    added.push({
-      id: uuidv4(),
-      key: stat.key,
-      name: stat.display,
-      store: null,
-      priceCents: null,
-      at: stat.lastPurchasedAt,
-      quantity: null,
-      unit: null,
-      // The stat is the only place this category exists; the rebuilt log has to
-      // carry it forward or the pantry it rebuilds would lose every one.
-      category: stat.category,
-    });
-  }
-  return added.length > 0 ? trimPurchases([...added, ...existing], now) : existing;
-}
-
 function LocalPantryIntelProvider({ children }: PropsWithChildren) {
-  const [stats, setStats] = useState<StatMap>({});
   const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const hydrated = useRef(false);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(LOCAL_KEY)
+    // Retire the old on-device pantry. removeItem on an absent key is a no-op,
+    // so this needs no flag of its own and costs nothing after the first run.
+    AsyncStorage.multiRemove([RETIRED_LOCAL_STATS_KEY, RETIRED_LOCAL_BACKFILL_KEY]).catch(() => {});
+
+    AsyncStorage.getItem(LOCAL_PURCHASES_KEY)
       .then((raw) => {
-        if (raw) {
-          const parsed = JSON.parse(raw) as StatMap;
-          if (parsed && typeof parsed === 'object') setStats(parsed);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        hydrated.current = true;
-      });
-
-    // Load the log and the stats together: the one-time backfill needs both,
-    // and running it against a half-loaded pair would write a partial history
-    // and then mark itself done.
-    Promise.all([
-      AsyncStorage.getItem(LOCAL_PURCHASES_KEY),
-      AsyncStorage.getItem(LOCAL_KEY),
-      AsyncStorage.getItem(LOCAL_BACKFILL_KEY),
-    ])
-      .then(([rawLog, rawStats, backfilled]) => {
-        const now = Date.now();
-        // Trim on read as well as write: entries age out of the window while
-        // the app is closed, so a log untouched for months would otherwise come
-        // back oversized and stale.
-        const parsed = rawLog ? JSON.parse(rawLog) : [];
-        let log: Purchase[] = Array.isArray(parsed) ? trimPurchases(parsed as Purchase[], now) : [];
-
-        if (backfilled !== '1') {
-          const savedStats = rawStats ? (JSON.parse(rawStats) as StatMap) : {};
-          log = backfillLocal(savedStats && typeof savedStats === 'object' ? savedStats : {}, log, now);
-          // Persist both the result and the flag. Marking it done even when
-          // nothing was added is deliberate: a user with no pantry history has
-          // nothing to backfill, and re-checking on every launch forever would
-          // be work with a known answer.
-          AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(log)).catch(() => {});
-          AsyncStorage.setItem(LOCAL_BACKFILL_KEY, '1').catch(() => {});
-        }
-        setPurchases(log);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        // Trim on read as well as write: rows age out of the window while the
+        // app is closed, so a log untouched for months would come back
+        // oversized and stale.
+        if (Array.isArray(parsed)) setPurchases(trimPurchases(parsed as Purchase[], Date.now()));
       })
       .catch(() => {
         // A corrupt log costs history, not function — start empty.
       });
   }, []);
 
-  useEffect(() => {
-    if (!hydrated.current) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(stats)).catch(() => {});
-    }, 300);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [stats]);
-
   const value = useMemo<PantryIntelContext>(
     () => ({
-      stats,
+      // Empty, always. Every pantry-derived surface is written to render
+      // nothing when this is empty, which is what makes the Vibe Check card and
+      // the weekly builder disappear for a guest without a single extra guard.
+      stats: EMPTY_STATS,
       purchases,
       logPurchase: (name, category, detail) => {
-        setStats((prev) => recordPurchase(prev, name, category));
         const entry = toPurchase(name, category, detail, Date.now());
         if (!entry) return;
         setPurchases((prev) => {
           const next = trimPurchases(foldPurchase(prev, entry), entry.at);
-          // Written straight through rather than on the debounced stats timer:
-          // this is history, and losing an entry to a kill mid-timer means a
-          // purchase that silently never happened.
+          // Written straight through rather than on a debounced timer: this is
+          // the only record a guest has, and losing an entry to a kill
+          // mid-timer means a purchase that silently never happened.
           AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(next)).catch(() => {});
           return next;
         });
@@ -394,13 +334,18 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
           return next;
         });
       },
-      markAlmostOut: (key) => setStats((prev) => applyAlmostOut(prev, key)),
-      markStillGood: (key) => setStats((prev) => applyStillGood(prev, key)),
-      setStaple: (key, patch) => setStats((prev) => applyStaple(prev, key, patch)),
-      setResting: (key, resting) => setStats((prev) => applyResting(prev, key, resting)),
-      seedDemo: () => setStats((prev) => seededDemoStats(prev)),
+      // Every one of these is a Pantry-tab action, and the Pantry tab is behind
+      // an account. They are no-ops rather than missing so the context shape
+      // stays identical across both backends — a caller that reached one of
+      // these while signed out would be a routing bug, and a silent no-op is a
+      // better failure than a crash in a shipped app.
+      markAlmostOut: () => {},
+      markStillGood: () => {},
+      setStaple: () => {},
+      setResting: () => {},
+      seedDemo: () => {},
     }),
-    [stats, purchases],
+    [purchases],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -540,11 +485,22 @@ async function migrateLocalPurchases(
           price_cents: p.priceCents,
           quantity: p.quantity,
           unit: p.unit,
+          category: p.category,
           recorded_at: new Date(p.at).toISOString(),
         })),
       );
       if (insertError) return;
     }
+
+    // Turn the whole log into a pantry.
+    //
+    // This is the moment the sign-up promise is kept. Uploading the purchases
+    // alone would leave the Pantry tab empty on the other side of the gate —
+    // technically the history is safe, but the person who was told "your pantry
+    // is ready" would open it and find nothing, which is worse than not having
+    // promised. The rebuild is what makes the tab arrive already knowing their
+    // rhythms instead of starting to learn from today.
+    await seedPantryFromLog([...missing, ...cloud], householdId);
 
     await AsyncStorage.setItem(LOCAL_MIGRATED_KEY, '1');
     // The local log is deliberately NOT deleted. It costs a few kilobytes, and
@@ -554,6 +510,56 @@ async function migrateLocalPurchases(
     applyPurchases(trimPurchases([...missing, ...cloud], now));
   } catch {
     // Corrupt local log, or offline. Either way the flag stays unset.
+  }
+}
+
+/**
+ * Write a pantry derived from the household's purchase log.
+ *
+ * Insert-only, deliberately. Rows another member already has are left exactly
+ * as they are, because theirs may carry decisions this rebuild cannot see — a
+ * pinned cadence, a staple flag, a resting item. statsFromPurchases can
+ * reproduce rhythms but never choices (see lib/pantry-intel.ts), so overwriting
+ * would silently undo settings somebody deliberately made. Only items the
+ * household has no row for at all are created.
+ *
+ * Best-effort throughout: a failure here costs a pantry that fills in on the
+ * next check-off rather than one that arrives complete, and it must never take
+ * the sign-up down with it.
+ */
+async function seedPantryFromLog(log: Purchase[], householdId: string): Promise<void> {
+  if (log.length === 0) return;
+  try {
+    const { data, error } = await supabase
+      .from('pantry_items')
+      .select('item_key')
+      .eq('household_id', householdId);
+    // Without a reliable list of what is already there we cannot tell a new row
+    // from an existing one, and guessing wrong would overwrite someone's
+    // settings. Skip rather than risk it.
+    if (error || !data) return;
+
+    const known = new Set((data as Array<{ item_key: string | null }>).map((r) => r.item_key));
+    // Categories come off the purchases themselves (migration 0023); the
+    // fallback only matters for rows logged before that column existed.
+    const derived = statsFromPurchases(log, (name) => categorizeSync(name));
+    const rows = Object.values(derived)
+      .filter((s) => !known.has(s.key))
+      .map((s) => ({
+        household_id: householdId,
+        item_key: s.key,
+        name: s.key,
+        display_name: s.display,
+        category: s.category,
+        last_purchased_at: new Date(s.lastPurchasedAt).toISOString(),
+        avg_purchase_interval_days: s.intervalDays,
+        sample_count: s.sampleCount,
+      }));
+    if (rows.length === 0) return;
+
+    await supabase.from('pantry_items').insert(rows);
+  } catch {
+    // See above: never fatal.
   }
 }
 

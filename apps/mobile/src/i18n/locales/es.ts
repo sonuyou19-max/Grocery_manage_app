@@ -220,11 +220,18 @@ const es = {
     cadenceLearned: { one: 'Korb ha aprendido unos %{count} día', other: 'Korb ha aprendido unos %{count} días' },
     cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
   },
+  household: {
+    defaultName: 'Casa de %{name}',
+  },
   teaser: {
     title: 'Tus estadísticas, en cuanto inicies sesión',
     body: 'Korb convierte tu compra en tendencias de gasto, cambios de precio y las tiendas que menos te cuestan.',
     keepTitle: 'Conserva tus estadísticas',
     keepBody: 'Ya tienes un historial de compra en este dispositivo. Inicia sesión y se viene contigo, con copia de seguridad.',
+    pantryTitle: 'Korb aprende qué se te acaba',
+    pantryBody: 'Observa qué compras y cuándo, y te avisa de lo que se está acabando antes de que lo notes.',
+    pantryKeepTitle: 'Tu despensa está lista',
+    pantryKeepBody: 'Llevas un tiempo comprando en este dispositivo. Inicia sesión y Korb convierte ese historial en tu despensa al instante.',
     cta: 'Inicia sesión o crea una cuenta',
     sampleNote: 'Cifras de ejemplo, no tus datos',
   },

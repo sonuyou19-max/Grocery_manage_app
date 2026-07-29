@@ -220,11 +220,18 @@ const it = {
     cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
   },
+  household: {
+    defaultName: 'Casa di %{name}',
+  },
   teaser: {
     title: 'Le tue analisi, appena accedi',
     body: 'Korb trasforma la tua spesa in andamenti, variazioni di prezzo e i negozi che ti costano meno.',
     keepTitle: 'Conserva le tue analisi',
     keepBody: 'Hai già uno storico della spesa su questo dispositivo. Accedi: viene con te e inizia a essere salvato.',
+    pantryTitle: 'Korb impara cosa ti finisce',
+    pantryBody: 'Osserva cosa compri e quando, poi ti dice cosa sta finendo prima che te ne accorga.',
+    pantryKeepTitle: 'La tua dispensa è pronta',
+    pantryKeepBody: 'Fai la spesa su questo dispositivo da un po’. Accedi e Korb trasforma subito quello storico nella tua dispensa.',
     cta: 'Accedi o crea un account',
     sampleNote: 'Cifre di esempio, non i tuoi dati',
   },

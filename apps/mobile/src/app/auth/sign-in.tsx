@@ -10,6 +10,7 @@ import { MeshBackground } from '@/components/mesh-background';
 import { readProfileName, useProfileName, writeProfileName } from '@/lib/profile-name';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
+import { captureException } from '@/lib/monitoring';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
 import { spacing, type, useTheme } from '@/theme';
@@ -29,7 +30,7 @@ import { spacing, type, useTheme } from '@/theme';
 export default function SignInScreen() {
   const { colors } = useTheme();
   const { sendCode, verifyCode } = useAuth();
-  const { setDisplayName } = useHousehold();
+  const { households, createHousehold, setDisplayName } = useHousehold();
   const { remember } = useProfileName();
   const t = useT();
 
@@ -107,6 +108,29 @@ export default function SignInScreen() {
     // household screen reads, and joining later carries the name along. A
     // failure here is not worth blocking sign-in over.
     await setDisplayName(clean);
+
+    // Every account gets a household, immediately and without being asked.
+    //
+    // Nothing in the app is stored in the cloud except inside one, so signing
+    // in without a household used to leave people in a state where the app
+    // looked signed-in and quietly saved nothing. And "create a household" is
+    // jargon to someone who just wants their shopping backed up — a solo
+    // shopper should never have to name a thing they did not know they needed.
+    // Sharing it with anyone comes later, from Settings, with an invite code.
+    //
+    // Only when they have none: a returning user signing in on a new phone
+    // already has theirs, and a second empty one would be clutter.
+    if (households.length === 0) {
+      const { error: householdError } = await createHousehold(
+        t('household.defaultName', { name: clean }),
+        clean,
+      );
+      // Not fatal. They are signed in either way, and the household screen in
+      // Settings can still create one by hand — blocking sign-in on a failed
+      // follow-up write would be a worse outcome than a missing default.
+      if (householdError) captureException(new Error(householdError), { at: 'signup.createHousehold' });
+    }
+
     setBusy(false);
     router.back();
   };
