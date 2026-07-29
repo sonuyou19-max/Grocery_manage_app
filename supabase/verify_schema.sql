@@ -217,6 +217,16 @@ checks as (
          not has_table_privilege('anon', 'ai_spend_daily', 'select')
          and not has_table_privilege('authenticated', 'ai_spend_daily', 'select')
 
+  -- 0023 · the log carries its own category
+  -- Without this the pantry cannot be rebuilt from the log, which is the whole
+  -- basis of "sign up and your history comes with you".
+  union all select '0023 price_entries.category',
+         exists (select 1 from col where table_name = 'price_entries' and column_name = 'category')
+  union all select '0023 price_entries.category uses the item_category enum',
+         exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'price_entries'
+                   and column_name = 'category' and udt_name = 'item_category')
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',

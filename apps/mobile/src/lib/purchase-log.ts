@@ -1,3 +1,5 @@
+import type { ItemCategory } from '@korb/shared';
+
 import { normalizeKey } from '@/lib/pantry-intel';
 
 /**
@@ -54,6 +56,16 @@ export interface Purchase {
   /** Amount bought, when known — needed to compare like with like. */
   quantity: number | null;
   unit: string | null;
+  /**
+   * The item's category at the time of purchase.
+   *
+   * On the log rather than looked up, because the log is the single source of
+   * truth the pantry is rebuilt from — and a category the user chose by hand is
+   * a decision, which is exactly what a log of events is otherwise bad at
+   * keeping. Null on rows written before migration 0023; callers fall back to
+   * their own categorisation, which is what they did before the field existed.
+   */
+  category: ItemCategory | null;
 }
 
 /**

@@ -138,6 +138,7 @@ const LOCAL_PURCHASE_CAP = 4000;
  */
 function toPurchase(
   name: string,
+  category: ItemCategory,
   detail: PurchaseDetail | undefined,
   now: number,
 ): Purchase | null {
@@ -160,6 +161,10 @@ function toPurchase(
     at: now,
     quantity: detail?.quantity ?? null,
     unit: detail?.unit ?? null,
+    // Recorded at purchase time rather than looked up later: the log is what
+    // the pantry is rebuilt from, and a category the user corrected by hand
+    // must survive that rebuild. See migration 0023.
+    category,
   };
 }
 
@@ -291,6 +296,9 @@ function backfillLocal(stats: StatMap, existing: Purchase[], now: number): Purch
       at: stat.lastPurchasedAt,
       quantity: null,
       unit: null,
+      // The stat is the only place this category exists; the rebuilt log has to
+      // carry it forward or the pantry it rebuilds would lose every one.
+      category: stat.category,
     });
   }
   return added.length > 0 ? trimPurchases([...added, ...existing], now) : existing;
@@ -365,7 +373,7 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       purchases,
       logPurchase: (name, category, detail) => {
         setStats((prev) => recordPurchase(prev, name, category));
-        const entry = toPurchase(name, detail, Date.now());
+        const entry = toPurchase(name, category, detail, Date.now());
         if (!entry) return;
         setPurchases((prev) => {
           const next = trimPurchases(foldPurchase(prev, entry), entry.at);
@@ -453,6 +461,7 @@ interface DbPriceRow {
   price_cents: number | null;
   quantity: number | null;
   unit: string | null;
+  category: ItemCategory | null;
   recorded_at: string;
 }
 
@@ -465,6 +474,7 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   at: Date.parse(r.recorded_at),
   quantity: r.quantity == null ? null : Number(r.quantity),
   unit: r.unit,
+  category: r.category,
 });
 
 /** Marks this device's orphaned local log as re-homed. Device-wide, not
@@ -507,7 +517,7 @@ async function migrateLocalPurchases(
     const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, unit, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .limit(LOCAL_PURCHASE_CAP);
@@ -606,7 +616,7 @@ function CloudPantryIntelProvider({
     const since = new Date(Date.now() - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, unit, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .order('recorded_at', { ascending: false })
@@ -701,7 +711,7 @@ function CloudPantryIntelProvider({
         apply(next);
         upsert([normalizeKey(name)], next);
 
-        const entry = toPurchase(name, detail, Date.now());
+        const entry = toPurchase(name, category, detail, Date.now());
         if (!entry) return;
         // Is this a correction to a transaction still inside its session
         // window, or a genuinely new purchase? The answer decides insert vs
@@ -719,6 +729,7 @@ function CloudPantryIntelProvider({
           price_cents: entry.priceCents,
           quantity: entry.quantity,
           unit: entry.unit,
+          category: entry.category,
         };
         const write = open
           // Correcting: keep the original row and its recorded_at, so a long

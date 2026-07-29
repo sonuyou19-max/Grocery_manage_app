@@ -1,5 +1,9 @@
 import type { ItemCategory } from '@korb/shared';
 
+// Type-only, so the cycle with purchase-log (which imports normalizeKey from
+// here) erases at compile time and never exists at runtime.
+import type { Purchase } from '@/lib/purchase-log';
+
 /**
  * Pantry Vibe Check — the silent learning engine.
  *
@@ -317,4 +321,61 @@ export function applyAlmostOut(stats: StatMap, key: string, now: number = Date.n
     sampleCount = Math.max(1, sampleCount);
   }
   return { ...stats, [key]: { ...s, intervalDays, sampleCount, snoozeUntil: now + 2 * DAY } };
+}
+
+/**
+ * Rebuild the whole pantry model from a purchase log.
+ *
+ * This is what lets the log be the single source of truth. Restock cadence
+ * stops being state that has to be migrated, merged or reconciled and becomes a
+ * computation: hand over the purchases, get the pantry back. A guest who signs
+ * up brings a year of shopping and their pantry appears fully formed, rather
+ * than starting to learn from zero on the day they created an account.
+ *
+ * ---------------------------------------------------------------------------
+ * It replays rather than recalculates
+ * ---------------------------------------------------------------------------
+ *
+ * The intervals could be computed directly — sort the gaps, blend them — but
+ * that would be a SECOND implementation of the learning rule, and the two would
+ * drift the first time either was tuned. A household rebuilt from its log would
+ * then predict differently from one that learned live, and nobody would ever
+ * notice because both look plausible. So this folds recordPurchase over the
+ * purchases in order, which is by construction the same answer live recording
+ * would have reached.
+ *
+ * ---------------------------------------------------------------------------
+ * What it deliberately cannot reproduce
+ * ---------------------------------------------------------------------------
+ *
+ * snoozeUntil, keepStocked, cadenceDays and archivedAt are absent from the
+ * result, and that is correct rather than a limitation. Those are DECISIONS —
+ * "still good", "always keep this", "every 14 days", "stop asking" — not
+ * purchase events, and no log of events can contain them. They exist only for
+ * users who reached the Pantry controls, which is exactly the surface an
+ * account unlocks. A rebuild therefore never destroys one, because a rebuild
+ * only happens for someone who could not have set any.
+ *
+ * The caller must still merge rather than overwrite when a row already exists
+ * — another member's decisions are none of this function's business.
+ *
+ * @param categoryFor fallback for purchases logged before migration 0023, which
+ *        carry no category of their own. Injected rather than imported so this
+ *        module stays pure and the check script can run it.
+ */
+export function statsFromPurchases(
+  purchases: Purchase[],
+  categoryFor: (name: string) => ItemCategory = () => 'other',
+): StatMap {
+  // Oldest first: recordPurchase measures each gap against the previous
+  // purchase it has seen, so out-of-order input would produce negative gaps
+  // and a nonsense rate. The log is stored newest-first everywhere else, which
+  // makes this sort the single most important line in the function.
+  const chronological = [...purchases].sort((a, b) => a.at - b.at);
+  let stats: StatMap = {};
+  for (const p of chronological) {
+    if (!p.name?.trim()) continue;
+    stats = recordPurchase(stats, p.name, p.category ?? categoryFor(p.name), p.at);
+  }
+  return stats;
 }
