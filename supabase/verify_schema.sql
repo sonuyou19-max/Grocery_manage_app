@@ -227,6 +227,40 @@ checks as (
                  where table_schema = 'public' and table_name = 'price_entries'
                    and column_name = 'category' and udt_name = 'item_category')
 
+  -- 0024 · entitlement
+  union all select '0024 subscriptions exists',
+         exists (select 1 from col where table_name = 'subscriptions'
+                   and column_name = 'current_period_end')
+  union all select '0024 RLS on subscriptions',
+         coalesce((select c.relrowsecurity from pg_class c
+                   join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relname = 'subscriptions'), false)
+  -- The single most important row in this block. A client able to write here
+  -- could grant itself a subscription; the absence of any INSERT/UPDATE/DELETE
+  -- policy is what makes that impossible rather than merely discouraged.
+  union all select '0024 subscriptions has exactly one (SELECT) policy',
+         (select count(*) from pg_policies
+          where schemaname = 'public' and tablename = 'subscriptions' and cmd = 'SELECT') = 1
+         and (select count(*) from pg_policies
+              where schemaname = 'public' and tablename = 'subscriptions') = 1
+  union all select '0024 can_write_household() exists',
+         exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.proname = 'can_write_household')
+  -- is_entitled takes an arbitrary user id, so an authenticated caller could
+  -- otherwise probe any user's subscription status. my_entitlement() is the
+  -- sanctioned route and is scoped to auth.uid() by construction.
+  union all select '0024 is_entitled NOT executable by anon or authenticated',
+         not has_function_privilege('anon', 'is_entitled(uuid)', 'execute')
+         and not has_function_privilege('authenticated', 'is_entitled(uuid)', 'execute')
+  union all select '0024 my_entitlement executable by authenticated',
+         has_function_privilege('authenticated', 'my_entitlement()', 'execute')
+  union all select '0024 household_access executable by authenticated',
+         has_function_privilege('authenticated', 'household_access()', 'execute')
+  -- Trial length lives in one function so it can be changed in one place.
+  union all select '0024 trial_length() exists',
+         exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.proname = 'trial_length')
+
   -- Pre-existing invariants the new columns rely on. RLS off on any of these
   -- would expose one household's data to another.
   union all select 'RLS on list_items',

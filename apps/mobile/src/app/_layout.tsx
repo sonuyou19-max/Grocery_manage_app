@@ -24,6 +24,7 @@ import { hydrateGetStarted, hydrateOnboarding } from '@/lib/onboarding';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
 import { GroceriesProvider } from '@/store/groceries';
+import { EntitlementProvider } from '@/store/entitlement';
 import { HouseholdProvider } from '@/store/household';
 import { LocaleProvider } from '@/store/locale';
 import { PantryIntelProvider } from '@/store/pantry-intel';
@@ -96,6 +97,10 @@ export default function RootLayout() {
         <LocaleProvider>
         <ToastProvider>
         <AuthProvider>
+          {/* Under Auth because it is keyed on the user, above Household so the
+              switcher and every screen below can ask whether a household is
+              still writable. */}
+          <EntitlementProvider>
           <HouseholdProvider>
             <GroceriesProvider>
               <PantryIntelProvider>
@@ -130,6 +135,7 @@ export default function RootLayout() {
               </PantryIntelProvider>
             </GroceriesProvider>
           </HouseholdProvider>
+          </EntitlementProvider>
         </AuthProvider>
         </ToastProvider>
         </LocaleProvider>
