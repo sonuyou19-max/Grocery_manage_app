@@ -470,21 +470,38 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
       return;
     }
 
-    const { count, error: countError } = await supabase
+    const { data: existing, error: readError } = await supabase
       .from('shopping_lists')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .eq('household_id', householdId);
-    if (countError) return;
-    if ((count ?? 0) > 0) {
-      // Joined an established household. Leave both sides alone, and stop
-      // asking — the answer will not change.
+    if (readError || !existing) return;
+
+    // Is anything here NOT ours?
+    //
+    // The naive check is "does the household already have lists" — and it is
+    // wrong in a way that destroys data. Lists and items are two round trips,
+    // so a network drop between them leaves the lists uploaded and the items
+    // not. On the retry a count-based check sees rows, concludes "established
+    // household, leave it alone", marks itself done, and strands every item
+    // permanently: the user's lists reappear completely empty. That is the
+    // exact outcome this whole migration exists to prevent.
+    //
+    // Comparing IDS instead tells the two cases apart. Ours are client
+    // generated, so a household containing only ids we recognise is our own
+    // interrupted run — resume it. One containing anything else is somebody
+    // else's household, and dumping a stranger's shopping into it would be
+    // worse than leaving ours behind.
+    const mine = new Set(local.map((l) => l.id));
+    const foreign = (existing as Array<{ id: string }>).some((r) => !mine.has(r.id));
+    if (foreign) {
       await AsyncStorage.setItem(LISTS_MIGRATED_KEY, '1');
       return;
     }
 
-    // Lists first, then items: the items carry a foreign key to the list, so a
-    // failure between the two leaves empty lists rather than orphaned rows.
-    const { error: listError } = await supabase.from('shopping_lists').insert(
+    // Lists first: items carry a foreign key to them. ignoreDuplicates makes
+    // each step a no-op when it already ran, so resuming costs nothing and
+    // cannot overwrite anything the user has since edited on another device.
+    const { error: listError } = await supabase.from('shopping_lists').upsert(
       local.map((l, i) => ({
         id: l.id,
         household_id: householdId,
@@ -492,6 +509,7 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
         store: l.store ?? null,
         position: i,
       })),
+      { onConflict: 'id', ignoreDuplicates: true },
     );
     if (listError) return;
 
@@ -511,7 +529,9 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
       })),
     );
     if (items.length > 0) {
-      const { error: itemError } = await supabase.from('list_items').insert(items);
+      const { error: itemError } = await supabase
+        .from('list_items')
+        .upsert(items, { onConflict: 'id', ignoreDuplicates: true });
       if (itemError) return;
     }
 
