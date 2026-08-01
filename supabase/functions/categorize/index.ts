@@ -41,8 +41,10 @@ type Group = (typeof GROUPS)[number];
 const UNITS = ['g', 'kg', 'ml', 'L', 'pcs'] as const;
 type Unit = (typeof UNITS)[number];
 
-const SYSTEM_PROMPT = `You classify a single grocery item.
-Return ONLY a JSON object, no prose, no code fences: {"category": "...", "group": "..."}.
+const SYSTEM_PROMPT = `You classify a single grocery item. The name may be in ANY
+language — Hindi, Turkish, Arabic, anything — not only the ones this app ships in.
+Return ONLY a JSON object, no prose, no code fences. EVERY key is required:
+{"category": "...", "group": "...", "emoji": "...", "generic": true, "unit": "..."}
 category is one of: ${CATEGORIES.join(', ')}.
 - produce/herbs -> fruit_veg; milk/cheese/eggs -> dairy_eggs; fresh meat/fish -> meat_fish;
   bread/pastries -> bakery; dry/canned/staples/condiments -> pantry; frozen goods -> frozen;

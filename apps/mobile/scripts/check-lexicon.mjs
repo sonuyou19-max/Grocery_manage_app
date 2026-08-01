@@ -190,5 +190,37 @@ client.setEmojiLexicon(() => undefined);
 check('unwired lexicon changes nothing', client.emojiFor('Milk', 'dairy_eggs'), '🥛');
 check('unknown term still falls back to its category', client.emojiFor('zzzqq', 'bakery'), '🍞');
 
+/* ------------------------------------ the prompt asks for what the parser reads */
+
+// The bug this pins, found in a shipped build: the response-shape example named
+// only two of the five fields. Everything described in prose further down —
+// emoji, generic, unit — was quietly never returned, because a model that is
+// shown an object with two keys returns an object with two keys.
+//
+// It was invisible for weeks. English items still showed the right emoji from
+// the curated table, so only a Hindi word revealed it — and `generic` silently
+// defaulting to false meant the shared lexicon had never published a single
+// term. A prompt cannot be typechecked, so this is the only place the two
+// halves are held together.
+const fn = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', 'categorize', 'index.ts'), 'utf8');
+
+const promptMatch = fn.match(/const SYSTEM_PROMPT = `([\s\S]*?)`;/);
+check('the system prompt is findable', promptMatch != null, true);
+const prompt = promptMatch ? promptMatch[1] : '';
+
+// Every key the parser destructures off the model's JSON.
+const parsedShape = fn.match(/const parsed = JSON\.parse\(extractJson\(raw\)\) as \{([\s\S]*?)\};/);
+check('the parsed shape is findable', parsedShape != null, true);
+const fields = parsedShape
+  ? [...parsedShape[1].matchAll(/^\s*(\w+)\??:/gm)].map((m) => m[1])
+  : [];
+check('all five fields are parsed', fields.length, 5);
+
+// The example object the model is shown, i.e. the first {...} in the prompt.
+const example = (prompt.match(/\{[^}]*"category"[^}]*\}/) ?? [''])[0];
+for (const f of fields) {
+  check(`the prompt's example object names "${f}"`, example.includes(`"${f}"`), true);
+}
+
 console.log(failures === 0 ? 'ALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
