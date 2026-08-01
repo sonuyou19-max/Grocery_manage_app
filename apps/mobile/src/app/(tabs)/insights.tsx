@@ -6,6 +6,7 @@ import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
 import { InsightsTeaser } from '@/components/insights-teaser';
+import { PlusCard } from '@/components/plus-card';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
@@ -21,6 +22,7 @@ import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
 import { priced as pricedPurchases, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
 import { useAuth } from '@/store/auth';
+import { useEntitlement } from '@/store/entitlement';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
@@ -33,7 +35,17 @@ type IconName = keyof typeof Ionicons.glyphMap;
  * balance (a rough food-group mix), your staples, and — once you log prices —
  * spending. Everything degrades gracefully while there isn't much data yet.
  *
- * The gate. Signed out, the whole tab is a teaser.
+ * Three states, not two:
+ *
+ *   guest   the whole tab is a blurred teaser — there is nothing of theirs to
+ *           show, so the question being answered is "what is this for"
+ *   free    their own real figures, for the last few weeks, with the three
+ *           cards that need a longer history replaced by one that explains them
+ *   Plus    everything
+ *
+ * The middle state only exists once billing is switched on server-side; until
+ * then `gateActive` is false and free reads identically to Plus. See
+ * store/entitlement.tsx.
  *
  * Split into two components rather than an early return inside one, because
  * the screen below is full of useMemo and a conditional return above them
@@ -55,12 +67,37 @@ function SignedInInsights() {
   const { t, money } = useLocale();
   const { lists } = useGroceries();
   const { stats, purchases } = usePantryIntel();
+  const { entitled, gateActive, historyCutoff } = useEntitlement();
+
+  /**
+   * Is this account currently being held to the free tier?
+   *
+   * Both halves are required. `gateActive` alone would lock a paying customer
+   * out; `!entitled` alone would lock everyone out before billing exists, which
+   * is the state the app ships in.
+   */
+  const locked = gateActive && !entitled;
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
   // Recomputed against a single `now` so the chart and the copy agree.
   const now = Date.now();
-  const trend = useMemo(() => spendTrend(purchases, now, 8), [purchases, now]);
+
+  /**
+   * How many weeks the free tier is showing, derived from the server's own
+   * cutoff rather than repeated as a constant here. If the number in the SQL
+   * changes, the sentence on screen changes with it.
+   */
+  const freeWeeks = Math.max(
+    1,
+    Math.round((now - (historyCutoff ?? now)) / (7 * 24 * 60 * 60 * 1000)),
+  );
+  // Eight weeks of bars over a four-week log would be half an empty chart, so
+  // the axis follows whatever history this account actually has.
+  const trend = useMemo(
+    () => spendTrend(purchases, now, locked ? 4 : 8),
+    [purchases, now, locked],
+  );
   const moves = useMemo(() => priceMoves(purchases), [purchases]);
   const hasTrend = trend.weeks.some((w) => w.count > 0);
 
@@ -133,7 +170,10 @@ function SignedInInsights() {
 
   return (
     <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
-      <WeeklyRecapCard />
+      {/* Plus. The recap is the only card here that costs money to produce —
+          one AI call per household per week — so it is also the one whose
+          price and paid status line up without argument. */}
+      {!locked && <WeeklyRecapCard />}
 
       {cart.total > 0 && (
         <Card>
@@ -219,8 +259,10 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {/* Items that cost more (or less) than they usually do. */}
-      {moves.length > 0 && (
+      {/* Items that cost more (or less) than they usually do. Plus: "usually"
+          is a claim about the past, and four weeks is not enough past to make
+          it. */}
+      {!locked && moves.length > 0 && (
         <Card>
           <CardHead
             icon="swap-vertical-outline"
@@ -300,8 +342,9 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {/* Cheaper elsewhere — same item priced at 2+ stores. */}
-      {cheaper.length > 0 && (
+      {/* Cheaper elsewhere — same item priced at 2+ stores. Plus: same reason.
+          Comparing shops needs enough trips to have visited more than one. */}
+      {!locked && cheaper.length > 0 && (
         <Card>
           <CardHead icon="trending-down-outline" title={t('insights.cheaperTitle')} hint={t('insights.cheaperHint')} />
           {cheaper.slice(0, 6).map((h) => (
@@ -325,6 +368,11 @@ function SignedInInsights() {
           ))}
         </Card>
       )}
+
+      {/* Last, where the three cards it stands in for would have been — so it
+          is found at the end of the reader's own figures rather than in front
+          of them. A free tab still ends with something to read. */}
+      {locked && <PlusCard freeWeeks={freeWeeks} />}
     </Screen>
   );
 }

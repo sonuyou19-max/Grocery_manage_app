@@ -222,6 +222,18 @@ const es = {
     cadenceLearned: { one: 'Korb ha aprendido unos %{count} día', other: 'Korb ha aprendido unos %{count} días' },
     cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
   },
+  plus: {
+    title: 'Korb Plus',
+    showingWeeks: {
+      one: 'Mostrando la última semana de gastos.',
+      other: 'Mostrando las últimas %{count} semanas de gastos.',
+    },
+    perkHistory: 'Un año completo de historial de gastos',
+    perkMoves: 'Cambios de precio: qué subió y cuánto',
+    perkCheaper: 'Más barato en otro sitio: el mismo producto entre tiendas',
+    perkRecap: 'Tu resumen semanal, escrito para ti',
+    nothingLost: 'No se borra nada. Tus compras antiguas siguen aquí y vuelven al instante con Plus.',
+  },
   household: {
     defaultName: 'Casa de %{name}',
     nowShoppingIn: 'Ahora compras en %{name}',

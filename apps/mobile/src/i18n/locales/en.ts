@@ -234,6 +234,18 @@ const en = {
     cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
     cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
   },
+  plus: {
+    title: 'Korb Plus',
+    showingWeeks: {
+      one: 'Showing the last week of spending.',
+      other: 'Showing the last %{count} weeks of spending.',
+    },
+    perkHistory: 'A full year of spending history',
+    perkMoves: 'Price changes — what went up, and by how much',
+    perkCheaper: 'Cheaper elsewhere — the same item across shops',
+    perkRecap: 'Your weekly recap, written for you',
+    nothingLost: 'Nothing is deleted. Your older shopping is still here, and comes straight back with Plus.',
+  },
   household: {
     defaultName: '%{name}’s home',
     nowShoppingIn: 'Now shopping in %{name}',

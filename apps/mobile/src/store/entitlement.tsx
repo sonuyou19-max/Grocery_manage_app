@@ -6,53 +6,86 @@ import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
 
 /**
- * Whether this person may share a household, and which of their households are
- * still writable.
+ * Korb Plus: what this person has paid for, and how far back they may look.
  *
  * ---------------------------------------------------------------------------
- * This is a MIRROR, never the decision
+ * What Plus is, and what it deliberately is not
  * ---------------------------------------------------------------------------
  *
- * Everything here is for rendering: greying a frozen household, showing the
- * paywall on the invite button, telling someone their trial ends on Friday. The
- * actual enforcement lives in Postgres (migration 0024) and in the policies
- * built on it — a client that lied about `entitled` would get a row-level
- * security error on the first write, not a free subscription.
+ * Plus buys DEPTH, not features. Free accounts get lists, cloud backup,
+ * realtime, the entire pantry with its burn-rate prediction, and — this is the
+ * part that changed — inviting other people into a household. Plus adds the
+ * full year of spending history instead of the last few weeks, and the three
+ * Insights cards that cannot exist without it: price moves over time, cheaper
+ * elsewhere across shops, and the weekly recap.
  *
- * Saying that plainly matters, because the temptation with a flag like this is
- * to start trusting it. If you ever find yourself wanting to *skip* a server
- * call because this says the user isn't entitled, that is fine; if you find
- * yourself wanting to *allow* something because it says they are, the check
- * belongs on the server.
+ * Sharing used to be the paid feature, and migration 0024 still carries the
+ * vocabulary for it. It was dropped because every comparable app gives sharing
+ * away, so charging for it made Korb's free tier visibly worse than whatever
+ * the user already has — and because an invite is how a second person comes to
+ * install the app at all. Taxing that taxes growth. See migration 0025.
  *
  * ---------------------------------------------------------------------------
- * Why access is a map and not a boolean
+ * This is a MIRROR, and the thing it mirrors is not a lock
  * ---------------------------------------------------------------------------
  *
- * Entitlement is per-user but writability is per-household, and they are not
- * the same question. Aparna is unsubscribed yet writes freely to her own
- * household, and — while Sonu pays — to his. One flag could not express that,
- * so the server returns a row per household and the client just looks it up.
+ * The old version of this file said enforcement lived in RLS, which was true
+ * when the paid thing was writing to someone else's household: lying about
+ * `entitled` got you a row-level security error, not a free subscription.
+ *
+ * That is no longer the shape of it, and pretending otherwise would be worse
+ * than saying nothing. The rows behind the history window are the user's OWN
+ * purchases, and RLS lets them read every one — as it should. `historyCutoff`
+ * is a product boundary the client is trusted to honour, and a patched client
+ * could ask for more.
+ *
+ * That is an acceptable trade because of what is behind the boundary: somebody
+ * sees their own groceries. It would not be acceptable for anything involving
+ * another person's data, another household, or the ability to write. If a
+ * future paid feature touches any of those, it needs a server check of its own
+ * and must not be added to this object and treated as done.
+ *
+ * The cutoff still comes from the server, though — see below.
  */
 
 interface EntitlementContext {
-  /** May this user invite anyone into a household? The one paid capability. */
+  /** Does this person have Plus (paid, or still inside the free month)? */
   entitled: boolean;
   /** When the free month runs out. Null once it has, or before we know. */
   trialEndsAt: number | null;
   /** End of a paid period, when there is one. */
   subscribedUntil: number | null;
+  /**
+   * The oldest purchase timestamp this account may see, as epoch ms.
+   *
+   * Computed by Postgres (`my_entitlement()`), never here. Not for enforcement
+   * — see above — but so "the free tier is four weeks" has exactly one
+   * definition. A constant in this bundle would ship on its own schedule, drift
+   * from the number printed on the paywall, and need a store release to change.
+   * The server can change it between two app opens.
+   *
+   * Null before the first answer arrives, and null when signed out. Callers
+   * must treat null as "no window yet" and fall back to their own default
+   * rather than to zero, which would show an empty history.
+   */
+  historyCutoff: number | null;
+  /**
+   * Is anything actually withheld from a free account right now?
+   *
+   * False until billing goes live, and false again the moment it is switched
+   * off — the server derives it from whether the free window is narrower than
+   * the paid one (migration 0025), so ONE change to one SQL function turns the
+   * whole tier on or off without an app release.
+   *
+   * Kept distinct from `!entitled`, and the difference matters: before launch
+   * every account past its free month is unentitled, but nothing is being
+   * withheld from it. Gating on `!entitled` alone would take the recap away
+   * from testers while leaving their history untouched — one user given two
+   * different answers about which tier they are on.
+   */
+  gateActive: boolean;
   /** False until the first answer arrives — callers must not gate on a guess. */
   loaded: boolean;
-  /**
-   * Can the current user write to this household right now?
-   *
-   * Optimistic before the first load: an unknown household reads as writable,
-   * because briefly showing a live list that turns out to be frozen is a much
-   * smaller harm than greying out a household the user is paying for while a
-   * request is in flight.
-   */
-  canWrite: (householdId: string) => boolean;
   refresh: () => Promise<void>;
 }
 
@@ -62,6 +95,8 @@ interface EntitlementRow {
   entitled: boolean;
   trial_ends_at: string | null;
   subscribed_until: string | null;
+  history_cutoff: string | null;
+  plus_gate_active: boolean;
 }
 
 const ms = (iso: string | null): number | null => {
@@ -76,7 +111,8 @@ export function EntitlementProvider({ children }: PropsWithChildren) {
   const [entitled, setEntitled] = useState(false);
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
   const [subscribedUntil, setSubscribedUntil] = useState<number | null>(null);
-  const [access, setAccess] = useState<Record<string, boolean>>({});
+  const [historyCutoff, setHistoryCutoff] = useState<number | null>(null);
+  const [gateActive, setGateActive] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -86,37 +122,27 @@ export function EntitlementProvider({ children }: PropsWithChildren) {
       setEntitled(false);
       setTrialEndsAt(null);
       setSubscribedUntil(null);
-      setAccess({});
+      setHistoryCutoff(null);
+      setGateActive(false);
       setLoaded(true);
       return;
     }
     try {
-      const [mine, households] = await Promise.all([
-        supabase.rpc('my_entitlement'),
-        supabase.rpc('household_access'),
-      ]);
-      if (!mine.error && mine.data) {
-        const row = (Array.isArray(mine.data) ? mine.data[0] : mine.data) as
-          | EntitlementRow
-          | undefined;
+      const { data, error } = await supabase.rpc('my_entitlement');
+      if (!error && data) {
+        const row = (Array.isArray(data) ? data[0] : data) as EntitlementRow | undefined;
         if (row) {
           setEntitled(row.entitled === true);
           setTrialEndsAt(ms(row.trial_ends_at));
           setSubscribedUntil(ms(row.subscribed_until));
+          setHistoryCutoff(ms(row.history_cutoff));
+          setGateActive(row.plus_gate_active === true);
         }
-      }
-      if (!households.error && Array.isArray(households.data)) {
-        const map: Record<string, boolean> = {};
-        for (const r of households.data as Array<{ household_id: string; can_write: boolean }>) {
-          map[r.household_id] = r.can_write === true;
-        }
-        setAccess(map);
       }
     } catch {
-      // Offline. Keep whatever we last knew rather than flipping the whole app
-      // into a frozen state over a dropped request — the server is still the
-      // one refusing writes, so a stale optimistic view costs one failed write
-      // and an explanation, not a wrong grant.
+      // Offline. Keep whatever we last knew rather than narrowing someone's
+      // history because a request timed out — a stale generous view costs
+      // nothing, and the next foreground corrects it.
     } finally {
       setLoaded(true);
     }
@@ -131,15 +157,8 @@ export function EntitlementProvider({ children }: PropsWithChildren) {
   }, [refresh, appActive]);
 
   const value = useMemo<EntitlementContext>(
-    () => ({
-      entitled,
-      trialEndsAt,
-      subscribedUntil,
-      loaded,
-      canWrite: (householdId) => access[householdId] ?? true,
-      refresh,
-    }),
-    [entitled, trialEndsAt, subscribedUntil, loaded, access, refresh],
+    () => ({ entitled, trialEndsAt, subscribedUntil, historyCutoff, gateActive, loaded, refresh }),
+    [entitled, trialEndsAt, subscribedUntil, historyCutoff, gateActive, loaded, refresh],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

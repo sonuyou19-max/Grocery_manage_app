@@ -12,7 +12,7 @@
  * listing's "Privacy Policy URL" field needs a hosted URL regardless.
  */
 
-export const LEGAL_LAST_UPDATED = '20 July 2026';
+export const LEGAL_LAST_UPDATED = '1 August 2026';
 
 /** Hosted URLs — leave empty to use the bundled in-app screens. */
 export const PRIVACY_URL = '';
@@ -41,7 +41,11 @@ When you sign in to sync and share, we process:
 - **Grocery & pantry data** — the lists and items you create, which items you check off, and the pantry statistics used to predict restocks.
 - **Technical data** — a session token and basic device information, and, if enabled, anonymised crash diagnostics.
 
+- **Subscription status** — if you subscribe to Korb Plus, we store the date your access runs until, which store sold it, and that purchase's identifier, so the app knows what to unlock.
+
 We do not collect your contacts, precise location, advertising identifiers, or payment card details, and we do not sell your data or use it for advertising.
+
+We never see your payment details. Korb Plus is bought and billed entirely through Google Play; we receive only a confirmation that a subscription is active and until when.
 
 ## Store cards stay on your device
 
@@ -59,13 +63,16 @@ The camera is used only to read the barcode at the moment you add a card. No pho
 
 - **Supabase** — hosting, database, and authentication, stored in the EU (Frankfurt).
 - **Anthropic** — powers the AI features. When you use AI quick-add, automatic categorisation, or the weekly recap, the relevant text is sent to Anthropic to generate a response. It is not used to train their models, and may be processed outside the EU under appropriate safeguards.
-- **Sentry** — receives anonymised crash reports to help us fix bugs.
+- **Sentry** — receives anonymised crash reports to help us fix bugs. Reports identify the screen you were on, never the contents of your lists, your household, or which items they refer to.
+- **Google Play and RevenueCat** — handle payment and tell us whether a subscription is active, if you buy Korb Plus. They receive no grocery, pantry, or household data.
 
 We may also disclose data if required by law.
 
 ## How long we keep it
 
 We keep your data for as long as your account exists. When you delete your account in Settings, we remove your account and the data tied to it; if you are the last member of a household, that household and its lists and pantry history are deleted too.
+
+Purchase history older than a year is removed automatically. Ending a Korb Plus subscription does **not** delete anything: your older history stops being displayed beyond the free window and is shown again in full if you subscribe again.
 
 ## Your rights
 
@@ -108,6 +115,28 @@ Anything you add to a shared household can be seen and changed by other members.
 ## Acceptable use
 
 Please don't use Korb for anything unlawful, attempt to break or gain unauthorised access to the app or its backend, or abuse the AI or other features with automated or excessive requests. We may suspend access that violates these Terms.
+
+## Korb Plus (subscription)
+
+Korb is free to use. Everything you need to run a household — your lists, cloud backup, sharing a household with other people, and the whole pantry with its predictions — costs nothing and always will.
+
+**Korb Plus** is an optional paid subscription. It adds a full year of spending history instead of the most recent weeks, price-change tracking, cheaper-elsewhere comparisons between shops, and your written weekly recap.
+
+**Free month.** Every new account gets Korb Plus free for 30 days from the day it is created. You do not need to enter payment details to get it, and it does not turn into a paid subscription on its own — nothing is charged unless you choose to subscribe.
+
+**Prices and billing.** Plus is offered monthly or annually. The exact price for your country, including VAT, is shown in the app before you confirm, and again by Google Play at the moment of purchase. Payment is taken by Google Play, not by us.
+
+**Renewal.** Subscriptions renew automatically at the end of each period until cancelled. Google Play charges the renewal within 24 hours before the current period ends.
+
+**Cancelling.** Cancel any time in the Google Play Store, under Payments & subscriptions. Cancelling stops the next renewal; you keep Plus until the end of the period you have already paid for. We cannot cancel a Google Play subscription on your behalf.
+
+**Refunds.** Refunds are handled by Google Play under their policy. If you believe something has gone wrong, contact us and we will help where we can.
+
+**Right of withdrawal (EU/EEA).** As a consumer you normally have 14 days to withdraw from a distance contract. Because Plus gives you immediate access to digital content, you are asked to agree at purchase that the service starts straight away, and you acknowledge that you lose the right of withdrawal once it has been fully performed. This does not affect your other statutory rights.
+
+**If your subscription ends.** Nothing is deleted. Your older shopping history stays exactly where it is — it simply stops being shown beyond the free window, and reappears in full if you subscribe again. You keep full use of every free feature, including sharing your household.
+
+**Price changes.** If we change the price of an existing subscription, you will be told in advance and asked to accept before it applies to you, as required by Google Play.
 
 ## AI features
 

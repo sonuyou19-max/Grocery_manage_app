@@ -265,6 +265,20 @@ const pl = {
     },
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
   },
+  plus: {
+    title: 'Korb Plus',
+    showingWeeks: {
+      one: 'Pokazujemy ostatni tydzień wydatków.',
+      few: 'Pokazujemy ostatnie %{count} tygodnie wydatków.',
+      many: 'Pokazujemy ostatnich %{count} tygodni wydatków.',
+      other: 'Pokazujemy ostatnie %{count} tygodnia wydatków.',
+    },
+    perkHistory: 'Pełny rok historii wydatków',
+    perkMoves: 'Zmiany cen — co podrożało i o ile',
+    perkCheaper: 'Taniej gdzie indziej — ten sam produkt w różnych sklepach',
+    perkRecap: 'Twoje tygodniowe podsumowanie, napisane dla Ciebie',
+    nothingLost: 'Nic nie jest usuwane. Twoje starsze zakupy wciąż tu są i wracają od razu z Plus.',
+  },
   household: {
     defaultName: 'Dom – %{name}',
     nowShoppingIn: 'Kupujesz teraz w %{name}',

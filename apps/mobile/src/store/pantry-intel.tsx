@@ -38,6 +38,7 @@ import {
 } from '@/lib/purchase-log';
 import { purchasesToMigrate } from '@/lib/purchase-migration';
 import { useAuth } from '@/store/auth';
+import { useEntitlement } from '@/store/entitlement';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 
@@ -203,11 +204,22 @@ function foldPurchase(existing: Purchase[], entry: Purchase): Purchase[] {
  */
 const EMPTY_STATS: StatMap = {};
 
-/** Newest first, inside the window, capped. */
-function trimPurchases(all: Purchase[], now: number): Purchase[] {
-  const cutoff = now - PURCHASE_WINDOW_MS;
+/**
+ * Newest first, inside the window, capped.
+ *
+ * `cutoff` is the oldest purchase to keep. It comes from the server for signed-
+ * in accounts (see entitlement.tsx — a free account sees the last few weeks,
+ * Plus sees the year) and falls back to the full retention window when there
+ * isn't one: guests, and the moment before the first answer arrives.
+ *
+ * Falling back to the FULL window rather than the free one is deliberate. Being
+ * briefly generous costs nothing; being briefly stingy would blank out a
+ * paying customer's history every time the app opened on a slow connection.
+ */
+function trimPurchases(all: Purchase[], now: number, cutoff?: number | null): Purchase[] {
+  const oldest = cutoff ?? now - PURCHASE_WINDOW_MS;
   return all
-    .filter((p) => p.at >= cutoff)
+    .filter((p) => p.at >= oldest)
     .sort((a, b) => b.at - a.at)
     .slice(0, LOCAL_PURCHASE_CAP);
 }
@@ -590,6 +602,20 @@ function CloudPantryIntelProvider({
   const purchaseCacheKey = `korb.purchaseLog.cloud.${householdId}`;
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * How far back this account may look, held in a ref rather than read directly.
+   *
+   * The server computes it as `now() - interval`, so the value moves every time
+   * it is asked. Putting it in a dependency array would make fetchPurchases a
+   * new function on every foreground refresh, which would tear down and
+   * re-open the realtime channel each time for a number that has changed by a
+   * few hundred milliseconds. The ref keeps the callback stable; `loaded` below
+   * is what actually triggers the one refetch that matters.
+   */
+  const { historyCutoff, loaded: entitlementLoaded } = useEntitlement();
+  const cutoffRef = useRef<number | null>(null);
+  cutoffRef.current = historyCutoff;
+
   const apply = useCallback(
     (map: StatMap) => {
       setStats(map);
@@ -626,10 +652,13 @@ function CloudPantryIntelProvider({
   /**
    * The household's recent priced purchases. Windowed in the query rather than
    * client-side, so the response stays bounded however long the household has
-   * been shopping.
+   * been shopping — and, since the window is now also the paid boundary, so the
+   * rows a free account may not see are never sent to the device in the first
+   * place. Hiding them after they arrive would leave them sitting in the
+   * AsyncStorage mirror.
    */
   const fetchPurchases = useCallback(async () => {
-    const since = new Date(Date.now() - PURCHASE_WINDOW_MS).toISOString();
+    const since = new Date(cutoffRef.current ?? Date.now() - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
       .select('id, item_key, item_name, store, price_cents, quantity, unit, category, recorded_at')
@@ -673,23 +702,9 @@ function CloudPantryIntelProvider({
         if (alive && raw) setStats(JSON.parse(raw) as StatMap);
       })
       .catch(() => {});
-    AsyncStorage.getItem(purchaseCacheKey)
-      .then((raw) => {
-        if (!alive || !raw) return;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setPurchases(trimPurchases(parsed as Purchase[], Date.now()));
-      })
-      .catch(() => {});
     if (!appActive) return () => { alive = false; };
 
     void fetchStats();
-    // Not on the realtime path (price_entries is deliberately unpublished — see
-    // migration 0013), so this is refreshed on open and on returning to the
-    // foreground. A member's purchase landing mid-session changes no decision
-    // currently on screen.
-    void fetchPurchases().then(() => {
-      if (alive) void migrateLocalPurchases(householdId, applyPurchases, fetchStats);
-    });
 
     const channel = supabase
       .channel(`pantry-${householdId}`)
@@ -705,7 +720,57 @@ function CloudPantryIntelProvider({
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
       supabase.removeChannel(channel);
     };
-  }, [householdId, cacheKey, purchaseCacheKey, fetchStats, fetchPurchases, scheduleRefetch, appActive]);
+  }, [householdId, cacheKey, fetchStats, scheduleRefetch, appActive]);
+
+  /**
+   * The money log, hydrated and fetched separately from the pantry above.
+   *
+   * Separate because it waits for something the pantry does not: `loaded` from
+   * the entitlement provider. The pantry is free for everyone, so it starts the
+   * moment the screen mounts. The purchase log is windowed by what the account
+   * has paid for, and reading the cache — or fetching — before that answer
+   * arrives would show a free account its full year for one frame and then
+   * snatch it back, which is a worse experience than the log appearing a beat
+   * late on a tab nobody launches into.
+   *
+   * `entitlementLoaded` flips false→true exactly once per sign-in, so this runs
+   * twice at most per cold start and never re-opens the realtime channel above.
+   *
+   * price_entries is deliberately unpublished (migration 0013), so there is no
+   * socket here: refreshed on open and on returning to the foreground. A
+   * member's purchase landing mid-session changes no decision on screen.
+   */
+  useEffect(() => {
+    if (!entitlementLoaded) return;
+    let alive = true;
+    AsyncStorage.getItem(purchaseCacheKey)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        const parsed = JSON.parse(raw);
+        // Trimmed against the CURRENT window, not the one in force when it was
+        // written. Without this, an account that lapses keeps seeing its full
+        // year straight from the device cache — the one path where the server
+        // window cannot help, because no request is made.
+        if (Array.isArray(parsed)) {
+          setPurchases(trimPurchases(parsed as Purchase[], Date.now(), cutoffRef.current));
+        }
+      })
+      .catch(() => {});
+    if (!appActive) return () => { alive = false; };
+
+    void fetchPurchases().then(() => {
+      if (alive) void migrateLocalPurchases(householdId, applyPurchases, fetchStats);
+    });
+    return () => { alive = false; };
+  }, [
+    householdId,
+    purchaseCacheKey,
+    entitlementLoaded,
+    fetchPurchases,
+    applyPurchases,
+    fetchStats,
+    appActive,
+  ]);
 
   const value = useMemo<PantryIntelContext>(() => {
     const upsert = (keys: string[], map: StatMap) => {

@@ -222,6 +222,18 @@ const nl = {
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
   },
+  plus: {
+    title: 'Korb Plus',
+    showingWeeks: {
+      one: 'Toont de laatste week aan uitgaven.',
+      other: 'Toont de laatste %{count} weken aan uitgaven.',
+    },
+    perkHistory: 'Een heel jaar aan uitgavengeschiedenis',
+    perkMoves: 'Prijsveranderingen — wat duurder werd, en hoeveel',
+    perkCheaper: 'Elders goedkoper — hetzelfde product per winkel',
+    perkRecap: 'Je wekelijkse terugblik, voor jou geschreven',
+    nothingLost: 'Er wordt niets verwijderd. Je oudere boodschappen staan er nog en komen met Plus meteen terug.',
+  },
   household: {
     defaultName: 'Huis van %{name}',
     nowShoppingIn: 'Je winkelt nu in %{name}',

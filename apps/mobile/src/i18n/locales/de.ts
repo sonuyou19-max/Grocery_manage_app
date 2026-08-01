@@ -223,6 +223,18 @@ const de = {
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
   },
+  plus: {
+    title: 'Korb Plus',
+    showingWeeks: {
+      one: 'Zeigt die letzte Woche deiner Ausgaben.',
+      other: 'Zeigt die letzten %{count} Wochen deiner Ausgaben.',
+    },
+    perkHistory: 'Ein ganzes Jahr Ausgabenverlauf',
+    perkMoves: 'Preisänderungen – was teurer wurde, und um wie viel',
+    perkCheaper: 'Woanders günstiger – dasselbe Produkt über Läden hinweg',
+    perkRecap: 'Dein wöchentlicher Rückblick, für dich geschrieben',
+    nothingLost: 'Nichts wird gelöscht. Deine älteren Einkäufe sind weiterhin da und kommen mit Plus sofort zurück.',
+  },
   household: {
     defaultName: 'Zuhause von %{name}',
     nowShoppingIn: 'Du kaufst jetzt in %{name} ein',
