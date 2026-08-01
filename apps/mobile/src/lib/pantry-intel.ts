@@ -379,3 +379,49 @@ export function statsFromPurchases(
   }
   return stats;
 }
+
+/**
+ * Undo one item's purchase, rebuilding its stat from what is left of the log.
+ *
+ * Ticking an item does two things — it writes a transaction AND it moves the
+ * item's burn rate on. Unticking within the mistake window undid only the
+ * first, so the pantry went on insisting the item was bought today: it appeared
+ * under Running low, "on a list", and "Last bought today" simultaneously, which
+ * is three statements that cannot all be true.
+ *
+ * The stat cannot simply be decremented, because the interval is an EMA — there
+ * is no arithmetic that removes one sample from it. So this replays the item's
+ * REMAINING purchases through the same learning code, which is by construction
+ * the state it would have been in had the mistaken tick never happened.
+ *
+ * Only that one item is rebuilt. Replaying the whole pantry on every untick
+ * would be work proportional to a year of shopping for a correction that
+ * touches one row.
+ *
+ * @param remaining the log AFTER the mistaken purchase was removed
+ */
+export function revertPurchase(
+  stats: StatMap,
+  key: string,
+  remaining: Purchase[],
+  categoryFor?: (name: string) => ItemCategory,
+): StatMap {
+  const prev = stats[key];
+  if (!prev) return stats;
+
+  const mine = remaining.filter((p) => p.key === key);
+  if (mine.length === 0) {
+    // That was its only purchase, so the item was created BY the mistake.
+    // Removing it restores exactly the state before the tick — leaving it with
+    // lastPurchasedAt 0 would keep a ghost row in the pantry that can never
+    // come due and that the user never asked to track.
+    const { [key]: _gone, ...rest } = stats;
+    return rest;
+  }
+
+  const rebuilt = statsFromPurchases(mine, categoryFor)[key];
+  if (!rebuilt) return stats;
+  // Spread the previous row first so the user's own settings survive — a staple
+  // flag or a pinned cadence is not a consequence of the purchase being undone.
+  return { ...stats, [key]: { ...prev, ...rebuilt } };
+}

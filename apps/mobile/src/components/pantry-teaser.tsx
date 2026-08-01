@@ -26,12 +26,19 @@ import type { ItemCategory } from '@korb/shared';
  */
 
 /** Invented, and fixed — a teaser that reshuffles on every render looks broken. */
-const SAMPLE: Array<{ name: string; category: ItemCategory; days: number; left: number }> = [
+const RUNNING_LOW: Array<{ name: string; category: ItemCategory; days: number; left: number }> = [
   { name: 'Milk', category: 'dairy_eggs', days: 6, left: 1 },
   { name: 'Bread', category: 'bakery', days: 4, left: 0 },
   { name: 'Eggs', category: 'dairy_eggs', days: 5, left: 2 },
-  { name: 'Coffee', category: 'pantry', days: 24, left: 9 },
-  { name: 'Bananas', category: 'fruit_veg', days: 7, left: 4 },
+  { name: 'Bananas', category: 'fruit_veg', days: 7, left: 1 },
+];
+
+const IN_STOCK: Array<{ name: string; category: ItemCategory; days: number; left: number }> = [
+  { name: 'Coffee', category: 'pantry', days: 24, left: 16 },
+  { name: 'Rice', category: 'pantry', days: 45, left: 31 },
+  { name: 'Olive oil', category: 'pantry', days: 40, left: 28 },
+  { name: 'Butter', category: 'dairy_eggs', days: 14, left: 9 },
+  { name: 'Pasta', category: 'pantry', days: 30, left: 22 },
 ];
 
 export function PantryTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }) {
@@ -44,8 +51,9 @@ export function PantryTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }) 
         title={hasLocalHistory ? t('teaser.pantryKeepTitle') : t('teaser.pantryTitle')}
         body={hasLocalHistory ? t('teaser.pantryKeepBody') : t('teaser.pantryBody')}
       >
+        <Text style={[type.label, { color: colors.muted }]}>{t('pantry.runningLow')}</Text>
         <Card>
-          {SAMPLE.map((s) => {
+          {RUNNING_LOW.map((s) => {
             // A bar that is nearly empty reads as "buy this now" at a glance,
             // which is the whole idea the Pantry is selling.
             const fraction = Math.max(0.06, Math.min(1, s.left / s.days));
@@ -64,6 +72,28 @@ export function PantryTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }) 
                         },
                       ]}
                     />
+                    <View style={{ flex: 1 - fraction }} />
+                  </View>
+                </View>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {t('pantry.daysLeft', { count: s.left })}
+                </Text>
+              </View>
+            );
+          })}
+        </Card>
+
+        <Text style={[type.label, { color: colors.muted }]}>{t('pantry.inStock')}</Text>
+        <Card>
+          {IN_STOCK.map((s) => {
+            const fraction = Math.max(0.06, Math.min(1, s.left / s.days));
+            return (
+              <View key={s.name} style={styles.row}>
+                <ItemEmoji name={s.name} category={s.category} />
+                <View style={styles.grow}>
+                  <Text style={[type.body, { color: colors.ink }]}>{s.name}</Text>
+                  <View style={[styles.track, { backgroundColor: colors.line }]}>
+                    <View style={[styles.fill, { flex: fraction, backgroundColor: colors.accent }]} />
                     <View style={{ flex: 1 - fraction }} />
                   </View>
                 </View>

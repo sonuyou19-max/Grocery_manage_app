@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import type { PropsWithChildren } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/store/locale';
@@ -37,6 +37,7 @@ export function Teaser({
 }: PropsWithChildren<{ title: string; body: string }>) {
   const { colors, scheme } = useTheme();
   const t = useT();
+  const { height } = useWindowDimensions();
 
   const open = () => {
     haptics.tick();
@@ -45,7 +46,17 @@ export function Teaser({
 
   return (
     <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={title}>
-      <View>
+      {/* Sized and clipped as one surface.
+          minHeight, because the sample is whatever the caller passed and a short
+          one left the blurred panel floating as a small pale rectangle in the
+          middle of the page with the invitation hanging out of it. Filling most
+          of the viewport makes it read as the tab's content rather than as a
+          component that failed to load.
+          overflow hidden, because the blur and the wash are absolutely
+          positioned children that would otherwise paint into the square corners
+          of their container — the rounding has to clip them, not just sit
+          underneath. */}
+      <View style={[styles.frame, { minHeight: height * 0.62 }]}>
         {/* pointerEvents none throughout, so every touch anywhere in the stack
             reaches the Pressable above rather than a sample row. */}
         <View pointerEvents="none">{children}</View>
@@ -90,6 +101,7 @@ export function Teaser({
 }
 
 const styles = StyleSheet.create({
+  frame: { borderRadius: radii.lg, overflow: 'hidden' },
   // Centred over the sample rather than pinned, so it sits in the optical
   // middle whatever the sample cards happen to measure at.
   ctaWrap: {

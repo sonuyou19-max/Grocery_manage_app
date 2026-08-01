@@ -24,6 +24,7 @@ import {
   buildDeck,
   normalizeKey,
   recordPurchase,
+  revertPurchase,
   statsFromPurchases,
   type DeckCard,
   type ItemStat,
@@ -324,6 +325,9 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
           return next;
         });
       },
+      // No stat to revert here, unlike the cloud backend: signed out there is
+      // no pantry model at all, so removing the transaction removes the whole
+      // trace of the mistaken tick.
       unlogRecent: (name) => {
         const key = normalizeKey(name);
         setPurchases((prev) => {
@@ -442,6 +446,7 @@ const LOCAL_MIGRATED_KEY = 'korb.purchaseLog.migrated.v1';
 async function migrateLocalPurchases(
   householdId: string,
   applyPurchases: (list: Purchase[]) => void,
+  onSeeded: () => Promise<void>,
 ): Promise<void> {
   try {
     const [done, rawLocal] = await Promise.all([
@@ -501,6 +506,11 @@ async function migrateLocalPurchases(
     // promised. The rebuild is what makes the tab arrive already knowing their
     // rhythms instead of starting to learn from today.
     await seedPantryFromLog([...missing, ...cloud], householdId);
+    // Pull the rows we just wrote. Without this the screen the user signed up
+    // FROM stays empty until something else remounts it — they land back on
+    // Pantry, see nothing, and only discover their history by switching tabs
+    // and returning.
+    await onSeeded();
 
     await AsyncStorage.setItem(LOCAL_MIGRATED_KEY, '1');
     // The local log is deliberately NOT deleted. It costs a few kilobytes, and
@@ -678,7 +688,7 @@ function CloudPantryIntelProvider({
     // foreground. A member's purchase landing mid-session changes no decision
     // currently on screen.
     void fetchPurchases().then(() => {
-      if (alive) void migrateLocalPurchases(householdId, applyPurchases);
+      if (alive) void migrateLocalPurchases(householdId, applyPurchases, fetchStats);
     });
 
     const channel = supabase
@@ -755,7 +765,27 @@ function CloudPantryIntelProvider({
         const key = normalizeKey(name);
         const doomed = recentRecordFor(purchasesRef.current, key, Date.now(), MISTAKE_WINDOW_MS);
         if (!doomed) return;
-        applyPurchases(purchasesRef.current.filter((p) => p.id !== doomed.id));
+        const remaining = purchasesRef.current.filter((p) => p.id !== doomed.id);
+        applyPurchases(remaining);
+
+        // The tick moved the burn rate as well as writing the transaction, so
+        // undoing it has to undo both — otherwise the item sits in the pantry
+        // insisting it was bought today, on a list, and running low, all at
+        // once.
+        const reverted = revertPurchase(statsRef.current, key, remaining, categorizeSync);
+        apply(reverted);
+        if (reverted[key]) {
+          upsert([key], reverted);
+        } else {
+          // Its only purchase — the pantry row was created by the mistake, so
+          // it goes with it.
+          void supabase
+            .from('pantry_items')
+            .delete()
+            .eq('household_id', householdId)
+            .eq('item_key', key);
+        }
+
         supabase
           .from('price_entries')
           .delete()

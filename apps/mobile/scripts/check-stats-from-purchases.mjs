@@ -189,5 +189,51 @@ const drift = mod.statsFromPurchases(spellings);
 check('one key despite spelling drift', Object.keys(drift).length, 1);
 check('display follows the newest spelling', drift.milk.display, 'Milk');
 
+/* ------------------------------------------------------ undoing a mistake */
+
+// Tick an item, realise it was the wrong row, untick. The transaction is
+// removed — but the tick ALSO moved the burn rate, and leaving that behind is
+// what made the pantry show "running low", "on a list" and "last bought today"
+// about one item simultaneously. Three statements that cannot all be true.
+
+const twoBuys = [buy('Milk', 30), buy('Milk', 7)];
+const mistake = buy('Milk', 0);
+const withMistake = mod.statsFromPurchases([...twoBuys, mistake]);
+const afterUndo = mod.revertPurchase(withMistake, 'milk', twoBuys);
+
+check('the mistaken purchase is forgotten', afterUndo.milk.lastPurchasedAt, twoBuys[1].at);
+check('the sample it added is forgotten', afterUndo.milk.sampleCount, 1);
+// The interval is an EMA, so it cannot be decremented — only replayed. This is
+// the assertion that proves the replay approach is doing its job.
+check(
+  'the interval returns to exactly what it was',
+  afterUndo.milk.intervalDays,
+  mod.statsFromPurchases(twoBuys).milk.intervalDays,
+);
+
+// An item bought for the very first time was CREATED by that tick, so undoing
+// it must remove the row entirely. Leaving lastPurchasedAt at 0 would strand a
+// ghost in the pantry that can never come due and the user never asked to
+// track.
+const firstEver = mod.statsFromPurchases([buy('Kiwi', 0)]);
+checkTrue('a first-ever purchase creates the item', firstEver.kiwi != null);
+check('undoing it removes the item', mod.revertPurchase(firstEver, 'kiwi', []).kiwi, undefined);
+
+// The user's own settings are not a consequence of the purchase, so they
+// survive. Undoing a mistap must not silently un-staple something.
+const staple = { ...withMistake, milk: { ...withMistake.milk, keepStocked: true, cadenceDays: 14 } };
+const afterStapleUndo = mod.revertPurchase(staple, 'milk', twoBuys);
+check('a staple flag survives the undo', afterStapleUndo.milk.keepStocked, true);
+check('a pinned cadence survives the undo', afterStapleUndo.milk.cadenceDays, 14);
+
+// Other items are untouched.
+const twoItems = mod.statsFromPurchases([buy('Milk', 5), buy('Bread', 3)]);
+const afterMixed = mod.revertPurchase(twoItems, 'milk', [buy('Bread', 3)]);
+checkTrue('another item is left alone', afterMixed.bread != null);
+check('...and the undone one is gone', afterMixed.milk, undefined);
+
+// Reverting something the pantry has never heard of is a no-op, not a crash.
+check('an unknown key is a no-op', mod.revertPurchase(twoItems, 'zzz', []), twoItems);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
