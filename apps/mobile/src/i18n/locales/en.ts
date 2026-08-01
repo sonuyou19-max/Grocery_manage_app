@@ -245,7 +245,6 @@ const en = {
     pantryKeepTitle: 'Your pantry is ready',
     pantryKeepBody: 'You have been shopping on this device for a while. Sign in and Korb turns that history into your pantry straight away.',
     cta: 'Sign in or create an account',
-    sampleNote: 'Example figures, not your data',
   },
   ledger: {
     openTitle: 'Purchase history',

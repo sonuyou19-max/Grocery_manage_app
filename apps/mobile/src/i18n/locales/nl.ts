@@ -233,7 +233,6 @@ const nl = {
     pantryKeepTitle: 'Je voorraadkast staat klaar',
     pantryKeepBody: 'Je doet al een tijdje boodschappen op dit toestel. Log in en Korb maakt daar meteen je voorraadkast van.',
     cta: 'Inloggen of account maken',
-    sampleNote: 'Voorbeeldbedragen, niet jouw gegevens',
   },
   ledger: {
     openTitle: 'Aankoopgeschiedenis',

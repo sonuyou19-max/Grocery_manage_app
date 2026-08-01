@@ -233,7 +233,6 @@ const it = {
     pantryKeepTitle: 'La tua dispensa è pronta',
     pantryKeepBody: 'Fai la spesa su questo dispositivo da un po’. Accedi e Korb trasforma subito quello storico nella tua dispensa.',
     cta: 'Accedi o crea un account',
-    sampleNote: 'Cifre di esempio, non i tuoi dati',
   },
   ledger: {
     openTitle: 'Cronologia acquisti',

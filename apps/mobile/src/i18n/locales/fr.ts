@@ -234,7 +234,6 @@ const fr = {
     pantryKeepTitle: 'Ton garde-manger est prêt',
     pantryKeepBody: 'Tu fais tes courses sur cet appareil depuis un moment. Connecte-toi et Korb en fait ton garde-manger aussitôt.',
     cta: 'Se connecter ou créer un compte',
-    sampleNote: 'Chiffres d’exemple, pas tes données',
   },
   ledger: {
     openTitle: 'Historique d’achats',

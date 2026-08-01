@@ -233,7 +233,6 @@ const es = {
     pantryKeepTitle: 'Tu despensa está lista',
     pantryKeepBody: 'Llevas un tiempo comprando en este dispositivo. Inicia sesión y Korb convierte ese historial en tu despensa al instante.',
     cta: 'Inicia sesión o crea una cuenta',
-    sampleNote: 'Cifras de ejemplo, no tus datos',
   },
   ledger: {
     openTitle: 'Historial de compras',

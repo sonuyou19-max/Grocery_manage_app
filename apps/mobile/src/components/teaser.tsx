@@ -27,8 +27,10 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * who does have data would be looking at their own numbers deliberately
  * smeared, which is not a teaser but the app withholding something that already
  * belongs to them. Callers pass a fixed, plausible sample and it carries a
- * visible disclaimer, because a blurred figure that happens to be legible would
- * otherwise read as a claim about them.
+ * fixed, plausible sample. No disclaimer is printed: the blur plus the wash
+ * leave nothing legible enough to be mistaken for a figure about them, and a
+ * caption explaining that made the panel read as a diagram rather than as the
+ * tab they are being invited into.
  */
 export function Teaser({
   title,
@@ -89,10 +91,6 @@ export function Teaser({
             <View style={[styles.button, { backgroundColor: colors.accent }]}>
               <Text style={[type.body, { color: colors.accentInk }]}>{t('teaser.cta')}</Text>
             </View>
-            {/* Never let invented numbers pass as theirs. */}
-            <Text style={[type.sub, styles.centred, { color: colors.muted }]}>
-              {t('teaser.sampleNote')}
-            </Text>
           </View>
         </View>
       </View>

@@ -276,7 +276,6 @@ const pl = {
     pantryKeepTitle: 'Twoja spiżarnia jest gotowa',
     pantryKeepBody: 'Od jakiegoś czasu robisz zakupy na tym urządzeniu. Zaloguj się, a Korb od razu zamieni tę historię w Twoją spiżarnię.',
     cta: 'Zaloguj się lub załóż konto',
-    sampleNote: 'Przykładowe kwoty, nie Twoje dane',
   },
   ledger: {
     openTitle: 'Historia zakupów',

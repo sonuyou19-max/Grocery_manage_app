@@ -234,7 +234,6 @@ const de = {
     pantryKeepTitle: 'Deine Vorratskammer ist bereit',
     pantryKeepBody: 'Du kaufst schon eine Weile mit diesem Gerät ein. Melde dich an – Korb macht daraus sofort deine Vorratskammer.',
     cta: 'Anmelden oder Konto erstellen',
-    sampleNote: 'Beispielwerte, nicht deine Daten',
   },
   ledger: {
     openTitle: 'Kaufhistorie',
