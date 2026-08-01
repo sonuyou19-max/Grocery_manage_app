@@ -182,6 +182,8 @@ const it = {
     needPhotoAccess: 'Korb non è riuscito ad aprire la galleria — scrivi il numero a mano.',
     importFailed:
       'Nessun codice a barre trovato in quell’immagine. Prova a scrivere il numero a mano.',
+    scannerUnavailable:
+      'Lo scanner non è riuscito ad avviarsi su questo dispositivo. Scrivi il numero: è stampato sulla carta.',
     importIosLimit:
       'Su iPhone da un’immagine salvata si possono leggere solo i codici QR. Scansiona la carta con la fotocamera, oppure scrivi il numero.',
   },

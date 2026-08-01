@@ -4,7 +4,7 @@ import {
   ThemeProvider,
   type Theme as NavTheme,
 } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
@@ -19,7 +19,7 @@ import { setEmojiLexicon } from '@/lib/item-emoji';
 import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
 import { setUnitLexicon } from '@/lib/item-unit';
 import { hydrateItemMemory } from '@/lib/item-memory';
-import { initMonitoring } from '@/lib/monitoring';
+import { initMonitoring, trackRoute } from '@/lib/monitoring';
 import { hydrateGetStarted, hydrateOnboarding } from '@/lib/onboarding';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
@@ -56,6 +56,14 @@ const navDark: NavTheme = {
 
 export default function RootLayout() {
   const scheme = useColorScheme();
+  // useSegments, not usePathname: it yields the route PATTERN — `list/[id]`
+  // rather than `list/6f2c…` — which is what makes the breadcrumb group and
+  // keeps household and list ids out of the crash report. See trackRoute.
+  const segments = useSegments();
+
+  useEffect(() => {
+    trackRoute(`/${segments.join('/')}`);
+  }, [segments]);
 
   useEffect(() => {
     // Start crash/error reporting (no-op until a Sentry DSN is configured).

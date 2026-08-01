@@ -210,6 +210,8 @@ const pl = {
     needPhotoAccess: 'Korb nie mógł otworzyć galerii — wpisz numer ręcznie.',
     importFailed:
       'Na tym obrazie nie znaleziono kodu kreskowego. Spróbuj wpisać numer ręcznie.',
+    scannerUnavailable:
+      'Nie udało się uruchomić skanera na tym urządzeniu. Wpisz numer — jest wydrukowany na karcie.',
     importIosLimit:
       'Na iPhone’ie z zapisanego obrazu można odczytać tylko kody QR. Zeskanuj kartę kamerą albo wpisz numer.',
   },

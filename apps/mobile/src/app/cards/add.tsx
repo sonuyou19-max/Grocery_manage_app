@@ -48,7 +48,7 @@ import { radii, spacing, type, useTheme } from '@/theme';
  *
  * Three capture routes, in descending reliability:
  *
- * 1. **Scan the card** — live camera. The one that works everywhere.
+ * 1. **Scan the card** — see "Two scanners" below.
  * 2. **Import a screenshot** — best-effort. `scanFromURLAsync` reads *only QR
  *    codes on iOS*, and on Android wants the barcode to fill most of the frame,
  *    so this fails often enough that it must fail *softly* — it drops into
@@ -59,6 +59,41 @@ import { radii, spacing, type, useTheme } from '@/theme';
  *
  * Whichever route is used, the last step shows the re-drawn code beside the
  * number so the user can check it against the physical card before saving.
+ *
+ * ---------------------------------------------------------------------------
+ * Two scanners, and why the in-process one is the fallback
+ * ---------------------------------------------------------------------------
+ *
+ * Preferred: `CameraView.launchScanner`, Google Play Services' own code scanner
+ * (ML Kit). The camera is opened, driven and closed by Play Services in ITS
+ * process, and every outcome — a code, a cancel, a device that cannot produce a
+ * preview — comes back as a resolved or rejected promise.
+ *
+ * Fallback: mounting `<CameraView>` ourselves, which runs CameraX inside this
+ * app.
+ *
+ * That ordering used to be the other way round, and it crashed. CameraX's
+ * initialisation runs on its own background thread and retries for several
+ * seconds before giving up with
+ *
+ *     CameraUnavailableException: Device reporting less cameras than
+ *     anticipated. Available cameras: 0
+ *
+ * thrown from that thread. Nothing in JavaScript can catch it — not a try/catch
+ * around the render, not an error boundary, not `onMountError`, which never
+ * fires because the failure is not in the view. It reaches Android's default
+ * uncaught-exception handler and takes the process down, typically well after
+ * the user has moved on, so the crash does not even look like it came from the
+ * scanner. Devices with no usable camera at all (emulators, some managed
+ * handsets, a camera held by another app) are the ones that hit it — precisely
+ * the devices where the answer should be "type the number instead".
+ *
+ * Handing the camera to Play Services removes our process from that failure
+ * entirely, and costs nothing on devices where it works: same formats, same
+ * result payload, better decoder, no camera permission prompt of our own. The
+ * `<CameraView>` path survives only for the minority without Play Services —
+ * where the risk is real but unavoidable, and where we have no alternative to
+ * offer beyond manual entry, which is already one tap away.
  */
 
 /** Everything the scanner can recognise that's plausible on a loyalty card. */
@@ -79,6 +114,27 @@ const SCAN_TYPES = [
 ] as const;
 
 type Step = 'store' | 'method' | 'scan' | 'manual' | 'confirm';
+
+/**
+ * Did the Play Services scanner close because the user backed out of it?
+ *
+ * Backing out is not a failure and must leave the user exactly where they were,
+ * with the method list still on screen; every other rejection means the scanner
+ * could not do its job and we owe them the manual route with a reason.
+ *
+ * Matched on the coded error rather than the message, since the message is not
+ * localised and not stable. Expo derives the code from the Kotlin exception
+ * name, so `BarcodeScanningCancelledException` arrives as
+ * `ERR_BARCODE_SCANNING_CANCELLED`; the substring test keeps working if that
+ * derivation is ever adjusted. The message is checked too, purely as a second
+ * chance — guessing "cancelled" wrong in the safe direction only costs a
+ * needless trip to manual entry.
+ */
+function isScannerCancellation(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  const text = `${typeof code === 'string' ? code : ''} ${typeof message === 'string' ? message : ''}`;
+  return /cancel/i.test(text);
+}
 
 export default function AddCardScreen() {
   const { colors } = useTheme();
@@ -136,6 +192,44 @@ export default function AddCardScreen() {
     haptics.success();
     setStep('confirm');
   }, []);
+
+  /**
+   * Open a scanner — Play Services' where it exists, ours where it doesn't.
+   *
+   * The listener is attached BEFORE the launch and removed in `finally`,
+   * because the native side emits `onModernBarcodeScanned` and only then
+   * resolves the promise. Subscribing afterwards would miss the only event we
+   * are here for, and leaving it attached would double-handle the next scan.
+   *
+   * `handled` guards the same result arriving twice — the scanner is meant to
+   * fire once per launch, but `onScanned` advances a step, and a second call
+   * would advance it again from a state that has already moved on.
+   */
+  const startScan = useCallback(async () => {
+    if (!CameraView.isModernBarcodeScannerAvailable) {
+      setStep('scan');
+      return;
+    }
+    let handled = false;
+    const subscription = CameraView.onModernBarcodeScanned(({ type, data }) => {
+      if (handled) return;
+      handled = true;
+      onScanned(type, data);
+    });
+    try {
+      await CameraView.launchScanner({ barcodeTypes: [...SCAN_TYPES] });
+    } catch (error) {
+      // No camera, no ML Kit module, Play Services mid-update: all the same
+      // answer from here. Never fall back to mounting our own CameraView —
+      // that is the code path this exists to avoid.
+      if (!isScannerCancellation(error)) {
+        setManualReason(t('cards.scannerUnavailable'));
+        setStep('manual');
+      }
+    } finally {
+      subscription.remove();
+    }
+  }, [onScanned, t]);
 
   /** Gallery import. Falls through to manual entry on any failure. */
   const importFromLibrary = async () => {
@@ -243,7 +337,7 @@ export default function AddCardScreen() {
             icon="camera-outline"
             title={t('cards.scanCard')}
             body={t('cards.scanCardHint')}
-            onPress={() => setStep('scan')}
+            onPress={() => void startScan()}
           />
           <MethodRow
             icon="images-outline"

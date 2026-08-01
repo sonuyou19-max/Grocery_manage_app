@@ -102,6 +102,14 @@ export default function ListDetailScreen() {
   const bagRef = useRef<View>(null);
   /** Bumps when a glyph lands, so the bag acknowledges the arrival. */
   const bagScale = useSharedValue(1);
+  // Declared here, with the other hooks, and NOT next to the bag markup that
+  // uses it. Below this component's `if (!list)` return is a region where no
+  // hook may be called: this screen renders once with the list still undefined
+  // whenever it is opened before the household's lists have arrived, and a hook
+  // that only runs on the render where the list exists changes the hook count
+  // between renders — "Rendered more hooks than during the previous render",
+  // which is fatal.
+  const bagStyle = useAnimatedStyle(() => ({ transform: [{ scale: bagScale.value }] }));
 
   const purchaseTimers = useRef<
     Map<
@@ -232,8 +240,6 @@ export default function ListDetailScreen() {
       });
     });
   };
-
-  const bagStyle = useAnimatedStyle(() => ({ transform: [{ scale: bagScale.value }] }));
 
   /** The bag acknowledging a landing — a short squash and settle. */
   const onGlyphArrive = () => {

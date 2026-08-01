@@ -183,6 +183,8 @@ const fr = {
     needPhotoAccess: 'Korb n’a pas pu ouvrir ta galerie — saisis plutôt le numéro.',
     importFailed:
       'Aucun code-barres trouvé dans cette image. Saisis plutôt le numéro à la main.',
+    scannerUnavailable:
+      'Le scanner n’a pas pu démarrer sur cet appareil. Saisis plutôt le numéro : il est imprimé sur la carte.',
     importIosLimit:
       'Sur iPhone, seuls les QR codes peuvent être lus depuis une image enregistrée. Scanne la carte avec l’appareil photo, ou saisis le numéro.',
   },

@@ -194,6 +194,8 @@ const en = {
     allowCamera: 'Allow camera',
     needPhotoAccess: 'Korb couldn’t open your gallery, so type the number instead.',
     importFailed: 'No barcode was found in that image. Try typing the number instead.',
+    scannerUnavailable:
+      'The scanner couldn’t start on this device. Type the number instead — it’s printed on the card.',
     importIosLimit:
       'On iPhone, only QR codes can be read from a saved image. Scan the card with the camera, or type the number.',
   },

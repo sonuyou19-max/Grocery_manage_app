@@ -183,6 +183,8 @@ const de = {
     needPhotoAccess: 'Korb konnte deine Galerie nicht öffnen — gib die Nummer stattdessen ein.',
     importFailed:
       'In diesem Bild wurde kein Barcode gefunden. Gib die Nummer am besten von Hand ein.',
+    scannerUnavailable:
+      'Der Scanner konnte auf diesem Gerät nicht starten. Gib die Nummer stattdessen ein – sie steht auf der Karte.',
     importIosLimit:
       'Auf dem iPhone lassen sich aus einem gespeicherten Bild nur QR-Codes lesen. Scanne die Karte mit der Kamera oder gib die Nummer ein.',
   },

@@ -182,6 +182,8 @@ const nl = {
     needPhotoAccess: 'Korb kon je galerij niet openen — typ het nummer in plaats daarvan.',
     importFailed:
       'Er is geen barcode gevonden in die afbeelding. Typ het nummer liever met de hand.',
+    scannerUnavailable:
+      'De scanner kon niet starten op dit toestel. Typ het nummer in — het staat op de kaart.',
     importIosLimit:
       'Op de iPhone kunnen uit een opgeslagen afbeelding alleen QR-codes worden gelezen. Scan de kaart met de camera of typ het nummer.',
   },
