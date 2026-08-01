@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { wipeLoyaltyCards } from '@/lib/loyalty-cards';
+import { clearAccountDataFromDevice } from '@/lib/local-data';
 import { forgetProfileName } from '@/lib/profile-name';
 import { supabase } from '@/lib/supabase';
 import { useT } from '@/store/locale';
@@ -140,6 +141,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
       signOut: async () => {
+        // Clear BEFORE dropping the session, and the order is not arbitrary.
+        //
+        // Signing out first flips the providers to their local backends, which
+        // immediately begin hydrating from the very keys we are about to
+        // remove. The local grocery store then persists whatever it read on a
+        // 300ms debounce — so a read that started before the wipe would write
+        // the stale lists straight back, and the user would see the ghost of
+        // their old data until the next launch.
+        //
+        // Clearing first leaves one much smaller race: a cloud fetch already in
+        // flight can rewrite its own cache. That cache is keyed per household
+        // and is only ever read again after signing back in as the same user,
+        // at which point a fresh fetch replaces it anyway.
+        await clearAccountDataFromDevice();
         await supabase.auth.signOut();
       },
       deleteAccount: async () => {
@@ -156,6 +171,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           if (deletedUserId) await forgetProfileName(deletedUserId);
           // The account is gone; drop the now-invalid session locally.
           await supabase.auth.signOut();
+          // The server rows are deleted, so a lingering cache would be a copy
+          // of exactly the data they asked to have destroyed.
+          await clearAccountDataFromDevice();
           return {};
         } catch (e) {
           return { error: cleanError(e, t('authError.network'), t) };

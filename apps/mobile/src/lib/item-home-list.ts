@@ -74,6 +74,20 @@ export function recallItemList(name: string): string | null {
  * Drop a list's entries once it's gone, so items homed there fall back to the
  * picker instead of holding a dead id forever.
  */
+/**
+ * Drop every remembered home list, in memory as well as on disk.
+ *
+ * Called on sign-out. Removing the storage key alone would not be enough: this
+ * module keeps the whole map in a module-level variable, so the next
+ * rememberItemList would serialise the old households straight back over the
+ * file we just deleted.
+ */
+export function forgetAllHomeLists(): void {
+  homes = {};
+  scope = 'local';
+  AsyncStorage.removeItem(CACHE_KEY).catch(() => {});
+}
+
 export function forgetHomeList(listId: string): void {
   let changed = false;
   for (const entries of Object.values(homes)) {
