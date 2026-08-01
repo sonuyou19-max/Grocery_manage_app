@@ -236,6 +236,8 @@ const en = {
   },
   household: {
     defaultName: '%{name}’s home',
+    nowShoppingIn: 'Now shopping in %{name}',
+    nowShoppingJoined: 'You’re in your new household now',
   },
   teaser: {
     title: 'See where your money goes',

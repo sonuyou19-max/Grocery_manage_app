@@ -224,6 +224,8 @@ const nl = {
   },
   household: {
     defaultName: 'Huis van %{name}',
+    nowShoppingIn: 'Je winkelt nu in %{name}',
+    nowShoppingJoined: 'Je zit nu in je nieuwe huishouden',
   },
   teaser: {
     title: 'Zie waar je geld heen gaat',

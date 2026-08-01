@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
+import { useToast } from '@/components/toast';
 import { useProfileName } from '@/lib/profile-name';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
@@ -24,6 +25,7 @@ export default function HouseholdSetupScreen() {
   const { colors } = useTheme();
   const { createHousehold, joinHousehold, myName } = useHousehold();
   const { name: savedName, ready: nameReady, remember } = useProfileName();
+  const { showToast } = useToast();
   const t = useT();
 
   const [mode, setMode] = useState<'create' | 'join'>('create');
@@ -59,6 +61,32 @@ export default function HouseholdSetupScreen() {
     // A name typed here is still worth remembering, so the next household
     // doesn't ask again either.
     if (!knownName) await remember(finalName);
+
+    /**
+     * Say that the switch happened.
+     *
+     * Creating or joining makes the new household active — which is right,
+     * you almost always want to use the thing you just made — but this screen
+     * closes straight onto the dashboard, so the lists you were looking at a
+     * second ago are simply gone, replaced by an empty household you have not
+     * been told you are now in. The switch was never the problem; doing it in
+     * silence was, and it reads as the app losing your data rather than
+     * showing you somewhere else.
+     *
+     * Fired BEFORE router.back(): the toast host lives at the root of the
+     * tree, above every screen, so the message survives this modal closing
+     * and lands over the dashboard it is describing.
+     *
+     * The name comes from what the user typed rather than from the created
+     * row, because the provider has been asked to refresh but this component
+     * is about to unmount and cannot wait to read the result back. For a join
+     * there is nothing typed to use — you enter a code, not a name — so that
+     * case gets the generic wording.
+     */
+    const created = mode === 'create' ? householdName.trim() : '';
+    showToast(
+      created ? t('household.nowShoppingIn', { name: created }) : t('household.nowShoppingJoined'),
+    );
     router.back();
   };
 

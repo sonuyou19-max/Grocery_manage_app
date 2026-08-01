@@ -267,6 +267,8 @@ const pl = {
   },
   household: {
     defaultName: 'Dom – %{name}',
+    nowShoppingIn: 'Kupujesz teraz w %{name}',
+    nowShoppingJoined: 'Jesteś teraz w nowym gospodarstwie',
   },
   teaser: {
     title: 'Zobacz, gdzie idą Twoje pieniądze',

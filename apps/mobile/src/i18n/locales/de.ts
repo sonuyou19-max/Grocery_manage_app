@@ -225,6 +225,8 @@ const de = {
   },
   household: {
     defaultName: 'Zuhause von %{name}',
+    nowShoppingIn: 'Du kaufst jetzt in %{name} ein',
+    nowShoppingJoined: 'Du bist jetzt in deinem neuen Haushalt',
   },
   teaser: {
     title: 'Sieh, wohin dein Geld geht',
