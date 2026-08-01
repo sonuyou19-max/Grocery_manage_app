@@ -30,12 +30,40 @@ export function groupLabel(
   return t(`group.${group}`);
 }
 
-// Fixed mid-tone hues that read on both light and dark backgrounds.
+/**
+ * Fixed mid-tone hues that read on both light and dark backgrounds.
+ *
+ * Two rules, both learned the hard way:
+ *
+ * **Nothing red.** Protein used to be #C0553D, a terracotta red, and it was the
+ * only red in the entire app — the theme's strongest warning colour is amber.
+ * So the one saturated red on screen sat in a chart that is explicitly not a
+ * judgement ("a rough guide by item — not a nutrition tracker"), and read as
+ * one: a quarter of your basket flagged. A food group is not an error.
+ *
+ * **No two adjacent in hue.** These appear as touching slices of a single bar
+ * with no gap between them, so two similar colours do not read as two groups,
+ * they read as one wide slice with a seam. Carbs and fats were #C79A3A and
+ * #D8B24A — twelve degrees and a little lightness apart — which at bar height
+ * and 10px legend dots is the same colour twice.
+ *
+ * The set below is one cool hue among four warm ones, spread around the wheel
+ * and separated by value as well as hue, so each slice survives being next to
+ * any other:
+ *
+ *   produce  leaf green    ~116°  the brand's own accent family
+ *   protein  slate blue    ~197°  the odd one out on purpose — furthest from
+ *                                 the greens, and carries no alarm
+ *   carbs    wheat gold     ~42°  bread, pasta, rice
+ *   fats     warm brown     ~28°  near carbs in hue, but much darker and less
+ *                                 saturated, which is what separates them
+ *   other    neutral        ~96°  deliberately dull; it is the leftovers bin
+ */
 export const GROUP_COLORS: Record<DisplayGroup, string> = {
   produce: '#5FA85A',
-  protein: '#C0553D',
-  carbs: '#C79A3A',
-  fats: '#D8B24A',
+  protein: '#4E8FA8',
+  carbs: '#D6A93F',
+  fats: '#A2703F',
   other: '#8A9284',
 };
 

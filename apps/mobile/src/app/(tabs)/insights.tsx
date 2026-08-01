@@ -14,7 +14,11 @@ import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
-import { priced, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
+// `priced` is imported under a longer name on purpose. As `priced` it sat one
+// character away from the `pricedItems` array below, and `priced.length` — the
+// arity of a function, which is 1 — type-checked perfectly as a number and shipped
+// "1 priced" onto a Spending card totalling €0.00. See the card itself.
+import { priced as pricedPurchases, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
 import { useAuth } from '@/store/auth';
 import { useGroceries } from '@/store/groceries';
@@ -105,9 +109,9 @@ function SignedInInsights() {
    */
   const pricedItems = useMemo(
     () =>
-      // `priced` has already dropped every null price, so the narrowing is a
-      // fact about the filter rather than an assumption about the data.
-      priced(purchases).map((p) => ({
+      // `pricedPurchases` has already dropped every null price, so the narrowing
+      // is a fact about the filter rather than an assumption about the data.
+      pricedPurchases(purchases).map((p) => ({
         name: p.name,
         category: statsByKey.get(p.key)?.category ?? ('other' as ItemCategory),
         priceCents: p.priceCents as number,
@@ -245,12 +249,18 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {priced.length > 0 ? (
+      {/* pricedItems, the array — NOT the `priced` filter it came from.
+          `priced.length` is a function's arity: permanently 1, never 0, and a
+          perfectly valid number as far as TypeScript is concerned. So this card
+          rendered on every account that had never entered a price, the empty
+          state two branches down was unreachable, and the header read "1 priced"
+          above a total of €0.00. */}
+      {pricedItems.length > 0 ? (
         <Card>
           <CardHead
             icon="cash-outline"
             title={t('insights.spendingTitle')}
-            hint={t('insights.spendingHint', { count: priced.length })}
+            hint={t('insights.spendingHint', { count: pricedItems.length })}
           />
           <View style={styles.spendTotal}>
             <Text style={[type.sub, { color: colors.muted }]}>{t('insights.totalLogged')}</Text>
