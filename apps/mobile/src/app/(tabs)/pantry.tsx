@@ -78,8 +78,7 @@ type Colors = ReturnType<typeof useTheme>['colors'];
  */
 export default function PantryScreen() {
   const { user } = useAuth();
-  const { purchases } = usePantryIntel();
-  if (!user) return <PantryTeaser hasLocalHistory={purchases.length > 0} />;
+  if (!user) return <PantryTeaser />;
   return <SignedInPantry />;
 }
 

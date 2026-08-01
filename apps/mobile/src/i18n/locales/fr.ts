@@ -225,14 +225,10 @@ const fr = {
     defaultName: 'Chez %{name}',
   },
   teaser: {
-    title: 'Tes analyses, dès que tu te connectes',
-    body: 'Korb transforme tes courses en tendances de dépenses, variations de prix et magasins les moins chers.',
-    keepTitle: 'Garde tes analyses',
-    keepBody: 'Tu as déjà un historique de courses sur cet appareil. Connecte-toi : il te suit et sera sauvegardé.',
-    pantryTitle: 'Korb apprend ce qui te manque',
-    pantryBody: 'Il observe ce que tu achètes et quand, puis te signale ce qui s’épuise avant que tu le remarques.',
-    pantryKeepTitle: 'Ton garde-manger est prêt',
-    pantryKeepBody: 'Tu fais tes courses sur cet appareil depuis un moment. Connecte-toi et Korb en fait ton garde-manger aussitôt.',
+    title: 'Vois où part ton argent',
+    body: 'Les dépenses par semaine, par magasin, par rayon — à partir de ce que tu achètes vraiment. Connecte-toi pour les voir.',
+    pantryTitle: 'Ne manque plus de rien',
+    pantryBody: 'Korb apprend à quelle vitesse tu consommes et te signale ce qui s’épuise avant que tu le remarques. Connecte-toi pour voir ce qu’il sait.',
     cta: 'Se connecter ou créer un compte',
   },
   ledger: {

@@ -267,14 +267,10 @@ const pl = {
     defaultName: 'Dom – %{name}',
   },
   teaser: {
-    title: 'Twoje analizy, gdy się zalogujesz',
-    body: 'Korb zamienia Twoje zakupy w trendy wydatków, zmiany cen i sklepy, w których płacisz najmniej.',
-    keepTitle: 'Zachowaj swoje analizy',
-    keepBody: 'Masz już historię zakupów na tym urządzeniu. Zaloguj się — pójdzie z Tobą i zacznie być zapisywana.',
-    pantryTitle: 'Korb uczy się, co Ci się kończy',
-    pantryBody: 'Obserwuje, co i kiedy kupujesz, i mówi, czego zaraz zabraknie, zanim to zauważysz.',
-    pantryKeepTitle: 'Twoja spiżarnia jest gotowa',
-    pantryKeepBody: 'Od jakiegoś czasu robisz zakupy na tym urządzeniu. Zaloguj się, a Korb od razu zamieni tę historię w Twoją spiżarnię.',
+    title: 'Zobacz, gdzie idą Twoje pieniądze',
+    body: 'Wydatki tygodniowo, wg sklepu i działu — z tego, co naprawdę kupujesz. Zaloguj się, by je zobaczyć.',
+    pantryTitle: 'Nigdy więcej Ci nie zabraknie',
+    pantryBody: 'Korb uczy się, jak szybko zużywasz produkty, i mówi, czego zaraz zabraknie, zanim to zauważysz. Zaloguj się, by zobaczyć, co wie.',
     cta: 'Zaloguj się lub załóż konto',
   },
   ledger: {

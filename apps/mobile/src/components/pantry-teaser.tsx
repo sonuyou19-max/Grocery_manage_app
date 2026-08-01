@@ -19,10 +19,11 @@ import type { ItemCategory } from '@korb/shared';
  * merge ambiguity the whole log-as-source-of-truth model removes. Behind an
  * account, nothing a guest can do ever needs reconciling.
  *
- * The consolation is a real one, and the copy leans on it: a guest who has been
- * shopping for months is not starting from zero. Their log comes with them and
- * the pantry arrives fully formed — already knowing their rhythms — rather than
- * beginning to learn on the day they signed up.
+ * The copy describes what Korb does, not what the user has done. An earlier
+ * version had a second variant for people with existing history, but it was
+ * chosen on a threshold of one check-off, so a first-day user was told they had
+ * been shopping here "for a while". Describing the feature is true whenever it
+ * is read; describing the user is a guess.
  */
 
 /** Invented, and fixed — a teaser that reshuffles on every render looks broken. */
@@ -41,16 +42,13 @@ const IN_STOCK: Array<{ name: string; category: ItemCategory; days: number; left
   { name: 'Pasta', category: 'pantry', days: 30, left: 22 },
 ];
 
-export function PantryTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }) {
+export function PantryTeaser() {
   const { colors } = useTheme();
   const t = useT();
 
   return (
     <Screen title={t('tabs.pantry')} subtitle={t('pantry.subtitleEmpty')}>
-      <Teaser
-        title={hasLocalHistory ? t('teaser.pantryKeepTitle') : t('teaser.pantryTitle')}
-        body={hasLocalHistory ? t('teaser.pantryKeepBody') : t('teaser.pantryBody')}
-      >
+      <Teaser title={t('teaser.pantryTitle')} body={t('teaser.pantryBody')}>
         <Text style={[type.label, { color: colors.muted }]}>{t('pantry.runningLow')}</Text>
         <Card>
           {RUNNING_LOW.map((s) => {

@@ -29,15 +29,18 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * happens to be legible would otherwise read as a claim about their spending.
  *
  * ---------------------------------------------------------------------------
- * Why the copy is conditional
+ * One message, not two
  * ---------------------------------------------------------------------------
  *
- * A guest who has been using Korb offline already HAS this history; it is on
- * their device and Insights showed it to them until now. Telling them to sign
- * up to "unlock" something they already own would be a lie they can catch. For
- * them the honest promise is that signing in KEEPS it — which is also true,
- * because signing in carries the local log into their household (see
- * lib/purchase-migration.ts).
+ * There used to be a second variant for guests who already had a history,
+ * chosen on "have they logged any purchases at all". A single check-off tripped
+ * it, so someone who installed that morning was told they had "been shopping on
+ * this device for a while" — a claim about them that the app had no business
+ * making and could not verify.
+ *
+ * The copy now describes what KORB does rather than what the user has done, so
+ * it is equally true on day one and after a year. That removes the variant, the
+ * threshold, and the whole class of picking-the-wrong-one bugs along with them.
  */
 
 /** Invented, and stable — a teaser that reshuffles on every render looks broken. */
@@ -55,7 +58,7 @@ function sampleWeeks(now: number): WeekSpend[] {
   }));
 }
 
-export function InsightsTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }) {
+export function InsightsTeaser() {
   const { colors } = useTheme();
   const { t, money } = useLocale();
 
@@ -64,10 +67,7 @@ export function InsightsTeaser({ hasLocalHistory }: { hasLocalHistory: boolean }
 
   return (
     <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
-      <Teaser
-        title={hasLocalHistory ? t('teaser.keepTitle') : t('teaser.title')}
-        body={hasLocalHistory ? t('teaser.keepBody') : t('teaser.body')}
-      >
+      <Teaser title={t('teaser.title')} body={t('teaser.body')}>
         <Card>
           <View style={styles.head}>
             <Ionicons name="stats-chart-outline" size={18} color={colors.accent} />

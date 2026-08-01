@@ -225,14 +225,10 @@ const de = {
     defaultName: 'Zuhause von %{name}',
   },
   teaser: {
-    title: 'Deine Auswertungen, sobald du dich anmeldest',
-    body: 'Korb macht aus deinem Einkauf Ausgabentrends, Preisänderungen und die Läden, die dich am wenigsten kosten.',
-    keepTitle: 'Behalte deine Auswertungen',
-    keepBody: 'Du hast bereits einen Einkaufsverlauf auf diesem Gerät. Melde dich an – er kommt mit und wird gesichert.',
-    pantryTitle: 'Korb lernt, was dir ausgeht',
-    pantryBody: 'Es merkt sich, was du wann kaufst, und sagt dir, was zur Neige geht, bevor du es bemerkst.',
-    pantryKeepTitle: 'Deine Vorratskammer ist bereit',
-    pantryKeepBody: 'Du kaufst schon eine Weile mit diesem Gerät ein. Melde dich an – Korb macht daraus sofort deine Vorratskammer.',
+    title: 'Sieh, wohin dein Geld geht',
+    body: 'Ausgaben nach Woche, Laden und Regal – aus dem, was du wirklich kaufst. Melde dich an, um sie zu sehen.',
+    pantryTitle: 'Damit nichts mehr ausgeht',
+    pantryBody: 'Korb lernt, wie schnell du Dinge verbrauchst, und sagt dir, was zur Neige geht, bevor du es merkst. Melde dich an, um zu sehen, was es weiß.',
     cta: 'Anmelden oder Konto erstellen',
   },
   ledger: {

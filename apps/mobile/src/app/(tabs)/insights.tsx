@@ -42,10 +42,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
  */
 export default function InsightsScreen() {
   const { user } = useAuth();
-  const { purchases } = usePantryIntel();
-  // Whether they HAVE a history decides whether the invitation says "unlock"
-  // or the honest "keep" — see components/insights-teaser.tsx.
-  if (!user) return <InsightsTeaser hasLocalHistory={purchases.length > 0} />;
+  if (!user) return <InsightsTeaser />;
   return <SignedInInsights />;
 }
 

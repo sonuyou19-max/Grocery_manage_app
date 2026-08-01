@@ -224,14 +224,10 @@ const nl = {
     defaultName: 'Huis van %{name}',
   },
   teaser: {
-    title: 'Je inzichten, zodra je inlogt',
-    body: 'Korb maakt van je boodschappen uitgaventrends, prijswijzigingen en de winkels die je het minst kosten.',
-    keepTitle: 'Behoud je inzichten',
-    keepBody: 'Je hebt al een boodschappengeschiedenis op dit toestel. Log in en die gaat mee — en wordt bewaard.',
-    pantryTitle: 'Korb leert wat er opraakt',
-    pantryBody: 'Het kijkt wat je wanneer koopt en zegt wat bijna op is voordat jij het merkt.',
-    pantryKeepTitle: 'Je voorraadkast staat klaar',
-    pantryKeepBody: 'Je doet al een tijdje boodschappen op dit toestel. Log in en Korb maakt daar meteen je voorraadkast van.',
+    title: 'Zie waar je geld heen gaat',
+    body: 'Uitgaven per week, per winkel, per schap — uit wat je echt koopt. Log in om ze te zien.',
+    pantryTitle: 'Nooit meer zonder zitten',
+    pantryBody: 'Korb leert hoe snel je door dingen heen gaat en zegt wat bijna op is voordat jij het merkt. Log in om te zien wat het weet.',
     cta: 'Inloggen of account maken',
   },
   ledger: {
