@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 
+import { initBilling } from '@/lib/billing';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
@@ -147,6 +148,22 @@ export function EntitlementProvider({ children }: PropsWithChildren) {
       setLoaded(true);
     }
   }, [user]);
+
+  /**
+   * Bind the store SDK to this account.
+   *
+   * Here rather than in the root layout because the RevenueCat app user id must
+   * BE the Supabase user id — that identity is the entire mechanism by which a
+   * webhook knows whose subscription row to write, and this is the component
+   * that already tracks who is signed in. Keeping the two in one place means
+   * they cannot get out of step on a sign-out/sign-in.
+   *
+   * No-op in every build without a RevenueCat key, which currently is all of
+   * them. See lib/billing.ts.
+   */
+  useEffect(() => {
+    void initBilling(user?.id ?? null);
+  }, [user?.id]);
 
   // Entitlement changes on a clock (a trial ending, a period lapsing) rather
   // than on anything happening in the app, so there is no event to subscribe

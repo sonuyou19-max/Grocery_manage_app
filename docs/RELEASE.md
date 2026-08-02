@@ -96,6 +96,87 @@ npx expo install @sentry/react-native
 # uncomment the init block in monitoring.ts
 ```
 
+## 3a. Korb Plus — billing (RevenueCat + Google Play)
+
+The code is complete and inert. Nothing sells, and nothing is withheld, until
+both halves below are done. Either half alone is safe: keys without the switch
+means a paywall nobody is sent to; the switch without keys means a Plus card
+with no button.
+
+**Prices:** €2.99/month, €19.99/year (annual ≈ 44% off). Set the Polish price by
+hand — Google's auto-conversion of €19.99 lands near 89 PLN, which is steep for
+that market; 69.99 PLN reads better.
+
+### a. Google Play Console
+
+Create ONE subscription with two base plans:
+
+| | Product / base plan | Price |
+|---|---|---|
+| Monthly | `korb_plus_monthly` | €2.99 |
+| Annual | `korb_plus_annual` | €19.99 |
+
+**Do NOT attach a free trial offer to either plan.** Korb already grants 30 days
+server-side from `auth.users.created_at` (migration 0024). Configure both and
+every new account gets sixty days. The server's version is the one to keep: it
+works before any purchase exists, and it cannot be re-claimed by cancelling and
+subscribing again.
+
+### b. RevenueCat
+
+1. Add the Android app, upload the Play service-account credentials.
+2. Create entitlement **`plus`** and attach both products to it. The identifier
+   must be exactly `plus` — `PLUS_ENTITLEMENT` in `src/lib/billing.ts`.
+3. Create an offering with packages `$rc_monthly` and `$rc_annual` so
+   `getOfferings().current.monthly / .annual` resolve.
+4. Add the webhook:
+   - URL: `https://<project>.supabase.co/functions/v1/billing-webhook`
+   - Authorization header: the same value as `REVENUECAT_WEBHOOK_SECRET` below.
+
+```
+# the webhook — note --no-verify-jwt, see the file's header comment
+supabase secrets set REVENUECAT_WEBHOOK_SECRET=$(openssl rand -hex 32)
+supabase functions deploy billing-webhook --no-verify-jwt
+
+# the app — public SDK key, safe in the bundle; it identifies, it does not authorise
+eas secret:create --name EXPO_PUBLIC_REVENUECAT_ANDROID_KEY --value goog_xxx
+```
+
+A new native build is required: `react-native-purchases` is a native module, so
+OTA will not carry it.
+
+### c. Turning the tier on
+
+Everything above can ship while Plus is still invisible. One statement switches
+it on for everyone:
+
+```sql
+create or replace function free_history_weeks() returns interval
+  language sql immutable as $$ select interval '4 weeks' $$;
+```
+
+Revert with `interval '520 weeks'`. No app release either way — the gate, the
+locked cards and the paywall entry points all follow `plus_gate_active`, which
+is derived from this function (migration 0025).
+
+**Before flipping it:** any tester whose account is older than 30 days drops to
+the free tier the moment you do. Grant them access instead of surprising them:
+
+```sql
+insert into subscriptions (user_id, current_period_end)
+values ('<their-uuid>', now() + interval '10 years')
+on conflict (user_id) do update set current_period_end = excluded.current_period_end;
+```
+
+### d. Smoke test
+
+- Play Console → licence testers, so purchases are free and renew fast.
+- Buy annual → paywall closes, toast, Insights regains its cards.
+- Check `subscriptions` has a row with a sane `current_period_end`.
+- Cancel in Play → access continues to the period end (this is correct; see the
+  `CANCELLATION` note in the webhook).
+- Reinstall → **Restore a previous purchase** brings it back.
+
 ## 4. Accounts & tooling
 
 - Apple Developer Program ($99/yr) and Google Play Console ($25 one-time).

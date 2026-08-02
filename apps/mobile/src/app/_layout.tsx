@@ -105,9 +105,9 @@ export default function RootLayout() {
         <LocaleProvider>
         <ToastProvider>
         <AuthProvider>
-          {/* Under Auth because it is keyed on the user, above Household so the
-              switcher and every screen below can ask whether a household is
-              still writable. */}
+          {/* Under Auth because it is keyed on the user, and above the data
+              providers because Pantry Intel waits on its answer before reading
+              the purchase log — see the history window in store/entitlement. */}
           <EntitlementProvider>
           <HouseholdProvider>
             <GroceriesProvider>
@@ -122,6 +122,7 @@ export default function RootLayout() {
                   <Stack.Screen name="cards/index" />
                   <Stack.Screen name="cards/add" />
                   <Stack.Screen name="legal" options={{ presentation: 'modal' }} />
+                  <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
                   <Stack.Screen name="auth/sign-in" options={{ presentation: 'modal' }} />
                   <Stack.Screen name="auth/household" options={{ presentation: 'modal' }} />
                   <Stack.Screen

@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { billingAvailable } from '@/lib/billing';
+import { haptics } from '@/lib/haptics';
 import { useT } from '@/store/locale';
-import { spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
  * What a free account is not seeing, and why it would be worth having.
@@ -37,14 +40,14 @@ import { spacing, type, useTheme } from '@/theme';
  * never to start.
  *
  * ---------------------------------------------------------------------------
- * There is no button yet
+ * The button appears only when it can be honoured
  * ---------------------------------------------------------------------------
  *
- * On purpose. Billing is not wired (that is the next phase), and a card that
- * invites someone to subscribe and then cannot take their money is worse than
- * one that simply explains what Plus is. The call to action arrives with the
- * thing that can honour it. Until then this is also invisible in practice: the
- * server ships with the gate switched off, so nobody sees this card at all.
+ * `billingAvailable()` is false in Expo Go and in any build without a
+ * RevenueCat key, and in those the card explains Plus and stops there. A call
+ * to action that opens a paywall which cannot take money is worse than no call
+ * to action at all — the reader concludes the app is broken rather than that
+ * the feature is unfinished.
  */
 export function PlusCard({ freeWeeks }: { freeWeeks: number }) {
   const { colors } = useTheme();
@@ -82,6 +85,19 @@ export function PlusCard({ freeWeeks }: { freeWeeks: number }) {
       {/* The reassurance, held apart from the sales pitch above it so it reads
           as a statement of fact rather than as one more bullet. */}
       <Text style={[type.sub, { color: colors.muted }]}>{t('plus.nothingLost')}</Text>
+
+      {billingAvailable() && (
+        <Pressable
+          onPress={() => {
+            haptics.tick();
+            router.push('/paywall');
+          }}
+          accessibilityRole="button"
+          style={[styles.cta, { backgroundColor: colors.accent }]}
+        >
+          <Text style={[type.body, { color: colors.accentInk }]}>{t('plus.see')}</Text>
+        </Pressable>
+      )}
     </Card>
   );
 }
@@ -98,4 +114,10 @@ const styles = StyleSheet.create({
   },
   perks: { gap: spacing.xs, marginVertical: spacing.sm },
   perkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  cta: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+  },
 });

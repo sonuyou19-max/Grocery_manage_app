@@ -8,9 +8,11 @@ import { LocaleSetup } from '@/components/locale-setup';
 import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { languageByCode, regionByCode } from '@/i18n';
+import { billingAvailable } from '@/lib/billing';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/legal';
 import { normalizeKey } from '@/lib/pantry-intel';
 import { useAuth } from '@/store/auth';
+import { useEntitlement } from '@/store/entitlement';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { useLocale, useT } from '@/store/locale';
@@ -20,11 +22,32 @@ import { spacing, type, useTheme } from '@/theme';
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const { user, signOut, deleteAccount } = useAuth();
+  const { entitled, trialEndsAt, subscribedUntil } = useEntitlement();
   const { households, household, membersOf, myName, setDisplayName } = useHousehold();
   const { seedDemo } = usePantryIntel();
   const { lists, deleteItem } = useGroceries();
   const { region, language, setLocale, t } = useLocale();
   const [localeOpen, setLocaleOpen] = useState(false);
+
+  /**
+   * One line describing where this account stands with Plus.
+   *
+   * Three states, and they are genuinely different: paying (renews on a date),
+   * inside the free month (ends on a date, and nothing will be charged), or
+   * neither. The middle one is the one worth being precise about — somebody
+   * who thinks a trial is a subscription gets an unpleasant surprise either
+   * when it ends or when they discover it never started.
+   */
+  const plusStatus = (() => {
+    const when = (at: number) => new Date(at).toLocaleDateString(language);
+    if (subscribedUntil && subscribedUntil > Date.now()) {
+      return t('plus.renewsOn', { date: when(subscribedUntil) });
+    }
+    if (entitled && trialEndsAt && trialEndsAt > Date.now()) {
+      return t('plus.trialUntil', { date: when(trialEndsAt) });
+    }
+    return t('plus.notActive');
+  })();
 
   // Dev preview: clear any prior sample items off lists so the deck refills,
   // then reseed and open the Vibe Check. (No-op cost in production — hidden.)
@@ -212,6 +235,31 @@ export default function SettingsScreen() {
                   {t('settings.setUpHouseholdHint')}
                 </Text>
               </View>
+            </Pressable>
+          </Card>
+        </>
+      )}
+
+      {/* Korb Plus.
+          Only for signed-in accounts, and only in a build that can actually
+          take money — see billingAvailable(). The subtitle says which of the
+          three states they are in, because "manage subscription" above a row
+          that opens a purchase screen is the kind of small lie people notice. */}
+      {user && billingAvailable() && (
+        <>
+          <Text style={[type.label, { color: colors.muted, marginTop: spacing.xs }]}>
+            {t('plus.title')}
+          </Text>
+          <Card>
+            <Pressable onPress={() => router.push('/paywall')} style={styles.row} hitSlop={6}>
+              <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
+              <View style={styles.grow}>
+                <Text style={[type.body, { color: colors.ink }]}>
+                  {entitled ? t('plus.active') : t('plus.title')}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>{plusStatus}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </Pressable>
           </Card>
         </>

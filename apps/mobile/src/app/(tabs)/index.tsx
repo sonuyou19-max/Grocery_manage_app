@@ -12,6 +12,7 @@ import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { HouseholdSwitcher } from '@/components/household-switcher';
 import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
+import { TrialNudge } from '@/components/trial-nudge';
 import { WeeklyListSheet } from '@/components/weekly-list-sheet';
 import { onboardingSeen } from '@/lib/onboarding';
 import { normalizeKey } from '@/lib/pantry-intel';
@@ -152,6 +153,10 @@ export default function ListsScreen() {
         headerAction={<WalletButton />}
         hasFab
       >
+        {/* Renders nothing at all unless a free month is genuinely days from
+            ending on an account that could act on it. See the component. */}
+        <TrialNudge />
+
         {/* Signed out there is no pantry to report on, and the empty branch below
             would cheerfully claim "nothing running low" about one that does not
             exist. The weekly builder needs no such guard — it renders only when
