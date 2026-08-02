@@ -57,12 +57,33 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     AsyncStorage.setItem(STORE_KEY, JSON.stringify({ region, language })).catch(() => {});
   }, []);
 
-  // Keep the engine's global locale in step with the active language, so code
-  // that can't read this context — notably the error boundary, which sits above
-  // the provider — still translates in the user's language via `i18n.t`.
-  useEffect(() => {
-    i18n.locale = state?.language ?? DEFAULT_LANGUAGE;
-  }, [state]);
+  /**
+   * Keep the engine's global locale in step with the active language, so code
+   * that can't read this context — notably the error boundary, which sits above
+   * the provider — still translates in the user's language via `i18n.t`.
+   *
+   * DURING RENDER, not in an effect, and that is the whole point.
+   *
+   * An effect runs after the tree has already rendered, so for one full pass
+   * every child saw the new language while `i18n.locale` still held the old
+   * one. That gap was not theoretical: i18n-js picks a pluralizer with
+   * `registry[askedFor] || registry[i18n.locale]`, so the stale global decided
+   * plural forms for a language that had not asked for it, and the screen
+   * filled with `[missing "en.…many" translation]`. Worse, assigning to
+   * `i18n.locale` re-renders nothing, so the wrong text stayed on screen until
+   * something unrelated happened to re-render it.
+   *
+   * A complete pluralizer registry (i18n/plural-rules.ts) already stops that
+   * particular symptom. This closes the same hole from the other side, for
+   * every OTHER thing the global locale feeds — date and number formatting, and
+   * any `i18n.t` call made without an explicit locale.
+   *
+   * Assigning to a module singleton mid-render is a side effect, which React
+   * normally warns against. It is safe here precisely because it is idempotent
+   * and derived: the same render always computes the same value, so a
+   * discarded or replayed render leaves nothing behind to clean up.
+   */
+  i18n.locale = state?.language ?? DEFAULT_LANGUAGE;
 
   const value = useMemo<LocaleValue>(() => {
     const language = state?.language ?? DEFAULT_LANGUAGE;

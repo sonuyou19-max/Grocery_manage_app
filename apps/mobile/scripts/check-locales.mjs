@@ -26,30 +26,55 @@ const TARGETS = ['de', 'es', 'fr', 'it', 'nl', 'pl'];
 
 const PLURAL_CATEGORIES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);
 
-/**
- * Plural categories each language must define. Everything here except Polish
- * uses the English-style one/other split.
- */
-const REQUIRED_PLURALS = {
-  en: ['one', 'other'],
-  de: ['one', 'other'],
-  es: ['one', 'other'],
-  fr: ['one', 'other'],
-  it: ['one', 'other'],
-  nl: ['one', 'other'],
-  pl: ['one', 'few', 'many'],
-};
-
-/** Load a locale's default export by transpiling it in-process. */
-function load(locale) {
-  const src = readFileSync(join(LOCALE_DIR, `${locale}.ts`), 'utf8');
-  const js = ts.transpileModule(src, {
+/** Transpile a TypeScript module in-process and return its exports. */
+function loadTs(file) {
+  const js = ts.transpileModule(readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019 },
   }).outputText;
   const mod = { exports: {} };
   new Function('module', 'exports', 'require', js)(mod, mod.exports, () => {});
-  return mod.exports.default;
+  return mod.exports;
 }
+
+/** Load a locale's default export. */
+const load = (locale) => loadTs(join(LOCALE_DIR, `${locale}.ts`)).default;
+
+/**
+ * The plural rules the APP actually runs, not a copy of them.
+ *
+ * This used to be a hand-written table in this file, which meant the check
+ * could agree with itself while disagreeing with the engine — and that is
+ * exactly the failure that shipped: the table said English needs one/other,
+ * the locale files provided one/other, the check passed, and the running app
+ * asked English for `many` anyway.
+ */
+const { PLURAL_RULES } = loadTs(join(HERE, '..', 'src', 'i18n', 'plural-rules.ts'));
+const { LANGUAGES } = loadTs(join(HERE, '..', 'src', 'i18n', 'languages.ts'));
+
+/**
+ * Counts to exercise each rule against.
+ *
+ * 0-120 covers every boundary Polish cares about (mod 10 and mod 100 both turn
+ * over inside it, including the 12-14 exception), and the fractions catch a
+ * rule that forgets non-integers. Korb never pluralizes anything larger — item
+ * counts, day counts, week counts.
+ */
+const PROBE_COUNTS = [...Array.from({ length: 121 }, (_, i) => i), 0.5, 1.5, 2.5];
+
+/**
+ * Which categories a language's rule can actually emit.
+ *
+ * Derived by running the rule, so it cannot drift from the code the app uses.
+ */
+function categoriesEmittedBy(rule) {
+  const seen = new Set();
+  for (const n of PROBE_COUNTS) seen.add(rule(n));
+  return [...seen];
+}
+
+const REQUIRED_PLURALS = Object.fromEntries(
+  Object.entries(PLURAL_RULES).map(([code, rule]) => [code, categoriesEmittedBy(rule)]),
+);
 
 const isPluralGroup = (value) =>
   value !== null &&
@@ -91,6 +116,48 @@ const fail = (locale, lines) => {
   console.error(`\n✗ ${locale}`);
   for (const line of lines) console.error(`    ${line}`);
 };
+
+/**
+ * Every language the app offers must have its OWN registered plural rule.
+ *
+ * This is the check that would have caught the bug, and none of the ones below
+ * could have. i18n-js resolves a pluralizer as
+ *
+ *     registry[requestedLocale] || registry[i18n.locale] || registry.default
+ *
+ * so a language with no entry silently borrows whichever rule the ENGINE-WIDE
+ * locale happens to point at. With only Polish registered, switching Polish →
+ * English rendered English strings through the Polish rule: count 5 asked for
+ * `many`, English has no `many`, and every count on screen became
+ * `[missing "en.lists.itemsCount.many" translation]`.
+ *
+ * Nothing about the locale FILES was wrong, which is why key-parity checking
+ * had nothing to say about it. The defect was entirely in which rule ran.
+ */
+{
+  const offered = LANGUAGES.map((l) => l.code);
+  const missing = offered.filter((code) => !PLURAL_RULES[code]);
+  const orphaned = Object.keys(PLURAL_RULES).filter((code) => !offered.includes(code));
+  const problems = [];
+  for (const code of missing) {
+    problems.push(
+      `"${code}" is offered in languages.ts but has no rule in plural-rules.ts — ` +
+        'it will silently borrow whichever rule the engine-wide locale points at',
+    );
+  }
+  for (const code of orphaned) {
+    problems.push(`"${code}" has a plural rule but is not a language the app offers`);
+  }
+  if (problems.length) {
+    fail('plural rules', problems);
+    // Everything below indexes REQUIRED_PLURALS by language, which is derived
+    // from the very table that just came up short. Continuing would replace a
+    // clear diagnosis with a TypeError three checks later.
+    console.error('\nFix plural-rules.ts before the remaining checks can run.');
+    process.exit(1);
+  }
+  console.log(`✓ plural rules cover all ${offered.length} languages`);
+}
 
 // The source itself must declare the plural categories English needs.
 for (const path of enShape.plurals) {

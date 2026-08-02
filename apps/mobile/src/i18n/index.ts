@@ -1,6 +1,7 @@
 import { I18n, useMakePlural } from 'i18n-js';
 
 import { DEFAULT_LANGUAGE } from './languages';
+import { PLURAL_RULES } from './plural-rules';
 import de from './locales/de';
 import en from './locales/en';
 import es from './locales/es';
@@ -21,23 +22,23 @@ i18n.defaultLocale = DEFAULT_LANGUAGE;
 i18n.locale = DEFAULT_LANGUAGE;
 
 /**
- * Polish cardinal plural rule (CLDR). Polish needs three forms where English
- * needs two — 1 produkt / 2 produkty / 5 produktów — so without this the engine
- * would fall back to the English one/other split and render "5 produkty".
- * Spelled out rather than imported from `make-plural` (a transitive dependency
- * of i18n-js) so bundling never depends on that package staying hoisted.
+ * Register a pluralizer for EVERY language, not just the irregular one.
+ *
+ * i18n-js resolves one as `registry[askedFor] || registry[i18n.locale] ||
+ * registry.default`. A language with no entry falls to the middle term, which
+ * is the engine-wide locale rather than the one the caller named — so with only
+ * Polish registered, the first render after switching Polish → English asked
+ * for English text using the Polish rule and printed
+ * `[missing "en.lists.itemsCount.many" translation]` across the screen.
+ *
+ * A complete registry means the first term always hits and the middle term is
+ * never reached. See ./plural-rules.ts for the rules and why they are narrower
+ * than CLDR.
  */
-const polishPlural = (count: number): string => {
-  // Fractions take "other"; every count we pluralize is a whole number.
-  if (!Number.isInteger(count)) return 'other';
-  if (count === 1) return 'one';
-  const mod10 = Math.abs(count) % 10;
-  const mod100 = Math.abs(count) % 100;
-  if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) return 'few';
-  return 'many';
-};
-
-i18n.pluralization.register('pl', useMakePlural({ pluralizer: polishPlural }));
+for (const [code, pluralizer] of Object.entries(PLURAL_RULES)) {
+  i18n.pluralization.register(code, useMakePlural({ pluralizer }));
+}
 
 export * from './languages';
+export * from './plural-rules';
 export * from './regions';
