@@ -294,3 +294,14 @@ export function emojiFor(name: string, category: ItemCategory = 'other'): string
   // 4. The category, which always has an answer.
   return CATEGORY_EMOJI[category] ?? CATEGORY_EMOJI.other;
 }
+
+/**
+ * The curated table, exposed.
+ *
+ * Read by lib/item-category.ts, which derives an aisle for every term here
+ * rather than keeping a second list of the same 646 words in seven languages.
+ * One table names the concepts; the other says which aisle each concept's
+ * emoji belongs to. Adding a word in a new language gets it an emoji, a unit
+ * AND a category, with no second edit to remember.
+ */
+export const __ITEM_EMOJI = ITEM_EMOJI;

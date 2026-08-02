@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { asUnit, type FoodGroup, type ItemCategory, type ItemUnit } from '@korb/shared';
 
+import { categoryFromTables } from '@/lib/item-category';
 import { fold } from '@/lib/item-emoji';
 import { learnLexiconEntry } from '@/lib/item-lexicon';
 import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
@@ -43,6 +44,19 @@ export const CATEGORY_ORDER: ItemCategory[] = [
   'other',
 ];
 
+/**
+ * English-only supplements to the curated table.
+ *
+ * This used to BE the category map, all 55 words of it, while ITEM_EMOJI and
+ * ITEM_UNIT carried 646 and 189 terms across seven languages. That mismatch is
+ * why "crème" showed up under Other with the right emoji and the right unit
+ * beside it — see lib/item-category.ts.
+ *
+ * What is left here is the handful of concepts the emoji table has no glyph
+ * for, plus a few English words whose aisle differs from what their glyph would
+ * suggest. Anything with an emoji gets its category from that; add new words to
+ * ITEM_EMOJI instead of here, and every language benefits at once.
+ */
 const KEYWORDS: Record<string, ItemCategory> = {
   milk: 'dairy_eggs',
   cheese: 'dairy_eggs',
@@ -109,7 +123,12 @@ const KEYWORDS: Record<string, ItemCategory> = {
 const CACHE_KEY = 'korb.categoryCache.v1';
 let learned: Record<string, ItemCategory> = {};
 
-const norm = (name: string) => name.trim().toLowerCase();
+/**
+ * The cache key. `fold`, not `toLowerCase` — it strips accents and ligatures,
+ * so "Crème", "creme" and "CRÈME" are one entry rather than three, and a
+ * learned answer is actually found again by somebody who types the accent.
+ */
+const norm = (name: string) => fold(name);
 
 export async function hydrateCategoryCache(): Promise<void> {
   try {
@@ -130,8 +149,20 @@ export async function learnCategory(name: string, category: ItemCategory): Promi
   }
 }
 
+/**
+ * The curated answer for a name, or null.
+ *
+ * Multilingual table first — it covers every term the app has an emoji for, in
+ * all seven languages — then the English supplements above. Whole name before
+ * word-by-word in both, so a compound never loses to one of its parts.
+ */
 function keywordMatch(name: string): ItemCategory | null {
-  for (const word of norm(name).split(/\s+/)) {
+  const fromTables = categoryFromTables(name);
+  if (fromTables) return fromTables;
+
+  const folded = norm(name);
+  if (KEYWORDS[folded]) return KEYWORDS[folded];
+  for (const word of folded.split(/[\s,./-]+/)) {
     if (KEYWORDS[word]) return KEYWORDS[word];
   }
   return null;
