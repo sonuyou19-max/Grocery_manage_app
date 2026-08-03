@@ -6,10 +6,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card } from '@/components/card';
 import { EditList } from '@/components/edit-list';
 import { EmptyState } from '@/components/empty-state';
-import { Fab } from '@/components/fab';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { Screen } from '@/components/screen';
-import { TextPromptModal } from '@/components/text-prompt-modal';
 import { HouseholdSwitcher } from '@/components/household-switcher';
 import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
 import { usePlusGate } from '@/lib/plus-gate';
@@ -46,7 +44,7 @@ let tourRouted = false;
 export default function ListsScreen() {
   const { colors } = useTheme();
   const t = useT();
-  const { lists, addList, addParsedItem, deleteList, reorderLists } = useGroceries();
+  const { lists, addParsedItem, deleteList, reorderLists } = useGroceries();
   const { household, members, myName } = useHousehold();
   const { user } = useAuth();
   // Shared with Insights and the Pantry — see lib/plus-gate.ts.
@@ -54,7 +52,6 @@ export default function ListsScreen() {
   const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
   const vibeVariant = vibeEmptyVariant();
-  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   // Items the builder handed off, awaiting a destination-list choice.
@@ -115,12 +112,6 @@ export default function ListsScreen() {
   const firstName = myName ? myName.split(/\s+/)[0] : null;
   const base = t(`greeting.${greetingKey()}`);
 
-  const openNewList = (name: string) => {
-    const id = addList(name);
-    setCreating(false);
-    router.push({ pathname: '/list/[id]', params: { id } });
-  };
-
   // Builder handed off the ticked items → ask which list to add them to.
   const onBuild = (selected: WeeklySuggestion[]) => {
     setBuilderOpen(false);
@@ -165,7 +156,6 @@ export default function ListsScreen() {
           </View>
         }
         headerAction={<WalletButton />}
-        hasFab
       >
         {/* Renders nothing at all unless a free month is genuinely days from
             ending on an account that could act on it. See the component. */}
@@ -273,15 +263,10 @@ export default function ListsScreen() {
         )}
       </Screen>
 
-      {!editing && <Fab label={t('lists.newList')} onPress={() => setCreating(true)} />}
-      <TextPromptModal
-        visible={creating}
-        title={t('lists.newList')}
-        placeholder={t('lists.newListPlaceholder')}
-        confirmLabel={t('lists.create')}
-        onCancel={() => setCreating(false)}
-        onSubmit={openNewList}
-      />
+      {/* The green "+ New list" Fab used to live here. Creating a list now
+          starts from the centre button in the tab bar, which is one place for
+          one job on every screen rather than a different affordance per tab —
+          and it takes the bottom-right corner back for the content. */}
       <WeeklyListSheet
         visible={builderOpen}
         suggestions={suggestions}

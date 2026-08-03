@@ -1,16 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
-import { useEffect } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CreateSheet } from '@/components/create-sheet';
+import { haptics } from '@/lib/haptics';
+import { useT } from '@/store/locale';
 import { spacing, useTheme } from '@/theme';
 
 /** Pill dimensions, exported so screens can reserve bottom clearance for it. */
 export const TAB_BAR_HEIGHT = 68;
 export const TAB_BAR_GAP = 12; // float gap above the home indicator
+
+/**
+ * Five slots, four of them routes.
+ *
+ * The middle slot is not a tab. It is an action, and it deliberately does not
+ * participate in the selected-tab machinery: it never becomes "current", the
+ * highlight never travels to it, and pressing it changes nothing about where
+ * you are. Everything below that maps a route index to a screen position has to
+ * account for the gap, which is what `slotFor` is.
+ */
+const SLOTS = 5;
+const CENTER_SLOT = 2;
+
+/** Route index (0–3) to slot index (0,1,3,4). */
+const slotFor = (routeIndex: number) =>
+  routeIndex < CENTER_SLOT ? routeIndex : routeIndex + 1;
+
+/** Diameter of the create button, and how far it rides above the pill. */
+const FAB_SIZE = 54;
+const FAB_LIFT = 16;
 
 const H_MARGIN = spacing.lg;
 const INNER_PAD = 6;
@@ -38,15 +62,19 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const count = state.routes.length;
-  const tabWidth = (width - H_MARGIN * 2 - INNER_PAD * 2) / count;
+  const t = useT();
+  const [creating, setCreating] = useState(false);
 
-  const active = useSharedValue(state.index);
+  const tabWidth = (width - H_MARGIN * 2 - INNER_PAD * 2) / SLOTS;
+
+  // Driven by the SLOT, not the route index, or the highlight would land on the
+  // create button when Insights is selected and stop one place short thereafter.
+  const active = useSharedValue(slotFor(state.index));
   useEffect(() => {
-    active.value = withSpring(state.index, { damping: 15, stiffness: 150, mass: 0.7 });
+    active.value = withSpring(slotFor(state.index), { damping: 15, stiffness: 150, mass: 0.7 });
   }, [state.index, active]);
 
-  // Lozenge centred under each tab's icon; slides one tab-width per index.
+  // Lozenge centred under each tab's icon; slides one slot-width per step.
   const bubbleStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: active.value * tabWidth }],
   }));
@@ -65,6 +93,14 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
           <View style={styles.row}>
             <Animated.View style={[styles.bubble, bubbleBase, { backgroundColor: colors.accentSoft }, bubbleStyle]} />
             {state.routes.map((route, i) => {
+              // The spacer occupies the middle slot so the four real tabs keep
+              // their positions; the button itself is drawn outside the pill so
+              // it can overlap the top edge without being clipped by it.
+              const spacer =
+                slotFor(i) === CENTER_SLOT + 1 && i === CENTER_SLOT ? (
+                  <View key="center-slot" style={styles.tab} pointerEvents="none" />
+                ) : null;
+
               const focused = state.index === i;
               const { options } = descriptors[route.key];
               const label = typeof options.title === 'string' ? options.title : route.name;
@@ -76,8 +112,9 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
               };
 
               return (
+                <View key={route.key} style={styles.slotGroup}>
+                {spacer}
                 <Pressable
-                  key={route.key}
                   onPress={onPress}
                   style={styles.tab}
                   accessibilityRole="button"
@@ -104,11 +141,36 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                     {label}
                   </Text>
                 </Pressable>
+                </View>
               );
             })}
           </View>
         </BlurView>
+
+        {/* Outside the BlurView, which has overflow:hidden — a child would be
+            cropped at the pill's edge exactly where this is meant to rise
+            above it. */}
+        <Pressable
+          onPress={() => {
+            haptics.tick();
+            setCreating(true);
+          }}
+          style={[styles.fabWrap, { left: width / 2 - H_MARGIN - FAB_SIZE / 2 }]}
+          accessibilityRole="button"
+          accessibilityLabel={t('create.title')}
+        >
+          <LinearGradient
+            colors={[colors.plusFrom, colors.plusTo]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fab}
+          >
+            <Ionicons name="add" size={28} color="#FFFFFF" />
+          </LinearGradient>
+        </Pressable>
       </View>
+
+      <CreateSheet visible={creating} onClose={() => setCreating(false)} />
     </View>
   );
 }
@@ -138,7 +200,28 @@ const styles = StyleSheet.create({
     height: BUBBLE_H,
     borderRadius: BUBBLE_H / 2,
   },
+  // One group per route, so the middle spacer can be emitted alongside the tab
+  // that follows it without a fragment key warning.
+  slotGroup: { flex: 1, flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center' },
+  fabWrap: {
+    position: 'absolute',
+    top: -FAB_LIFT,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    shadowColor: '#2A1B5E',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  fab: {
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconZone: { height: BUBBLE_H, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1, marginTop: 4 },
 });

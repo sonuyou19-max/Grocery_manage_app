@@ -66,8 +66,11 @@ export interface ThemeColors {
    * as that across the three surfaces it appears on (the card, the badge, the
    * paywall) without a label.
    *
-   * Reserved. Nothing that is not about the subscription may use these, or the
-   * signal stops meaning anything.
+   * Reserved, with one deliberate exception: the tab bar's create button. That
+   * button opens a sheet whose second option is the Plus recipe importer, and
+   * the colour was specified for it. It is worth knowing the cost — a free
+   * user taps a purple button to make a free list, which spends a little of
+   * what the gradient means everywhere else. Nothing else may use these.
    */
   plusFrom: string;
   plusTo: string;

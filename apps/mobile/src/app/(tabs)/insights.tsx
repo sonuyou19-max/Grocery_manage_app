@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { LayoutAnimation, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
 import { EcoBar } from '@/components/eco-bar';
+import { RangePicker, withinRange, type Range } from '@/components/range-picker';
+import { StaplesSheet } from '@/components/staples-sheet';
 import { InsightsTeaser } from '@/components/insights-teaser';
 import { PlusCard } from '@/components/plus-card';
 import { Screen } from '@/components/screen';
@@ -35,6 +37,9 @@ import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
+
+/** How many staples the card shows before handing off to the sheet. */
+const STAPLES_SHOWN = 5;
 
 /**
  * Insights: a feed of what the app has learned about your shopping. Basket
@@ -101,6 +106,18 @@ function SignedInInsights() {
   const moves = useMemo(() => priceMoves(purchases), [purchases]);
   const hasTrend = trend.weeks.some((w) => w.count > 0);
 
+  /**
+   * One range per card, defaulting to a month.
+   *
+   * Held here rather than inside each card because the derivations below need
+   * them, and because a card that owned its own state would reset every time
+   * the tab re-rendered for an unrelated reason.
+   */
+  const [spendRange, setSpendRange] = useState<Range>('month');
+  const [storeRange, setStoreRange] = useState<Range>('month');
+  const [stapleRange, setStapleRange] = useState<Range>('month');
+  const [staplesOpen, setStaplesOpen] = useState(false);
+
   const cart = useMemo(
     () => basketBalance(lists.flatMap((l) => l.items).map((it) => ({ name: it.name, category: it.category }))),
     [lists],
@@ -114,14 +131,24 @@ function SignedInInsights() {
     [tracked],
   );
 
-  const staples = useMemo(
-    () =>
-      tracked
-        .filter((s) => s.sampleCount >= 1)
-        .sort((a, b) => b.sampleCount - a.sampleCount)
-        .slice(0, 5),
-    [tracked],
-  );
+  /**
+   * Staples, counted over the chosen window from the purchase log.
+   *
+   * This used to read `sampleCount` off the pantry model, which is a lifetime
+   * figure and therefore could not answer "what have I bought most THIS
+   * quarter" at all. Counting the log instead makes the range control mean
+   * something; the pantry model still owns prediction, which is a different
+   * question.
+   */
+  const staples = useMemo(() => {
+    const counts = new Map<string, { key: string; display: string; times: number }>();
+    for (const p of withinRange(purchases, stapleRange, now)) {
+      const found = counts.get(p.key);
+      if (found) found.times += 1;
+      else counts.set(p.key, { key: p.key, display: p.name, times: 1 });
+    }
+    return [...counts.values()].sort((a, b) => b.times - a.times);
+  }, [purchases, stapleRange, now]);
 
   /** Category per item, looked up from the pantry — the log doesn't carry one. */
   const statsByKey = useMemo(() => {
@@ -158,19 +185,39 @@ function SignedInInsights() {
         // dearer shop as the bargain. See lib/price-intel.ts.
         quantity: p.quantity,
         unit: p.unit,
+        // Carried so the range pickers can scope this array; the price helpers
+        // ignore it, and a filter that had to re-join against `purchases` would
+        // be a second source of truth for what "in this window" means.
+        at: p.at,
       })),
     [purchases, statsByKey],
   );
 
-  const spendTotal = pricedItems.reduce((sum, it) => sum + it.priceCents, 0);
+  /**
+   * One range per card, defaulting to a month.
+   *
+   * Held here rather than inside each card because the derivations below need
+   * them, and because a card that owned its own state would reset every time
+   * the tab re-rendered for an unrelated reason.
+   */
+  const spendScoped = useMemo(
+    () => withinRange(pricedItems, spendRange, now),
+    [pricedItems, spendRange, now],
+  );
+  const storeScoped = useMemo(
+    () => withinRange(pricedItems, storeRange, now),
+    [pricedItems, storeRange, now],
+  );
+
+  const spendTotal = spendScoped.reduce((sum, it) => sum + it.priceCents, 0);
   const spendByCat = useMemo(() => {
     const m = new Map<ItemCategory, number>();
-    for (const it of pricedItems) m.set(it.category, (m.get(it.category) ?? 0) + it.priceCents);
+    for (const it of spendScoped) m.set(it.category, (m.get(it.category) ?? 0) + it.priceCents);
     return CATEGORY_ORDER.map((c) => ({ category: c, cents: m.get(c) ?? 0 }))
       .filter((x) => x.cents > 0)
       .sort((a, b) => b.cents - a.cents);
-  }, [pricedItems]);
-  const storeSpend = useMemo(() => spendByStore(pricedItems), [pricedItems]);
+  }, [spendScoped]);
+  const storeSpend = useMemo(() => spendByStore(storeScoped), [storeScoped]);
   const cheaper = useMemo(() => cheaperStoreHints(pricedItems), [pricedItems]);
 
   /**
@@ -267,17 +314,38 @@ function SignedInInsights() {
           names there is nothing to show. */}
       {!locked && staples.length > 0 && (
         <Card>
-          <CardHead icon="repeat-outline" title={t('insights.staplesTitle')} hint={t('insights.staplesHint')} />
-          {staples.map((s) => (
+          <CardHead
+            icon="repeat-outline"
+            title={t('insights.staplesTitle')}
+            action={<RangePicker value={stapleRange} onChange={setStapleRange} />}
+          />
+          {/* Five, then a door. A household with sixty tracked items turned this
+              card into most of the tab, and the sixtieth staple is not what
+              anybody came for — but it should still be reachable. */}
+          {staples.slice(0, STAPLES_SHOWN).map((s) => (
             <View key={s.key} style={styles.row}>
               <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
                 {s.display}
               </Text>
               <Text style={[type.sub, { color: colors.muted }]}>
-                {t('insights.boughtTimes', { count: s.sampleCount + 1 })}
+                {t('insights.boughtTimes', { count: s.times })}
               </Text>
             </View>
           ))}
+          {staples.length > STAPLES_SHOWN && (
+            <Pressable
+              onPress={() => {
+                haptics.tick();
+                setStaplesOpen(true);
+              }}
+              style={styles.moreRow}
+            >
+              <Text style={[type.sub, { color: colors.accent }]}>
+                {t('insights.viewAllStaples', { count: staples.length })}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+            </Pressable>
+          )}
         </Card>
       )}
 
@@ -365,12 +433,12 @@ function SignedInInsights() {
           rendered on every account that had never entered a price, the empty
           state two branches down was unreachable, and the header read "1 priced"
           above a total of €0.00. */}
-      {pricedItems.length > 0 ? (
+      {spendScoped.length > 0 ? (
         <Card>
           <CardHead
             icon="cash-outline"
             title={t('insights.spendingTitle')}
-            hint={t('insights.spendingHint', { count: pricedItems.length })}
+            action={<RangePicker value={spendRange} onChange={setSpendRange} />}
           />
           <View style={styles.spendTotal}>
             <Text style={[type.sub, { color: colors.muted }]}>{t('insights.totalLogged')}</Text>
@@ -393,7 +461,11 @@ function SignedInInsights() {
       {/* Spend per store — only when at least one priced item has a store. */}
       {storeSpend.some((s) => s.store != null) && (
         <Card>
-          <CardHead icon="storefront-outline" title={t('insights.whereTitle')} hint={t('insights.whereHint')} />
+          <CardHead
+            icon="storefront-outline"
+            title={t('insights.whereTitle')}
+            action={<RangePicker value={storeRange} onChange={setStoreRange} />}
+          />
           {storeSpend.map((s) => (
             <View key={s.store ?? 'none'} style={styles.row}>
               {s.store ? (
@@ -491,6 +563,12 @@ function SignedInInsights() {
           is found at the end of the reader's own figures rather than in front
           of them. A free tab still ends with something to read. */}
       {locked && <PlusCard freeWeeks={freeWeeks} />}
+
+      <StaplesSheet
+        visible={staplesOpen}
+        staples={staples}
+        onClose={() => setStaplesOpen(false)}
+      />
     </Screen>
   );
 }
@@ -509,13 +587,31 @@ function usePerUnitPrice() {
     unit ? `${money(cents)} / ${unit}` : money(cents);
 }
 
-function CardHead({ icon, title, hint }: { icon: IconName; title: string; hint?: string }) {
+/**
+ * A card's header: icon, title, and either a static hint or a control.
+ *
+ * `hint` and `action` occupy the same corner and are mutually exclusive by
+ * convention rather than by type — a card that wants a range picker has nothing
+ * useful to also say there, and two things fighting for the right edge is how
+ * the header starts wrapping in German.
+ */
+function CardHead({
+  icon,
+  title,
+  hint,
+  action,
+}: {
+  icon: IconName;
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
   const { colors } = useTheme();
   return (
     <View style={styles.cardHead}>
       <Ionicons name={icon} size={20} color={colors.accent} />
       <Text style={[type.body, styles.grow, { color: colors.ink }]}>{title}</Text>
-      {hint ? <Text style={[type.sub, { color: colors.muted }]}>{hint}</Text> : null}
+      {action ?? (hint ? <Text style={[type.sub, { color: colors.muted }]}>{hint}</Text> : null)}
     </View>
   );
 }
@@ -706,6 +802,13 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xs },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  moreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
   ecoPlot: {
     flexDirection: 'row',
     alignItems: 'flex-end',
