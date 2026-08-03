@@ -55,11 +55,19 @@ export interface Item {
    * coordinate with.
    */
   claimedBy: string | null;
+  /**
+   * "This one is organic, or from a local producer" — the shopper's own claim,
+   * never inferred. Korb has no way to know whether the milk you picked up was
+   * organic, so it does not pretend to: the flag is off until somebody says
+   * otherwise, and it feeds the eco score's own separate line rather than
+   * moving the item's impact band (see lib/eco.ts).
+   */
+  bio: boolean;
   claimedAt: number | null;
 }
 
 export type ItemPatch = Partial<
-  Pick<Item, 'name' | 'category' | 'quantity' | 'unit' | 'priceCents' | 'store'>
+  Pick<Item, 'name' | 'category' | 'quantity' | 'unit' | 'priceCents' | 'store' | 'bio'>
 >;
 
 export interface List {
@@ -157,6 +165,7 @@ const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {})
   // Local lists have nobody to coordinate with, so nothing is ever claimed.
   claimedBy: null,
   claimedAt: null,
+  bio: false,
   ...opts,
 });
 
@@ -401,6 +410,7 @@ interface DbItem {
   created_at: string;
   claimed_by: string | null;
   claimed_at: string | null;
+  bio: boolean | null;
 }
 interface DbList {
   id: string;
@@ -419,6 +429,7 @@ const mapItem = (r: DbItem): Item => ({
   priceCents: r.price_cents,
   store: r.store,
   checked: r.checked,
+  bio: r.bio ?? false,
   claimedBy: r.claimed_by,
   claimedAt: r.claimed_at ? Date.parse(r.claimed_at) : null,
 });
@@ -522,6 +533,7 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
         quantity: it.quantity,
         unit: it.unit,
         price_cents: it.priceCents,
+        bio: it.bio,
         store: it.store,
         checked: it.checked,
         position: i,
@@ -569,7 +581,7 @@ function CloudGroceriesProvider({
     const { data, error } = await supabase
       .from('shopping_lists')
       .select(
-        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, created_at, claimed_by, claimed_at)',
+        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, created_at, claimed_by, claimed_at, bio)',
       )
       .eq('household_id', householdId)
       .eq('archived', false)
@@ -710,6 +722,7 @@ function CloudGroceriesProvider({
       if (patch.quantity !== undefined) db.quantity = patch.quantity;
       if (patch.unit !== undefined) db.unit = patch.unit;
       if (patch.priceCents !== undefined) db.price_cents = patch.priceCents;
+      if (patch.bio !== undefined) db.bio = patch.bio;
       if (patch.store !== undefined) db.store = patch.store;
       return db;
     };

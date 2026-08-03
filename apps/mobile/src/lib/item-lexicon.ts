@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { asUnit, type ItemCategory, type ItemUnit } from '@korb/shared';
+import { asCarbonTier, asUnit, type CarbonTier, type ItemCategory, type ItemUnit } from '@korb/shared';
 
 import { supabase } from '@/lib/supabase';
 
@@ -33,14 +33,21 @@ interface LexiconEntry {
    * see unitFor() in item-unit.ts, which stops rather than falling back.
    */
   unit: ItemUnit | null;
+  /**
+   * The climate band, or null when the model declined or the item is not food.
+   * Consulted only after lib/eco.ts has tried its own table and the item's food
+   * group, so an absent value here is routine rather than a gap.
+   */
+  carbon: CarbonTier | null;
 }
 
-// v2 adds `unit` to each cached entry. The cursor is versioned alongside it and
-// not carried over: the unit arrives as a new column on rows this device may
-// already have synced, and a delta keyed on updated_at would never fetch them
-// again. Bumping both costs one full re-sync, once.
-const CACHE_KEY = 'korb.itemLexicon.v2';
-const CURSOR_KEY = 'korb.itemLexicon.cursor.v2';
+// v3 adds `carbon`, for exactly the reason v2 added `unit`: the band arrives as
+// a new column on rows this device may already hold, and a delta keyed on
+// updated_at would never fetch them again — every term learned before migration
+// 0027 would sit in the cache with no band forever. Bumping both keys costs one
+// full re-sync, once, which is the cheapest correct answer.
+const CACHE_KEY = 'korb.itemLexicon.v3';
+const CURSOR_KEY = 'korb.itemLexicon.cursor.v3';
 
 /**
  * Ceiling on what we keep locally.
@@ -107,11 +114,19 @@ export function learnLexiconEntry(
   emoji: string,
   category: ItemCategory | null,
   unit: ItemUnit | null = null,
+  carbon: CarbonTier | null = null,
 ): void {
   if (!foldedTerm || !emoji) return;
   const existing = entries.get(foldedTerm);
-  if (existing?.emoji === emoji && existing.category === category && existing.unit === unit) return;
-  entries.set(foldedTerm, { emoji, category, unit });
+  if (
+    existing?.emoji === emoji &&
+    existing.category === category &&
+    existing.unit === unit &&
+    existing.carbon === carbon
+  ) {
+    return;
+  }
+  entries.set(foldedTerm, { emoji, category, unit, carbon });
   changed();
   void persist();
 }
@@ -121,8 +136,11 @@ function persist(): Promise<void> {
   if (saveTimer) clearTimeout(saveTimer);
   return new Promise((resolve) => {
     saveTimer = setTimeout(() => {
-      const flat: Record<string, [string, ItemCategory | null, ItemUnit | null]> = {};
-      for (const [term, e] of entries) flat[term] = [e.emoji, e.category, e.unit];
+      const flat: Record<
+        string,
+        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null]
+      > = {};
+      for (const [term, e] of entries) flat[term] = [e.emoji, e.category, e.unit, e.carbon];
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(flat)).catch(() => {}).finally(resolve);
     }, 400);
   });
@@ -139,10 +157,13 @@ export async function hydrateLexicon(): Promise<void> {
     ]);
     cursor = savedCursor;
     if (raw) {
-      const flat = JSON.parse(raw) as Record<string, [string, ItemCategory | null, ItemUnit | null]>;
+      const flat = JSON.parse(raw) as Record<
+        string,
+        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null]
+      >;
       const next = new Map<string, LexiconEntry>();
-      for (const [term, [emoji, category, unit]] of Object.entries(flat)) {
-        next.set(term, { emoji, category, unit: unit ?? null });
+      for (const [term, [emoji, category, unit, carbon]] of Object.entries(flat)) {
+        next.set(term, { emoji, category, unit: unit ?? null, carbon: carbon ?? null });
       }
       entries = next;
       changed();
@@ -174,7 +195,7 @@ export async function syncLexicon(): Promise<void> {
     for (let page = 0; page < 25; page += 1) {
       let q = supabase
         .from('item_lexicon')
-        .select('term, emoji, category, unit, updated_at')
+        .select('term, emoji, category, unit, carbon, updated_at')
         .order('updated_at', { ascending: true })
         .limit(PAGE);
       if (cursor) q = q.gt('updated_at', cursor);
@@ -187,13 +208,22 @@ export async function syncLexicon(): Promise<void> {
         emoji: string;
         category: ItemCategory | null;
         unit: string | null;
+        carbon: string | null;
         updated_at: string;
       }>) {
         if (entries.size >= MAX_ENTRIES && !entries.has(row.term)) continue;
         // asUnit rather than a cast: the column is plain text with a CHECK, and
         // a client running against an older or hand-edited database shouldn't
         // be able to put an unknown string into the item sheet's picker.
-        entries.set(row.term, { emoji: row.emoji, category: row.category, unit: asUnit(row.unit) });
+        entries.set(row.term, {
+          emoji: row.emoji,
+          category: row.category,
+          unit: asUnit(row.unit),
+          // asCarbonTier for the same reason as asUnit: plain text with a
+          // CHECK, and an older or hand-edited database must not be able to
+          // put an unknown band into a score.
+          carbon: asCarbonTier(row.carbon),
+        });
         cursor = row.updated_at;
         moved = true;
       }

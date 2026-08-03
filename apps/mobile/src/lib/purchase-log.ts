@@ -66,6 +66,16 @@ export interface Purchase {
    * their own categorisation, which is what they did before the field existed.
    */
   category: ItemCategory | null;
+  /**
+   * Whether the shopper flagged this purchase as organic or local.
+   *
+   * On the log for the same reason `category` is: it is a decision the user
+   * made about a specific shop, not a property of the item's name, and the
+   * eco history is rebuilt from this log after the list it came from is long
+   * gone. False on rows written before migration 0027, which is the correct
+   * reading — nobody could tick a box that did not exist.
+   */
+  bio: boolean;
 }
 
 /**

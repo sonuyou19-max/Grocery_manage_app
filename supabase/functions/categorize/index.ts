@@ -41,10 +41,16 @@ type Group = (typeof GROUPS)[number];
 const UNITS = ['g', 'kg', 'ml', 'L', 'pcs'] as const;
 type Unit = (typeof UNITS)[number];
 
+// Kept in step with CARBON_TIERS in packages/shared and the CHECK on
+// item_lexicon.carbon (migration 0027). Same copy-and-CHECK arrangement as
+// UNITS above, for the same reason: Deno cannot import from the workspace.
+const CARBONS = ['low', 'medium', 'high'] as const;
+type Carbon = (typeof CARBONS)[number];
+
 const SYSTEM_PROMPT = `You classify a single grocery item. The name may be in ANY
 language — Hindi, Turkish, Arabic, anything — not only the ones this app ships in.
 Return ONLY a JSON object, no prose, no code fences. EVERY key is required:
-{"category": "...", "group": "...", "emoji": "...", "generic": true, "unit": "..."}
+{"category": "...", "group": "...", "emoji": "...", "generic": true, "unit": "...", "carbon": "..."}
 category is one of: ${CATEGORIES.join(', ')}.
 - produce/herbs -> fruit_veg; milk/cheese/eggs -> dairy_eggs; fresh meat/fish -> meat_fish;
   bread/pastries -> bakery; dry/canned/staples/condiments -> pantry; frozen goods -> frozen;
@@ -74,7 +80,19 @@ Use null whenever it is genuinely a toss-up — yoghurt sold in both small pots
 and big tubs, sauces that come in bottles and jars, anything you would have to
 guess at. null is a good answer and is expected often; the app leaves the choice
 to the user, which is much better than a confident wrong unit they have to
-notice and undo. Do not pick a unit just because the category usually uses it.`;
+notice and undo. Do not pick a unit just because the category usually uses it.
+carbon is the item's climate impact band, one of: ${CARBONS.join(', ')}, or null.
+Judge it by emissions PER KILOGRAM of the product, using global averages, not by
+how much of it someone eats:
+- high  -> beef, lamb, hard cheese, butter, farmed prawns, chocolate, coffee;
+- medium -> pork, chicken, eggs, fish, cow's milk, cream, yoghurt, rice, oils;
+- low   -> vegetables, fruit, grains, bread, pasta, potatoes, legumes, tofu,
+           nuts, plant milks.
+Use null for anything not eaten or drunk — cleaning products, toiletries, pet
+food, a note to self — and for anything you genuinely cannot place. Do not
+guess: the app has its own table for the items that matter and falls back to
+the food group, so null costs nothing and a wrong band is a wrong number in a
+score people are trying to improve.`;
 
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
@@ -92,11 +110,11 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Body must be {"name": string}' }, { status: 400 });
   }
 
-  // Five short fields plus JSON punctuation. Generous on purpose: a truncated
+  // Six short fields plus JSON punctuation. Generous on purpose: a truncated
   // response parses as nothing and costs a whole call. Declared here rather
   // than inline because the budget guard has to know the ceiling before the
   // call, and the two must never drift apart.
-  const MAX_TOKENS = 140;
+  const MAX_TOKENS = 160;
   const guard = await reserveBudget(req, 'categorize', SYSTEM_PROMPT + name, MAX_TOKENS);
   if (guard.denied) return guard.denied;
 
@@ -120,6 +138,7 @@ Deno.serve(async (req) => {
   let emoji: string | null = null;
   let generic = false;
   let unit: Unit | null = null;
+  let carbon: Carbon | null = null;
   try {
     const parsed = JSON.parse(extractJson(raw)) as {
       category?: string;
@@ -127,6 +146,7 @@ Deno.serve(async (req) => {
       emoji?: string;
       generic?: boolean;
       unit?: string | null;
+      carbon?: string | null;
     };
     if (parsed.category && (CATEGORIES as readonly string[]).includes(parsed.category)) {
       category = parsed.category as Category;
@@ -147,6 +167,12 @@ Deno.serve(async (req) => {
     if (typeof parsed.unit === 'string' && (UNITS as readonly string[]).includes(parsed.unit)) {
       unit = parsed.unit as Unit;
     }
+    // Membership test once more. A band outside the three is not a near miss
+    // to be coerced — it is evidence the model was improvising, and the client
+    // has a food-group default that is right more often than an improvisation.
+    if (typeof parsed.carbon === 'string' && (CARBONS as readonly string[]).includes(parsed.carbon)) {
+      carbon = parsed.carbon as Carbon;
+    }
   } catch {
     // leave defaults
   }
@@ -157,7 +183,7 @@ Deno.serve(async (req) => {
   // where it isn't available the promise is simply left to run.
   if (emoji) {
     const write = offerToLexicon(
-      { term: name.trim(), emoji, category, generic, unit },
+      { term: name.trim(), emoji, category, generic, unit, carbon },
       `ip:${clientIp(req)}`,
     );
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })
@@ -166,5 +192,5 @@ Deno.serve(async (req) => {
     else void write;
   }
 
-  return Response.json({ category, group, emoji, unit });
+  return Response.json({ category, group, emoji, unit, carbon });
 });

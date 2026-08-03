@@ -214,12 +214,32 @@ check('the parsed shape is findable', parsedShape != null, true);
 const fields = parsedShape
   ? [...parsedShape[1].matchAll(/^\s*(\w+)\??:/gm)].map((m) => m[1])
   : [];
-check('all five fields are parsed', fields.length, 5);
+// Deliberately not a count. It used to assert `fields.length === 5`, which meant
+// adding a sixth field to the function broke a check that had noticed nothing
+// wrong — the number was a restatement of today's code, not a property of it.
+// What actually has to hold is that the three lists agree: everything the
+// parser reads is named in the prompt's example, and everything the response
+// returns was parsed. Both survive a field being added; neither survives one
+// being added in only two of the three places, which is the real failure.
+check('some fields are parsed', fields.length > 0, true);
 
 // The example object the model is shown, i.e. the first {...} in the prompt.
 const example = (prompt.match(/\{[^}]*"category"[^}]*\}/) ?? [''])[0];
 for (const f of fields) {
   check(`the prompt's example object names "${f}"`, example.includes(`"${f}"`), true);
+}
+
+// And the other end: a field the function returns but never parsed is a field
+// that is always its default. `group` is computed rather than returned from the
+// parse block in the same shape, so it is allowed to be absent from `fields`.
+const returned = (fn.match(/return Response\.json\(\{([^}]*)\}\)/) ?? ['', ''])[1]
+  .split(',')
+  .map((x) => x.trim())
+  .filter(Boolean);
+check('the response is findable', returned.length > 0, true);
+for (const f of returned) {
+  if (f === 'group') continue;
+  check(`"${f}" is parsed before it is returned`, fields.includes(f), true);
 }
 
 console.log(failures === 0 ? 'ALL PASS' : `\n${failures} FAILURE(S)`);

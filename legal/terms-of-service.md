@@ -53,6 +53,8 @@ loyalty cards, the pantry's restock predictions, and your recent spending.
 - your written weekly recap;
 - the pantry-mix and staples breakdowns, the vibe check, and your itemised
   purchase history;
+- your climate score week by week, which shops your lighter baskets happen at,
+  and suggested swaps;
 - no limit on the number of households you create.
 
 Which features sit on which side may change as the app develops; if we move

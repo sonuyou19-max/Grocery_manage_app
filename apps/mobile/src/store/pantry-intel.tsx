@@ -65,6 +65,8 @@ export interface PurchaseDetail {
   store?: string | null;
   quantity?: number | null;
   unit?: string | null;
+  /** The shopper's organic/local flag, carried from the list item. */
+  bio?: boolean | null;
 }
 
 interface PantryIntelContext {
@@ -165,6 +167,7 @@ function toPurchase(
     at: now,
     quantity: detail?.quantity ?? null,
     unit: detail?.unit ?? null,
+    bio: detail?.bio === true,
     // Recorded at purchase time rather than looked up later: the log is what
     // the pantry is rebuilt from, and a category the user corrected by hand
     // must survive that rebuild. See migration 0023.
@@ -420,6 +423,7 @@ interface DbPriceRow {
   item_name: string;
   store: string | null;
   price_cents: number | null;
+  bio: boolean | null;
   quantity: number | null;
   unit: string | null;
   category: ItemCategory | null;
@@ -432,6 +436,7 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   name: r.item_name,
   store: r.store,
   priceCents: r.price_cents,
+  bio: r.bio ?? false,
   at: Date.parse(r.recorded_at),
   quantity: r.quantity == null ? null : Number(r.quantity),
   unit: r.unit,
@@ -479,7 +484,7 @@ async function migrateLocalPurchases(
     const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, bio, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .limit(LOCAL_PURCHASE_CAP);
@@ -500,6 +505,7 @@ async function migrateLocalPurchases(
           item_name: p.name,
           store: p.store,
           price_cents: p.priceCents,
+          bio: p.bio,
           quantity: p.quantity,
           unit: p.unit,
           category: p.category,
@@ -661,7 +667,7 @@ function CloudPantryIntelProvider({
     const since = new Date(cutoffRef.current ?? Date.now() - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, bio, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .order('recorded_at', { ascending: false })
@@ -808,6 +814,7 @@ function CloudPantryIntelProvider({
           item_name: entry.name,
           store: entry.store,
           price_cents: entry.priceCents,
+          bio: entry.bio,
           quantity: entry.quantity,
           unit: entry.unit,
           category: entry.category,

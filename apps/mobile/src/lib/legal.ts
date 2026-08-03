@@ -126,6 +126,7 @@ Korb is free to use. Everything you need to run a household costs nothing: your 
 - price-change tracking, and cheaper-elsewhere comparisons between shops;
 - your written weekly recap;
 - the pantry-mix and staples breakdowns, the vibe check, and your itemised purchase history;
+- your climate score week by week, which shops your lighter baskets happen at, and suggested swaps;
 - no limit on the number of households you create.
 
 Which features sit on which side may change as the app develops; if we move something you already rely on out of the free tier, we will tell you before it takes effect.

@@ -142,7 +142,7 @@ export default function PaywallScreen() {
   };
 
   /**
-   * The same eight capabilities the Plus card lists, in the same order, read
+   * The same nine capabilities the Plus card lists, in the same order, read
    * from the same keys.
    *
    * Kept identical on purpose: somebody arrives here from that card, and a
@@ -154,6 +154,7 @@ export default function PaywallScreen() {
     { icon: 'time-outline', id: 'history' },
     { icon: 'swap-vertical-outline', id: 'moves' },
     { icon: 'trending-down-outline', id: 'cheaper' },
+    { icon: 'leaf-outline', id: 'eco' },
     { icon: 'pulse-outline', id: 'vibe' },
     { icon: 'file-tray-full-outline', id: 'pantryMix' },
     { icon: 'repeat-outline', id: 'staples' },

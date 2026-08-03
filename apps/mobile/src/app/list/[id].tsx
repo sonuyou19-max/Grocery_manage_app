@@ -32,6 +32,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
 import { GlassView } from '@/components/glass';
+import { EcoBar, EcoDot } from '@/components/eco-bar';
+import { ecoScoreFor } from '@/lib/item-carbon';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ItemSheet } from '@/components/item-sheet';
 import { ListPantryStrip } from '@/components/list-pantry-strip';
@@ -282,6 +284,7 @@ export default function ListDetailScreen() {
         store: item.store ?? list.store ?? null,
         quantity: item.quantity,
         unit: item.unit,
+        bio: item.bio,
       };
       timers.set(item.id, {
         name,
@@ -468,6 +471,12 @@ export default function ListDetailScreen() {
           </Text>
         )}
       </GlassView>
+
+      {/* How light this basket is, while it is still a basket.
+          Free, and deliberately so: the feedback is only worth anything before
+          you have bought the thing, and a paywall on the one screen where it
+          could change a decision would make the whole feature decorative. */}
+      <BasketEcoStrip items={list.items} />
 
       {/* Pantry, surfaced where you'd act on it: things you usually buy on this
           list that are due. A view over the one pantry, not a per-list copy. */}
@@ -749,6 +758,13 @@ function SwipeableItemRow({
               >
                 {it.name}
               </Text>
+              {/* After the name, not before it: the name is what you are
+                  looking for in a hurry, and a coloured dot in front of it
+                  would be the first thing the eye lands on for every row. */}
+              {!it.checked && <EcoDot name={it.name} category={it.category} />}
+              {it.bio && !it.checked && (
+                <Ionicons name="leaf" size={13} color={colors.accent} accessibilityLabel={t('eco.bioBadge')} />
+              )}
             </View>
             {(it.quantity != null || it.store != null) && (
               <View style={styles.meta}>
@@ -811,6 +827,39 @@ function Stat({
       <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
       <Text style={[type.body, { color: colors.ink }]}>{value}</Text>
     </View>
+  );
+}
+
+/**
+ * "Most of this basket is light" — the live read on the open list.
+ *
+ * Hidden below four food items rather than shown as a near-empty bar: two
+ * items is not a basket, and a bar that swings from 100 to 15 as you add the
+ * second thing teaches people the number is noise. The same floor the weekly
+ * history uses, for the same reason.
+ */
+function BasketEcoStrip({ items }: { items: Item[] }) {
+  const { colors } = useTheme();
+  const { t } = useLocale();
+  const eco = useMemo(
+    () => ecoScoreFor(items.map((it) => ({ name: it.name, category: it.category, bio: it.bio }))),
+    [items],
+  );
+  if (eco.total < 4 || eco.score == null) return null;
+
+  return (
+    <GlassView radius={radii.md} style={styles.eco}>
+      <View style={styles.ecoHead}>
+        <Ionicons name="leaf-outline" size={16} color={colors.accent} />
+        <Text style={[type.label, styles.grow, { color: colors.ink }]}>
+          {t('eco.basketTitle')}
+        </Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t('eco.lowShare', { percent: Math.round(eco.shares.low * 100) })}
+        </Text>
+      </View>
+      <EcoBar shares={eco.shares} counts={eco.counts} compact />
+    </GlassView>
   );
 }
 
@@ -878,6 +927,8 @@ const styles = StyleSheet.create({
   bagBadgeText: { fontSize: 10, fontWeight: '800' },
   cartSection: { marginTop: spacing.lg },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  eco: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, padding: spacing.md, gap: spacing.sm },
+  ecoHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   swipeWrap: { overflow: 'hidden' },
   deleteLayer: {
     position: 'absolute',

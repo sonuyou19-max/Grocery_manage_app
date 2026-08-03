@@ -68,6 +68,30 @@ export type QuickAddRequest = z.infer<typeof quickAddRequestSchema>;
 export const foodGroupSchema = z.enum(['protein', 'carbs', 'produce', 'fats', 'other', 'nonfood']);
 export type FoodGroup = z.infer<typeof foodGroupSchema>;
 
+/**
+ * How heavy an item's climate footprint is, as three coarse bands.
+ *
+ * Three, not a number. Per-kilo emissions for food are well established at the
+ * PRODUCT level — beef around 60 kg CO2e/kg, chicken 6, vegetables under 1 —
+ * but Korb knows an item's name and usually not its weight, so any figure it
+ * printed would be a number with no denominator. Bands say the true part (beef
+ * is in a different league from lentils) without implying the false part (that
+ * we know how much beef).
+ *
+ * Mirrored as a CHECK on item_lexicon.carbon (migration 0027) and as a copy in
+ * the categorize function, which cannot import from the workspace. The CHECK is
+ * what stops the three drifting.
+ */
+export const CARBON_TIERS = ['low', 'medium', 'high'] as const;
+export const carbonTierSchema = z.enum(CARBON_TIERS);
+export type CarbonTier = z.infer<typeof carbonTierSchema>;
+
+/** Narrow an arbitrary string to a known carbon tier, or null. */
+export const asCarbonTier = (value: unknown): CarbonTier | null =>
+  typeof value === 'string' && (CARBON_TIERS as readonly string[]).includes(value)
+    ? (value as CarbonTier)
+    : null;
+
 /** Single-item categorization: request + response for the categorize function. */
 export const categorizeRequestSchema = z.object({
   name: z.string().min(1).max(120),
@@ -78,5 +102,7 @@ export const categorizeResultSchema = z.object({
   category: itemCategorySchema.catch('other'),
   /** Optional: added alongside category so the balance insight is ~free. */
   group: foodGroupSchema.nullable().catch(null).optional(),
+  /** Optional: the climate band, on the same call, for the same reason. */
+  carbon: carbonTierSchema.nullable().catch(null).optional(),
 });
 export type CategorizeResult = z.infer<typeof categorizeResultSchema>;

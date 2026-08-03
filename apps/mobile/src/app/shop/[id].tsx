@@ -85,6 +85,7 @@ export default function ShoppingModeScreen() {
         store: item.store ?? list.store ?? null,
         quantity: item.quantity,
         unit: item.unit,
+        bio: item.bio,
       });
       haptics.success();
     } else {

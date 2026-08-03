@@ -316,6 +316,42 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
               </View>
             </Field>
 
+            {/* Organic / local (optional).
+                A claim only the shopper can make: Korb cannot tell whether the
+                milk in the trolley was organic, so it never guesses. It sits
+                after the price because that is the order the packet is read in
+                — what it is, how much, how much it cost, then what kind. */}
+            <Pressable
+              onPress={() => {
+                haptics.tick();
+                patch({ bio: !itemObj.bio });
+              }}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: itemObj.bio }}
+              style={[
+                styles.bioRow,
+                {
+                  borderColor: itemObj.bio ? colors.accent : colors.line,
+                  backgroundColor: itemObj.bio ? colors.accentSoft : 'transparent',
+                },
+              ]}
+            >
+              <Ionicons
+                name={itemObj.bio ? 'leaf' : 'leaf-outline'}
+                size={20}
+                color={itemObj.bio ? colors.accent : colors.muted}
+              />
+              <View style={styles.bioGrow}>
+                <Text style={[type.body, { color: colors.ink }]}>{t('eco.bioLabel')}</Text>
+                <Text style={[type.sub, { color: colors.muted }]}>{t('eco.bioHint')}</Text>
+              </View>
+              <Ionicons
+                name={itemObj.bio ? 'checkmark-circle' : 'ellipse-outline'}
+                size={22}
+                color={itemObj.bio ? colors.accent : colors.line}
+              />
+            </Pressable>
+
             {/* Supermarket (optional) */}
             <Field label={t('itemSheet.buyAtLabel')}>
               <ScrollView
@@ -439,6 +475,15 @@ const inputColors = (colors: ReturnType<typeof useTheme>['colors']) => ({
 });
 
 const styles = StyleSheet.create({
+  bioGrow: { flex: 1, minWidth: 0 },
+  bioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderRadius: radii.md,
+  },
   fill: { flex: 1, justifyContent: 'flex-end' },
   fillPlain: { flex: 1 },
   backdrop: {

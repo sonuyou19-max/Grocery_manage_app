@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
+import { EcoBar } from '@/components/eco-bar';
 import { InsightsTeaser } from '@/components/insights-teaser';
 import { PlusCard } from '@/components/plus-card';
 import { Screen } from '@/components/screen';
@@ -12,6 +13,8 @@ import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
+import { ecoByStore, weeklyEco, type EcoWeek } from '@/lib/eco';
+import { ecoScoreFor, ecoSwaps } from '@/lib/item-carbon';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
@@ -168,6 +171,58 @@ function SignedInInsights() {
   const storeSpend = useMemo(() => spendByStore(pricedItems), [pricedItems]);
   const cheaper = useMemo(() => cheaperStoreHints(pricedItems), [pricedItems]);
 
+  /**
+   * The eco figures, all from the purchase log rather than the live lists.
+   *
+   * Same reasoning as the money above: what you bought last Tuesday is a fact
+   * about last Tuesday, and a score that moved because somebody edited a row
+   * today would be unimprovable by definition. The live-list read lives on the
+   * list screen, where it is about the shop you are doing right now.
+   *
+   * `category` is looked up from the pantry only as a fallback — the log has
+   * carried its own since 0023, and the item's recorded category is the one the
+   * user may have corrected by hand.
+   */
+  const ecoPurchases = useMemo(
+    () =>
+      purchases.map((p) => ({
+        name: p.name,
+        category: p.category ?? statsByKey.get(p.key)?.category ?? null,
+        store: p.store,
+        at: p.at,
+        bio: p.bio,
+      })),
+    [purchases, statsByKey],
+  );
+  const eco = useMemo(
+    () =>
+      ecoScoreFor(
+        ecoPurchases.map((p) => ({
+          name: p.name,
+          category: p.category ?? ('other' as ItemCategory),
+          bio: p.bio,
+        })),
+      ),
+    [ecoPurchases],
+  );
+  const ecoWeeks = useMemo(
+    () => weeklyEco(ecoPurchases, now, weekStartOf, locked ? 4 : 8),
+    [ecoPurchases, now, locked],
+  );
+  const ecoStores = useMemo(() => ecoByStore(ecoPurchases), [ecoPurchases]);
+  const swaps = useMemo(
+    () =>
+      ecoSwaps(
+        ecoPurchases.map((p) => ({
+          name: p.name,
+          category: p.category ?? ('other' as ItemCategory),
+        })),
+      ).filter((s) => s.times >= 2),
+    [ecoPurchases],
+  );
+  /** Two scored weeks is the minimum that can show a direction. */
+  const ecoScored = ecoWeeks.filter((w) => w.score != null);
+
   return (
     <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
       {/* Plus. The recap is the only card here that costs money to produce —
@@ -184,6 +239,40 @@ function SignedInInsights() {
           />
           <BalanceBar slices={cart.slices} />
           <Text style={[type.sub, { color: colors.muted }]}>{t('insights.basketNote')}</Text>
+        </Card>
+      )}
+
+      {/* FREE, and the only new card that is.
+          The impact mix is what makes the dots on the list mean something —
+          without a place that adds them up, a coloured dot is decoration. It is
+          also the hook: somebody has to see the feature work before there is
+          any reason to pay for its history. See lib/eco.ts for why the number
+          is what it is. */}
+      {eco.score != null && (
+        <Card>
+          <CardHead
+            icon="leaf-outline"
+            title={t('eco.cardTitle')}
+            hint={t('eco.cardHint', { count: eco.total })}
+          />
+          <View style={styles.heroRow}>
+            <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
+            <Text style={[type.sub, { color: colors.muted }]}>{t('eco.outOf')}</Text>
+          </View>
+          <EcoBar shares={eco.shares} counts={eco.counts} />
+          {eco.bioCount > 0 && (
+            /* Its own line, never folded into the bar. Organic is frequently
+               higher carbon per kilo, so showing it as part of the impact mix
+               would state something false; showing it beside is true and still
+               gives the credit. */
+            <View style={styles.row}>
+              <Ionicons name="leaf" size={16} color={colors.accent} />
+              <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+                {t('eco.bioCount', { count: eco.bioCount })}
+              </Text>
+            </View>
+          )}
+          <Text style={[type.sub, { color: colors.muted }]}>{t('eco.cardNote')}</Text>
         </Card>
       )}
 
@@ -389,6 +478,95 @@ function SignedInInsights() {
         </Card>
       )}
 
+      {/* Plus: HIDE. A trend needs weeks, and the whole thing a free account is
+          missing here IS the weeks — a locked shell would be an empty chart
+          with a price on it. */}
+      {!locked && ecoScored.length >= 2 && (
+        <Card>
+          <CardHead
+            icon="trending-up-outline"
+            title={t('eco.trendTitle')}
+            hint={t('eco.trendHint', { count: ecoScored.length })}
+          />
+          <EcoTrend weeks={ecoWeeks} />
+          {(() => {
+            // First scored week against last. Not "this week vs last week":
+            // one quiet week would swamp it, and the card is about a direction
+            // over the window, which is what the bars behind it show.
+            const first = ecoScored[0].score as number;
+            const last = ecoScored[ecoScored.length - 1].score as number;
+            const delta = last - first;
+            if (Math.abs(delta) < 3) {
+              return <Text style={[type.sub, { color: colors.muted }]}>{t('eco.trendFlat')}</Text>;
+            }
+            return (
+              <View style={styles.row}>
+                <Ionicons
+                  name={delta > 0 ? 'arrow-up' : 'arrow-down'}
+                  size={14}
+                  color={delta > 0 ? colors.accent : colors.muted}
+                />
+                <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+                  {t(delta > 0 ? 'eco.trendUp' : 'eco.trendDown', { points: Math.abs(delta) })}
+                </Text>
+              </View>
+            );
+          })()}
+        </Card>
+      )}
+
+      {/* Plus: HIDE, and the copy is load-bearing.
+          "Lidl is greener than Carrefour" would be a lie Korb has no standing
+          to tell — it knows nothing about either chain, only what YOU put in
+          the trolley at each. Every string here says "what you buy at". See
+          ecoByStore in lib/eco.ts. */}
+      {!locked && ecoStores.length >= 2 && (
+        <Card>
+          <CardHead
+            icon="storefront-outline"
+            title={t('eco.storesTitle')}
+            hint={t('eco.storesHint')}
+          />
+          {ecoStores.map((st) => (
+            <View key={st.store} style={styles.row}>
+              <SupermarketBadge store={st.store} size={16} />
+              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
+                {supermarketLabel(st.store) ?? st.store}
+              </Text>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t('eco.storeScore', { score: st.score })}
+              </Text>
+            </View>
+          ))}
+          <Text style={[type.sub, { color: colors.muted }]}>{t('eco.storesNote')}</Text>
+        </Card>
+      )}
+
+      {/* Plus: HIDE. A swap is advice drawn from a year of habits; with four
+          weeks there is no habit to draw it from. */}
+      {!locked && swaps.length > 0 && (
+        <Card>
+          <CardHead icon="repeat-outline" title={t('eco.swapsTitle')} hint={t('eco.swapsHint')} />
+          {swaps.slice(0, 3).map((sw) => (
+            <View key={sw.name} style={styles.swapRow}>
+              <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                {sw.name}
+              </Text>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t('eco.swapBody', {
+                  times: sw.times,
+                  to: t(`eco.swapTo.${sw.to}`),
+                })}
+              </Text>
+            </View>
+          ))}
+          {/* No kilograms. Korb has a quantity for a minority of items, so any
+              "saves 12kg CO2" would be a number with no denominator — the one
+              kind of claim this feature cannot afford to get wrong. */}
+          <Text style={[type.sub, { color: colors.muted }]}>{t('eco.swapsNote')}</Text>
+        </Card>
+      )}
+
       {/* Last, where the three cards it stands in for would have been — so it
           is found at the end of the reader's own figures rather than in front
           of them. A free tab still ends with something to read. */}
@@ -418,6 +596,49 @@ function CardHead({ icon, title, hint }: { icon: IconName; title: string; hint?:
       <Ionicons name={icon} size={20} color={colors.accent} />
       <Text style={[type.body, styles.grow, { color: colors.ink }]}>{title}</Text>
       {hint ? <Text style={[type.sub, { color: colors.muted }]}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * The eco score across weeks, as columns.
+ *
+ * Deliberately not the spend chart with different numbers. Spend has no ceiling
+ * so its bars are scaled to the tallest; a score is out of 100, so the bars are
+ * scaled to 100 and a tall bar means "close to as good as it gets" rather than
+ * "the biggest of these". A week with no score draws a stub, matching the spend
+ * chart's rule that an empty week is data rather than a gap.
+ */
+function EcoTrend({ weeks }: { weeks: EcoWeek[] }) {
+  const { colors } = useTheme();
+  const { t, language } = useLocale();
+  const dayMonth = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short' });
+  const first = weeks[0];
+
+  return (
+    <View style={{ gap: spacing.xs }}>
+      <View style={styles.ecoPlot}>
+        {weeks.map((w) => (
+          <View key={w.weekStart} style={styles.ecoColumn}>
+            <View
+              style={{
+                height: w.score == null ? 2 : Math.max(2, (w.score / 100) * 56),
+                width: 14,
+                borderTopLeftRadius: 4,
+                borderTopRightRadius: 4,
+                backgroundColor: w.score == null ? colors.line : colors.accent,
+              }}
+            />
+          </View>
+        ))}
+      </View>
+      <View style={[styles.ecoAxis, { backgroundColor: colors.line }]} />
+      <View style={styles.ecoLabels}>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {first ? dayMonth.format(new Date(first.weekStart)) : ''}
+        </Text>
+        <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendThisWeek')}</Text>
+      </View>
     </View>
   );
 }
@@ -454,6 +675,17 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xs },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  swapRow: { gap: 2, paddingVertical: spacing.xs },
+  ecoPlot: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 56,
+    gap: spacing.xs,
+  },
+  ecoColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  ecoAxis: { height: StyleSheet.hairlineWidth, borderRadius: radii.sm },
+  ecoLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
   spendTotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.xs },
   // marginBottom, because the chart that follows draws its peak label at the

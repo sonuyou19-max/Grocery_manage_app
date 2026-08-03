@@ -75,6 +75,7 @@ const PERKS: Perk[] = [
   { icon: 'time-outline', id: 'history' },
   { icon: 'swap-vertical-outline', id: 'moves' },
   { icon: 'trending-down-outline', id: 'cheaper' },
+  { icon: 'leaf-outline', id: 'eco' },
   { icon: 'pulse-outline', id: 'vibe' },
   { icon: 'file-tray-full-outline', id: 'pantryMix' },
   { icon: 'repeat-outline', id: 'staples' },

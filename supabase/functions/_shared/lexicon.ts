@@ -67,6 +67,11 @@ export interface LexiconCandidate {
    * Null is stored as null — an absent answer, not a wrong one; see 0021.
    */
   unit?: string | null;
+  /**
+   * The item's climate band, or null when the model declined or the item is
+   * not food. Null is stored as null for the same reason as unit; see 0027.
+   */
+  carbon?: string | null;
 }
 
 /**
@@ -100,6 +105,12 @@ export async function offerToLexicon(
     typeof candidate.unit === 'string' && ['g', 'kg', 'ml', 'L', 'pcs'].includes(candidate.unit)
       ? candidate.unit
       : null;
+  // Same arrangement for the climate band, against CARBON_TIERS in
+  // packages/shared and the CHECK in 0027.
+  const carbon =
+    typeof candidate.carbon === 'string' && ['low', 'medium', 'high'].includes(candidate.carbon)
+      ? candidate.carbon
+      : null;
 
   try {
     // Ensure the row exists without disturbing an existing one. ignoreDuplicates
@@ -114,6 +125,7 @@ export async function offerToLexicon(
           emoji: candidate.emoji,
           category: candidate.category,
           unit,
+          carbon,
           sightings: 0,
           published: false,
         },
@@ -129,6 +141,11 @@ export async function offerToLexicon(
     // `is('unit', null)` filter is what keeps the two rules compatible: an
     // established unit is still immutable, an absent one gets written once.
     if (unit) await db.from('item_lexicon').update({ unit }).eq('term', term).is('unit', null);
+    // And the same fill-once rule for carbon, so every term published before
+    // 0027 can still acquire a band without any of them becoming rewritable.
+    if (carbon) {
+      await db.from('item_lexicon').update({ carbon }).eq('term', term).is('carbon', null);
+    }
 
     const hash = await callerHash(caller, salt);
     // The composite primary key is what makes this count distinct — the same
