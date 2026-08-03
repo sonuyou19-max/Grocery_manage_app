@@ -18,6 +18,11 @@
  *   - non-food is excluded rather than counted as clean;
  *   - a thin week produces no score at all rather than a wild one.
  *
+ * The per-shop roll-up and the swap suggestions were cut from the product, and
+ * their assertions went with them rather than being kept "in case": a check
+ * over code nothing calls is a check that will one day fail for a reason nobody
+ * has to care about.
+ *
  * Run with `pnpm --filter mobile check:eco`.
  */
 import { readFileSync } from 'node:fs';
@@ -46,7 +51,7 @@ const eco = compile('eco.ts', (spec) => {
   if (spec === '@/lib/nutrition') return nutrition;
   return {};
 });
-const { carbonOf, ecoScore, ecoSwaps, weeklyEco, ecoByStore, CARBON_COLORS } = eco;
+const { carbonOf, ecoScore, weeklyEco, CARBON_COLORS } = eco;
 const { weekStartOf } = purchaseLog;
 
 let failures = 0;
@@ -200,38 +205,6 @@ check('every week in the window is present', weeks.length, 4);
 check('a full week is scored', weeks[2].score, 100);
 check('a thin week is null, not a bad score', weeks[3].score, null);
 check('...though its items are still counted', weeks[3].total, 1);
-
-const stores = ecoByStore([
-  ...['Carrots', 'Apples', 'Spinach', 'Bread'].map((n) =>
-    buy(n, n === 'Bread' ? 'bakery' : 'fruit_veg', now, 'aldi'),
-  ),
-  ...['Beef', 'Lamb', 'Cheese', 'Butter'].map((n) =>
-    buy(n, n === 'Beef' || n === 'Lamb' ? 'meat_fish' : 'dairy_eggs', now, 'lidl'),
-  ),
-  // Two items at one shop is not a basket worth naming.
-  buy('Beef', 'meat_fish', now, 'carrefour'),
-]);
-check('shops are ranked best first', stores.map((s) => s.store), ['aldi', 'lidl']);
-check('a shop with too few items is dropped', stores.find((s) => s.store === 'carrefour'), undefined);
-check('an unnamed shop is not a shop', ecoByStore([buy('Beef', 'meat_fish', now, null)]).length, 0);
-
-/* ----------------------------------------------------------------- swaps */
-
-const swaps = ecoSwaps([
-  { name: 'Beef mince', category: 'meat_fish' },
-  { name: 'beef mince', category: 'meat_fish' },
-  { name: 'Cheddar cheese', category: 'dairy_eggs' },
-  { name: 'Carrots', category: 'fruit_veg' },
-]);
-check('only heavy items get advice', swaps.length, 2);
-check('the most-bought comes first', swaps[0].from, 'beef');
-check('...counted across spellings', swaps[0].times, 2);
-check('a light basket needs no advice', ecoSwaps([{ name: 'Carrots', category: 'fruit_veg' }]).length, 0);
-// Every swap must point at something genuinely lighter, or the advice is noise.
-for (const s of swaps) {
-  assert(`the swap for ${s.from} names a target`, typeof s.to === 'string' && s.to.length > 0);
-  assert(`...and it is not itself`, s.to !== s.from);
-}
 
 /* ---------------------------------------------------------------- colours */
 

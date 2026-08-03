@@ -1,6 +1,6 @@
 import type { ItemCategory } from '@korb/shared';
 
-import { carbonOf, ecoScore, ecoSwaps, type CarbonTier, type EcoScore } from '@/lib/eco';
+import { ecoScore, type EcoScore } from '@/lib/eco';
 import { fold } from '@/lib/item-emoji';
 import { lexiconLookup } from '@/lib/item-lexicon';
 
@@ -12,14 +12,9 @@ import { lexiconLookup } from '@/lib/item-lexicon';
  * can run its rules on real Node and prove them. Reaching into the lexicon
  * cache from there would make it unloadable outside the app.
  *
- * So this is the two-line seam. Everything that renders calls these; nothing
- * calls `carbonOf` with a hand-supplied third argument except the tests.
+ * So this is the seam: one function, called by the two places that show eco
+ * figures. Nothing hands `carbonOf` a band by hand except the check script.
  */
-
-/** An item's impact band, consulting the shared lexicon for unknown terms. */
-export function carbonFor(name: string, category: ItemCategory): CarbonTier | null {
-  return carbonOf(name, category, lexiconLookup(fold(name))?.carbon ?? null);
-}
 
 interface ScorableItem {
   name: string;
@@ -38,6 +33,3 @@ export function ecoScoreFor(items: ScorableItem[]): EcoScore {
     })),
   );
 }
-
-/** Re-exported so screens have one import for the whole feature. */
-export { ecoSwaps };

@@ -32,7 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
 import { GlassView } from '@/components/glass';
-import { EcoBar, EcoDot } from '@/components/eco-bar';
+import { EcoBar } from '@/components/eco-bar';
 import { ecoScoreFor } from '@/lib/item-carbon';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ItemSheet } from '@/components/item-sheet';
@@ -758,10 +758,11 @@ function SwipeableItemRow({
               >
                 {it.name}
               </Text>
-              {/* After the name, not before it: the name is what you are
-                  looking for in a hurry, and a coloured dot in front of it
-                  would be the first thing the eye lands on for every row. */}
-              {!it.checked && <EcoDot name={it.name} category={it.category} />}
+              {/* The impact dot was here and is gone deliberately. A coloured
+                  band on every row turned writing a list into being marked,
+                  and the one place the judgement is welcome is the summary
+                  below, which you look at when you choose to. The leaf stays:
+                  it is the user's own flag, not ours. */}
               {it.bio && !it.checked && (
                 <Ionicons name="leaf" size={13} color={colors.accent} accessibilityLabel={t('eco.bioBadge')} />
               )}
@@ -841,6 +842,7 @@ function Stat({
 function BasketEcoStrip({ items }: { items: Item[] }) {
   const { colors } = useTheme();
   const { t } = useLocale();
+  const [explained, setExplained] = useState(false);
   const eco = useMemo(
     () => ecoScoreFor(items.map((it) => ({ name: it.name, category: it.category, bio: it.bio }))),
     [items],
@@ -857,8 +859,31 @@ function BasketEcoStrip({ items }: { items: Item[] }) {
         <Text style={[type.sub, { color: colors.muted }]}>
           {t('eco.lowShare', { percent: Math.round(eco.shares.low * 100) })}
         </Text>
+        {/* A three-colour bar with no words is a rebus. The explanation is one
+            tap away rather than always on, because it is worth reading once and
+            then never again — and a permanent paragraph under a strip this
+            small would be more explanation than thing explained. */}
+        <Pressable
+          onPress={() => {
+            haptics.tick();
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExplained((v) => !v);
+          }}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('eco.whatIsThis')}
+        >
+          <Ionicons
+            name={explained ? 'information-circle' : 'information-circle-outline'}
+            size={18}
+            color={colors.muted}
+          />
+        </Pressable>
       </View>
       <EcoBar shares={eco.shares} counts={eco.counts} compact />
+      {explained && (
+        <Text style={[type.sub, { color: colors.muted }]}>{t('eco.basketExplainer')}</Text>
+      )}
     </GlassView>
   );
 }

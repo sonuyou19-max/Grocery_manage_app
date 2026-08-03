@@ -13,8 +13,8 @@ import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
-import { ecoByStore, weeklyEco, type EcoWeek } from '@/lib/eco';
-import { ecoScoreFor, ecoSwaps } from '@/lib/item-carbon';
+import { weeklyEco, type EcoWeek } from '@/lib/eco';
+import { ecoScoreFor } from '@/lib/item-carbon';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { isResting } from '@/lib/pantry-intel';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
@@ -208,17 +208,6 @@ function SignedInInsights() {
   const ecoWeeks = useMemo(
     () => weeklyEco(ecoPurchases, now, weekStartOf, locked ? 4 : 8),
     [ecoPurchases, now, locked],
-  );
-  const ecoStores = useMemo(() => ecoByStore(ecoPurchases), [ecoPurchases]);
-  const swaps = useMemo(
-    () =>
-      ecoSwaps(
-        ecoPurchases.map((p) => ({
-          name: p.name,
-          category: p.category ?? ('other' as ItemCategory),
-        })),
-      ).filter((s) => s.times >= 2),
-    [ecoPurchases],
   );
   /** Two scored weeks is the minimum that can show a direction. */
   const ecoScored = ecoWeeks.filter((w) => w.score != null);
@@ -515,58 +504,6 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {/* Plus: HIDE, and the copy is load-bearing.
-          "Lidl is greener than Carrefour" would be a lie Korb has no standing
-          to tell — it knows nothing about either chain, only what YOU put in
-          the trolley at each. Every string here says "what you buy at". See
-          ecoByStore in lib/eco.ts. */}
-      {!locked && ecoStores.length >= 2 && (
-        <Card>
-          <CardHead
-            icon="storefront-outline"
-            title={t('eco.storesTitle')}
-            hint={t('eco.storesHint')}
-          />
-          {ecoStores.map((st) => (
-            <View key={st.store} style={styles.row}>
-              <SupermarketBadge store={st.store} size={16} />
-              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
-                {supermarketLabel(st.store) ?? st.store}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {t('eco.storeScore', { score: st.score })}
-              </Text>
-            </View>
-          ))}
-          <Text style={[type.sub, { color: colors.muted }]}>{t('eco.storesNote')}</Text>
-        </Card>
-      )}
-
-      {/* Plus: HIDE. A swap is advice drawn from a year of habits; with four
-          weeks there is no habit to draw it from. */}
-      {!locked && swaps.length > 0 && (
-        <Card>
-          <CardHead icon="repeat-outline" title={t('eco.swapsTitle')} hint={t('eco.swapsHint')} />
-          {swaps.slice(0, 3).map((sw) => (
-            <View key={sw.name} style={styles.swapRow}>
-              <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                {sw.name}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {t('eco.swapBody', {
-                  times: sw.times,
-                  to: t(`eco.swapTo.${sw.to}`),
-                })}
-              </Text>
-            </View>
-          ))}
-          {/* No kilograms. Korb has a quantity for a minority of items, so any
-              "saves 12kg CO2" would be a number with no denominator — the one
-              kind of claim this feature cannot afford to get wrong. */}
-          <Text style={[type.sub, { color: colors.muted }]}>{t('eco.swapsNote')}</Text>
-        </Card>
-      )}
-
       {/* Last, where the three cards it stands in for would have been — so it
           is found at the end of the reader's own figures rather than in front
           of them. A free tab still ends with something to read. */}
@@ -675,7 +612,6 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xs },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  swapRow: { gap: 2, paddingVertical: spacing.xs },
   ecoPlot: {
     flexDirection: 'row',
     alignItems: 'flex-end',

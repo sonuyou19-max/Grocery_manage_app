@@ -1,57 +1,19 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { ItemCategory } from '@korb/shared';
-
 import { CARBON_COLORS, type CarbonTier } from '@/lib/eco';
-import { carbonFor } from '@/lib/item-carbon';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
- * The impact dot beside an item's name, and the stacked bar that sums them up.
+ * The low / medium / high bar, and nothing else.
  *
- * Both live here because they are the same claim at two scales, and the one
- * thing that must never drift is which colour means what. A dot that is amber
- * on the list and a bar segment that is amber in Insights have to be the same
- * band or the feature is lying quietly.
+ * There was an `EcoDot` here too, rendered beside every item's name on the
+ * list. It is gone: a coloured band on every row turns writing a shopping list
+ * into being marked, and a judgement you did not ask for on a screen you use
+ * twice a day stops being information and becomes nagging. The same claim
+ * survives in this bar, where it is a summary you look at rather than a verdict
+ * on each line.
  */
-
-/**
- * A single item's band, as a dot.
- *
- * Returns null for non-food rather than a grey dot. Washing-up liquid has a
- * footprint, but not one Korb can place next to a kilo of anything edible, and
- * a neutral dot in a row of coloured ones reads as "we checked and it's fine"
- * rather than "this isn't part of the question".
- *
- * The band is also on the accessible label, never colour alone — the same rule
- * the pantry's staple bookmark follows. Around one in twelve men cannot
- * separate this palette's amber from its red by hue.
- */
-export function EcoDot({
-  name,
-  category,
-  size = 8,
-}: {
-  name: string;
-  category: ItemCategory;
-  size?: number;
-}) {
-  const t = useT();
-  const tier = carbonFor(name, category);
-  if (!tier) return null;
-  return (
-    <View
-      accessibilityLabel={t(`eco.tier.${tier}`)}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: CARBON_COLORS[tier],
-      }}
-    />
-  );
-}
 
 export interface EcoBarProps {
   shares: Record<CarbonTier, number>;
