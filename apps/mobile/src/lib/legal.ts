@@ -49,7 +49,7 @@ We never see your payment details. Korb Plus is bought and billed entirely throu
 
 ## Importing a recipe
 
-If you paste a link, our server fetches that page and reads its ingredient list; if you paste text, we read what you pasted. Either way we take only the recipe's name, its serving count and its ingredients — never the method — and we do not keep the page, the text, or the recipe. The only thing saved is the shopping list you choose to create, which is yours.
+If you paste a link, our server fetches that page and reads its ingredient list — for a video link, the description the creator wrote, never the captions. If you paste text, we read what you pasted. Either way we take only the recipe's name, its serving count and its ingredients — never the method — and we do not keep the page, the text, or the recipe. The only thing saved is the shopping list you choose to create, which is yours.
 
 ## Store cards stay on your device
 

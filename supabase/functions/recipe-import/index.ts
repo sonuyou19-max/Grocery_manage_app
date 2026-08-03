@@ -133,6 +133,109 @@ function visibleText(html: string): string {
 }
 
 /* ------------------------------------------------------------------------ */
+/* YouTube                                                                   */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * A video page has no schema.org/Recipe, and the generic text path finds
+ * nothing on it — `visibleText` strips <script> blocks first, and the
+ * description lives inside one. So the page reduced to navigation chrome and
+ * every YouTube link failed.
+ *
+ * The description is the video's own metadata, served in its own HTML, and
+ * reading it is the same kind of act as reading a blog's JSON-LD. This is
+ * deliberately NOT the transcript: captions are a different resource behind
+ * different terms, and are not worth taking.
+ *
+ * Expect this to work about half the time. Plenty of cooking channels put a
+ * clean ingredient list in the description; plenty put it only in the video, or
+ * behind a link to their own site. When it finds nothing the user gets the same
+ * honest "paste the ingredients as text" as any other page.
+ */
+const YOUTUBE_HOSTS = new Set([
+  'youtube.com',
+  'm.youtube.com',
+  'music.youtube.com',
+  'youtube-nocookie.com',
+  'youtu.be',
+]);
+
+export function isYouTube(input: string): boolean {
+  try {
+    const host = new URL(input).hostname.toLowerCase().replace(/^www\./, '');
+    return YOUTUBE_HOSTS.has(host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The balanced JSON object following `marker`.
+ *
+ * A regex cannot do this: the object is one line of minified JavaScript
+ * containing every brace and quote a video description can hold, and
+ * `/\{.*\}/` would swallow the rest of the page. Walking the braces while
+ * tracking string state and escapes is the only way to find where it ends.
+ */
+function jsonAfter(html: string, marker: string): unknown {
+  const at = html.indexOf(marker);
+  if (at === -1) return null;
+  const start = html.indexOf('{', at + marker.length);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < html.length; i += 1) {
+    const ch = html[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Title and description from a watch page, or null if neither is there. */
+export function youtubeDescription(html: string): { title: string; description: string } | null {
+  const player = jsonAfter(html, 'ytInitialPlayerResponse') as
+    | { videoDetails?: { title?: unknown; shortDescription?: unknown } }
+    | null;
+  const details = player?.videoDetails;
+  if (!details) return null;
+
+  const description = String(details.shortDescription ?? '').trim();
+  // A video with no description, or a one-line one, has no ingredients in it.
+  // Failing here rather than spending a model call on "Thanks for watching!".
+  if (description.length < 40) return null;
+
+  return {
+    title: String(details.title ?? '').trim().slice(0, 200),
+    // Descriptions carry chapter timestamps, affiliate links and sponsor
+    // blurbs. Bounded so the padding cannot become the bill.
+    description: description.slice(0, 4000),
+  };
+}
+
+/* ------------------------------------------------------------------------ */
 /* The model                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -160,6 +263,12 @@ items is the ingredient list, one entry per ingredient:
 - Skip water, and skip anything that is not bought (ice, "oil for frying" if
   oil already appears).
 - At most 40 items.
+
+The text may be a video description rather than a recipe page. If so, ignore
+chapter timestamps ("0:00 Intro"), links, hashtags, sponsor and discount-code
+blurbs, equipment lists, and "subscribe" copy — take only the ingredients. If
+there is no ingredient list in it, return an empty items array rather than
+inventing one from the dish name.
 
 Do NOT return the method, the instructions, or any prose from the page. Only the
 ingredient list.`;
@@ -236,8 +345,16 @@ Deno.serve(async (req) => {
     }
     scraped = scrapeJsonLd(html);
     if (!scraped) {
-      titleHint = pageTitle(html);
-      forModel = visibleText(html);
+      // A video page's description, when there is one, beats its stripped body
+      // by a mile — the body is navigation.
+      const video = isYouTube(inputUrl) ? youtubeDescription(html) : null;
+      if (video) {
+        titleHint = video.title;
+        forModel = video.description;
+      } else {
+        titleHint = pageTitle(html);
+        forModel = visibleText(html);
+      }
     }
   }
 
@@ -303,4 +420,11 @@ Deno.serve(async (req) => {
 // list the user creates, which is theirs, and nothing about the recipe itself.
 
 /** Test seam: the pure helpers, so check-recipe.mjs can exercise them. */
-export const __test = { sanitizeItems, parseServings, visibleText, pageTitle, scrapeJsonLd };
+export const __test = {
+  sanitizeItems,
+  parseServings,
+  visibleText,
+  pageTitle,
+  scrapeJsonLd,
+  jsonAfter,
+};

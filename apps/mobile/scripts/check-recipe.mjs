@@ -51,6 +51,21 @@ const { cleanRecipeName, scaleQuantity, reviewRows, checkedCount, inPantryCount,
 const safeFetch = compileAt(join(FUNCS, '_shared', 'safe-fetch.ts'));
 const { isBlockedHost } = safeFetch;
 
+// The importer imports Deno-only modules at the top, so it cannot be loaded
+// whole in Node. Its pure parsers are compiled from the same source with the
+// imports stubbed — which still catches the thing that matters: a change to the
+// extraction logic that these assertions describe.
+// `Deno.serve` runs at module scope, so it is stubbed rather than avoided —
+// registering a no-op handler is harmless and keeps the parsers compiled from
+// the real file rather than from a copy that could drift away from it.
+globalThis.Deno = globalThis.Deno ?? { serve: () => {}, env: { get: () => '' } };
+const importer = compileAt(join(FUNCS, 'recipe-import', 'index.ts'), () => ({
+  default: class {},
+  reserveBudget: () => ({}),
+  fetchPage: () => null,
+}));
+const { isYouTube, youtubeDescription, __test } = importer;
+
 let failures = 0;
 const check = (name, actual, expected) => {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
@@ -262,6 +277,70 @@ assert('a bare word is not a url', !looksLikeUrl('carbonara'));
 assert('prose containing a link is text', !looksLikeUrl('look at https://a.com/x'));
 assert('a file: url is not accepted', !looksLikeUrl('file:///etc/passwd'));
 assert('a javascript: url is not accepted', !looksLikeUrl('javascript:alert(1)'));
+
+/* ================================= youtube ============================= */
+
+for (const url of [
+  'https://www.youtube.com/watch?v=abc123',
+  'https://youtube.com/watch?v=abc123',
+  'https://m.youtube.com/watch?v=abc123',
+  'https://youtu.be/abc123',
+  'https://music.youtube.com/watch?v=abc123',
+]) {
+  assert(`"${url}" is recognised as YouTube`, isYouTube(url));
+}
+assert('a recipe blog is not YouTube', !isYouTube('https://bbcgoodfood.com/x'));
+// A lookalike host must not be treated as YouTube — that is how a spoofed page
+// would get its "description" read as trusted metadata.
+assert('youtube.com.evil.test is not YouTube', !isYouTube('https://youtube.com.evil.test/x'));
+assert('notyoutube.com is not YouTube', !isYouTube('https://notyoutube.com/x'));
+
+/** A watch page, minified the way YouTube actually serves one. */
+const ytPage = (description, title = 'Best Thai Green Curry') =>
+  `<html><head><title>${title} - YouTube</title></head><body>` +
+  `<script>var ytInitialPlayerResponse = {"responseContext":{"a":1},` +
+  `"videoDetails":{"videoId":"abc","title":${JSON.stringify(title)},` +
+  `"shortDescription":${JSON.stringify(description)}},"playbackTracking":{}};</script>` +
+  `</body></html>`;
+
+const desc = [
+  '0:00 Intro',
+  '1:20 The paste',
+  '',
+  'INGREDIENTS',
+  '400ml coconut milk',
+  '2 tbsp green curry paste',
+  '500g chicken thighs',
+  '',
+  'Get 10% off at sponsor.example with code CURRY',
+  '#thaifood #curry',
+].join('\n');
+
+const found = youtubeDescription(ytPage(desc));
+assert('a description is found', found != null);
+check('...with the video title', found?.title, 'Best Thai Green Curry');
+assert('...and the ingredient lines', found?.description.includes('400ml coconut milk'));
+// The brace-walk has to survive everything a description can contain, which is
+// where a regex would have swallowed the rest of the page.
+const tricky = 'Serve with rice {or noodles} — "the best" \\ 100% \u00e9\n2 cups';
+assert('braces, quotes and escapes in a description survive', youtubeDescription(ytPage(tricky)) != null);
+check(
+  '...decoded exactly',
+  youtubeDescription(ytPage(tricky))?.description,
+  tricky,
+);
+
+check('a page with no player response yields nothing', youtubeDescription('<html></html>'), null);
+check('a page with no videoDetails yields nothing', youtubeDescription('<script>var ytInitialPlayerResponse = {"a":1};</script>'), null);
+// "Thanks for watching, subscribe!" is not worth a model call.
+check('a one-line description is not worth a call', youtubeDescription(ytPage('Subscribe!')), null);
+
+// And the reason this exists at all: the generic path throws the description
+// away, because it lives in a <script> block.
+assert(
+  'the generic text path cannot see a description',
+  !__test.visibleText(ytPage(desc)).includes('coconut milk'),
+);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
