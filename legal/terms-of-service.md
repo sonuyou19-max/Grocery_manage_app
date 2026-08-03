@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Last updated: 20 July 2026**
+**Last updated: 3 August 2026**
 
 > **Note for the operator:** This is a good-faith draft, **not legal advice**.
 > Have it reviewed by a qualified professional before publishing. Keep it in
@@ -39,6 +39,64 @@ Please don't:
 - abuse the AI or other features (for example, automated or excessive requests).
 
 We may suspend or terminate access that violates these Terms.
+
+## Korb Plus (subscription)
+
+Korb is free to use. Everything you need to run a household costs nothing: your
+lists, cloud backup and live sync, sharing a household with other people, your
+loyalty cards, the pantry's restock predictions, and your recent spending.
+
+**Korb Plus** is an optional paid subscription. It adds:
+
+- a full year of spending history, instead of only the most recent weeks;
+- price-change tracking, and cheaper-elsewhere comparisons between shops;
+- your written weekly recap;
+- the pantry-mix and staples breakdowns, the vibe check, and your itemised
+  purchase history;
+- no limit on the number of households you create.
+
+Which features sit on which side may change as the app develops; if we move
+something you already rely on out of the free tier, we will tell you before it
+takes effect.
+
+**Free month.** Every new account gets Korb Plus free for 30 days from the day
+it is created. You do not need to enter payment details to get it, and it does
+not turn into a paid subscription on its own — nothing is charged unless you
+choose to subscribe.
+
+**Prices and billing.** Plus is offered monthly or annually. The exact price for
+your country, including VAT, is shown in the app before you confirm, and again
+by Google Play at the moment of purchase. Payment is taken by Google Play, not
+by us.
+
+**Renewal.** Subscriptions renew automatically at the end of each period until
+cancelled. Google Play charges the renewal within 24 hours before the current
+period ends.
+
+**Cancelling.** Cancel any time in the Google Play Store, under Payments &
+subscriptions. Cancelling stops the next renewal; you keep Plus until the end of
+the period you have already paid for. We cannot cancel a Google Play
+subscription on your behalf.
+
+**Refunds.** Refunds are handled by Google Play under their policy. If you
+believe something has gone wrong, contact us and we will help where we can.
+
+**Right of withdrawal (EU/EEA).** As a consumer you normally have 14 days to
+withdraw from a distance contract. Because Plus gives you immediate access to
+digital content, you are asked to agree at purchase that the service starts
+straight away, and you acknowledge that you lose the right of withdrawal once it
+has been fully performed. This does not affect your other statutory rights.
+
+**If your subscription ends.** Nothing is deleted. Your older shopping history
+stays exactly where it is — it simply stops being shown beyond the free window,
+and the Plus features above stop being shown. Everything reappears in full if
+you subscribe again. You keep full use of every free feature, including sharing
+your household and your loyalty cards, and any household you already created
+stays yours.
+
+**Price changes.** If we change the price of an existing subscription, you will
+be told in advance and asked to accept before it applies to you, as required by
+Google Play.
 
 ## AI features
 

@@ -74,7 +74,7 @@ export function PantryTeaser() {
                   </View>
                 </View>
                 <Text style={[type.sub, { color: colors.muted }]}>
-                  {t('pantry.daysLeft', { count: s.left })}
+                  {t('status.daysLeft', { count: s.left })}
                 </Text>
               </View>
             );
@@ -96,7 +96,7 @@ export function PantryTeaser() {
                   </View>
                 </View>
                 <Text style={[type.sub, { color: colors.muted }]}>
-                  {t('pantry.daysLeft', { count: s.left })}
+                  {t('status.daysLeft', { count: s.left })}
                 </Text>
               </View>
             );

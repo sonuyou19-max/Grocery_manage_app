@@ -141,11 +141,24 @@ export default function PaywallScreen() {
     showToast(t('paywall.nothingToRestore'));
   };
 
-  const perks: Array<{ icon: keyof typeof Ionicons.glyphMap; text: string }> = [
-    { icon: 'time-outline', text: t('plus.perkHistory') },
-    { icon: 'swap-vertical-outline', text: t('plus.perkMoves') },
-    { icon: 'trending-down-outline', text: t('plus.perkCheaper') },
-    { icon: 'sparkles-outline', text: t('plus.perkRecap') },
+  /**
+   * The same eight capabilities the Plus card lists, in the same order, read
+   * from the same keys.
+   *
+   * Kept identical on purpose: somebody arrives here from that card, and a
+   * shorter or differently-worded list at the moment of payment reads as a
+   * bait-and-switch even when every line is true. `plus.detail.*Title` is the
+   * single source; the bodies stay on the card, where there is room.
+   */
+  const perks: Array<{ icon: keyof typeof Ionicons.glyphMap; id: string }> = [
+    { icon: 'time-outline', id: 'history' },
+    { icon: 'swap-vertical-outline', id: 'moves' },
+    { icon: 'trending-down-outline', id: 'cheaper' },
+    { icon: 'pulse-outline', id: 'vibe' },
+    { icon: 'file-tray-full-outline', id: 'pantryMix' },
+    { icon: 'repeat-outline', id: 'staples' },
+    { icon: 'home-outline', id: 'households' },
+    { icon: 'sparkles-outline', id: 'recap' },
   ];
 
   const busy = phase === 'working';
@@ -185,9 +198,11 @@ export default function PaywallScreen() {
 
           <View style={styles.perks}>
             {perks.map((p) => (
-              <View key={p.icon} style={styles.perkRow}>
+              <View key={p.id} style={styles.perkRow}>
                 <Ionicons name={p.icon} size={18} color={colors.accent} />
-                <Text style={[type.body, styles.grow, { color: colors.ink }]}>{p.text}</Text>
+                <Text style={[type.body, styles.grow, { color: colors.ink }]}>
+                  {t(`plus.detail.${p.id}Title`)}
+                </Text>
               </View>
             ))}
           </View>

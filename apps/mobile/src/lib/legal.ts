@@ -12,7 +12,7 @@
  * listing's "Privacy Policy URL" field needs a hosted URL regardless.
  */
 
-export const LEGAL_LAST_UPDATED = '1 August 2026';
+export const LEGAL_LAST_UPDATED = '3 August 2026';
 
 /** Hosted URLs — leave empty to use the bundled in-app screens. */
 export const PRIVACY_URL = '';
@@ -118,9 +118,17 @@ Please don't use Korb for anything unlawful, attempt to break or gain unauthoris
 
 ## Korb Plus (subscription)
 
-Korb is free to use. Everything you need to run a household — your lists, cloud backup, sharing a household with other people, and the whole pantry with its predictions — costs nothing and always will.
+Korb is free to use. Everything you need to run a household costs nothing: your lists, cloud backup and live sync, sharing a household with other people, your loyalty cards, the pantry's restock predictions, and your recent spending.
 
-**Korb Plus** is an optional paid subscription. It adds a full year of spending history instead of the most recent weeks, price-change tracking, cheaper-elsewhere comparisons between shops, and your written weekly recap.
+**Korb Plus** is an optional paid subscription. It adds:
+
+- a full year of spending history, instead of only the most recent weeks;
+- price-change tracking, and cheaper-elsewhere comparisons between shops;
+- your written weekly recap;
+- the pantry-mix and staples breakdowns, the vibe check, and your itemised purchase history;
+- no limit on the number of households you create.
+
+Which features sit on which side may change as the app develops; if we move something you already rely on out of the free tier, we will tell you before it takes effect.
 
 **Free month.** Every new account gets Korb Plus free for 30 days from the day it is created. You do not need to enter payment details to get it, and it does not turn into a paid subscription on its own — nothing is charged unless you choose to subscribe.
 
@@ -134,7 +142,7 @@ Korb is free to use. Everything you need to run a household — your lists, clou
 
 **Right of withdrawal (EU/EEA).** As a consumer you normally have 14 days to withdraw from a distance contract. Because Plus gives you immediate access to digital content, you are asked to agree at purchase that the service starts straight away, and you acknowledge that you lose the right of withdrawal once it has been fully performed. This does not affect your other statutory rights.
 
-**If your subscription ends.** Nothing is deleted. Your older shopping history stays exactly where it is — it simply stops being shown beyond the free window, and reappears in full if you subscribe again. You keep full use of every free feature, including sharing your household.
+**If your subscription ends.** Nothing is deleted. Your older shopping history stays exactly where it is — it simply stops being shown beyond the free window, and the Plus features above stop being shown. Everything reappears in full if you subscribe again. You keep full use of every free feature, including sharing your household and your loyalty cards, and any household you already created stays yours.
 
 **Price changes.** If we change the price of an existing subscription, you will be told in advance and asked to accept before it applies to you, as required by Google Play.
 

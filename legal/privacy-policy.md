@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: 20 July 2026**
+**Last updated: 3 August 2026**
 
 > **Note for the operator:** This is a good-faith draft tailored to how Korb
 > works. It is **not legal advice** — have it reviewed by a qualified
@@ -33,10 +33,17 @@ When you sign in to sync and share, we process:
   and the resulting pantry "burn-rate" statistics used to predict restocks.
 - **Technical data** — a session token and basic device information needed to
   operate the app, and, if enabled, anonymised crash/error diagnostics.
+- **Subscription status** — if you subscribe to Korb Plus, we store the date
+  your access runs until, which store sold it, and that purchase's identifier,
+  so the app knows what to unlock.
 
 We do **not** collect your contacts, precise location, advertising identifiers,
 or payment card details, and we do not sell your data or use it for
 advertising.
+
+We never see your payment details. Korb Plus is bought and billed entirely
+through Google Play; we receive only a confirmation that a subscription is
+active and until when.
 
 ## Store cards stay on your device
 
@@ -77,6 +84,11 @@ We use a small number of service providers who process data on our behalf:
   occur outside the EU (e.g. the United States) under appropriate safeguards
   such as Standard Contractual Clauses.
 - **Sentry** — receives anonymised crash and error reports to help us fix bugs.
+  Reports identify the screen you were on, never the contents of your lists,
+  your household, or which items they refer to.
+- **Google Play and RevenueCat** — handle payment and tell us whether a
+  subscription is active, if you buy Korb Plus. They receive no grocery,
+  pantry, or household data.
 
 We may also disclose data if required by law.
 
@@ -93,6 +105,11 @@ When you delete your account in **Settings → Delete account**, we remove your
 account and the data tied to it; if you are the last member of a household, that
 household and its lists and pantry history are deleted too. Backups are purged
 on our provider's rolling schedule.
+
+Purchase history older than a year is removed automatically. Ending a Korb Plus
+subscription does **not** delete anything: your older history stops being
+displayed beyond the free window, and is shown again in full if you subscribe
+again.
 
 ## Your rights
 
