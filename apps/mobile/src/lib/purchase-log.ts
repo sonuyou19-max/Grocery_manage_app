@@ -234,14 +234,27 @@ export interface PriceMove {
   samples: number;
 }
 
+/** The parts of a purchase that decide whether two prices can be compared. */
+export interface Priceable {
+  priceCents: number | null;
+  quantity: number | null;
+  unit: string | null;
+}
+
 /**
  * Per-unit price, so €2/1L and €4/2L compare equal.
  *
  * Returns null rather than guessing when the quantity is missing or zero: a
  * price with no amount attached can't be normalized, and silently treating it
  * as a unit price is how "milk doubled!" gets reported for a 2L bottle.
+ *
+ * Exported, and typed on the structural shape rather than on Purchase, because
+ * the cheaper-elsewhere card needs exactly this and used to do without it —
+ * comparing €1.20 for 1L at one shop against €2.00 for 2L at another and
+ * announcing the first as cheaper. Two cards answering price questions from
+ * two different notions of "comparable" is the bug; one definition is the fix.
  */
-function unitPrice(p: Purchase): number | null {
+export function unitPrice(p: Priceable): number | null {
   if (p.priceCents == null) return null;
   if (p.quantity == null) return null;
   if (p.quantity <= 0) return null;
@@ -252,8 +265,13 @@ function unitPrice(p: Purchase): number | null {
  * Comparable purchases must share a unit as well as a name. Litres against
  * kilos is meaningless, and an unpriced-per-unit entry (no quantity) can only
  * be compared with other entries that also lack one.
+ *
+ * Shared with price-intel for the same reason as unitPrice above: whether two
+ * prices may be set side by side is one question, and it should have one
+ * answer wherever it is asked.
  */
-const comparisonBucket = (p: Purchase): string => `${p.unit ?? ''}|${p.quantity == null ? 'flat' : 'unit'}`;
+export const comparisonBucket = (p: Pick<Priceable, 'unit' | 'quantity'>): string =>
+  `${p.unit ?? ''}|${p.quantity == null ? 'flat' : 'unit'}`;
 
 const median = (values: number[]): number => {
   const sorted = [...values].sort((a, b) => a - b);

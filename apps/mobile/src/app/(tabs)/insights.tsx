@@ -71,6 +71,7 @@ function SignedInInsights() {
   // The one definition, shared with the Pantry, the dashboard and the Vibe
   // Check. See lib/plus-gate.ts for why it is not two lines written here.
   const { locked } = usePlusGate();
+  const perUnitPrice = usePerUnitPrice();
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
@@ -133,10 +134,10 @@ function SignedInInsights() {
    * last Tuesday is a fact about last Tuesday; it must not move because a row
    * was edited today.
    *
-   * The shape is mapped to what the aggregation helpers expect, so
-   * spendByStore and cheaperStoreHints keep working unchanged — they were
-   * always right about *how* to aggregate, only wrong about what they were
-   * given.
+   * Quantity and unit travel with the price. They used to be dropped here,
+   * which is what made cheaperStoreHints compare a 1 L bottle against a 2 L one
+   * and name the dearer shop as the bargain — the helper could not have been
+   * right, because the data it needed never arrived.
    */
   const pricedItems = useMemo(
     () =>
@@ -147,6 +148,11 @@ function SignedInInsights() {
         category: statsByKey.get(p.key)?.category ?? ('other' as ItemCategory),
         priceCents: p.priceCents as number,
         store: p.store,
+        // Carried through, not dropped. Without these the cheaper-elsewhere
+        // card compared €1.20 for 1 L against €2.00 for 2 L and named the
+        // dearer shop as the bargain. See lib/price-intel.ts.
+        quantity: p.quantity,
+        unit: p.unit,
       })),
     [purchases, statsByKey],
   );
@@ -343,7 +349,12 @@ function SignedInInsights() {
       )}
 
       {/* Cheaper elsewhere — same item priced at 2+ stores. Plus: same reason.
-          Comparing shops needs enough trips to have visited more than one. */}
+          Comparing shops needs enough trips to have visited more than one.
+
+          The figures are PER UNIT whenever the user gave a quantity, so they
+          are labelled as such — "€1.00 / L" is a different claim from "€1.00",
+          and somebody who logged a 2 L bottle has to be able to tell which one
+          they are reading. */}
       {!locked && cheaper.length > 0 && (
         <Card>
           <CardHead icon="trending-down-outline" title={t('insights.cheaperTitle')} hint={t('insights.cheaperHint')} />
@@ -356,12 +367,12 @@ function SignedInInsights() {
                 <SupermarketBadge store={h.cheapStore} size={16} />
                 <Text style={[type.sub, { color: colors.accent }]}>
                   {t('insights.cheaperAt', {
-                    price: money(h.cheapCents),
+                    price: perUnitPrice(h.cheapCents, h.perUnit),
                     store: supermarketLabel(h.cheapStore) ?? h.cheapStore,
                   })}
                 </Text>
                 <Text style={[type.sub, { color: colors.muted }]}>
-                  {t('insights.cheaperVs', { price: money(h.dearCents) })}
+                  {t('insights.cheaperVs', { price: perUnitPrice(h.dearCents, h.perUnit) })}
                 </Text>
               </View>
             </View>
@@ -375,6 +386,20 @@ function SignedInInsights() {
       {locked && <PlusCard freeWeeks={freeWeeks} />}
     </Screen>
   );
+}
+
+/**
+ * A price, labelled with the unit it is per — or plain, when it isn't.
+ *
+ * "€1.00" and "€1.00 / L" are different claims, and the cheaper-elsewhere card
+ * shows whichever the underlying comparison actually made. Assembled here
+ * rather than in price-intel because it needs the locale's own money
+ * formatter, which is a screen concern.
+ */
+function usePerUnitPrice() {
+  const { money } = useLocale();
+  return (cents: number, unit: string | null) =>
+    unit ? `${money(cents)} / ${unit}` : money(cents);
 }
 
 function CardHead({ icon, title, hint }: { icon: IconName; title: string; hint?: string }) {
