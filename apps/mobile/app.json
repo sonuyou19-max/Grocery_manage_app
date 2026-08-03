@@ -15,7 +15,6 @@
       "bundleIdentifier": "app.korb.mobile",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
-          "whatsapp",
           "whatsapp"
         ],
         "ITSAppUsesNonExemptEncryption": false
