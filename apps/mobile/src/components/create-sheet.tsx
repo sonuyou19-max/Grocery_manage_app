@@ -32,17 +32,6 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * nobody ever discovers the feature exists.
  */
 
-/**
- * Whether the importer itself exists yet.
- *
- * It does not. The row ships anyway, marked, because the alternative was a
- * sheet with one option in it — and because a row that says "soon" is honest
- * in a way that a row leading to a paywall for a feature nobody can use yet is
- * not. Flipping this to true and deleting the `soon` branch is the whole
- * client-side change when the importer lands.
- */
-const RECIPE_IMPORT_READY = false;
-
 export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors } = useTheme();
   const t = useT();
@@ -58,13 +47,12 @@ export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: (
   };
 
   const onRecipe = () => {
-    if (!RECIPE_IMPORT_READY) return;
     onClose();
     // The gate decides, not this component. `locked` is false for a trial user
     // and for everyone while the tier is switched off, so this row simply works
     // until billing goes live — see lib/plus-gate.ts.
     if (locked) requirePlus();
-    else router.push('/paywall');
+    else router.push('/recipe');
   };
 
   return (
@@ -99,12 +87,7 @@ export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: (
               </Pressable>
 
               <Pressable
-                style={[
-                  styles.row,
-                  { borderColor: colors.line },
-                  !RECIPE_IMPORT_READY && styles.soonRow,
-                ]}
-                disabled={!RECIPE_IMPORT_READY}
+                style={[styles.row, { borderColor: colors.line }]}
                 onPress={() => {
                   haptics.tick();
                   onRecipe();
@@ -125,13 +108,9 @@ export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: (
                       <Text style={[type.label, styles.badgeText]}>{t('plus.badge')}</Text>
                     </LinearGradient>
                   </View>
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {RECIPE_IMPORT_READY ? t('create.recipeBody') : t('create.recipeSoon')}
-                  </Text>
+                  <Text style={[type.sub, { color: colors.muted }]}>{t('create.recipeBody')}</Text>
                 </View>
-                {RECIPE_IMPORT_READY && (
-                  <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-                )}
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </Pressable>
             </GlassView>
           </Pressable>
@@ -178,7 +157,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  soonRow: { opacity: 0.6 },
   badge: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radii.pill },
   badgeText: { color: '#FFFFFF' },
 });

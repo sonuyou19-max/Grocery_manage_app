@@ -33,6 +33,7 @@ import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
 import { GlassView } from '@/components/glass';
 import { EcoBar } from '@/components/eco-bar';
+import { usePlusGate } from '@/lib/plus-gate';
 import { ecoScoreFor } from '@/lib/item-carbon';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ItemSheet } from '@/components/item-sheet';
@@ -81,6 +82,7 @@ export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useTheme();
   const { t, money } = useLocale();
+  const { locked, requirePlus } = usePlusGate();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem, setClaim, shoppersOnline } = useGroceries();
   const { user } = useAuth();
@@ -352,6 +354,20 @@ export default function ListDetailScreen() {
 
   // Invite a family member: open WhatsApp pre-filled with the household join
   // code (falls back to the system share sheet if WhatsApp isn't available).
+  /**
+   * Import into the list already open.
+   *
+   * Routed rather than sheeted from here, so the import screen is the same
+   * screen either way — one place that knows how to talk to the function, one
+   * set of failure states. The `to` param is what makes it append instead of
+   * creating.
+   */
+  const onImport = () => {
+    haptics.tick();
+    if (locked) requirePlus();
+    else router.push({ pathname: '/recipe', params: { to: list.id } });
+  };
+
   const inviteFamily = async () => {
     if (!user) {
       Alert.alert(t('listDetail.signInShareTitle'), t('listDetail.signInShareBody'), [
@@ -441,6 +457,11 @@ export default function ListDetailScreen() {
             </Pressable>
           </Animated.View>
         )}
+        {/* Import straight into THIS list. Same flow as the create sheet's
+            row, minus the naming step — the list already has a name. */}
+        <Pressable onPress={onImport} hitSlop={12} accessibilityLabel={t('recipe.title')}>
+          <Ionicons name="sparkles-outline" size={22} color={colors.plusInk} />
+        </Pressable>
         <Pressable onPress={inviteFamily} hitSlop={12}>
           <Ionicons name="person-add-outline" size={22} color={colors.accent} />
         </Pressable>

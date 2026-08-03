@@ -47,6 +47,10 @@ We do not collect your contacts, precise location, advertising identifiers, or p
 
 We never see your payment details. Korb Plus is bought and billed entirely through Google Play; we receive only a confirmation that a subscription is active and until when.
 
+## Importing a recipe
+
+If you paste a link, our server fetches that page and reads its ingredient list; if you paste text, we read what you pasted. Either way we take only the recipe's name, its serving count and its ingredients — never the method — and we do not keep the page, the text, or the recipe. The only thing saved is the shopping list you choose to create, which is yours.
+
 ## Store cards stay on your device
 
 If you add supermarket loyalty cards, the card number and the shop it belongs to are stored **only on your phone**. They are never sent to us or to any other service, and they are not shared with other members of your household — even members who share the device, because cards are kept separately for each signed-in account. Adding a card therefore requires you to be signed in: a card is held under your account so that nobody else using the same phone can see it. Deleting a card, or deleting your account, removes them from the phone.
@@ -62,7 +66,7 @@ The camera is used only to read the barcode at the moment you add a card. No pho
 ## Who we share it with
 
 - **Supabase** — hosting, database, and authentication, stored in the EU (Frankfurt).
-- **Anthropic** — powers the AI features. When you use AI quick-add, automatic categorisation, or the weekly recap, the relevant text is sent to Anthropic to generate a response. It is not used to train their models, and may be processed outside the EU under appropriate safeguards.
+- **Anthropic** — powers the AI features. When you use AI quick-add, automatic categorisation, the weekly recap, or import a recipe, the relevant text is sent to Anthropic to generate a response. It is not used to train their models, and may be processed outside the EU under appropriate safeguards.
 - **Sentry** — receives anonymised crash reports to help us fix bugs. Reports identify the screen you were on, never the contents of your lists, your household, or which items they refer to.
 - **Google Play and RevenueCat** — handle payment and tell us whether a subscription is active, if you buy Korb Plus. They receive no grocery, pantry, or household data.
 
@@ -127,6 +131,7 @@ Korb is free to use. Everything you need to run a household costs nothing: your 
 - your written weekly recap;
 - the pantry-mix and staples breakdowns, the vibe check, and your itemised purchase history;
 - your climate score week by week;
+- importing a recipe from a link or pasted text, checked against your pantry;
 - no limit on the number of households you create.
 
 Which features sit on which side may change as the app develops; if we move something you already rely on out of the free tier, we will tell you before it takes effect.

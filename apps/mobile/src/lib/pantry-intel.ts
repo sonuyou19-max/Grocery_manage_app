@@ -180,6 +180,16 @@ export function isDue(stat: ItemStat, now: number): boolean {
 }
 
 /** Fraction of an item's lifespan still remaining (1 = just bought, 0 = out). */
+/**
+ * Below this fraction of an item's usual interval, it counts as running low.
+ *
+ * Lived in the Pantry screen as a local constant until the recipe importer
+ * needed the same judgement — and a second copy of a threshold is how two
+ * screens end up disagreeing about whether you have garlic. One number, one
+ * home, both callers.
+ */
+export const LOW_THRESHOLD = 0.35;
+
 export function lifeRemaining(stat: ItemStat, now: number): number {
   if (!stat.lastPurchasedAt) return 1;
   const span = effectiveInterval(stat) * DAY;

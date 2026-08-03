@@ -38,6 +38,7 @@ import {
   dueAt,
   hasUserCadence,
   isResting,
+  LOW_THRESHOLD,
   lastBoughtLabel,
   lifeRemaining,
   normalizeKey,
@@ -55,9 +56,6 @@ import { radii, spacing, type, useTheme } from '@/theme';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-/** An item is "running low" once less than this fraction of its lifespan is left. */
-const LOW_THRESHOLD = 0.35;
 
 type Colors = ReturnType<typeof useTheme>['colors'];
 
