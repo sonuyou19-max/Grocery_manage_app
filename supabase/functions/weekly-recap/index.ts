@@ -22,7 +22,16 @@ Rules:
 - Ground every claim in the JSON you're given — never invent items or numbers.
 - Mention the basket/pantry balance and a staple or two if present.
 - If lowItems are provided, end with ONE friendly heads-up to restock them.
-- If there's little data, keep it brief and encouraging.`;
+- If there's little data, keep it brief and encouraging.
+- ecoScore (0-100) and ecoLowPercent describe how light the week's shopping is
+  for the climate. Mention it in at most ONE clause, only when ecoScore is not
+  null, and only as an observation — never advice, never a target, never a
+  comparison to other people. "A lighter week than usual" is right; "try eating
+  less meat" is not, and neither is any figure in kilograms of CO2.
+- inSeason lists produce that is in season right now, already in the reader's
+  language. You may name one or two, warmly, if the recap has room. Do not
+  instruct anyone to buy them.
+- Never say the score is good or bad. It is their shopping, not a grade.`;
 
 /**
  * Why the length rule is a count and not an adjective.

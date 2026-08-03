@@ -355,3 +355,60 @@ export function weeklyEco(
       };
     });
 }
+
+/* ------------------------------------------------------ the biggest lever */
+
+export interface HeaviestStaple {
+  /** As the shopper writes it. */
+  name: string;
+  /** Purchases in the window — what makes it a habit rather than a one-off. */
+  times: number;
+}
+
+/**
+ * At least this many purchases before an item counts as something you buy
+ * "regularly". Two is a coincidence; three is a pattern, and the sentence this
+ * feeds says "regularly" out loud.
+ */
+const HABIT_PURCHASES = 3;
+
+/**
+ * The heavy item this household buys most often.
+ *
+ * ---------------------------------------------------------------------------
+ * Why one item and not a list
+ * ---------------------------------------------------------------------------
+ *
+ * A list of suggested substitutions was built and then deleted, because generic
+ * advice is noise: everyone gets the same eight rows, most of which are about
+ * food they never buy. This is the sharp version of the same idea. Korb knows
+ * which heavy item YOU buy most, and for one household that is cheese, for
+ * another coffee, for another beef — the single biggest lever, different every
+ * time, and derivable from data already on the device.
+ *
+ * It returns a fact and nothing else. No "try swapping", no target, no saving.
+ * The reader knows perfectly well what to do with "cheese is the heaviest thing
+ * you buy regularly"; being told would turn an observation into a lecture, and
+ * the lecture is the part people uninstall over.
+ */
+export function heaviestStaple(items: EcoPurchase[]): HeaviestStaple | null {
+  const counts = new Map<string, { name: string; times: number }>();
+
+  for (const p of items) {
+    if (carbonOf(p.name, p.category ?? 'other') !== 'high') continue;
+    const key = fold(p.name);
+    if (!key) continue;
+    const found = counts.get(key);
+    if (found) found.times += 1;
+    else counts.set(key, { name: p.name.trim(), times: 1 });
+  }
+
+  let best: HeaviestStaple | null = null;
+  for (const entry of counts.values()) {
+    if (entry.times < HABIT_PURCHASES) continue;
+    // Ties go to whichever the map saw first, which is the earlier purchase —
+    // arbitrary but stable, so the card does not reshuffle between renders.
+    if (!best || entry.times > best.times) best = entry;
+  }
+  return best;
+}

@@ -6,8 +6,10 @@ import type { ItemCategory } from '@korb/shared';
 
 import { Card } from '@/components/card';
 import { categoryLabel } from '@/lib/categorize';
+import { ecoScoreFor } from '@/lib/item-carbon';
 import { basketBalance } from '@/lib/nutrition';
 import { dueAt, isResting } from '@/lib/pantry-intel';
+import { inSeason } from '@/lib/seasonal';
 import { recapRuns } from '@/lib/recap-markup';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
@@ -80,6 +82,12 @@ export function WeeklyRecapCard() {
     const priced = items.filter((it) => it.priceCents != null);
     const spendCents = priced.reduce((sum, it) => sum + (it.priceCents ?? 0), 0);
 
+    // Scored from the LISTS, not the purchase log, because that is what the
+    // rest of this payload describes — the recap is about the week's shopping
+    // as the household sees it, and mixing two sources would let the prose and
+    // the Insights card disagree about the same week.
+    const eco = ecoScoreFor(items.map((it) => ({ name: it.name, category: it.category, bio: it.bio })));
+
     return {
       itemCount: items.length,
       listCount: lists.length,
@@ -90,6 +98,12 @@ export function WeeklyRecapCard() {
       spendEuros: Math.round(spendCents) / 100,
       pricedCount: priced.length,
       members: members.length,
+      ecoScore: eco.score,
+      ecoLowPercent: eco.score == null ? null : Math.round(eco.shares.low * 100),
+      // Translated here rather than in the function: the edge function has no
+      // locale files, and a produce name is exactly the kind of word a model
+      // will translate loosely if asked to.
+      inSeason: inSeason(new Date()).map((k) => t(`eco.season.${k}`)),
     };
   }, [lists, stats, members]);
 

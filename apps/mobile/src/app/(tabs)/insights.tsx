@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { LayoutAnimation, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ItemCategory } from '@korb/shared';
 
@@ -13,10 +13,12 @@ import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
 import { SpendTrendChart } from '@/components/spend-trend-chart';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
-import { weeklyEco, type EcoWeek } from '@/lib/eco';
+import { haptics } from '@/lib/haptics';
+import { heaviestStaple, weeklyEco, type EcoScore, type EcoWeek, type HeaviestStaple } from '@/lib/eco';
 import { ecoScoreFor } from '@/lib/item-carbon';
 import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
 import { isResting } from '@/lib/pantry-intel';
+import { inSeason } from '@/lib/seasonal';
 import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
 // `priced` is imported under a longer name on purpose. As `priced` it sat one
 // character away from the `pricedItems` array below, and `priced.length` — the
@@ -209,6 +211,13 @@ function SignedInInsights() {
     () => weeklyEco(ecoPurchases, now, weekStartOf, locked ? 4 : 8),
     [ecoPurchases, now, locked],
   );
+  /**
+   * The one heavy thing this household buys most. Null until it has been bought
+   * three times — below that it is a meal, not a habit, and the sentence says
+   * "regularly" out loud.
+   */
+  const heaviest = useMemo(() => heaviestStaple(ecoPurchases), [ecoPurchases]);
+
   /** Two scored weeks is the minimum that can show a direction. */
   const ecoScored = ecoWeeks.filter((w) => w.score != null);
 
@@ -237,33 +246,7 @@ function SignedInInsights() {
           also the hook: somebody has to see the feature work before there is
           any reason to pay for its history. See lib/eco.ts for why the number
           is what it is. */}
-      {eco.score != null && (
-        <Card>
-          <CardHead
-            icon="leaf-outline"
-            title={t('eco.cardTitle')}
-            hint={t('eco.cardHint', { count: eco.total })}
-          />
-          <View style={styles.heroRow}>
-            <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
-            <Text style={[type.sub, { color: colors.muted }]}>{t('eco.outOf')}</Text>
-          </View>
-          <EcoBar shares={eco.shares} counts={eco.counts} />
-          {eco.bioCount > 0 && (
-            /* Its own line, never folded into the bar. Organic is frequently
-               higher carbon per kilo, so showing it as part of the impact mix
-               would state something false; showing it beside is true and still
-               gives the credit. */
-            <View style={styles.row}>
-              <Ionicons name="leaf" size={16} color={colors.accent} />
-              <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
-                {t('eco.bioCount', { count: eco.bioCount })}
-              </Text>
-            </View>
-          )}
-          <Text style={[type.sub, { color: colors.muted }]}>{t('eco.cardNote')}</Text>
-        </Card>
-      )}
+      {eco.score != null && <EcoCard eco={eco} heaviest={heaviest} now={now} />}
 
       {/* Plus: HIDE, not prompt. A pantry mix is a single bar and a legend —
           there is no shell worth leaving behind, and a locked one would just be
@@ -534,6 +517,117 @@ function CardHead({ icon, title, hint }: { icon: IconName; title: string; hint?:
       <Text style={[type.body, styles.grow, { color: colors.ink }]}>{title}</Text>
       {hint ? <Text style={[type.sub, { color: colors.muted }]}>{hint}</Text> : null}
     </View>
+  );
+}
+
+/**
+ * The free climate card: the score, what it is made of, and two sentences.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the methodology note moved behind an (i)
+ * ---------------------------------------------------------------------------
+ *
+ * "Counted by item, not by weight" is the most important sentence on the card
+ * and also the one nobody needs twice. Printed permanently it was a caveat
+ * competing with the finding, and once two more lines arrived below it the card
+ * was four sentences of hedging around one number. Behind the (i) it is still
+ * one tap from anybody who wants to know how the figure is made — and the same
+ * gesture as the basket strip on the list screen, so the pattern is learned
+ * once.
+ *
+ * ---------------------------------------------------------------------------
+ * The card deliberately ends on something good
+ * ---------------------------------------------------------------------------
+ *
+ * Score, mix, then "the heaviest thing you buy" — three readings in a row that
+ * are, at best, neutral. A feature whose every sentence is a shortcoming is one
+ * people stop opening, so the last line is what is in season: true, useful to
+ * somebody who has never thought about carbon, and the only place here where
+ * Korb gets to be pleased about something.
+ */
+function EcoCard({
+  eco,
+  heaviest,
+  now,
+}: {
+  eco: EcoScore;
+  heaviest: HeaviestStaple | null;
+  now: number;
+}) {
+  const { colors } = useTheme();
+  const { t } = useLocale();
+  const [explained, setExplained] = useState(false);
+  const season = inSeason(new Date(now));
+
+  return (
+    <Card>
+      <View style={styles.cardHead}>
+        <Ionicons name="leaf-outline" size={18} color={colors.accent} />
+        <Text style={[type.label, styles.grow, { color: colors.ink }]}>{t('eco.cardTitle')}</Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t('eco.cardHint', { count: eco.total })}
+        </Text>
+        <Pressable
+          onPress={() => {
+            haptics.tick();
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExplained((v) => !v);
+          }}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('eco.whatIsThis')}
+        >
+          <Ionicons
+            name={explained ? 'information-circle' : 'information-circle-outline'}
+            size={18}
+            color={colors.muted}
+          />
+        </Pressable>
+      </View>
+
+      <View style={styles.heroRow}>
+        <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
+        <Text style={[type.sub, { color: colors.muted }]}>{t('eco.outOf')}</Text>
+      </View>
+      <EcoBar shares={eco.shares} counts={eco.counts} />
+      {explained && (
+        <Text style={[type.sub, { color: colors.muted }]}>{t('eco.cardNote')}</Text>
+      )}
+
+      {eco.bioCount > 0 && (
+        /* Its own line, never folded into the bar. Organic is frequently higher
+           carbon per kilo, so showing it as part of the impact mix would state
+           something false; showing it beside is true and still gives credit. */
+        <View style={styles.row}>
+          <Ionicons name="leaf" size={16} color={colors.accent} />
+          <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+            {t('eco.bioCount', { count: eco.bioCount })}
+          </Text>
+        </View>
+      )}
+
+      {/* A fact, with no instruction attached. See heaviestStaple in eco.ts for
+          why there is no "try swapping" on the end of it. */}
+      {heaviest && (
+        <View style={styles.row}>
+          <Ionicons name="arrow-up-circle-outline" size={16} color={colors.muted} />
+          <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+            {t('eco.heaviest', { item: heaviest.name })}
+          </Text>
+        </View>
+      )}
+
+      {season.length > 0 && (
+        <View style={styles.row}>
+          <Ionicons name="sunny-outline" size={16} color={colors.accent} />
+          <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+            {t('eco.inSeason', {
+              items: season.map((k) => t(`eco.season.${k}`)).join(t('common.listJoin')),
+            })}
+          </Text>
+        </View>
+      )}
+    </Card>
   );
 }
 

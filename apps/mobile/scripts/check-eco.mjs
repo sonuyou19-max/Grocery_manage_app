@@ -34,24 +34,27 @@ import ts from 'typescript';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'src', 'lib');
 
-const compile = (file, req) => {
-  const js = ts.transpileModule(readFileSync(join(LIB, file), 'utf8'), {
+const compileAt = (path, req = () => ({})) => {
+  const js = ts.transpileModule(readFileSync(path, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const mod = { exports: {} };
   new Function('module', 'exports', 'require', js)(mod, mod.exports, req);
   return mod.exports;
 };
+const compile = (file, req) => compileAt(join(LIB, file), req);
 
 const itemEmoji = compile('item-emoji.ts', () => ({}));
 const nutrition = compile('nutrition.ts', () => ({}));
 const purchaseLog = compile('purchase-log.ts', () => ({}));
+const seasonal = compile('seasonal.ts', () => ({}));
 const eco = compile('eco.ts', (spec) => {
   if (spec === '@/lib/item-emoji') return itemEmoji;
   if (spec === '@/lib/nutrition') return nutrition;
   return {};
 });
-const { carbonOf, ecoScore, weeklyEco, CARBON_COLORS } = eco;
+const { carbonOf, ecoScore, heaviestStaple, weeklyEco, CARBON_COLORS } = eco;
+const { inSeason, SEASONAL_PRODUCE } = seasonal;
 const { weekStartOf } = purchaseLog;
 
 let failures = 0;
@@ -205,6 +208,68 @@ check('every week in the window is present', weeks.length, 4);
 check('a full week is scored', weeks[2].score, 100);
 check('a thin week is null, not a bad score', weeks[3].score, null);
 check('...though its items are still counted', weeks[3].total, 1);
+
+/* ------------------------------------------------- the biggest lever */
+
+const bought = (name, category, times) =>
+  Array.from({ length: times }, () => ({ name, category, store: null, at: now, bio: false }));
+
+const lever = heaviestStaple([
+  ...bought('Cheese', 'dairy_eggs', 5),
+  ...bought('Beef', 'meat_fish', 3),
+  ...bought('Carrots', 'fruit_veg', 20),
+]);
+check('the heaviest regular buy is named', lever?.name, 'Cheese');
+check('...with how often it was bought', lever?.times, 5);
+// Twenty bags of carrots must never win: the whole point is the HEAVY item you
+// buy most, not the item you buy most.
+check('a light item never wins, however often it is bought', lever?.name !== 'Carrots', true);
+// Two is a coincidence. The sentence this feeds says "regularly" out loud, so
+// it must not fire on a one-off roast.
+check('twice is not a habit', heaviestStaple(bought('Beef', 'meat_fish', 2)), null);
+check('three times is', heaviestStaple(bought('Beef', 'meat_fish', 3))?.times, 3);
+check('a basket with nothing heavy has no lever', heaviestStaple(bought('Carrots', 'fruit_veg', 9)), null);
+// Spelling drift is one habit, not two half-habits that each miss the cut.
+check(
+  'spellings of one item are counted together',
+  heaviestStaple([...bought('Cheese', 'dairy_eggs', 2), ...bought('cheese', 'dairy_eggs', 1)])?.times,
+  3,
+);
+
+/* ------------------------------------------------------------- in season */
+
+// Every month must have something to say, or the card ends on a blank line in
+// whichever month nobody thought about.
+for (let m = 0; m < 12; m++) {
+  const items = inSeason(new Date(Date.UTC(2026, m, 15)));
+  assert(`month ${m + 1} has produce`, items.length > 0);
+  assert(`month ${m + 1} names at most three`, items.length <= 3);
+  // A key with no locale string renders as a missing-translation error in the
+  // one line of this feature that is supposed to feel like a gift.
+  for (const k of items) {
+    assert(`month ${m + 1}: "${k}" is a known produce key`, SEASONAL_PRODUCE.includes(k));
+  }
+  // Repeating an item inside one month would print "apples, apples, pears".
+  assert(`month ${m + 1} has no duplicates`, new Set(items).size === items.length);
+}
+
+// Strawberries in December would be the single most obvious way to lose the
+// reader's trust in the whole calendar, so the two sentinel cases are pinned.
+assert('strawberries are not in season in December', !inSeason(new Date(Date.UTC(2026, 11, 15))).includes('strawberries'));
+assert('asparagus is not in season in October', !inSeason(new Date(Date.UTC(2026, 9, 15))).includes('asparagus'));
+assert('strawberries do appear in early summer', inSeason(new Date(Date.UTC(2026, 4, 15))).includes('strawberries'));
+
+// Every produce key must have a name in every language. check-i18n-keys can see
+// that `eco.season.` is a live namespace but not that all 24 members are in it,
+// and a gap renders as [missing "en.eco.season.parsnips" translation] on the one
+// line of this whole feature that is meant to feel like a gift.
+const LOCALES = join(HERE, '..', 'src', 'i18n', 'locales');
+for (const lang of ['en', 'de', 'fr', 'it', 'es', 'nl', 'pl']) {
+  const catalog = compileAt(join(LOCALES, `${lang}.ts`)).default;
+  const season = catalog?.eco?.season ?? {};
+  const missing = SEASONAL_PRODUCE.filter((k) => typeof season[k] !== 'string' || !season[k].trim());
+  check(`${lang} names all ${SEASONAL_PRODUCE.length} seasonal items`, missing, []);
+}
 
 /* ---------------------------------------------------------------- colours */
 

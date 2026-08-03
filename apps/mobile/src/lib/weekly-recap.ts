@@ -18,6 +18,19 @@ export interface RecapPayload {
   spendEuros: number;
   pricedCount: number;
   members: number;
+  /**
+   * The climate side, so the recap can mention it without a second AI call.
+   *
+   * Null when there is not enough food logged to score, which the prompt is
+   * told to treat as "say nothing about it" rather than as a zero. A recap
+   * that opened with "your climate score is 0" for somebody who bought four
+   * bottles of bleach would be both wrong and rude.
+   */
+  ecoScore: number | null;
+  /** Share of food items in the light band, 0–100. */
+  ecoLowPercent: number | null;
+  /** What is in season this month, already in the reader's language. */
+  inSeason: string[];
 }
 
 /** The recap is prose, so it is generated in the reader's language. */
