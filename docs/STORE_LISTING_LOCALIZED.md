@@ -48,7 +48,17 @@ Nutze es allein ganz ohne Konto oder melde dich an zum Synchronisieren und
 Teilen. Deine Daten liegen in der EU, wir verkaufen sie nicht, und du kannst
 dein Konto samt allem jederzeit in den Einstellungen löschen.
 
-Kostenlos. Viel Spaß beim Einkaufen.
+Korb ist kostenlos: deine Listen, das Cloud-Backup, das Teilen mit deinem
+Haushalt in Echtzeit, deine Kundenkarten und deine Vorratsvorhersagen kosten
+nichts.
+
+Korb Plus ist ein optionales Abo für alle, die das ganze Bild wollen — ein Jahr
+Ausgabenverlauf, Preisänderungen im Blick, Preisvergleiche zwischen Geschäften,
+dein Wochenrückblick, deine Warenkorb-Balance und deine Basics sowie unbegrenzt
+viele Haushalte. Jedes neue Konto bekommt es 30 Tage gratis. Ohne Karte, und es
+wird nicht von allein zu einem bezahlten Abo.
+
+Viel Spaß beim Einkaufen.
 ```
 
 - **Keywords** (≤100): `einkaufsliste,einkaufen,lebensmittel,vorrat,haushalt,familie,supermarkt,kühlschrank,essen,liste`
@@ -88,7 +98,17 @@ Utilise-le seul sans compte, ou connecte-toi pour synchroniser et partager. Tes
 données sont hébergées dans l'UE, on ne les vend pas, et tu peux supprimer ton
 compte et tout son contenu à tout moment depuis les Réglages.
 
-Gratuit. Bonnes courses.
+Korb est gratuit : tes listes, la sauvegarde dans le cloud, le partage en
+direct avec ton foyer, tes cartes de fidélité et les prévisions de tes placards
+ne coûtent rien.
+
+Korb Plus est un abonnement facultatif pour celles et ceux qui veulent tout
+voir — un an d'historique de dépenses, le suivi des variations de prix, les
+comparaisons entre magasins, ton récap hebdo écrit, l'équilibre de ton panier
+et tes basiques, et des foyers illimités. Chaque nouveau compte l'a gratuitement
+pendant 30 jours. Sans carte bancaire, et sans reconduction automatique.
+
+Bonnes courses.
 ```
 
 - **Keywords** (≤100): `courses,liste de courses,épicerie,garde-manger,foyer,famille,supermarché,frigo,repas,alimentation`
@@ -127,7 +147,17 @@ Usalo da solo senza account, oppure accedi per sincronizzare e condividere. I
 tuoi dati stanno nell'UE, non li vendiamo e puoi eliminare il tuo account e
 tutto il suo contenuto quando vuoi dalle Impostazioni.
 
-Gratis. Buona spesa.
+Korb è gratis: le tue liste, il backup nel cloud, la condivisione in tempo
+reale con la tua famiglia, le tue carte fedeltà e le previsioni della dispensa
+non costano nulla.
+
+Korb Plus è un abbonamento facoltativo per chi vuole il quadro completo — un
+anno di storico delle spese, il monitoraggio delle variazioni di prezzo, i
+confronti tra negozi, il tuo riepilogo settimanale, l'equilibrio del carrello e
+i tuoi immancabili, e famiglie illimitate. Ogni nuovo account lo riceve gratis
+per 30 giorni. Senza carta, e non diventa a pagamento da solo.
+
+Buona spesa.
 ```
 
 - **Keywords** (≤100): `spesa,lista della spesa,dispensa,famiglia,supermercato,frigo,alimentari,cibo,casa,lista`
@@ -166,7 +196,17 @@ PRIVADO DESDE EL DISEÑO
 están en la UE, no los vendemos y puedes eliminar tu cuenta y todo su contenido
 cuando quieras desde Ajustes.
 
-Gratis. Feliz compra.
+Korb es gratis: tus listas, la copia en la nube, compartir en directo con tu
+hogar, tus tarjetas de fidelización y las previsiones de tu despensa no cuestan
+nada.
+
+Korb Plus es una suscripción opcional para quien quiere verlo todo — un año de
+historial de gastos, seguimiento de cambios de precio, comparativas entre
+tiendas, tu resumen semanal escrito, el equilibrio de tu cesta y tus básicos, y
+hogares ilimitados. Cada cuenta nueva lo tiene gratis 30 días. Sin tarjeta, y no
+se convierte en una suscripción de pago por su cuenta.
+
+Feliz compra.
 ```
 
 - **Keywords** (≤100): `compra,lista de la compra,despensa,hogar,familia,supermercado,nevera,comida,alimentación,lista`
@@ -204,7 +244,17 @@ Gebruik het alleen zonder account, of meld je aan om te synchroniseren en
 delen. Je gegevens staan in de EU, we verkopen ze niet, en je kunt je account
 en alles erin altijd verwijderen via Instellingen.
 
-Gratis. Fijn winkelen.
+Korb is gratis: je lijsten, de back-up in de cloud, live delen met je
+huishouden, je klantenkaarten en de voorspellingen van je voorraadkast kosten
+niets.
+
+Korb Plus is een optioneel abonnement voor wie het volledige beeld wil — een
+jaar uitgavengeschiedenis, prijswijzigingen volgen, prijzen vergelijken tussen
+winkels, je wekelijkse terugblik, je mandbalans en je vaste boodschappen, en
+onbeperkt huishoudens. Elk nieuw account krijgt het 30 dagen gratis. Zonder
+kaart, en het wordt niet vanzelf een betaald abonnement.
+
+Fijn winkelen.
 ```
 
 - **Keywords** (≤100): `boodschappen,boodschappenlijst,voorraad,huishouden,gezin,supermarkt,koelkast,eten,lijst,delen`
@@ -243,7 +293,16 @@ Korzystaj samodzielnie bez konta albo zaloguj się, aby synchronizować i
 udostępniać. Twoje dane są w UE, nie sprzedajemy ich, a konto wraz z całą
 zawartością możesz usunąć w każdej chwili w Ustawieniach.
 
-Za darmo. Udanych zakupów.
+Korb jest darmowy: twoje listy, kopia w chmurze, udostępnianie na żywo
+domownikom, twoje karty lojalnościowe i przewidywania spiżarni nic nie kosztują.
+
+Korb Plus to opcjonalna subskrypcja dla tych, którzy chcą pełnego obrazu — rok
+historii wydatków, śledzenie zmian cen, porównania między sklepami, twoje
+tygodniowe podsumowanie, bilans koszyka i twoje stałe zakupy oraz nieograniczona
+liczba domów. Każde nowe konto dostaje go za darmo na 30 dni. Bez karty i bez
+automatycznego przejścia w płatną subskrypcję.
+
+Udanych zakupów.
 ```
 
 - **Keywords** (≤100): `zakupy,lista zakupów,spiżarnia,dom,rodzina,supermarket,lodówka,jedzenie,lista,zapasy`

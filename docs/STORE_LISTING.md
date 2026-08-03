@@ -44,7 +44,17 @@ Use it solo with no account, or sign in to sync and share. Your data lives in
 the EU, we don’t sell it, and you can delete your account and everything in it
 any time from Settings.
 
-Free to use. Happy shopping.
+Korb is free: your lists, cloud backup, live sharing with your household,
+your loyalty cards and your pantry predictions cost nothing.
+
+Korb Plus is an optional subscription for the people who want the full
+picture — a year of spending history, price-change tracking, cheaper-elsewhere
+comparisons between shops, your written weekly recap, your pantry mix and
+staples breakdowns, and unlimited households. Every new account gets it free
+for 30 days. No card needed, and it doesn't turn into a paid subscription on
+its own.
+
+Happy shopping.
 ```
 
 ## Keywords (Apple, ≤100 chars, comma-separated, no spaces)
