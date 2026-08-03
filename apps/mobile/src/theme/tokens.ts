@@ -6,6 +6,29 @@ import type { TextStyle } from 'react-native';
  *
  * Dark mode is a re-pick, not an inversion: the accent brightens to hold
  * contrast, warn/crit shift warmer for low-light legibility.
+ *
+ * ---------------------------------------------------------------------------
+ * Measured contrast, not judged contrast
+ * ---------------------------------------------------------------------------
+ *
+ * Every ratio quoted below is WCAG 2.1 relative luminance, computed rather than
+ * eyeballed, because eyeballing is what produced the two failures this comment
+ * exists to record. Both looked fine on a good laptop display.
+ *
+ *   `line` was 1.15:1 against `bg`. Not a borderline value — a hairline that
+ *   the panel of a cheap Android phone cannot physically render distinctly from
+ *   its background. It now sits near 1.6:1, roughly where Material puts a
+ *   divider: present when you look for it, silent when you don't.
+ *
+ *   `warn` was 3.44:1 on white and 2.95:1 on `warnSoft`, and it is used for
+ *   13px body text — "~4 days left", the "Still good" chip, the RUNNING LOW
+ *   heading. AA wants 4.5:1 for text that size. It failed on every surface it
+ *   appears on, in the app's default light theme. Darkened until it clears on
+ *   the worst of them (4.8:1 on `warnSoft`, 5.6:1 on white).
+ *
+ * `crit` was checked at the same time and passes — 5.0:1 on white, 4.8:1 in
+ * dark mode — so it is deliberately unchanged. The red always looked like the
+ * risky one and never was.
  */
 
 export interface ThemeColors {
@@ -60,11 +83,11 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     surface: '#FFFFFF',
     ink: '#141A10',
     muted: '#5E6857',
-    line: '#E5E8DC',
+    line: '#CBD0BF',
     accent: '#2E7442',
     accentInk: '#FFFFFF',
     accentSoft: '#E4EFE4',
-    warn: '#B97F14',
+    warn: '#8A5F0F',
     warnSoft: '#F6EDD8',
     crit: '#C93E22',
     critSoft: '#F9E6E0',
@@ -76,7 +99,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshC: '#CFE0DE',
     meshScrim: 'rgba(246,247,240,0.5)',
     glassFill: 'rgba(255,255,255,0.55)',
-    glassBorder: 'rgba(255,255,255,0.7)',
+    glassBorder: 'rgba(20,26,16,0.22)',
     blurTint: 'light',
     plusFrom: '#6D5AE6',
     plusTo: '#2FA5A0',
@@ -88,7 +111,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     surface: '#1E241B',
     ink: '#F1F4EA',
     muted: '#96A28B',
-    line: '#2B3326',
+    line: '#414A3B',
     accent: '#5FB878',
     accentInk: '#0E1A10',
     accentSoft: '#243B2A',
@@ -104,7 +127,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshC: '#2A3312',
     meshScrim: 'rgba(11,15,9,0.42)',
     glassFill: 'rgba(30,36,27,0.55)',
-    glassBorder: 'rgba(255,255,255,0.1)',
+    glassBorder: 'rgba(255,255,255,0.16)',
     blurTint: 'dark',
     // Lifted and desaturated for the dark surface: the light-mode violet goes
     // muddy on #1E241B, and the teal has to stay legible as a 12px glyph.

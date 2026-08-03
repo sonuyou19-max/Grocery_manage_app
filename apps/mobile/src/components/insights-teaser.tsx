@@ -81,6 +81,9 @@ export function InsightsTeaser() {
             weeks={weeks}
             currentWeekStart={weeks[weeks.length - 1].weekStart}
             peakWeekStart={peak.weekStart}
+            // The same figure the sample hero above prints, so the guest sees
+            // the average line sitting where the number says it should.
+            averageCents={4950}
           />
         </Card>
 

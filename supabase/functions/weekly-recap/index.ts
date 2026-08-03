@@ -14,12 +14,30 @@ const SYSTEM_PROMPT = `You write a short weekly grocery recap for a household gr
 Voice: warm, casual, second person, like a friendly check-in text — never corporate.
 Use the informal second person where the language distinguishes it (du, tu, tú, ty).
 Rules:
-- 2 to 4 short sentences. No markdown, no bullet points, no headings.
+- Exactly 2 or 3 sentences. Each one under 16 words. Stop there.
+- Wrap the key facts — numbers, amounts, item names — in ** **, like **13 items**
+  or **€43**. Two to four of them in the whole recap, never a whole sentence.
+- No other formatting: no bullets, no headings, no italics, no line breaks.
 - At most one emoji, and only if it fits naturally.
 - Ground every claim in the JSON you're given — never invent items or numbers.
 - Mention the basket/pantry balance and a staple or two if present.
 - If lowItems are provided, end with ONE friendly heads-up to restock them.
 - If there's little data, keep it brief and encouraging.`;
+
+/**
+ * Why the length rule is a count and not an adjective.
+ *
+ * It used to say "2 to 4 short sentences" and got back a single 60-word
+ * paragraph with three clauses joined by dashes — technically obeying, since
+ * the model reads "short" as relative to what it might otherwise have written.
+ * A word cap per sentence is a rule it cannot satisfy while rambling.
+ *
+ * The ** markers are the only markup the app renders (see lib/recap-markup.ts),
+ * and the parser there treats an unpaired or absent marker as ordinary text, so
+ * a model that ignores this rule produces a plain recap rather than a broken
+ * one. Recaps written before this prompt existed, still cached on devices and
+ * in household_recaps, render the same way.
+ */
 
 /**
  * Languages the app ships. The recap is prose, so it has to be written in the

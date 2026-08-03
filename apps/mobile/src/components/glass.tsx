@@ -45,6 +45,17 @@ export function GlassView({ children, style, radius = radii.lg, intensity, accen
 const styles = StyleSheet.create({
   base: {
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth * 1.5,
+    /**
+     * A full device-independent pixel, not a hairline.
+     *
+     * This was `hairlineWidth * 1.5`, which on a 3x screen is half a physical
+     * pixel — a value the compositor renders by fading the border toward
+     * transparent. Combined with a border colour that was itself nearly white,
+     * a card had no visible edge at all on anything but a good display. A
+     * frosted surface still needs a boundary; making it 1dp means the width is
+     * the same apparent thickness on every density instead of thinning out as
+     * screens get sharper.
+     */
+    borderWidth: 1,
   },
 });

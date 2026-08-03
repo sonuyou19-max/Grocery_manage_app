@@ -696,7 +696,20 @@ const styles = StyleSheet.create({
   rowStack: { gap: spacing.sm },
   // Wraps: the two labels together overrun a narrow phone in the longer
   // languages ("Noch gut" + "Zur Liste hinzufügen").
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  //
+  // The vertical margins are its own, not the parent's. Everything on this
+  // screen is spaced by one `gap` on the scroll content, which gave the legend
+  // the same 12dp as the gap between two pantry rows — so a caption explaining
+  // a gesture sat as tightly against the search field above and the section
+  // heading below as list items sit against each other. It is a different KIND
+  // of thing from its neighbours and needs to look like one.
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
   legendPill: {
     flexDirection: 'row',
     alignItems: 'center',

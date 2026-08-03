@@ -256,7 +256,7 @@ const it = {
       movesBody: 'È Korb che confronta il prezzo che hai inserito oggi con quelli di prima. Segna i prezzi, ottieni risposte.',
       cheaperTitle: 'Quale negozio costa meno',
       cheaperBody: 'Indica negozio e prezzo quando compri, e Korb ti dice dove lo stesso prodotto ti costa meno.',
-      vibeTitle: 'La spesa in dieci secondi',
+      vibeTitle: 'Vibe Check della dispensa, in dieci secondi',
       vibeBody: 'Scorri quello che sta finendo e la lista è pronta prima che tu abbia messo le scarpe.',
       pantryMixTitle: 'Tutto il carrello a colpo d’occhio',
       pantryMixBody: 'Frutta e verdura, proteine, carboidrati — come mangia davvero la tua casa, non solo cosa hai comprato.',

@@ -308,7 +308,7 @@ const pl = {
       movesBody: 'To Korb porównuje cenę wpisaną dziś z tymi wpisanymi wcześniej. Zapisuj ceny, dostaniesz odpowiedzi.',
       cheaperTitle: 'Który sklep jest tańszy',
       cheaperBody: 'Zaznacz sklep i cenę przy zakupie, a Korb powie Ci, gdzie to samo kosztuje mniej.',
-      vibeTitle: 'Zakupy w dziesięć sekund',
+      vibeTitle: 'Vibe Check spiżarni, w dziesięć sekund',
       vibeBody: 'Przewiń to, co się kończy, a lista będzie gotowa, zanim założysz buty.',
       pantryMixTitle: 'Cały koszyk na jednym ekranie',
       pantryMixBody: 'Warzywa i owoce, białko, węglowodany — jak naprawdę je Twój dom, nie tylko co trafiło do koszyka.',

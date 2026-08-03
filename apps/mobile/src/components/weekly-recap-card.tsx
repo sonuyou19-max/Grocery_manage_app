@@ -8,6 +8,7 @@ import { Card } from '@/components/card';
 import { categoryLabel } from '@/lib/categorize';
 import { basketBalance } from '@/lib/nutrition';
 import { dueAt, isResting } from '@/lib/pantry-intel';
+import { recapRuns } from '@/lib/recap-markup';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import {
@@ -192,7 +193,15 @@ export function WeeklyRecapCard() {
         </View>
       )}
       {phase === 'ready' && text && (
-        <Text style={[type.bodyRegular, { color: colors.ink, lineHeight: 22 }]}>{text}</Text>
+        <Text style={[type.bodyRegular, { color: colors.ink, lineHeight: 22 }]}>
+          {recapRuns(text).map((run, i) => (
+            // Index keys: runs have no identity of their own, and the whole
+            // paragraph is replaced at once whenever the recap changes.
+            <Text key={i} style={run.bold ? styles.bold : undefined}>
+              {run.text}
+            </Text>
+          ))}
+        </Text>
       )}
       {phase === 'empty' && (
         <Text style={[type.sub, { color: colors.muted }]}>{t('weekly.recapEmpty')}</Text>
@@ -205,6 +214,7 @@ export function WeeklyRecapCard() {
 }
 
 const styles = StyleSheet.create({
+  bold: { fontWeight: '700' },
   grow: { flex: 1, minWidth: 0 },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

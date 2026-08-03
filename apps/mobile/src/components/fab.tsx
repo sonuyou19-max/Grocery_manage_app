@@ -12,6 +12,19 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 // its offset above the tab bar — on short screens.
 export const FAB_HEIGHT = 48;
 
+/**
+ * Air between the Fab and the floating tab bar below it.
+ *
+ * Was `spacing.md` — 12dp — which is less than the tab bar's own drop shadow
+ * reaches, so the two elements read as one stacked blob rather than two things
+ * that happen to float. 24 separates them without pushing the Fab up into the
+ * content.
+ *
+ * Exported because `Screen` reserves the same value as bottom padding; if the
+ * two drift, the last card slides under the Fab on a short list.
+ */
+export const FAB_GAP = spacing.xl;
+
 interface FabProps {
   label: string;
   icon?: IoniconName;
@@ -28,7 +41,7 @@ export function Fab({ label, icon = 'add', onPress, aboveTabBar = true }: FabPro
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const bottom = aboveTabBar
-    ? insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + spacing.md
+    ? insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + FAB_GAP
     : insets.bottom + spacing.lg;
   return (
     <Pressable

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 
 import type { WeekSpend } from '@/lib/purchase-log';
 import { useLocale } from '@/store/locale';
@@ -31,18 +32,47 @@ const BAR_WIDTH = 14;
 /** Flat mark for a week with nothing logged. */
 const EMPTY_STUB = 2;
 
+/**
+ * Where the faint rules sit, as a fraction of the tallest bar.
+ *
+ * Three, not more: at 64dp of plot, a fourth line is closer to its neighbours
+ * than a bar is wide, and the grid starts competing with the data it exists to
+ * measure.
+ */
+const GRID_FRACTIONS = [0.25, 0.5, 0.75];
+
 interface SpendTrendChartProps {
   weeks: WeekSpend[];
   /** Highlighted with a label as still in progress. */
   currentWeekStart: number;
   peakWeekStart: number | null;
+  /**
+   * The figure printed above the chart, drawn across it as a dashed rule.
+   *
+   * The card leads with "€25.00 a week, on average" and then showed bars with
+   * nothing to read them against, so the average was a number you were asked to
+   * take on trust while looking at the evidence for it. Drawing it makes every
+   * bar legible at a glance as "over" or "under", which is the only question
+   * anyone brings to this card.
+   */
+  averageCents: number;
 }
 
-export function SpendTrendChart({ weeks, currentWeekStart, peakWeekStart }: SpendTrendChartProps) {
+export function SpendTrendChart({
+  weeks,
+  currentWeekStart,
+  peakWeekStart,
+  averageCents,
+}: SpendTrendChartProps) {
   const { colors } = useTheme();
   const { t, money, language } = useLocale();
 
   const max = Math.max(...weeks.map((w) => w.cents), 1);
+  // SVG y grows downward; the plot is read from the baseline up.
+  const yFor = (fraction: number) => PLOT_HEIGHT * (1 - fraction);
+  // Clamped: one exceptional week can put the mean above every other bar, and
+  // an average line drawn off the top of the plot is worse than none.
+  const averageY = yFor(Math.min(averageCents / max, 1));
 
   const dayMonth = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short' });
   const first = weeks[0];
@@ -62,6 +92,35 @@ export function SpendTrendChart({ weeks, currentWeekStart, peakWeekStart }: Spen
       })}
     >
       <View style={[styles.plot, { height: PLOT_HEIGHT }]}>
+        {/* Behind the bars, and non-interactive: this is paper, not data. */}
+        <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+          {GRID_FRACTIONS.map((f) => (
+            <Line
+              key={f}
+              x1="0"
+              x2="100%"
+              y1={yFor(f)}
+              y2={yFor(f)}
+              stroke={colors.line}
+              strokeWidth={1}
+            />
+          ))}
+          {/* Dashed, so it reads as a reference rather than as a fourth rule —
+              and stronger than the grid, because it is the one line the card's
+              headline number refers to. */}
+          {averageCents > 0 && (
+            <Line
+              x1="0"
+              x2="100%"
+              y1={averageY}
+              y2={averageY}
+              stroke={colors.muted}
+              strokeWidth={1}
+              strokeDasharray="4 4"
+            />
+          )}
+        </Svg>
+
         {weeks.map((w) => {
           const isCurrent = w.weekStart === currentWeekStart;
           const isPeak = w.weekStart === peakWeekStart && w.cents > 0;

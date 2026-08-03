@@ -257,7 +257,7 @@ const de = {
       movesBody: 'Das ist Korb, das den heute eingetragenen Preis mit deinen früheren vergleicht. Preise erfassen, Antworten bekommen.',
       cheaperTitle: 'Welcher Laden ist günstiger',
       cheaperBody: 'Trag beim Einkaufen Laden und Preis ein, und Korb sagt dir, wo dich dasselbe Produkt weniger kostet.',
-      vibeTitle: 'Der Zehn-Sekunden-Einkauf',
+      vibeTitle: 'Vorrats-Vibe-Check, in zehn Sekunden',
       vibeBody: 'Wisch dich durch alles, was zur Neige geht – die Liste steht, bevor du die Schuhe anhast.',
       pantryMixTitle: 'Der ganze Warenkorb auf einen Blick',
       pantryMixBody: 'Obst und Gemüse, Eiweiß, Kohlenhydrate – wie dein Haushalt wirklich isst, nicht nur was du gekauft hast.',

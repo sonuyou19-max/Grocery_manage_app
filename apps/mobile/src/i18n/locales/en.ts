@@ -268,7 +268,7 @@ const en = {
       movesBody: 'That’s Korb comparing the price you typed today against the ones you typed before. Log prices, get answers.',
       cheaperTitle: 'Which shop is cheaper',
       cheaperBody: 'Tag your shop and price when you buy, and Korb tells you where the same item costs you less.',
-      vibeTitle: 'The ten-second shop',
+      vibeTitle: 'Pantry Vibe Check, in ten seconds',
       vibeBody: 'Swipe through what’s running low and build the list before you’ve got your shoes on.',
       pantryMixTitle: 'See the whole basket',
       pantryMixBody: 'Produce, protein, carbs — the shape of how your household eats, not just what you bought.',

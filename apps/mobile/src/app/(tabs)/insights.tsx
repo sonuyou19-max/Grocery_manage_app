@@ -260,6 +260,7 @@ function SignedInInsights() {
             weeks={trend.weeks}
             currentWeekStart={weekStartOf(now)}
             peakWeekStart={trend.peak?.weekStart ?? null}
+            averageCents={trend.averageCents}
           />
           <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendCaveat')}</Text>
         </Card>
@@ -365,13 +366,21 @@ function SignedInInsights() {
               </Text>
               <View style={styles.hintDetail}>
                 <SupermarketBadge store={h.cheapStore} size={16} />
-                <Text style={[type.sub, { color: colors.accent }]}>
+                {/* The saving is the point of the row, so the winning price is
+                    the only thing here set in a bold weight. The two prices
+                    were the same size, the same weight and one step apart in
+                    colour, which made the reader compare two numbers instead of
+                    being handed the answer. */}
+                <Text style={[type.sub, styles.cheapPrice, { color: colors.accent }]}>
                   {t('insights.cheaperAt', {
                     price: perUnitPrice(h.cheapCents, h.perUnit),
                     store: supermarketLabel(h.cheapStore) ?? h.cheapStore,
                   })}
                 </Text>
-                <Text style={[type.sub, { color: colors.muted }]}>
+                {/* Still legible — it is half the comparison and removing it
+                    would leave a price with nothing to be cheaper THAN — but
+                    set back so the eye reaches it second. */}
+                <Text style={[type.sub, styles.dearPrice, { color: colors.muted }]}>
                   {t('insights.cheaperVs', { price: perUnitPrice(h.dearCents, h.perUnit) })}
                 </Text>
               </View>
@@ -463,4 +472,15 @@ const styles = StyleSheet.create({
   deltaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
   hintRow: { gap: spacing.xs, paddingVertical: spacing.xs },
   hintDetail: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
+  cheapPrice: { fontWeight: '700' },
+  /**
+   * 0.9, and that is the floor rather than a taste call.
+   *
+   * `muted` on a card is 5.84:1. This text is 13px, so AA wants 4.5:1, which
+   * leaves room for a fade to about 0.9 — at 0.75 it lands on 3.39:1 and fails.
+   * Most of the separation in this row therefore comes from weight, not from
+   * value: the cheap price is bold accent, this stays regular. Fading it
+   * further would trade a readable comparison for a slightly prettier one.
+   */
+  dearPrice: { opacity: 0.9 },
 });

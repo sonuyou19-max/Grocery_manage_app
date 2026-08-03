@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FAB_HEIGHT } from '@/components/fab';
+import { FAB_GAP, FAB_HEIGHT } from '@/components/fab';
 import { TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/floating-tab-bar';
 import { MeshBackground } from '@/components/mesh-background';
 import { spacing, type, useTheme } from '@/theme';
@@ -105,7 +105,7 @@ export function Screen({ title, eyebrow, subtitle, hasFab, headerAction, childre
   });
   // Clear the floating tab bar (and the Fab, when present) so the last card
   // is never hidden behind either.
-  const fabClearance = hasFab ? FAB_HEIGHT + spacing.md : 0;
+  const fabClearance = hasFab ? FAB_HEIGHT + FAB_GAP : 0;
   const bottomClearance = insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + spacing.lg + fabClearance;
 
   return (
