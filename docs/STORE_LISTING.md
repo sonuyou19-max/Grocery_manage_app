@@ -77,9 +77,15 @@ Use these to fill Apple’s privacy nutrition labels and Google’s Data safety 
 - Identifiers: user/account ID — App functionality.
 - Diagnostics: crash logs & performance (only if Sentry is enabled) — App
   functionality / diagnostics.
+- Purchases: whether a Korb Plus subscription is active and until when — App
+  functionality (unlocking paid features). Payment itself is handled by Google
+  Play; we never receive card details.
 
-**Not collected:** precise location, contacts, health, financial/payment info,
+**Not collected:** precise location, contacts, health, payment card details,
 photos, advertising identifiers.
+
+**Loyalty cards are not collected at all.** Card numbers never leave the
+device, so they are not declared as collected or shared.
 
 **Tracking:** No. Data is **not** used to track users across apps/sites and
 **not** shared for advertising.
@@ -88,6 +94,9 @@ photos, advertising identifiers.
 - Supabase — hosting/database/auth (EU region).
 - Anthropic — AI features (item text / small aggregates sent to generate a
   response; not used to train their models).
+- Sentry — anonymised crash reports (screen name only, never list contents).
+- Google Play / RevenueCat — payment and subscription status. They receive no
+  grocery, pantry, or household data.
 
 **Encryption in transit:** Yes.
 **Account deletion:** Yes — in-app (Settings → Delete account) and on request
