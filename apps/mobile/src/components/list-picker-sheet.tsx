@@ -13,8 +13,15 @@ interface ListPickerSheetProps {
   /** Heading, e.g. "Add Milk to". Defaults to the localized "Add to list". */
   title?: string;
   onCancel: () => void;
-  /** Called with the chosen (or freshly-created) list id. */
-  onPick: (listId: string) => void;
+  /**
+   * The chosen (or freshly-created) list.
+   *
+   * The name comes with the id because a caller cannot look it up: a list
+   * created here exists in the store immediately, but not in the `lists` array
+   * any consumer is holding until React re-renders. Handing both over closes
+   * that window rather than asking every caller to know about it.
+   */
+  onPick: (listId: string, listName: string) => void;
 }
 
 /**
@@ -52,7 +59,7 @@ export function ListPickerSheet({ visible, title, onCancel, onPick }: ListPicker
             </Pressable>
 
             {lists.map((l) => (
-              <Pressable key={l.id} style={styles.row} onPress={() => onPick(l.id)}>
+              <Pressable key={l.id} style={styles.row} onPress={() => onPick(l.id, l.name)}>
                 <Ionicons name="list-outline" size={22} color={colors.muted} />
                 <Text style={[type.body, { color: colors.ink, flex: 1 }]} numberOfLines={1}>
                   {l.name}
@@ -72,7 +79,7 @@ export function ListPickerSheet({ visible, title, onCancel, onPick }: ListPicker
         onSubmit={(name) => {
           const id = addList(name);
           setCreating(false);
-          onPick(id);
+          onPick(id, name);
         }}
       />
     </>

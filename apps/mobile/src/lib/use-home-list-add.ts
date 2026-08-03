@@ -31,8 +31,27 @@ export interface HomeListAdd {
    * the caller should then open the list picker and call `addToChosenList`.
    */
   addToHomeList: (name: string, category: ItemCategory) => boolean;
-  /** Add to a list the user picked; that list becomes the item's new home. */
-  addToChosenList: (listId: string, name: string, category: ItemCategory) => void;
+  /**
+   * Add to a list the user picked; that list becomes the item's new home.
+   *
+   * The list's NAME is passed in rather than looked up, and that is the whole
+   * point of this signature. It used to resolve the id against `lists` and
+   * return silently when it found nothing — which is exactly what happens when
+   * the list was created a moment ago in the picker: `addList` returns the new
+   * id synchronously, but `lists` is still the array from the last render. So
+   * "New list…" from the Pantry created the list and dropped the item, and
+   * swiping again worked, because by then the render had caught up.
+   *
+   * The lookup only ever existed to fill in the toast. The caller already knows
+   * the name — it either read it off the row it tapped or just typed it — so it
+   * says so, and there is nothing left to fail.
+   */
+  addToChosenList: (
+    listId: string,
+    listName: string,
+    name: string,
+    category: ItemCategory,
+  ) => void;
 }
 
 export function useHomeListAdd(): HomeListAdd {
@@ -61,13 +80,12 @@ export function useHomeListAdd(): HomeListAdd {
     [lists, commit],
   );
 
+  // No lookup, and so no way to fail. See the interface for what the lookup
+  // used to cost.
   const addToChosenList = useCallback(
-    (listId: string, name: string, category: ItemCategory) => {
-      const list = lists.find((l) => l.id === listId);
-      if (!list) return;
-      commit(list.id, list.name, name, category);
-    },
-    [lists, commit],
+    (listId: string, listName: string, name: string, category: ItemCategory) =>
+      commit(listId, listName, name, category),
+    [commit],
   );
 
   return { addToHomeList, addToChosenList };

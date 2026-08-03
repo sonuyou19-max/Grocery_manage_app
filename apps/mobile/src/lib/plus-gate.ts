@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 
-import { billingAvailable } from '@/lib/billing';
 import { haptics } from '@/lib/haptics';
 import { useEntitlement } from '@/store/entitlement';
 
@@ -74,11 +73,19 @@ export interface PlusGate {
    */
   tierLive: boolean;
   /**
-   * Ask for the subscription.
+   * Ask for the subscription. Always goes somewhere.
    *
-   * Routes to the paywall when there is something to sell, and does nothing at
-   * all when there isn't — no key, no store, no dead-end screen. Callers can
-   * fire this unconditionally; it decides whether the tap goes anywhere.
+   * It used to check `billingAvailable()` first and return silently when there
+   * was no store key, on the reasoning that a paywall which cannot take money
+   * reads as a broken app. The result was worse than either outcome it was
+   * avoiding: on a build without a key, tapping a locked card ran no action and
+   * showed no prompt. Purchase History simply did nothing — not the feature,
+   * not an explanation. A dead tap is indistinguishable from a crash.
+   *
+   * The paywall already handles having no products: it lists what Plus does,
+   * then says plainly that subscriptions are not available right now and offers
+   * a retry. That is an honest screen in every configuration, and it is the
+   * screen someone who just hit a locked feature needs to see.
    */
   requirePlus: () => void;
   /**
@@ -98,9 +105,6 @@ export function usePlusGate(): PlusGate {
   const locked = gateActive && !entitled;
 
   const requirePlus = useCallback(() => {
-    // Nothing to sell means nothing to say. A paywall that cannot take money
-    // reads as a broken app, not an unfinished feature.
-    if (!billingAvailable()) return;
     haptics.tick();
     router.push('/paywall');
   }, []);

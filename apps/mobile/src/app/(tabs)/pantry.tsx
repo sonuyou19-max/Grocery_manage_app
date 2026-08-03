@@ -203,11 +203,11 @@ function SignedInPantry() {
     setPendingAdd(item);
   };
 
-  const pickList = (listId: string) => {
+  const pickList = (listId: string, listName: string) => {
     const item = pendingAdd;
     setPendingAdd(null);
     if (!item) return;
-    addToChosenList(listId, item.display, item.category);
+    addToChosenList(listId, listName, item.display, item.category);
     markAlmostOut(item.key);
     haptics.success();
   };

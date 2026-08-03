@@ -147,11 +147,11 @@ function SignedInVibeCheck() {
     });
   };
 
-  const pickList = (listId: string) => {
+  const pickList = (listId: string, listName: string) => {
     const card = pendingPick;
     setPendingPick(null);
     if (!card) return;
-    addToChosenList(listId, card.display, card.category);
+    addToChosenList(listId, listName, card.display, card.category);
     markAlmostOut(card.key);
   };
 
