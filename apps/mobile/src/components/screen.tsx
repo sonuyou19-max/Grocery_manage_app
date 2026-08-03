@@ -16,6 +16,19 @@ import { spacing, type, useTheme } from '@/theme';
 
 interface ScreenProps extends PropsWithChildren {
   title: string;
+  /**
+   * A small line above the title, for a header that is really two thoughts.
+   *
+   * The dashboard's greeting is the case this exists for. "Good afternoon,
+   * Sonu" as one display string wraps wherever the width runs out — which on a
+   * 360dp phone was mid-phrase, giving "Good / afternoon, / Sonu". Splitting it
+   * across two nodes puts the break where it belongs, and dropping the eyebrow
+   * to h2 guarantees the greeting fits one line in every language we ship,
+   * including the long ones, rather than merely fitting in English.
+   *
+   * It scales with the title on collapse, as one block.
+   */
+  eyebrow?: string;
   /** Text, or a node when the line needs to be interactive (e.g. the
    * household switcher on the dashboard). */
   subtitle?: ReactNode;
@@ -44,7 +57,7 @@ const COLLAPSE_DISTANCE = 72;
  * Both properties are composited on the UI thread, which is what keeps this
  * free on the low-end hardware the Android build has to run on.
  */
-export function Screen({ title, subtitle, hasFab, headerAction, children }: ScreenProps) {
+export function Screen({ title, eyebrow, subtitle, hasFab, headerAction, children }: ScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -63,14 +76,33 @@ export function Screen({ title, subtitle, hasFab, headerAction, children }: Scre
     ],
   }));
 
-  const subtitleStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, COLLAPSE_DISTANCE * 0.6], [1, 0], Extrapolation.CLAMP),
-    transform: [
-      {
-        translateY: interpolate(scrollY.value, [0, COLLAPSE_DISTANCE], [0, -6], Extrapolation.CLAMP),
-      },
-    ],
-  }));
+  const subtitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [0, COLLAPSE_DISTANCE * 0.6],
+      [1, 0],
+      Extrapolation.CLAMP,
+    );
+    return {
+      opacity,
+      // The subtitle row is interactive — the household switcher, and on the
+      // dashboard the Plus badge — and it keeps its layout slot after fading,
+      // near the top of the viewport where thumbs land. Without this, a faded-
+      // out row is an invisible button: a flick that ends on it opens a sheet
+      // the user cannot see they touched. Faded means gone, for touches too.
+      pointerEvents: opacity < 0.05 ? 'none' : 'auto',
+      transform: [
+        {
+          translateY: interpolate(
+            scrollY.value,
+            [0, COLLAPSE_DISTANCE],
+            [0, -6],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    };
+  });
   // Clear the floating tab bar (and the Fab, when present) so the last card
   // is never hidden behind either.
   const fabClearance = hasFab ? FAB_HEIGHT + spacing.md : 0;
@@ -92,9 +124,15 @@ export function Screen({ title, subtitle, hasFab, headerAction, children }: Scre
                 of pushing the control off-screen. */}
             <View style={styles.headerRow}>
               <View style={styles.headerText}>
-                <Animated.Text style={[type.display, styles.title, { color: colors.ink }, titleStyle]}>
-                  {title}
-                </Animated.Text>
+                {/* Eyebrow and title scale together, from the same left origin,
+                    so the two lines stay locked to each other and to the
+                    margin while the header collapses. */}
+                <Animated.View style={[styles.titleBlock, titleStyle]}>
+                  {eyebrow ? (
+                    <Text style={[type.h2, { color: colors.muted }]}>{eyebrow}</Text>
+                  ) : null}
+                  <Text style={[type.display, { color: colors.ink }]}>{title}</Text>
+                </Animated.View>
                 <Animated.View style={subtitleStyle}>
                   {typeof subtitle === 'string' ? (
                     <Text style={[type.sub, { color: colors.muted }]}>{subtitle}</Text>
@@ -125,7 +163,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   // minWidth 0 lets the title actually wrap instead of forcing the row wide.
   headerText: { flex: 1, minWidth: 0, gap: spacing.xs },
-  // Anchors the shrink to the left margin. Without it the title scales about
+  // Anchors the shrink to the left margin. Without it the block scales about
   // its centre and slides inward as it collapses, which reads as drift.
-  title: { transformOrigin: 'left center' },
+  titleBlock: { transformOrigin: 'left center' },
 });

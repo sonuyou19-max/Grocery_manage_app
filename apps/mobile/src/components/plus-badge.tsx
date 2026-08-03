@@ -9,18 +9,23 @@ import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
- * "You have Plus" — in the dashboard header, next to the wallet.
+ * "You have Plus" — on the dashboard's status line, beside the household name.
  *
  * ---------------------------------------------------------------------------
- * Why the header and not the greeting line
+ * Why the status line and not beside the wallet
  * ---------------------------------------------------------------------------
  *
- * The header is chrome the user passes every single launch, and it does not
- * reflow: the greeting already carries a name and the subtitle already carries
- * a household switcher, both of which grow with translation and with whatever
- * the user typed. A badge wedged in there would sometimes wrap onto its own
- * line and sometimes not. Beside the wallet button it is always in the same
- * place, at the same size, next to the app's other bit of status.
+ * It was beside the wallet first, on the reasoning that the top-right corner is
+ * fixed furniture and would not reflow. That was wrong, and visibly so: the
+ * header row gives the title whatever width the actions leave it, so adding a
+ * pill up there narrowed the greeting column until "Good afternoon, Sonu" broke
+ * into three lines. The badge did not move; it pushed everything else.
+ *
+ * Here it sits on the line that already reports context — which household you
+ * are in — and takes its width from a row that is free to wrap, so it cannot
+ * squeeze the display title at any width or in any language. It also reads
+ * better: household and tier are both answers to "what account am I in right
+ * now", and the wallet goes back to being the header's single action.
  *
  * ---------------------------------------------------------------------------
  * It counts the trial down out loud

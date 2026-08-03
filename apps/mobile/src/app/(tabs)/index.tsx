@@ -107,9 +107,13 @@ export default function ListsScreen() {
 
   // Your name, not your name *in this household* — the two are the same value,
   // so the greeting stays put when you switch.
+  // The greeting is two lines on purpose: the time of day above, the person
+  // below. As one string it wrapped wherever the width ran out — "Good /
+  // afternoon, / Sonu" — and no amount of width fixes that, because a longer
+  // name or a longer language reintroduces it. Two nodes put the break where a
+  // reader expects it, at every width.
   const firstName = myName ? myName.split(/\s+/)[0] : null;
   const base = t(`greeting.${greetingKey()}`);
-  const greeting = firstName ? `${base}, ${firstName}` : base;
 
   const openNewList = (name: string) => {
     const id = addList(name);
@@ -152,14 +156,15 @@ export default function ListsScreen() {
   return (
     <>
       <Screen
-        title={greeting}
-        subtitle={<HouseholdSwitcher fallback={t('greeting.subtitle')} />}
-        headerAction={
-          <View style={styles.headerActions}>
+        eyebrow={firstName ? base : undefined}
+        title={firstName ?? base}
+        subtitle={
+          <View style={styles.statusRow}>
+            <HouseholdSwitcher fallback={t('greeting.subtitle')} />
             <PlusBadge />
-            <WalletButton />
           </View>
         }
+        headerAction={<WalletButton />}
         hasFab
       >
         {/* Renders nothing at all unless a free month is genuinely days from
@@ -387,7 +392,15 @@ const styles = StyleSheet.create({
   // ~2.5×), so let the hint give way instead of pushing the row out of bounds.
   holdHint: { flexShrink: 1, textAlign: 'right' },
   grow: { flex: 1, minWidth: 0 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Household name and Plus badge share the line under the name. Wrapping is
+  // allowed because a long household name plus a long translated badge can
+  // exceed the width, and dropping to a second line beats squashing either.
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   vibeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   vibeEmoji: { fontSize: 26 },
   listHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
