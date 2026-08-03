@@ -33,6 +33,7 @@ import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { rubberBand, springTo } from '@/lib/motion';
+import { usePlusGate } from '@/lib/plus-gate';
 import {
   dueAt,
   hasUserCadence,
@@ -85,6 +86,8 @@ export default function PantryScreen() {
 function SignedInPantry() {
   const { colors } = useTheme();
   const t = useT();
+  // Shared with Insights and the dashboard — see lib/plus-gate.ts.
+  const { guard } = usePlusGate();
   const { stats, purchases, logPurchase, markAlmostOut, markStillGood, setStaple, setResting } =
     usePantryIntel();
   const { addToHomeList, addToChosenList } = useHomeListAdd();
@@ -413,14 +416,20 @@ function SignedInPantry() {
           if (item) onRest(item);
         }}
         purchases={purchases}
-        onOpenHistory={() => {
+        /* Plus gates this by PROMPTING, not hiding.
+           The row stays in the settings sheet because an item visibly HAS a
+           history — the pantry above it already says "last bought yesterday",
+           so hiding the way in would look like a missing feature rather than a
+           paid one. `guard` opens the ledger when unlocked and the paywall when
+           not, and closing the staple sheet first is right either way: two
+           stacked modals on Android leave the lower one visible through the
+           upper's backdrop. */
+        onOpenHistory={guard(() => {
           const item = stapleKey ? stats[stapleKey] : null;
           if (!item) return;
-          // Close the settings sheet first: two stacked modals on Android leave
-          // the lower one visible through the upper's backdrop.
           setStapleKey(null);
           setLedgerFor({ name: item.display, category: item.category });
-        }}
+        })}
       />
 
       <PurchaseLedger

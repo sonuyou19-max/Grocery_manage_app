@@ -1,12 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
-import { billingAvailable } from '@/lib/billing';
 import { haptics } from '@/lib/haptics';
+import { usePlusGate } from '@/lib/plus-gate';
 import { useEntitlement } from '@/store/entitlement';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -49,7 +48,11 @@ const WARN_WITHIN_DAYS = 5;
 export function TrialNudge() {
   const { colors } = useTheme();
   const t = useT();
-  const { entitled, gateActive, trialEndsAt, subscribedUntil } = useEntitlement();
+  const { trialEndsAt, subscribedUntil } = useEntitlement();
+  // From the shared hook, not rebuilt here — see lib/plus-gate.ts. This banner
+  // warns about LOSING Plus, so it needs both halves: the person must currently
+  // have it, and the tier must be switched on, or the warning is about nothing.
+  const { entitled, tierLive, requirePlus } = usePlusGate();
   // `null` while we are still asking storage. Rendering nothing until then
   // stops the banner appearing for a frame and vanishing for someone who
   // already dismissed it.
@@ -68,8 +71,10 @@ export function TrialNudge() {
 
   const show =
     dismissed === false &&
-    gateActive &&
-    billingAvailable() &&
+    // `tierLive`, not `locked`. Locked is false for exactly the people this
+    // warns — they still have Plus. The question is whether the tier is on at
+    // all, so that losing it will mean something.
+    tierLive &&
     entitled &&
     // A paying subscriber is not in a trial, even though their account still
     // has a trial-end date somewhere in the past or future. Without this they
@@ -103,7 +108,7 @@ export function TrialNudge() {
       <Pressable
         onPress={() => {
           haptics.tick();
-          router.push('/paywall');
+          requirePlus();
         }}
         style={[styles.cta, { backgroundColor: colors.accent }]}
       >

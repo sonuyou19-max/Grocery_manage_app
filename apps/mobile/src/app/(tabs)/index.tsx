@@ -12,6 +12,8 @@ import { Screen } from '@/components/screen';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { HouseholdSwitcher } from '@/components/household-switcher';
 import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
+import { usePlusGate } from '@/lib/plus-gate';
+import { PlusBadge } from '@/components/plus-badge';
 import { TrialNudge } from '@/components/trial-nudge';
 import { WeeklyListSheet } from '@/components/weekly-list-sheet';
 import { onboardingSeen } from '@/lib/onboarding';
@@ -47,6 +49,8 @@ export default function ListsScreen() {
   const { lists, addList, addParsedItem, deleteList, reorderLists } = useGroceries();
   const { household, members, myName } = useHousehold();
   const { user } = useAuth();
+  // Shared with Insights and the Pantry — see lib/plus-gate.ts.
+  const { guard } = usePlusGate();
   const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
   const vibeVariant = vibeEmptyVariant();
@@ -150,7 +154,12 @@ export default function ListsScreen() {
       <Screen
         title={greeting}
         subtitle={<HouseholdSwitcher fallback={t('greeting.subtitle')} />}
-        headerAction={<WalletButton />}
+        headerAction={
+          <View style={styles.headerActions}>
+            <PlusBadge />
+            <WalletButton />
+          </View>
+        }
         hasFab
       >
         {/* Renders nothing at all unless a free month is genuinely days from
@@ -160,11 +169,18 @@ export default function ListsScreen() {
         {/* Signed out there is no pantry to report on, and the empty branch below
             would cheerfully claim "nothing running low" about one that does not
             exist. The weekly builder needs no such guard — it renders only when
-            it has suggestions, and a guest has none. */}
+            it has suggestions, and a guest has none.
+
+            Plus gates this by PROMPTING, not hiding. The card's own subtitle
+            says how many items are low, so its value is legible from the
+            outside — removing it would read as the app having lost a feature
+            rather than as a feature being for sale. `guard` runs the push when
+            unlocked and opens the paywall when not; both branches live in one
+            place so they cannot be written the wrong way round here. */}
         {!editing &&
           user &&
           (vibeCount > 0 ? (
-            <Pressable onPress={() => router.push('/vibe-check')}>
+            <Pressable onPress={guard(() => router.push('/vibe-check'))}>
               <Card accented>
                 <View style={styles.vibeRow}>
                   <Text style={styles.vibeEmoji}>☕️</Text>
@@ -371,6 +387,7 @@ const styles = StyleSheet.create({
   // ~2.5×), so let the hint give way instead of pushing the row out of bounds.
   holdHint: { flexShrink: 1, textAlign: 'right' },
   grow: { flex: 1, minWidth: 0 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   vibeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   vibeEmoji: { fontSize: 26 },
   listHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

@@ -34,6 +34,24 @@ export interface ThemeColors {
   glassBorder: string;
   /** BlurView tint to use for glass/mesh in this scheme. */
   blurTint: 'light' | 'dark';
+  /**
+   * Korb Plus.
+   *
+   * A violet-to-teal ramp, deliberately outside the app's green-and-amber
+   * family. Everything else in Korb is a shade of "your groceries"; Plus is a
+   * different KIND of thing — something you buy — and it should be recognisable
+   * as that across the three surfaces it appears on (the card, the badge, the
+   * paywall) without a label.
+   *
+   * Reserved. Nothing that is not about the subscription may use these, or the
+   * signal stops meaning anything.
+   */
+  plusFrom: string;
+  plusTo: string;
+  /** Tint behind a Plus icon or sub-card. Low saturation; it sits under text. */
+  plusSoft: string;
+  /** Text and glyphs ON plusSoft. */
+  plusInk: string;
 }
 
 export const palette: Record<'light' | 'dark', ThemeColors> = {
@@ -60,6 +78,10 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     glassFill: 'rgba(255,255,255,0.55)',
     glassBorder: 'rgba(255,255,255,0.7)',
     blurTint: 'light',
+    plusFrom: '#6D5AE6',
+    plusTo: '#2FA5A0',
+    plusSoft: '#EFEDFC',
+    plusInk: '#4A3BC4',
   },
   dark: {
     bg: '#0E120C',
@@ -84,6 +106,12 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     glassFill: 'rgba(30,36,27,0.55)',
     glassBorder: 'rgba(255,255,255,0.1)',
     blurTint: 'dark',
+    // Lifted and desaturated for the dark surface: the light-mode violet goes
+    // muddy on #1E241B, and the teal has to stay legible as a 12px glyph.
+    plusFrom: '#8B7BF0',
+    plusTo: '#45C3BC',
+    plusSoft: '#241F3D',
+    plusInk: '#A99BF5',
   },
 };
 

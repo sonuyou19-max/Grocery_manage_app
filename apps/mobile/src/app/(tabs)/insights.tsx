@@ -21,6 +21,7 @@ import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
 // "1 priced" onto a Spending card totalling €0.00. See the card itself.
 import { priced as pricedPurchases, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
 import { supermarketLabel } from '@/lib/supermarkets';
+import { usePlusGate } from '@/lib/plus-gate';
 import { useAuth } from '@/store/auth';
 import { useEntitlement } from '@/store/entitlement';
 import { useGroceries } from '@/store/groceries';
@@ -44,8 +45,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
  *   Plus    everything
  *
  * The middle state only exists once billing is switched on server-side; until
- * then `gateActive` is false and free reads identically to Plus. See
- * store/entitlement.tsx.
+ * then the tier is off and free reads identically to Plus. See lib/plus-gate.ts.
  *
  * Split into two components rather than an early return inside one, because
  * the screen below is full of useMemo and a conditional return above them
@@ -67,16 +67,10 @@ function SignedInInsights() {
   const { t, money } = useLocale();
   const { lists } = useGroceries();
   const { stats, purchases } = usePantryIntel();
-  const { entitled, gateActive, historyCutoff } = useEntitlement();
-
-  /**
-   * Is this account currently being held to the free tier?
-   *
-   * Both halves are required. `gateActive` alone would lock a paying customer
-   * out; `!entitled` alone would lock everyone out before billing exists, which
-   * is the state the app ships in.
-   */
-  const locked = gateActive && !entitled;
+  const { historyCutoff } = useEntitlement();
+  // The one definition, shared with the Pantry, the dashboard and the Vibe
+  // Check. See lib/plus-gate.ts for why it is not two lines written here.
+  const { locked } = usePlusGate();
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
@@ -187,7 +181,11 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {pantry.total > 0 && (
+      {/* Plus: HIDE, not prompt. A pantry mix is a single bar and a legend —
+          there is no shell worth leaving behind, and a locked one would just be
+          a rectangle asking for money in the middle of the reader's own
+          figures. The Plus card at the foot of the tab makes the offer once. */}
+      {!locked && pantry.total > 0 && (
         <Card>
           <CardHead
             icon="file-tray-full-outline"
@@ -198,7 +196,9 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {staples.length > 0 && (
+      {/* Plus: HIDE, same reasoning. Staples is a list of names; without the
+          names there is nothing to show. */}
+      {!locked && staples.length > 0 && (
         <Card>
           <CardHead icon="repeat-outline" title={t('insights.staplesTitle')} hint={t('insights.staplesHint')} />
           {staples.map((s) => (
@@ -422,7 +422,19 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
   spendTotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.xs },
-  heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, flexWrap: 'wrap' },
+  // marginBottom, because the chart that follows draws its peak label at the
+  // very top of its own box: without clearance the label sat on the baseline of
+  // "a week, on average" and the two overlapped. flexWrap keeps the caption on
+  // its own line when the amount is long or the translation is (pl:
+  // "tygodniowo, średnio"), and alignItems baseline keeps them on one line when
+  // it isn't.
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+    marginBottom: spacing.sm,
+  },
   deltaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
   hintRow: { gap: spacing.xs, paddingVertical: spacing.xs },
   hintDetail: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
