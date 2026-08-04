@@ -35,7 +35,7 @@
 -- Not for enforcement. The rows are the user's own and RLS already lets them
 -- read every one; a patched client could ask for all of it, and the worst
 -- outcome is that somebody sees their own groceries. It is here so that "the
--- free tier is four weeks" has exactly ONE definition. Put it in the client and
+-- free tier is five weeks" has exactly ONE definition. Put it in the client and
 -- it is a constant in a bundle that ships on its own schedule, drifts from the
 -- copy in the paywall, and cannot be changed without a store release.
 --
@@ -49,7 +49,7 @@
 --
 -- Lapsing narrows a query. It does not touch a row. Somebody who subscribes,
 -- accumulates a year of history and then stops paying still has all of it in
--- price_entries; they see the last four weeks until they resubscribe, at which
+-- price_entries; they see the free window until they resubscribe, at which
 -- point the whole year is simply there again. There is no archival job, no
 -- grace-period deletion, and no code path in this schema that removes history
 -- for non-payment. That is a promise the app makes in the UI, so it had better
@@ -64,7 +64,9 @@
 -- exactly nothing. The gate is live, wired and testable from the day it lands;
 -- it just isn't biting yet.
 --
--- When billing goes live, this becomes `interval '4 weeks'`. That is a one-line
+-- When billing goes live, this becomes `interval '5 weeks'` (migration 0028 —
+-- four was the original plan and is two days short of the 30-day default the
+-- Insights cards offer; see that file). That is a one-line
 -- change to one function: no app release, no store review, no client deploy,
 -- and it can be reverted in seconds if conversion or complaints say it was
 -- wrong. Shipping the boundary and turning it on are two different decisions
@@ -120,7 +122,7 @@ returns table (
   --
   -- Derived rather than stored so it cannot disagree with the switch it
   -- describes: the gate is on exactly when free is narrower than paid. Setting
-  -- free_history_weeks() to 4 weeks turns the whole of Plus on in one edit;
+  -- free_history_weeks() to 5 weeks turns the whole of Plus on in one edit;
   -- setting it back to 520 turns all of it off again.
   plus_gate_active boolean
 )
@@ -148,7 +150,7 @@ grant execute on function my_entitlement() to authenticated;
 
 -- The two window functions are immutable constants and reveal nothing about any
 -- user, so the app may read them directly — useful for the paywall, which has
--- to tell people what they are buying without hard-coding "4 weeks" a second
+-- to tell people what they are buying without hard-coding the window a second
 -- time in a translated string.
 grant execute on function free_history_weeks() to authenticated, anon, service_role;
 grant execute on function paid_history_weeks() to authenticated, anon, service_role;

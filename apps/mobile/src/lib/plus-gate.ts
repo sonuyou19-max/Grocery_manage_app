@@ -50,7 +50,7 @@ import { useEntitlement } from '@/store/entitlement';
  *             rather than that a feature is for sale.
  *
  *   NARROW    Show less of the same thing, silently. Only the history window
- *             does this, and only because four weeks of your own spending is a
+ *             does this, and only because five weeks of your own spending is a
  *             coherent product rather than a broken one.
  */
 export interface PlusGate {

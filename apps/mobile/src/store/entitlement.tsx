@@ -60,7 +60,7 @@ interface EntitlementContext {
    * The oldest purchase timestamp this account may see, as epoch ms.
    *
    * Computed by Postgres (`my_entitlement()`), never here. Not for enforcement
-   * — see above — but so "the free tier is four weeks" has exactly one
+   * — see above — but so "the free tier is five weeks" has exactly one
    * definition. A constant in this bundle would ship on its own schedule, drift
    * from the number printed on the paywall, and need a store release to change.
    * The server can change it between two app opens.

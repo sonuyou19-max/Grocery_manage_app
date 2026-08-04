@@ -67,9 +67,11 @@ export function rangeCutoff(range: Range, now: number): number | null {
  * moves the moment that SQL function does, and cannot drift from the sentence
  * the Insights tab prints above the chart.
  *
- * NOTE FOR LAUNCH: this makes "Last 30 days" a paid range if the free window is
- * left at four weeks (28 days), which is two days short of it. Set
- * `free_history_weeks()` to 5 so the default view is genuinely free.
+ * The free window is five weeks, not four, BECAUSE of this function: 30 days is
+ * the default view, and a four-week window (28 days) would put a free account's
+ * own default card behind the paywall. Migration 0028 carries that reasoning and
+ * is the one that turns the tier on. If anyone ever narrows it below 30 days
+ * again, this is where the damage shows up.
  *
  * Null cutoff — signed out, or the first answer has not arrived — gates nothing.
  * A guess in this direction shows a paywall to someone who has not been told

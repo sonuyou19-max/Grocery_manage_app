@@ -396,7 +396,7 @@ function SignedInInsights() {
       )}
 
       {/* Items that cost more (or less) than they usually do. Plus: "usually"
-          is a claim about the past, and four weeks is not enough past to make
+          is a claim about the past, and five weeks is not enough past to make
           it. */}
       {!locked && moves.length > 0 && (
         <Card>
