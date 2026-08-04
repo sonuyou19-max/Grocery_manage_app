@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  InteractionManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -62,6 +63,8 @@ export default function RecipeImportScreen() {
   const [error, setError] = useState<ImportOutcome['status'] | null>(null);
   const [recipe, setRecipe] = useState<ParsedRecipe | null>(null);
   const [clip, setClip] = useState<string | null>(null);
+  /** Where to go once the review sheet has actually gone. See `onConfirm`. */
+  const [leaving, setLeaving] = useState<{ id: string; append: boolean } | null>(null);
 
   /**
    * The gate, checked here as well as at the two buttons that open this screen.
@@ -128,6 +131,28 @@ export default function RecipeImportScreen() {
    * second curry into a list that already has onions on it un-ticks the onions
    * instead of adding a second row — the same rule every other add path in the
    * app follows.
+   *
+   * -------------------------------------------------------------------------
+   * Why this does not navigate here
+   * -------------------------------------------------------------------------
+   *
+   * It used to, and it landed on a blank white screen. Two separate faults, and
+   * fixing either alone would have left the other:
+   *
+   *   The review sheet is a react-native <Modal>, which on Android is its own
+   *   native window. `setRecipe(null)` and `router.replace(...)` batch into one
+   *   commit, so the screen underneath was being torn down and replaced while
+   *   that window was still dismissing. The stack lands, the modal window is
+   *   still on top of it, and what you see is the empty window.
+   *
+   *   For the ?to= case it was also navigating to a route already in the stack.
+   *   Coming from a list, the stack is [tabs, list/X, recipe]; replacing the top
+   *   with list/X gives two entries with the same key, and the duplicate renders
+   *   nothing.
+   *
+   * So: unmount the sheet, wait for it to be gone, and only then move — and for
+   * an append, don't move at all. Going back to the list the user was already
+   * looking at is both the correct stack operation and what they asked for.
    */
   const onConfirm = (name: string, rows: ReviewRow[]) => {
     const id = target?.id ?? addList(name);
@@ -141,12 +166,30 @@ export default function RecipeImportScreen() {
       if (target) addOrReviveItem(id, parsed);
       else addParsedItem(id, parsed);
     }
-    setRecipe(null);
     showToast(t('recipe.added', { count: rows.length, list: target?.name ?? name }));
-    // replace, not push: backing out of the list should reach the app, not the
-    // import screen it came from.
-    router.replace({ pathname: '/list/[id]', params: { id } });
+    // Same commit: the Modal unmounts, and the effect below picks up the move.
+    setRecipe(null);
+    setLeaving({ id, append: target != null });
   };
+
+  useEffect(() => {
+    if (!leaving) return;
+    // The effect already runs after the commit that unmounted the Modal; this
+    // additionally waits out its dismissal animation, which is the part Android
+    // does on its own schedule.
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (leaving.append) {
+        // Back to the list that opened this. It re-reads the store on render,
+        // so the imported rows are simply there.
+        router.back();
+      } else {
+        // replace, not push: backing out of a list built from an import should
+        // reach the app, not the import screen it came from.
+        router.replace({ pathname: '/list/[id]', params: { id: leaving.id } });
+      }
+    });
+    return () => task.cancel();
+  }, [leaving]);
 
   const busy = phase !== 'idle';
 

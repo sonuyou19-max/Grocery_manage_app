@@ -51,7 +51,34 @@ export const SEASONAL_PRODUCE = [
 
 export type SeasonalProduce = (typeof SEASONAL_PRODUCE)[number];
 
-/** Month index 0–11, as `Date.getMonth()` returns it. */
+/**
+ * Fruit or vegetable, culinary rather than botanical.
+ *
+ * A tomato is a fruit and nobody wants to be told so while planning dinner;
+ * rhubarb is a stem and everybody treats it as a fruit. The only job this table
+ * has is to keep each month's three from being all of one kind, and for that
+ * the kitchen's definition is the useful one.
+ */
+export const PRODUCE_KIND: Record<SeasonalProduce, 'fruit' | 'veg'> = {
+  apples: 'fruit', blackberries: 'fruit', cherries: 'fruit', oranges: 'fruit',
+  pears: 'fruit', plums: 'fruit', raspberries: 'fruit', rhubarb: 'fruit',
+  strawberries: 'fruit',
+  asparagus: 'veg', cabbage: 'veg', courgettes: 'veg', kale: 'veg',
+  leeks: 'veg', mushrooms: 'veg', newPotatoes: 'veg', parsnips: 'veg',
+  peas: 'veg', peppers: 'veg', pumpkin: 'veg', radishes: 'veg',
+  spinach: 'veg', sprouts: 'veg', tomatoes: 'veg',
+};
+
+/**
+ * Month index 0–11, as `Date.getMonth()` returns it.
+ *
+ * Every month carries at least one fruit and at least one vegetable, which
+ * check-eco asserts. Three months used to break that — September was all fruit,
+ * November and December all vegetables — and a line reading "in season now:
+ * pumpkin, parsnips, cabbage" tells somebody nothing about what to put in a
+ * fruit bowl. Winter fruit is real (stored apples and pears, Mediterranean
+ * citrus), so the balance costs no honesty.
+ */
 const CALENDAR: readonly (readonly SeasonalProduce[])[] = [
   ['leeks', 'kale', 'oranges'], // January
   ['cabbage', 'kale', 'oranges'], // February
@@ -61,10 +88,10 @@ const CALENDAR: readonly (readonly SeasonalProduce[])[] = [
   ['strawberries', 'cherries', 'newPotatoes'], // June
   ['cherries', 'raspberries', 'courgettes'], // July
   ['tomatoes', 'plums', 'peppers'], // August
-  ['apples', 'pears', 'blackberries'], // September
+  ['apples', 'blackberries', 'mushrooms'], // September
   ['apples', 'pumpkin', 'mushrooms'], // October
-  ['pumpkin', 'parsnips', 'cabbage'], // November
-  ['sprouts', 'leeks', 'parsnips'], // December
+  ['pumpkin', 'parsnips', 'apples'], // November
+  ['sprouts', 'leeks', 'pears'], // December
 ];
 
 /**

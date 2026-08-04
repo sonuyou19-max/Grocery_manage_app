@@ -54,7 +54,7 @@ const eco = compile('eco.ts', (spec) => {
   return {};
 });
 const { carbonOf, ecoScore, heaviestStaple, weeklyEco, CARBON_COLORS } = eco;
-const { inSeason, SEASONAL_PRODUCE } = seasonal;
+const { inSeason, SEASONAL_PRODUCE, PRODUCE_KIND } = seasonal;
 const { weekStartOf } = purchaseLog;
 
 let failures = 0;
@@ -251,7 +251,22 @@ for (let m = 0; m < 12; m++) {
   }
   // Repeating an item inside one month would print "apples, apples, pears".
   assert(`month ${m + 1} has no duplicates`, new Set(items).size === items.length);
+
+  // A balanced mix, not three of a kind. "In season now: pumpkin, parsnips,
+  // cabbage" answers half the question somebody planning a shop is asking, and
+  // three months of the calendar used to read exactly like that.
+  const kinds = items.map((k) => PRODUCE_KIND[k]);
+  assert(`month ${m + 1}: every item is classified`, kinds.every(Boolean));
+  assert(`month ${m + 1} names a fruit`, kinds.includes('fruit'));
+  assert(`month ${m + 1} names a vegetable`, kinds.includes('veg'));
 }
+
+// The classification has to cover the list, or a new key would silently make
+// the balance check above vacuous for whatever month it lands in.
+assert(
+  'every produce key is classified as fruit or veg',
+  SEASONAL_PRODUCE.every((k) => PRODUCE_KIND[k] === 'fruit' || PRODUCE_KIND[k] === 'veg'),
+);
 
 // Strawberries in December would be the single most obvious way to lose the
 // reader's trust in the whole calendar, so the two sentinel cases are pinned.

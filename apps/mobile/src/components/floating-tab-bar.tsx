@@ -35,6 +35,15 @@ const slotFor = (routeIndex: number) =>
 /** Diameter of the create button, and how far it rides above the pill. */
 const FAB_SIZE = 54;
 const FAB_LIFT = 16;
+/**
+ * Thickness of the page-coloured ring around the button.
+ *
+ * Four is the number that reads as a cutout rather than as a border: thin
+ * enough that nobody registers it as a stroke, thick enough to separate the
+ * gradient from the pill's own edge so the two do not appear welded together.
+ */
+const FAB_RING = 4;
+const RING_SIZE = FAB_SIZE + FAB_RING * 2;
 
 const H_MARGIN = spacing.lg;
 const INNER_PAD = 6;
@@ -65,7 +74,18 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   const t = useT();
   const [creating, setCreating] = useState(false);
 
-  const tabWidth = (width - H_MARGIN * 2 - INNER_PAD * 2) / SLOTS;
+  /**
+   * Measured, not computed.
+   *
+   * This used to be `(width - H_MARGIN * 2 - INNER_PAD * 2) / SLOTS`, which is
+   * the width a slot OUGHT to be — and the bug was that it wasn't. Deriving the
+   * highlight's step from an assumption about the layout means the highlight is
+   * right only while the assumption holds; measuring the row means it cannot
+   * disagree with what is on screen, whatever the padding or the safe area does
+   * later. `width` stays a dependency so a rotation re-measures.
+   */
+  const [rowWidth, setRowWidth] = useState(0);
+  const tabWidth = rowWidth > 0 ? rowWidth / SLOTS : 0;
 
   // Driven by the SLOT, not the route index, or the highlight would land on the
   // create button when Insights is selected and stop one place short thereafter.
@@ -75,10 +95,27 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   }, [state.index, active]);
 
   // Lozenge centred under each tab's icon; slides one slot-width per step.
+  // Hidden until the row has been measured, so it cannot flash at x=0 on the
+  // first frame.
   const bubbleStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: active.value * tabWidth }],
   }));
-  const bubbleBase = { left: INNER_PAD + tabWidth / 2 - BUBBLE_W / 2 };
+  const bubbleBase = {
+    left: tabWidth / 2 - BUBBLE_W / 2,
+    opacity: tabWidth > 0 ? 1 : 0,
+  };
+
+  // 0 = plus, 1 = cross. A spring rather than a timing curve: this is a direct
+  // response to a finger, and the small overshoot at the end is what makes it
+  // feel like the icon turned rather than that a value was interpolated.
+  const open = useSharedValue(0);
+  useEffect(() => {
+    open.value = withSpring(creating ? 1 : 0, { damping: 14, stiffness: 180, mass: 0.6 });
+  }, [creating, open]);
+
+  const plusStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${open.value * 45}deg` }],
+  }));
 
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }]} pointerEvents="box-none">
@@ -90,14 +127,30 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
           style={[styles.pill, { borderColor: colors.glassBorder }]}
         >
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]} pointerEvents="none" />
-          <View style={styles.row}>
+          {/* The inner padding lives on the pill, not on this row, so the row's
+              measured width IS the width the five slots divide up and the
+              absolutely-positioned highlight below shares one unambiguous
+              origin with them. Padding on the row would make both of those
+              depend on how Yoga resolves an absolute child against a padded
+              parent, which is not a thing this layout should rest on. */}
+          <View style={styles.row} onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}>
             <Animated.View style={[styles.bubble, bubbleBase, { backgroundColor: colors.accentSoft }, bubbleStyle]} />
-            {state.routes.map((route, i) => {
-              // The spacer occupies the middle slot so the four real tabs keep
-              // their positions; the button itself is drawn outside the pill so
-              // it can overlap the top edge without being clipped by it.
+            {state.routes.flatMap((route, i) => {
+              /*
+               * The spacer holding the middle slot open, emitted as a SIBLING of
+               * the tabs rather than nested inside one.
+               *
+               * It used to be wrapped in a per-route group, which quietly broke
+               * the whole layout: the row had four groups at flex:1, so each got
+               * a quarter, and the group carrying the spacer split its quarter
+               * between two children. The real slots were therefore ¼, ¼, ⅛, ⅛,
+               * ¼ while every highlight calculation assumed five equal fifths.
+               * That is the asymmetric pill — and the unevenly spaced icons with
+               * it. flatMap keeps them siblings, so five flex:1 children are
+               * five equal slots and the arithmetic is true again.
+               */
               const spacer =
-                slotFor(i) === CENTER_SLOT + 1 && i === CENTER_SLOT ? (
+                i === CENTER_SLOT ? (
                   <View key="center-slot" style={styles.tab} pointerEvents="none" />
                 ) : null;
 
@@ -111,10 +164,10 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                 if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
               };
 
-              return (
-                <View key={route.key} style={styles.slotGroup}>
-                {spacer}
+              return [
+                spacer,
                 <Pressable
+                  key={route.key}
                   onPress={onPress}
                   style={styles.tab}
                   accessibilityRole="button"
@@ -140,9 +193,8 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                   >
                     {label}
                   </Text>
-                </Pressable>
-                </View>
-              );
+                </Pressable>,
+              ];
             })}
           </View>
         </BlurView>
@@ -153,10 +205,22 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
         <Pressable
           onPress={() => {
             haptics.tick();
-            setCreating(true);
+            setCreating((v) => !v);
           }}
-          style={[styles.fabWrap, { left: width / 2 - H_MARGIN - FAB_SIZE / 2 }]}
+          style={[
+            styles.fabRing,
+            {
+              left: width / 2 - H_MARGIN - RING_SIZE / 2,
+              // The cutout. A ring in the PAGE's colour, not the pill's, so the
+              // button reads as punched through the bar rather than resting on
+              // it — and on Android it does double duty, because elevation
+              // draws no shadow for a view with no background to cast one.
+              // That absence is why this looked flat and pasted-on.
+              backgroundColor: colors.bg,
+            },
+          ]}
           accessibilityRole="button"
+          accessibilityState={{ expanded: creating }}
           accessibilityLabel={t('create.title')}
         >
           <LinearGradient
@@ -165,7 +229,12 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
             end={{ x: 1, y: 1 }}
             style={styles.fab}
           >
-            <Ionicons name="add" size={28} color="#FFFFFF" />
+            {/* One glyph, rotated — not two glyphs swapped. A cross IS a plus
+                turned an eighth of a turn, so rotating is the honest animation
+                and it cannot flicker mid-transition the way a swap does. */}
+            <Animated.View style={plusStyle}>
+              <Ionicons name="add" size={28} color="#FFFFFF" />
+            </Animated.View>
           </LinearGradient>
         </Pressable>
       </View>
@@ -187,12 +256,13 @@ const styles = StyleSheet.create({
   },
   pill: {
     height: TAB_BAR_HEIGHT,
+    paddingHorizontal: INNER_PAD,
     borderRadius: 30,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     justifyContent: 'center',
   },
-  row: { flexDirection: 'row', paddingHorizontal: INNER_PAD },
+  row: { flexDirection: 'row' },
   bubble: {
     position: 'absolute',
     top: 0,
@@ -200,20 +270,25 @@ const styles = StyleSheet.create({
     height: BUBBLE_H,
     borderRadius: BUBBLE_H / 2,
   },
-  // One group per route, so the middle spacer can be emitted alongside the tab
-  // that follows it without a fragment key warning.
-  slotGroup: { flex: 1, flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center' },
-  fabWrap: {
+  fabRing: {
     position: 'absolute',
     top: -FAB_LIFT,
-    width: FAB_SIZE,
-    height: FAB_SIZE,
+    width: RING_SIZE,
+    height: RING_SIZE,
+    borderRadius: RING_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // iOS reads the four shadow* properties; Android reads only elevation, and
+    // only for a view that has a background. The ring supplies that background,
+    // which is why the two effects are deliberately on the same element.
     shadowColor: '#2A1B5E',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    shadowOpacity: 0.38,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    // Above the pill's own elevation (12), or Android would paint the bar over
+    // the button regardless of tree order.
+    elevation: 16,
   },
   fab: {
     width: FAB_SIZE,
