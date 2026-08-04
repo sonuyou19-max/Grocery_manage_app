@@ -366,6 +366,19 @@ const en = {
       cheaper: 'Cheaper elsewhere',
       vibe: 'Vibe Check',
     },
+    pillar: {
+      moneyTitle: 'SAVE MONEY',
+      moneyKicker: 'From the prices you log',
+      timeTitle: 'SAVE TIME',
+      timeKicker: 'Less typing, fewer trips',
+      betterTitle: 'EAT BETTER',
+      betterKicker: 'The shape of your basket',
+    },
+    also: {
+      recap: 'your weekly recap',
+      households: 'as many households as you like',
+    },
+    alsoIncluded: 'Also included: %{list}.',
     detail: {
       historyTitle: 'Twelve months of history',
       historyBody: 'Every shop you’ve logged for a full year back, not just the last few weeks.',

@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
+import { PlusFeatures } from '@/components/plus-features';
 import { useToast } from '@/components/toast';
 import {
   billingAvailable,
@@ -141,32 +142,6 @@ export default function PaywallScreen() {
     showToast(t('paywall.nothingToRestore'));
   };
 
-  /**
-   * The same capabilities the Plus card lists, in the same order, read from
-   * the same keys.
-   *
-   * Anything added to Plus has to land in BOTH arrays. A capability named in
-   * the Terms but missing here is the divergence that reads as a promise the
-   * paywall did not make — check-plus-gate asserts the two lists match.
-   *
-   * Kept identical on purpose: somebody arrives here from that card, and a
-   * shorter or differently-worded list at the moment of payment reads as a
-   * bait-and-switch even when every line is true. `plus.detail.*Title` is the
-   * single source; the bodies stay on the card, where there is room.
-   */
-  const perks: Array<{ icon: keyof typeof Ionicons.glyphMap; id: string }> = [
-    { icon: 'time-outline', id: 'history' },
-    { icon: 'swap-vertical-outline', id: 'moves' },
-    { icon: 'trending-down-outline', id: 'cheaper' },
-    { icon: 'restaurant-outline', id: 'recipe' },
-    { icon: 'leaf-outline', id: 'eco' },
-    { icon: 'pulse-outline', id: 'vibe' },
-    { icon: 'file-tray-full-outline', id: 'pantryMix' },
-    { icon: 'repeat-outline', id: 'staples' },
-    { icon: 'home-outline', id: 'households' },
-    { icon: 'sparkles-outline', id: 'recap' },
-  ];
-
   const busy = phase === 'working';
   const trialDaysLeft =
     trialEndsAt && trialEndsAt > Date.now()
@@ -202,16 +177,11 @@ export default function PaywallScreen() {
             </View>
           )}
 
-          <View style={styles.perks}>
-            {perks.map((p) => (
-              <View key={p.id} style={styles.perkRow}>
-                <Ionicons name={p.icon} size={18} color={colors.accent} />
-                <Text style={[type.body, styles.grow, { color: colors.ink }]}>
-                  {t(`plus.detail.${p.id}Title`)}
-                </Text>
-              </View>
-            ))}
-          </View>
+          {/* The one description of Plus in the app. The Insights tab used to
+              carry a second, differently-worded one; a shorter list at the
+              moment of payment reads as a bait-and-switch even when every line
+              of it is true. See lib/plus-pillars.ts. */}
+          <PlusFeatures />
 
           {phase === 'loading' && <ActivityIndicator color={colors.accent} style={styles.spin} />}
 
@@ -376,8 +346,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.md,
   },
-  perks: { gap: spacing.sm, marginVertical: spacing.sm },
-  perkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   spin: { marginVertical: spacing.xl },
   unavailable: { alignItems: 'center', gap: spacing.sm, marginVertical: spacing.lg },
   plans: { gap: spacing.sm },

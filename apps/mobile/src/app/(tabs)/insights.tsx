@@ -9,7 +9,7 @@ import { EcoBar } from '@/components/eco-bar';
 import { RangePicker, withinRange, type Range } from '@/components/range-picker';
 import { StaplesSheet } from '@/components/staples-sheet';
 import { InsightsTeaser } from '@/components/insights-teaser';
-import { PlusCard } from '@/components/plus-card';
+import { PlusBadge } from '@/components/plus-badge';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { WeeklyRecapCard } from '@/components/weekly-recap-card';
@@ -269,7 +269,22 @@ function SignedInInsights() {
   const ecoScored = ecoWeeks.filter((w) => w.score != null);
 
   return (
-    <Screen title={t('tabs.insights')} subtitle={t('insights.subtitle')}>
+    <Screen
+      title={t('tabs.insights')}
+      /* The tier sits on the status line, exactly as it does on the dashboard,
+         instead of in a card at the foot of the tab. That card was the last
+         thing you reached after scrolling every chart — the worst place to
+         explain a subscription and the worst place to notice a trial running
+         out. Up here it is the same badge, in the same slot, saying the same
+         three things (Plus / Plus · N days / Unlock Plus), and it opens the
+         same screen. One description of Plus, one way in. */
+      subtitle={
+        <View style={styles.statusRow}>
+          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.subtitle')}</Text>
+          <PlusBadge />
+        </View>
+      }
+    >
       {/* Plus. The recap is the only card here that costs money to produce —
           one AI call per household per week — so it is also the one whose
           price and paid status line up without argument. */}
@@ -392,6 +407,17 @@ function SignedInInsights() {
             averageCents={trend.averageCents}
           />
           <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendCaveat')}</Text>
+          {/* The one sentence worth keeping from the Plus card that used to sit
+              at the foot of this tab. It belongs on the chart it is about: a
+              free reader looking at five weeks of bars needs to know the axis is
+              a tier boundary and not the whole of their history. Said plainly,
+              in the same breath as the caveat, and not as a sales pitch — the
+              badge in the header is where the selling happens. */}
+          {locked && (
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t('plus.showingWeeks', { count: freeWeeks })}
+            </Text>
+          )}
         </Card>
       )}
 
@@ -562,7 +588,6 @@ function SignedInInsights() {
       {/* Last, where the three cards it stands in for would have been — so it
           is found at the end of the reader's own figures rather than in front
           of them. A free tab still ends with something to read. */}
-      {locked && <PlusCard freeWeeks={freeWeeks} />}
 
       <StaplesSheet
         visible={staplesOpen}
@@ -796,6 +821,9 @@ function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
 }
 
 const styles = StyleSheet.create({
+  // Mirrors the dashboard's status row: wraps rather than squeezing the
+  // subtitle, which is what broke the greeting into three lines last time.
+  statusRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
   grow: { flex: 1, minWidth: 0 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   bar: { flexDirection: 'row', height: 16, borderRadius: radii.sm, overflow: 'hidden' },

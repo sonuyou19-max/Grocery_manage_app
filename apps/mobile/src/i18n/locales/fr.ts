@@ -355,6 +355,19 @@ const fr = {
       cheaper: 'Moins cher ailleurs',
       vibe: 'Vibe Check',
     },
+    pillar: {
+      moneyTitle: 'ÉCONOMISER',
+      moneyKicker: 'À partir des prix que tu saisis',
+      timeTitle: 'GAGNER DU TEMPS',
+      timeKicker: 'Moins de saisie, moins d\'allers-retours',
+      betterTitle: 'MIEUX MANGER',
+      betterKicker: 'La composition de ton panier',
+    },
+    also: {
+      recap: 'ton résumé hebdomadaire',
+      households: 'autant de foyers que tu veux',
+    },
+    alsoIncluded: 'Également inclus : %{list}.',
     detail: {
       historyTitle: 'Douze mois d’historique',
       historyBody: 'Chaque course que tu as enregistrée, sur un an entier — pas seulement les dernières semaines.',

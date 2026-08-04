@@ -354,6 +354,19 @@ const es = {
       cheaper: 'Más barato fuera',
       vibe: 'Vibe Check',
     },
+    pillar: {
+      moneyTitle: 'AHORRAR DINERO',
+      moneyKicker: 'A partir de los precios que anotas',
+      timeTitle: 'AHORRAR TIEMPO',
+      timeKicker: 'Menos teclear, menos viajes',
+      betterTitle: 'COMER MEJOR',
+      betterKicker: 'La composición de tu cesta',
+    },
+    also: {
+      recap: 'tu resumen semanal',
+      households: 'todas las casas que quieras',
+    },
+    alsoIncluded: 'También incluye: %{list}.',
     detail: {
       historyTitle: 'Doce meses de historial',
       historyBody: 'Cada compra que has registrado, un año entero atrás, no solo las últimas semanas.',

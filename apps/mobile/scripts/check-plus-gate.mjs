@@ -105,7 +105,6 @@ const MUST_GATE = [
   'src/app/(tabs)/insights.tsx',
   'src/app/(tabs)/pantry.tsx',
   'src/app/(tabs)/index.tsx',
-  'src/components/plus-card.tsx',
   'src/components/plus-badge.tsx',
   'src/components/create-sheet.tsx',
   // The only Plus feature with its own route, so the only one that can be
@@ -157,48 +156,59 @@ if (!requireBody || !/router\.push\(['"]\/paywall['"]\)/.test(requireBody)) {
   console.log('ok   requirePlus() always opens the paywall');
 }
 
-/* ------------------ 5. the card and the paywall sell the same thing */
+/* -------------------- 5. one description of Plus, and it is complete */
 
 /*
- * Somebody arrives at the paywall from the Plus card, and a shorter or
- * differently-ordered list at the moment of payment reads as a bait-and-switch
- * even when every line is true. The two arrays are separate because one carries
- * bodies and the other does not, so they can drift — and did: the recipe
- * importer was named in the Terms as a Plus feature while appearing in neither.
+ * There used to be two lists — one on the Plus card at the foot of Insights,
+ * one on the paywall — kept in the same order by hand, and this check asserted
+ * they matched. They had already drifted once: the recipe importer was named in
+ * the Terms of Service as a paid feature while appearing in neither, so the app
+ * was contractually selling something it never mentioned.
  *
- * Both lists must also resolve to real copy. This is the same failure that took
- * the paywall down once already, when four `plus.*` keys were renamed and
- * check-locales passed because all seven locales lost them together.
+ * Asserting that two lists agree is the weaker fix. There is now one list
+ * (lib/plus-pillars.ts), the card is gone, and what needs guarding is different:
+ * that every capability in it resolves to real copy, and that nothing quietly
+ * falls out of the grouping. A feature moved into a pillar that no longer
+ * renders would vanish with no test failing.
  */
-const perkIds = (rel) => {
-  const f = files.find((x) => x.rel === rel);
-  if (!f) return null;
-  const block = f.text.match(/\[\s*(\{ icon: '[^']+', id: '[^']+' \},\s*)+\]/)?.[0];
-  return block ? [...block.matchAll(/id: '([^']+)'/g)].map((m) => m[1]) : null;
-};
-const cardPerks = perkIds('src/components/plus-card.tsx');
-const wallPerks = perkIds('src/app/paywall.tsx');
+const pillars = files.find((f) => f.rel === 'src/lib/plus-pillars.ts')?.text ?? null;
 const en = readFileSync(join(SRC, 'i18n/locales/en.ts'), 'utf8');
 
-if (!cardPerks || !wallPerks) {
-  fail('could not read the perk lists', [
-    'Expected an array of { icon, id } literals in plus-card.tsx and paywall.tsx.',
-  ]);
-} else if (cardPerks.join(',') !== wallPerks.join(',')) {
-  fail('the Plus card and the paywall must list the same perks in the same order', [
-    `plus-card.tsx: ${cardPerks.join(', ')}`,
-    `paywall.tsx:   ${wallPerks.join(', ')}`,
-  ]);
+if (!pillars) {
+  fail('lib/plus-pillars.ts is missing', ['It is the only description of what Plus sells.']);
 } else {
-  const orphans = cardPerks.filter(
-    (id) => !en.includes(`${id}Title:`) || !en.includes(`${id}Body:`),
+  const ids = [...pillars.matchAll(/id: '([^']+)' \}/g)].map((m) => m[1]);
+  const pillarIds = [...pillars.matchAll(/^    id: '([^']+)',$/gm)].map((m) => m[1]);
+
+  const orphans = ids.filter((id) => !en.includes(`${id}Title:`) || !en.includes(`${id}Body:`));
+  const headless = pillarIds.filter(
+    (id) => !en.includes(`${id}Title:`) || !en.includes(`${id}Kicker:`),
   );
-  if (orphans.length) {
-    fail('every perk needs plus.detail copy', [
+
+  if (orphans.length || headless.length) {
+    fail('every Plus capability and pillar needs copy', [
       ...orphans.map((id) => `plus.detail.${id}Title / ${id}Body missing from en.ts`),
+      ...headless.map((id) => `plus.pillar.${id}Title / ${id}Kicker missing from en.ts`),
+    ]);
+  } else if (pillarIds.length !== 3) {
+    fail('the carousel expects three pillars', [
+      `Found ${pillarIds.length}: ${pillarIds.join(', ')}. The dots and the copy assume three.`,
     ]);
   } else {
-    console.log(`ok   ${cardPerks.length} perks listed identically, all with copy`);
+    /*
+     * The count is pinned because the Terms of Service enumerates what Plus
+     * includes. Adding a capability here without adding it there — or the
+     * reverse — is the exact divergence that started this check.
+     */
+    const TERMS_COUNT = 10;
+    if (ids.length !== TERMS_COUNT) {
+      fail('Plus must sell exactly what the Terms say it sells', [
+        `lib/plus-pillars.ts lists ${ids.length} capabilities; legal/terms-of-service.md`,
+        `and lib/legal.ts enumerate ${TERMS_COUNT}. Update both, or neither.`,
+      ]);
+    } else {
+      console.log(`ok   ${ids.length} capabilities in 3 pillars, all with copy`);
+    }
   }
 }
 

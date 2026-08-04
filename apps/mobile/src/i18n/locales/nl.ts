@@ -354,6 +354,19 @@ const nl = {
       cheaper: 'Elders goedkoper',
       vibe: 'Vibe Check',
     },
+    pillar: {
+      moneyTitle: 'GELD BESPAREN',
+      moneyKicker: 'Uit de prijzen die je invult',
+      timeTitle: 'TIJD BESPAREN',
+      timeKicker: 'Minder typen, minder ritjes',
+      betterTitle: 'BETER ETEN',
+      betterKicker: 'De samenstelling van je mandje',
+    },
+    also: {
+      recap: 'je weekoverzicht',
+      households: 'zo veel huishoudens als je wilt',
+    },
+    alsoIncluded: 'Ook inbegrepen: %{list}.',
     detail: {
       historyTitle: 'Twaalf maanden geschiedenis',
       historyBody: 'Elke boodschap die je hebt vastgelegd, een heel jaar terug — niet alleen de laatste weken.',

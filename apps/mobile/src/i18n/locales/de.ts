@@ -355,6 +355,19 @@ const de = {
       cheaper: 'Woanders günstiger',
       vibe: 'Vibe-Check',
     },
+    pillar: {
+      moneyTitle: 'GELD SPAREN',
+      moneyKicker: 'Aus den Preisen, die du einträgst',
+      timeTitle: 'ZEIT SPAREN',
+      timeKicker: 'Weniger tippen, weniger Wege',
+      betterTitle: 'BESSER ESSEN',
+      betterKicker: 'Die Zusammensetzung deines Einkaufs',
+    },
+    also: {
+      recap: 'deinen Wochenrückblick',
+      households: 'so viele Haushalte, wie du willst',
+    },
+    alsoIncluded: 'Ebenfalls dabei: %{list}.',
     detail: {
       historyTitle: 'Zwölf Monate Verlauf',
       historyBody: 'Jeder Einkauf, den du erfasst hast – ein ganzes Jahr zurück, nicht nur die letzten Wochen.',
