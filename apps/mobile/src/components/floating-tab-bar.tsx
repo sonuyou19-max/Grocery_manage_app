@@ -239,7 +239,14 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
         </Pressable>
       </View>
 
-      <CreateSheet visible={creating} onClose={() => setCreating(false)} />
+      {/* Clear the whole bar AND the button standing proud of it, plus a gap.
+          The sheet used to cover both, which hid the plus-to-cross rotation it
+          had just triggered — the animation played underneath its own menu. */}
+      <CreateSheet
+        visible={creating}
+        onClose={() => setCreating(false)}
+        bottomClearance={insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + FAB_LIFT + spacing.md}
+      />
     </View>
   );
 }

@@ -289,10 +289,10 @@ const nl = {
     recipeBody: 'Plak een link of de tekst — Korb haalt de ingrediënten eruit',
   },
   range: {
-    week: 'Deze week',
-    month: 'Deze maand',
-    quarter: 'Dit kwartaal',
-    year: 'Dit jaar',
+    week: 'Laatste 7 dagen',
+    month: 'Laatste 30 dagen',
+    quarter: 'Laatste 3 maanden',
+    year: 'Laatste 12 maanden',
     all: 'Alles',
   },
   recipe: {

@@ -290,10 +290,10 @@ const de = {
     recipeBody: 'Link oder Text einfügen — Korb holt die Zutaten heraus',
   },
   range: {
-    week: 'Diese Woche',
-    month: 'Dieser Monat',
-    quarter: 'Dieses Quartal',
-    year: 'Dieses Jahr',
+    week: 'Letzte 7 Tage',
+    month: 'Letzte 30 Tage',
+    quarter: 'Letzte 3 Monate',
+    year: 'Letzte 12 Monate',
     all: 'Gesamt',
   },
   recipe: {

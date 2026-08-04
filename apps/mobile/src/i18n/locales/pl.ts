@@ -336,10 +336,10 @@ const pl = {
     recipeBody: 'Wklej link lub tekst — Korb wyciągnie składniki',
   },
   range: {
-    week: 'Ten tydzień',
-    month: 'Ten miesiąc',
-    quarter: 'Ten kwartał',
-    year: 'Ten rok',
+    week: 'Ostatnie 7 dni',
+    month: 'Ostatnie 30 dni',
+    quarter: 'Ostatnie 3 miesiące',
+    year: 'Ostatnie 12 miesięcy',
     all: 'Cały czas',
   },
   recipe: {

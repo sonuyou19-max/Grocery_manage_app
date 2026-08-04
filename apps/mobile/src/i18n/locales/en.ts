@@ -301,10 +301,10 @@ const en = {
     recipeBody: 'Paste a link or the text — Korb pulls out the ingredients',
   },
   range: {
-    week: 'This week',
-    month: 'This month',
-    quarter: 'This quarter',
-    year: 'This year',
+    week: 'Last 7 days',
+    month: 'Last 30 days',
+    quarter: 'Last 3 months',
+    year: 'Last 12 months',
     all: 'All time',
   },
   recipe: {

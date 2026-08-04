@@ -14,6 +14,7 @@ import Animated, {
 import { GlassView } from '@/components/glass';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { haptics } from '@/lib/haptics';
+import { useDeferUntilClosed } from '@/lib/modal-nav';
 import { usePlusGate } from '@/lib/plus-gate';
 import { useGroceries } from '@/store/groceries';
 import { useT } from '@/store/locale';
@@ -58,7 +59,24 @@ import { radii, spacing, type, useTheme } from '@/theme';
 const OPEN_MS = 220;
 const CLOSE_MS = 160;
 
-export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function CreateSheet({
+  visible,
+  onClose,
+  bottomClearance,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  /**
+   * How much room to leave under the card, in px.
+   *
+   * Passed in rather than imported, because the only honest source for it is the
+   * tab bar's own geometry — and the tab bar renders this component, so reading
+   * its constants from here would be an import cycle. It also has to clear the
+   * create button, which rises above the pill: the sheet sitting over the button
+   * hid the very rotation it was triggering.
+   */
+  bottomClearance: number;
+}) {
   const { colors } = useTheme();
   const t = useT();
   const { addList } = useGroceries();
@@ -97,20 +115,26 @@ export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: (
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
 
+  /*
+   * Both rows leave this screen, and neither may do it while the Modal is still
+   * up — see lib/modal-nav.ts. `mounted` is the Modal's own visibility, so the
+   * queued move runs the instant the sheet is really gone.
+   */
+  const whenClosed = useDeferUntilClosed(mounted);
+
   const openNewList = (name: string) => {
     const id = addList(name);
     setNaming(false);
+    whenClosed(() => router.push({ pathname: '/list/[id]', params: { id } }));
     onClose();
-    router.push({ pathname: '/list/[id]', params: { id } });
   };
 
   const onRecipe = () => {
-    onClose();
     // The gate decides, not this component. `locked` is false for a trial user
     // and for everyone while the tier is switched off, so this row simply works
     // until billing goes live — see lib/plus-gate.ts.
-    if (locked) requirePlus();
-    else router.push('/recipe');
+    whenClosed(locked ? requirePlus : () => router.push('/recipe'));
+    onClose();
   };
 
   return (
@@ -127,7 +151,7 @@ export function CreateSheet({ visible, onClose }: { visible: boolean; onClose: (
         <Pressable style={styles.backdrop} onPress={onClose}>
           {/* Stops a tap on the sheet itself from closing it. */}
           <Pressable onPress={() => {}}>
-            <Animated.View style={[styles.origin, cardStyle]}>
+            <Animated.View style={[styles.origin, { marginBottom: bottomClearance }, cardStyle]}>
             <GlassView radius={radii.lg} style={styles.card}>
               <Text style={[type.h2, { color: colors.ink }]}>{t('create.title')}</Text>
 
@@ -203,7 +227,7 @@ const styles = StyleSheet.create({
   // Bottom centre: where the create button is. Everything scales out of and
   // back into that point.
   origin: { transformOrigin: 'center bottom' },
-  card: { padding: spacing.lg, gap: spacing.md, marginBottom: spacing.xxl },
+  card: { padding: spacing.lg, gap: spacing.md },
   grow: { flex: 1, minWidth: 0 },
   row: {
     flexDirection: 'row',

@@ -289,10 +289,10 @@ const es = {
     recipeBody: 'Pega un enlace o el texto: Korb saca los ingredientes',
   },
   range: {
-    week: 'Esta semana',
-    month: 'Este mes',
-    quarter: 'Este trimestre',
-    year: 'Este año',
+    week: 'Últimos 7 días',
+    month: 'Últimos 30 días',
+    quarter: 'Últimos 3 meses',
+    year: 'Últimos 12 meses',
     all: 'Todo el tiempo',
   },
   recipe: {
