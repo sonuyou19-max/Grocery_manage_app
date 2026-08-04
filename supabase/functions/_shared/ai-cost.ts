@@ -106,12 +106,16 @@ export const FN_CALL_CAPS: Record<string, number> = {
   'quick-add-parse': 120,
   'weekly-recap': 60,
   // The most expensive call in the app — up to 1400 output tokens against
-  // categorize's 160 — so its count cap is the tightest. The per-caller SPEND
-  // cap already stops a runaway at roughly 26 worst-case imports a day; this
-  // sits just under that so the refusal names the reason a human would give
-  // ("you have imported forty recipes today") rather than a budget figure.
-  // Without an entry here it fell through to the 100 default, which is four
-  // times more imports than the money cap would ever allow.
+  // categorize's 160 — so its count cap is the tightest.
+  //
+  // Where the spend cap alone would bite depends entirely on page size: a
+  // maximum-length page reserves ~9,500 micros, so the $0.25 caller cap stops
+  // it at ~26 a day, while a typical recipe page settles near 2,500 and would
+  // run to ~100. Forty sits inside that band, which means a heavy but honest
+  // day gets refused by a limit a person can understand ("forty recipes") in
+  // most cases, rather than by a budget figure that moves with page length.
+  // Without an entry here it fell through to the 100 default — the loosest end
+  // of that range, for the most expensive call.
   'recipe-import': 40,
 };
 
