@@ -142,8 +142,12 @@ export default function PaywallScreen() {
   };
 
   /**
-   * The same nine capabilities the Plus card lists, in the same order, read
-   * from the same keys.
+   * The same capabilities the Plus card lists, in the same order, read from
+   * the same keys.
+   *
+   * Anything added to Plus has to land in BOTH arrays. A capability named in
+   * the Terms but missing here is the divergence that reads as a promise the
+   * paywall did not make — check-plus-gate asserts the two lists match.
    *
    * Kept identical on purpose: somebody arrives here from that card, and a
    * shorter or differently-worded list at the moment of payment reads as a
@@ -154,6 +158,7 @@ export default function PaywallScreen() {
     { icon: 'time-outline', id: 'history' },
     { icon: 'swap-vertical-outline', id: 'moves' },
     { icon: 'trending-down-outline', id: 'cheaper' },
+    { icon: 'restaurant-outline', id: 'recipe' },
     { icon: 'leaf-outline', id: 'eco' },
     { icon: 'pulse-outline', id: 'vibe' },
     { icon: 'file-tray-full-outline', id: 'pantryMix' },

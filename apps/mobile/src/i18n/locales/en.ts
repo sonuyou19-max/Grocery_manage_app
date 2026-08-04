@@ -373,6 +373,8 @@ const en = {
       movesBody: 'That’s Korb comparing the price you typed today against the ones you typed before. Log prices, get answers.',
       cheaperTitle: 'Which shop is cheaper',
       cheaperBody: 'Tag your shop and price when you buy, and Korb tells you where the same item costs you less.',
+      recipeTitle: 'Any recipe, straight to a list',
+      recipeBody: 'Paste a link or the text. Korb pulls out the ingredients, checks them against your pantry and scales them to how many you’re feeding.',
       ecoTitle: 'See your shopping get lighter',
       ecoBody: 'Your climate score, week by week, so you can see whether your basket is actually changing.',
       vibeTitle: 'Pantry Vibe Check, in ten seconds',

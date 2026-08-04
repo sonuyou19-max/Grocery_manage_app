@@ -361,6 +361,8 @@ const nl = {
       movesBody: 'Dat is Korb die de prijs van vandaag vergelijkt met die van eerder. Prijzen invullen, antwoorden krijgen.',
       cheaperTitle: 'Welke winkel is goedkoper',
       cheaperBody: 'Vul winkel en prijs in als je koopt, en Korb vertelt je waar hetzelfde product je minder kost.',
+      recipeTitle: 'Elk recept, meteen op je lijst',
+      recipeBody: 'Plak een link of de tekst. Korb haalt de ingrediënten eruit, vergelijkt ze met je voorraad en rekent ze om naar het aantal porties.',
       ecoTitle: 'Zie je boodschappen lichter worden',
       ecoBody: 'Je klimaatscore, week na week, zodat je ziet of je mandje echt verandert.',
       vibeTitle: 'Voorraad Vibe Check, in tien seconden',

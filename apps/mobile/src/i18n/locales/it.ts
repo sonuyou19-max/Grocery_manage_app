@@ -361,6 +361,8 @@ const it = {
       movesBody: 'È Korb che confronta il prezzo che hai inserito oggi con quelli di prima. Segna i prezzi, ottieni risposte.',
       cheaperTitle: 'Quale negozio costa meno',
       cheaperBody: 'Indica negozio e prezzo quando compri, e Korb ti dice dove lo stesso prodotto ti costa meno.',
+      recipeTitle: 'Qualsiasi ricetta, dritta in lista',
+      recipeBody: 'Incolla un link o il testo. Korb ne estrae gli ingredienti, li confronta con la tua dispensa e li adatta al numero di porzioni.',
       ecoTitle: 'Guarda la tua spesa alleggerirsi',
       ecoBody: 'Il tuo punteggio climatico, settimana per settimana, per vedere se la spesa sta davvero cambiando.',
       vibeTitle: 'Vibe Check della dispensa, in dieci secondi',

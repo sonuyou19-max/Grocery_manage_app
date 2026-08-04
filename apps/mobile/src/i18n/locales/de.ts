@@ -362,6 +362,8 @@ const de = {
       movesBody: 'Das ist Korb, das den heute eingetragenen Preis mit deinen früheren vergleicht. Preise erfassen, Antworten bekommen.',
       cheaperTitle: 'Welcher Laden ist günstiger',
       cheaperBody: 'Trag beim Einkaufen Laden und Preis ein, und Korb sagt dir, wo dich dasselbe Produkt weniger kostet.',
+      recipeTitle: 'Jedes Rezept, direkt auf die Liste',
+      recipeBody: 'Link oder Text einfügen. Korb holt die Zutaten heraus, gleicht sie mit deinem Vorrat ab und rechnet sie auf die Zahl der Portionen um.',
       ecoTitle: 'Sieh deinen Einkauf leichter werden',
       ecoBody: 'Dein Klimawert, Woche für Woche – damit du siehst, ob sich dein Einkauf wirklich ändert.',
       vibeTitle: 'Vorrats-Vibe-Check, in zehn Sekunden',

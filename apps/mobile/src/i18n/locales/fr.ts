@@ -362,6 +362,8 @@ const fr = {
       movesBody: 'C’est Korb qui compare le prix que tu as saisi aujourd’hui à ceux d’avant. Note tes prix, obtiens des réponses.',
       cheaperTitle: 'Quel magasin est le moins cher',
       cheaperBody: 'Indique le magasin et le prix quand tu achètes, et Korb te dit où le même produit te coûte moins.',
+      recipeTitle: 'N’importe quelle recette, direct en liste',
+      recipeBody: 'Colle un lien ou le texte. Korb en sort les ingrédients, les compare à tes placards et les ajuste au nombre de parts.',
       ecoTitle: 'Vois tes courses s’alléger',
       ecoBody: 'Ton score climat, semaine après semaine, pour voir si ton panier change vraiment.',
       vibeTitle: 'Vibe Check du placard, en dix secondes',

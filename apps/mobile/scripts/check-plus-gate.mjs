@@ -107,6 +107,10 @@ const MUST_GATE = [
   'src/app/(tabs)/index.tsx',
   'src/components/plus-card.tsx',
   'src/components/plus-badge.tsx',
+  'src/components/create-sheet.tsx',
+  // The only Plus feature with its own route, so the only one that can be
+  // reached without passing the button that gates it.
+  'src/app/recipe.tsx',
 ];
 const missing = MUST_GATE.filter((rel) => {
   const f = files.find((x) => x.rel === rel);
@@ -121,16 +125,81 @@ if (missing.length) {
   console.log(`ok   all ${MUST_GATE.length} gated surfaces use the shared gate`);
 }
 
-/* ------------------------- 4. the paid tier is reachable to buy */
+/* ------------------------- 4. a locked tap always goes somewhere */
 
+/*
+ * This check used to assert the OPPOSITE: that requirePlus() short-circuits on
+ * billingAvailable() === false, on the reasoning that a paywall which cannot
+ * take money reads as a broken app. Shipping it proved otherwise — on a build
+ * with no store key, tapping Purchase History ran no action and showed no
+ * prompt, which is indistinguishable from a crash.
+ *
+ * Worse, the check kept passing after the behaviour was removed, because it
+ * only looked for the STRING `billingAvailable` and plus-gate.ts still explains
+ * in a comment why it no longer calls it. A guard that a comment can satisfy is
+ * not a guard. So this now asserts the real invariant — requirePlus navigates,
+ * unconditionally — by requiring the router push and forbidding an early return
+ * in front of it.
+ */
 const gate = files.find((f) => f.rel === 'src/lib/plus-gate.ts');
-if (!gate || !/billingAvailable/.test(gate.text)) {
-  fail('the gate must not prompt when there is nothing to sell', [
-    'plus-gate.ts should short-circuit requirePlus() on billingAvailable() === false,',
-    'or every locked tap opens a paywall that cannot take money.',
+const requireBody = gate?.text.match(/const requirePlus = useCallback\(([\s\S]*?)\n  \}, \[/)?.[1];
+if (!requireBody || !/router\.push\(['"]\/paywall['"]\)/.test(requireBody)) {
+  fail('requirePlus() must always open the paywall', [
+    'plus-gate.ts: could not find an unconditional router.push("/paywall") in requirePlus().',
+    'A locked tap that runs no action is indistinguishable from a crash.',
+  ]);
+} else if (/\breturn\b/.test(requireBody)) {
+  fail('requirePlus() must not bail out before navigating', [
+    'plus-gate.ts: requirePlus() contains an early return. The paywall handles having',
+    'no products to sell; silence does not.',
   ]);
 } else {
-  console.log('ok   requirePlus() stays silent when billing is not configured');
+  console.log('ok   requirePlus() always opens the paywall');
+}
+
+/* ------------------ 5. the card and the paywall sell the same thing */
+
+/*
+ * Somebody arrives at the paywall from the Plus card, and a shorter or
+ * differently-ordered list at the moment of payment reads as a bait-and-switch
+ * even when every line is true. The two arrays are separate because one carries
+ * bodies and the other does not, so they can drift — and did: the recipe
+ * importer was named in the Terms as a Plus feature while appearing in neither.
+ *
+ * Both lists must also resolve to real copy. This is the same failure that took
+ * the paywall down once already, when four `plus.*` keys were renamed and
+ * check-locales passed because all seven locales lost them together.
+ */
+const perkIds = (rel) => {
+  const f = files.find((x) => x.rel === rel);
+  if (!f) return null;
+  const block = f.text.match(/\[\s*(\{ icon: '[^']+', id: '[^']+' \},\s*)+\]/)?.[0];
+  return block ? [...block.matchAll(/id: '([^']+)'/g)].map((m) => m[1]) : null;
+};
+const cardPerks = perkIds('src/components/plus-card.tsx');
+const wallPerks = perkIds('src/app/paywall.tsx');
+const en = readFileSync(join(SRC, 'i18n/locales/en.ts'), 'utf8');
+
+if (!cardPerks || !wallPerks) {
+  fail('could not read the perk lists', [
+    'Expected an array of { icon, id } literals in plus-card.tsx and paywall.tsx.',
+  ]);
+} else if (cardPerks.join(',') !== wallPerks.join(',')) {
+  fail('the Plus card and the paywall must list the same perks in the same order', [
+    `plus-card.tsx: ${cardPerks.join(', ')}`,
+    `paywall.tsx:   ${wallPerks.join(', ')}`,
+  ]);
+} else {
+  const orphans = cardPerks.filter(
+    (id) => !en.includes(`${id}Title:`) || !en.includes(`${id}Body:`),
+  );
+  if (orphans.length) {
+    fail('every perk needs plus.detail copy', [
+      ...orphans.map((id) => `plus.detail.${id}Title / ${id}Body missing from en.ts`),
+    ]);
+  } else {
+    console.log(`ok   ${cardPerks.length} perks listed identically, all with copy`);
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

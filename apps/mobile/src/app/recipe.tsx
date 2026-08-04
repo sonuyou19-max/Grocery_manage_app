@@ -19,6 +19,7 @@ import { useToast } from '@/components/toast';
 import { categorizeSync } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { importRecipe, type ImportOutcome } from '@/lib/recipe-import';
+import { usePlusGate } from '@/lib/plus-gate';
 import { looksLikeUrl, type ParsedRecipe, type ReviewRow } from '@/lib/recipe';
 import { useGroceries } from '@/store/groceries';
 import { useT } from '@/store/locale';
@@ -54,12 +55,29 @@ export default function RecipeImportScreen() {
   const { to } = useLocalSearchParams<{ to?: string }>();
   const target = to ? lists.find((l) => l.id === to) : undefined;
   const { showToast } = useToast();
+  const { locked } = usePlusGate();
 
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<ImportOutcome['status'] | null>(null);
   const [recipe, setRecipe] = useState<ParsedRecipe | null>(null);
   const [clip, setClip] = useState<string | null>(null);
+
+  /**
+   * The gate, checked here as well as at the two buttons that open this screen.
+   *
+   * Those buttons already call requirePlus() when locked, so this only fires
+   * for a route reached another way — a deep link, a notification, a restored
+   * navigation state after the trial expired mid-session. Every other Plus
+   * feature is a card inside a gated tab; this is the only one with its own URL,
+   * so it is the only one that needs the check twice.
+   *
+   * replace(), not push(): backing out of the paywall should land wherever the
+   * user was, not on the screen they were not allowed to open.
+   */
+  useEffect(() => {
+    if (locked) router.replace('/paywall');
+  }, [locked]);
 
   /**
    * The clipboard chip is most of this screen's value.

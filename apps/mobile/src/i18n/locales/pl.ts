@@ -421,6 +421,8 @@ const pl = {
       movesBody: 'To Korb porównuje cenę wpisaną dziś z tymi wpisanymi wcześniej. Zapisuj ceny, dostaniesz odpowiedzi.',
       cheaperTitle: 'Który sklep jest tańszy',
       cheaperBody: 'Zaznacz sklep i cenę przy zakupie, a Korb powie Ci, gdzie to samo kosztuje mniej.',
+      recipeTitle: 'Każdy przepis prosto na listę',
+      recipeBody: 'Wklej link albo tekst. Korb wyciągnie składniki, porówna je z Twoją spiżarnią i przeliczy na liczbę porcji.',
       ecoTitle: 'Zobacz, jak Twoje zakupy lżeją',
       ecoBody: 'Twój wynik klimatyczny, tydzień po tygodniu — żeby zobaczyć, czy koszyk naprawdę się zmienia.',
       vibeTitle: 'Vibe Check spiżarni, w dziesięć sekund',

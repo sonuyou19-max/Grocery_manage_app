@@ -105,6 +105,14 @@ export const FN_CALL_CAPS: Record<string, number> = {
   categorize: 400,
   'quick-add-parse': 120,
   'weekly-recap': 60,
+  // The most expensive call in the app — up to 1400 output tokens against
+  // categorize's 160 — so its count cap is the tightest. The per-caller SPEND
+  // cap already stops a runaway at roughly 26 worst-case imports a day; this
+  // sits just under that so the refusal names the reason a human would give
+  // ("you have imported forty recipes today") rather than a budget figure.
+  // Without an entry here it fell through to the 100 default, which is four
+  // times more imports than the money cap would ever allow.
+  'recipe-import': 40,
 };
 
 /**
