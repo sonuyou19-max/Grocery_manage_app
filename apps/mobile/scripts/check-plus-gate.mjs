@@ -59,6 +59,20 @@ const files = sources(SRC).map((f) => ({
   text: readFileSync(f, 'utf8'),
 }));
 
+/**
+ * Source with comments removed, for the two checks below that look for
+ * `gateActive`/`entitled` as CODE.
+ *
+ * Without this, a file that explains — in prose — why it does NOT rebuild the
+ * rule trips the same regex as a file that rebuilds it. lib/recipe-gate.ts hit
+ * this the day it was written: its doc comment discusses `gateActive` being
+ * false when signed out, in the same paragraph as `entitled`, to explain what
+ * the hook deliberately does NOT do. A check that cannot tell "mentions" from
+ * "does" is the same defect as a check a comment can satisfy — just pointed
+ * the other way — and this codebase has now produced one of each.
+ */
+const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
 /* --------------------------------- 1. nobody else rebuilds the rule */
 
 /**
@@ -70,7 +84,9 @@ const files = sources(SRC).map((f) => ({
 const rebuilt = files.filter(
   (f) =>
     !OWNERS.includes(f.rel) &&
-    f.text.split('\n').some((line) => /gateActive/.test(line) && /entitled/.test(line)),
+    code(f.text)
+      .split('\n')
+      .some((line) => /gateActive/.test(line) && /entitled/.test(line)),
 );
 if (rebuilt.length) {
   fail(
@@ -83,7 +99,9 @@ if (rebuilt.length) {
 
 /* ------------------------------- 2. gateActive is not read elsewhere */
 
-const readsGate = files.filter((f) => !OWNERS.includes(f.rel) && /\bgateActive\b/.test(f.text));
+const readsGate = files.filter(
+  (f) => !OWNERS.includes(f.rel) && /\bgateActive\b/.test(code(f.text)),
+);
 if (readsGate.length) {
   fail(
     'gateActive is internal to the gate',
@@ -96,20 +114,16 @@ if (readsGate.length) {
 /* ---------------------------- 3. gated screens go through the hook */
 
 /**
- * Screens known to gate something. Listed explicitly rather than inferred,
- * because the failure this catches is a screen QUIETLY LOSING its gate during
- * an unrelated refactor — and something inferred from the file's own contents
- * would stop noticing at exactly that moment.
+ * Screens known to gate something on Plus alone. Listed explicitly rather
+ * than inferred, because the failure this catches is a screen QUIETLY LOSING
+ * its gate during an unrelated refactor — and something inferred from the
+ * file's own contents would stop noticing at exactly that moment.
  */
 const MUST_GATE = [
   'src/app/(tabs)/insights.tsx',
   'src/app/(tabs)/pantry.tsx',
   'src/app/(tabs)/index.tsx',
   'src/components/plus-badge.tsx',
-  'src/components/create-sheet.tsx',
-  // The only Plus feature with its own route, so the only one that can be
-  // reached without passing the button that gates it.
-  'src/app/recipe.tsx',
 ];
 const missing = MUST_GATE.filter((rel) => {
   const f = files.find((x) => x.rel === rel);
@@ -122,6 +136,64 @@ if (missing.length) {
   );
 } else {
   console.log(`ok   all ${MUST_GATE.length} gated surfaces use the shared gate`);
+}
+
+/* -------------------- 3b. recipe import goes through the STRICTER gate */
+
+/**
+ * The importer needs a signed-out visitor turned away too, which plain
+ * `usePlusGate` cannot answer — `gateActive` is deliberately false when
+ * signed out (every OTHER Plus surface is already behind its own "no user →
+ * teaser" screen before Plus is ever consulted). Recipe import is reached
+ * from a route, not a tab, and it went three sites without that first check:
+ * a signed-out visitor could open and use the importer for free. All three
+ * now go through lib/recipe-gate.ts instead, and this pins that they still
+ * do — a site quietly reverting to bare `usePlusGate` would reintroduce
+ * exactly that hole.
+ */
+const MUST_RECIPE_GATE = [
+  'src/components/create-sheet.tsx',
+  'src/app/list/[id].tsx',
+  // The only Plus feature with its own route, so the only one that can be
+  // reached without passing a button that gates it at all.
+  'src/app/recipe.tsx',
+];
+const missingRecipe = MUST_RECIPE_GATE.filter((rel) => {
+  const f = files.find((x) => x.rel === rel);
+  return !f || !/useRecipeGate/.test(f.text);
+});
+const regressed = MUST_RECIPE_GATE.filter((rel) => {
+  const f = files.find((x) => x.rel === rel);
+  return f && /\busePlusGate\(/.test(f.text);
+});
+if (missingRecipe.length) {
+  fail(
+    'every way into /recipe must go through useRecipeGate',
+    missingRecipe.map((rel) => `${rel} no longer imports useRecipeGate — was the auth check removed?`),
+  );
+} else if (regressed.length) {
+  fail('recipe import must not fall back to the auth-blind gate', [
+    ...regressed.map((rel) => `${rel} calls usePlusGate() directly, alongside useRecipeGate.`),
+    'That is how a signed-out visitor reached the importer for free the first time.',
+  ]);
+} else {
+  console.log(`ok   all ${MUST_RECIPE_GATE.length} ways into /recipe check sign-in AND Plus`);
+}
+
+/*
+ * And the hook itself has to actually compose both primitives — a rewrite
+ * that quietly dropped the `useAuth()` check would satisfy every assertion
+ * above (the import is still there) while reintroducing the exact hole this
+ * whole section exists to close.
+ */
+const recipeGate = files.find((f) => f.rel === 'src/lib/recipe-gate.ts')?.text;
+if (!recipeGate || !/useAuth\(\)/.test(recipeGate) || !/usePlusGate\(\)/.test(recipeGate)) {
+  fail('lib/recipe-gate.ts must compose useAuth() and usePlusGate()', [
+    'Both checks — signed in, and entitled — have to run, in that order, or',
+    'the signed-out bypass comes back with a different call stack.',
+  ]);
+} else {
+  console.log('ok   useRecipeGate checks auth before it checks Plus');
 }
 
 /* ------------------------- 4. a locked tap always goes somewhere */

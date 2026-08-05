@@ -33,7 +33,7 @@ import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
 import { GlassView } from '@/components/glass';
 import { EcoBar } from '@/components/eco-bar';
-import { usePlusGate } from '@/lib/plus-gate';
+import { useRecipeGate } from '@/lib/recipe-gate';
 import { ecoScoreFor } from '@/lib/item-carbon';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ItemSheet } from '@/components/item-sheet';
@@ -82,7 +82,7 @@ export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useTheme();
   const { t, money } = useLocale();
-  const { locked, requirePlus } = usePlusGate();
+  const { openOrRedirect } = useRecipeGate();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem, setClaim, shoppersOnline } = useGroceries();
   const { user } = useAuth();
@@ -364,8 +364,7 @@ export default function ListDetailScreen() {
    */
   const onImport = () => {
     haptics.tick();
-    if (locked) requirePlus();
-    else router.push({ pathname: '/recipe', params: { to: list.id } });
+    openOrRedirect(() => router.push({ pathname: '/recipe', params: { to: list.id } }));
   };
 
   const inviteFamily = async () => {

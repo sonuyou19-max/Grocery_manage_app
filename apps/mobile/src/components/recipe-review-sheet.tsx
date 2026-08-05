@@ -1,10 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { GlassView } from '@/components/glass';
 import { ItemEmoji } from '@/components/item-emoji';
 import { haptics } from '@/lib/haptics';
+import { useDeferUntilClosed } from '@/lib/modal-nav';
 import {
   checkedCount,
   cleanRecipeName,
@@ -27,18 +35,48 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * and the cost of that landing straight in a shopping list — silently, ten
  * wrong rows to delete by hand — is the difference between a feature people
  * trust and one they try once.
+ *
+ * ---------------------------------------------------------------------------
+ * It owns its own exit — and the moment it is truly gone
+ * ---------------------------------------------------------------------------
+ *
+ * This used to be a plain `<Modal visible={recipe != null} animationType=
+ * "slide">`, and the parent found out it had closed by watching `recipe`
+ * flip to null — which happens on the SAME frame the parent asks it to close,
+ * not the frame the native window actually finishes animating away on. Three
+ * times running, that gap is where a navigation landed while the native
+ * window was still on top of the screen it was navigating to: the blank
+ * white cover in the bug reports, gone the instant you tap Back because the
+ * screen underneath was correct the whole time.
+ *
+ * So the Modal's own `visible` is now `mounted`, a LOCAL state this component
+ * drives itself: it flips true the instant `recipe` arrives, and false only
+ * once a JS-timed fade has actually finished playing — the same pattern
+ * create-sheet.tsx uses for the same reason. `onDismissed` fires one frame
+ * after that, via `useDeferUntilClosed` (see lib/modal-nav.ts), which is the
+ * extra beat native needs to tear the window down. A caller that navigates
+ * from `onDismissed` — recipe.tsx does — is navigating into a screen that has
+ * genuinely already replaced this one, not one still fading out on top of it.
  */
 export function RecipeReviewSheet({
   recipe,
   mode,
   onClose,
   onConfirm,
+  onDismissed,
 }: {
   recipe: ParsedRecipe | null;
   /** `create` names a new list; `append` adds to the one already open. */
   mode: 'create' | 'append';
   onClose: () => void;
   onConfirm: (name: string, rows: ReviewRow[]) => void;
+  /**
+   * Fires once this sheet has ACTUALLY closed — its own exit animation done,
+   * one more frame for the native window. Fires for every close, cancel or
+   * confirm alike; the caller decides whether that means "go somewhere" or
+   * "nothing to do", exactly like `onConfirm` already decides what to write.
+   */
+  onDismissed?: () => void;
 }) {
   const { colors } = useTheme();
   const t = useT();
@@ -47,6 +85,44 @@ export function RecipeReviewSheet({
   const [name, setName] = useState('');
   const [servings, setServings] = useState<number | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
+
+  /** Long enough to read as a movement, short enough not to sit in the way. */
+  const OPEN_MS = 220;
+  const CLOSE_MS = 160;
+  const open = recipe != null;
+  const [mounted, setMounted] = useState(open);
+  const progress = useSharedValue(open ? 1 : 0);
+  const whenReallyClosed = useDeferUntilClosed(mounted);
+  // The prop, not captured directly in the effect below: `onDismissed` is a
+  // fresh arrow function on the parent's every render, and putting it in that
+  // effect's deps would re-arm the queued action on every one of them while
+  // the sheet sits open. A ref always holds the latest without doing that.
+  const onDismissedRef = useRef(onDismissed);
+  onDismissedRef.current = onDismissed;
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      progress.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
+      // Armed on every open, not once: `whenClosed` only remembers the LATEST
+      // action, and each open needs its own turn to report back when it ends.
+      whenReallyClosed(() => onDismissedRef.current?.());
+    } else {
+      progress.value = withTiming(
+        0,
+        { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) },
+        (done) => {
+          if (done) runOnJS(setMounted)(false);
+        },
+      );
+    }
+  }, [open, progress, whenReallyClosed]);
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: (1 - progress.value) * 32 }],
+  }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
 
   // Re-seed whenever a new recipe arrives. Keyed on the object identity rather
   // than its contents: a second import of the same URL is still a fresh start.
@@ -100,9 +176,19 @@ export function RecipeReviewSheet({
   };
 
   return (
-    <Modal visible={recipe != null} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={mounted}
+      transparent
+      // "none": the fade/slide below IS the transition, JS-driven so we know
+      // exactly when it finishes. RN's own "slide" would run underneath it,
+      // the two would fight, and we'd be back to not knowing when it's done.
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <Animated.View style={[StyleSheet.absoluteFill, styles.dim, backdropStyle]} />
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable onPress={() => {}}>
+          <Animated.View style={sheetStyle}>
           <GlassView radius={radii.lg} style={styles.card}>
             <View style={styles.grabber} />
 
@@ -202,6 +288,7 @@ export function RecipeReviewSheet({
               </Text>
             </Pressable>
           </GlassView>
+          </Animated.View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -228,7 +315,10 @@ function Stepper({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(12,18,10,0.45)', justifyContent: 'flex-end' },
+  // Its own layer so it can fade with the card instead of snapping on and off
+  // with the Modal window.
+  dim: { backgroundColor: 'rgba(12,18,10,0.45)' },
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
   card: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,

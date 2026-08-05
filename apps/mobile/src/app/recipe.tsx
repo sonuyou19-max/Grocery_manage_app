@@ -4,7 +4,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  InteractionManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +19,7 @@ import { useToast } from '@/components/toast';
 import { categorizeSync } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { importRecipe, type ImportOutcome } from '@/lib/recipe-import';
-import { usePlusGate } from '@/lib/plus-gate';
+import { useRecipeGate } from '@/lib/recipe-gate';
 import { looksLikeUrl, type ParsedRecipe, type ReviewRow } from '@/lib/recipe';
 import { useGroceries } from '@/store/groceries';
 import { useT } from '@/store/locale';
@@ -56,7 +55,7 @@ export default function RecipeImportScreen() {
   const { to } = useLocalSearchParams<{ to?: string }>();
   const target = to ? lists.find((l) => l.id === to) : undefined;
   const { showToast } = useToast();
-  const { locked } = usePlusGate();
+  const { redirectIfBlocked } = useRecipeGate();
 
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -69,18 +68,18 @@ export default function RecipeImportScreen() {
   /**
    * The gate, checked here as well as at the two buttons that open this screen.
    *
-   * Those buttons already call requirePlus() when locked, so this only fires
-   * for a route reached another way — a deep link, a notification, a restored
-   * navigation state after the trial expired mid-session. Every other Plus
-   * feature is a card inside a gated tab; this is the only one with its own URL,
-   * so it is the only one that needs the check twice.
-   *
-   * replace(), not push(): backing out of the paywall should land wherever the
-   * user was, not on the screen they were not allowed to open.
+   * Those buttons already redirect via `useRecipeGate` when blocked, so this
+   * only fires for a route reached another way — a deep link, a notification,
+   * a restored navigation state after the trial expired mid-session, or a
+   * visitor who was never signed in at all. Every other Plus feature is a card
+   * inside a gated tab; this is the only one with its own URL, so it is the
+   * only one that needs the check twice. `redirectIfBlocked` picks sign-in vs
+   * paywall itself — see lib/recipe-gate.ts for why those are two different
+   * questions with two different destinations.
    */
   useEffect(() => {
-    if (locked) router.replace('/paywall');
-  }, [locked]);
+    redirectIfBlocked();
+  }, [redirectIfBlocked]);
 
   /**
    * The clipboard chip is most of this screen's value.
@@ -136,23 +135,24 @@ export default function RecipeImportScreen() {
    * Why this does not navigate here
    * -------------------------------------------------------------------------
    *
-   * It used to, and it landed on a blank white screen. Two separate faults, and
-   * fixing either alone would have left the other:
+   * It used to, and it landed on a blank white screen — three times running,
+   * the third of which survived an earlier fix aimed at this exact function.
+   * That fix waited for `InteractionManager.runAfterInteractions` before
+   * moving, on the theory that it would wait out the sheet's dismissal. It
+   * doesn't: RN's built-in `<Modal>` animation is native-driven and registers
+   * no interaction handle at all, so the callback could fire on the very next
+   * frame — before the native window had actually gone. The real fix lives in
+   * RecipeReviewSheet now: it drives its own JS-timed exit animation and only
+   * reports `onDismissed` a frame after the Modal's `visible` prop has
+   * genuinely gone false. `onReviewDismissed` below is what that callback
+   * runs, and it is the only thing in this file allowed to navigate out of a
+   * closed sheet.
    *
-   *   The review sheet is a react-native <Modal>, which on Android is its own
-   *   native window. `setRecipe(null)` and `router.replace(...)` batch into one
-   *   commit, so the screen underneath was being torn down and replaced while
-   *   that window was still dismissing. The stack lands, the modal window is
-   *   still on top of it, and what you see is the empty window.
-   *
-   *   For the ?to= case it was also navigating to a route already in the stack.
-   *   Coming from a list, the stack is [tabs, list/X, recipe]; replacing the top
-   *   with list/X gives two entries with the same key, and the duplicate renders
-   *   nothing.
-   *
-   * So: unmount the sheet, wait for it to be gone, and only then move — and for
-   * an append, don't move at all. Going back to the list the user was already
-   * looking at is both the correct stack operation and what they asked for.
+   * For the ?to= case there was a second, independent fault: navigating to a
+   * route already in the stack. Coming from a list, the stack is
+   * [tabs, list/X, recipe]; replacing the top with list/X gives two entries
+   * with the same key, and the duplicate renders nothing. That's why append
+   * goes `back()` rather than `replace()` — see `onReviewDismissed`.
    */
   const onConfirm = (name: string, rows: ReviewRow[]) => {
     const id = target?.id ?? addList(name);
@@ -167,29 +167,33 @@ export default function RecipeImportScreen() {
       else addParsedItem(id, parsed);
     }
     showToast(t('recipe.added', { count: rows.length, list: target?.name ?? name }));
-    // Same commit: the Modal unmounts, and the effect below picks up the move.
-    setRecipe(null);
+    // Remembered for onReviewDismissed, which fires once the sheet is truly
+    // gone — not on this commit, and not on a guess about how long that takes.
     setLeaving({ id, append: target != null });
+    setRecipe(null);
   };
 
-  useEffect(() => {
+  /**
+   * Runs once RecipeReviewSheet reports it has actually closed — see its own
+   * header comment for what "actually" means and why the old mechanism here
+   * was not enough. Fires on EVERY close, including a plain cancel, which is
+   * why `leaving` being null (nothing was confirmed) is the ordinary case and
+   * not an error: this function simply has nothing to do then.
+   */
+  const onReviewDismissed = () => {
     if (!leaving) return;
-    // The effect already runs after the commit that unmounted the Modal; this
-    // additionally waits out its dismissal animation, which is the part Android
-    // does on its own schedule.
-    const task = InteractionManager.runAfterInteractions(() => {
-      if (leaving.append) {
-        // Back to the list that opened this. It re-reads the store on render,
-        // so the imported rows are simply there.
-        router.back();
-      } else {
-        // replace, not push: backing out of a list built from an import should
-        // reach the app, not the import screen it came from.
-        router.replace({ pathname: '/list/[id]', params: { id: leaving.id } });
-      }
-    });
-    return () => task.cancel();
-  }, [leaving]);
+    const { id, append } = leaving;
+    setLeaving(null);
+    if (append) {
+      // Back to the list that opened this. It re-reads the store on render,
+      // so the imported rows are simply there.
+      router.back();
+    } else {
+      // replace, not push: backing out of a list built from an import should
+      // reach the app, not the import screen it came from.
+      router.replace({ pathname: '/list/[id]', params: { id } });
+    }
+  };
 
   const busy = phase !== 'idle';
 
@@ -284,6 +288,7 @@ export default function RecipeImportScreen() {
         mode={target ? 'append' : 'create'}
         onClose={() => setRecipe(null)}
         onConfirm={onConfirm}
+        onDismissed={onReviewDismissed}
       />
     </View>
   );

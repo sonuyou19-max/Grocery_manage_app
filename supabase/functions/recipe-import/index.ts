@@ -243,6 +243,13 @@ const SYSTEM_PROMPT = `You extract the shopping-relevant parts of a recipe.
 Return ONLY a JSON object, no prose, no code fences:
 {"name": "...", "servings": 4, "items": [{"name": "...", "quantity": 2, "unit": "g"}]}
 
+Write every name — the dish and every ingredient — in the SAME LANGUAGE the
+source is written in. These instructions are in English; that is not a
+signal to answer in English. A French page produces French output, a German
+video description produces German output. NEVER translate: the person who
+wrote "poireaux" is going to look for "poireaux" on the shelf, and English
+would send them looking for the wrong word in the wrong aisle.
+
 name is the dish, as a person would write it on a shopping list. Strip the
 website's own name, "Recipe", and any SEO padding. Keep it under 60 characters.
 
@@ -250,8 +257,10 @@ servings is the number the recipe makes, or null if it does not say. Never guess
 
 items is the ingredient list, one entry per ingredient:
 - name is the SHOPPING name, not the recipe phrasing: "1 large onion, finely
-  diced" -> "Onion". Drop preparation ("chopped", "at room temperature"), drop
-  size adjectives, keep the thing you buy. Singular where natural.
+  diced" -> "Onion" (or, from a French source, "1 gros oignon, émincé" ->
+  "Oignon" — same operation, source language kept). Drop preparation
+  ("chopped", "at room temperature"), drop size adjectives, keep the thing you
+  buy. Singular where natural.
 - quantity is a number, or null when the recipe gives none ("salt to taste",
   "a handful of parsley"). Convert fractions and ranges to a single number:
   "1 1/2" -> 1.5, "2-3" -> 3. Never invent one.
@@ -427,4 +436,5 @@ export const __test = {
   pageTitle,
   scrapeJsonLd,
   jsonAfter,
+  SYSTEM_PROMPT,
 };

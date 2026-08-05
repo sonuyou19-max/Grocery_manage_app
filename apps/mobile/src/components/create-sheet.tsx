@@ -15,7 +15,7 @@ import { GlassView } from '@/components/glass';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { haptics } from '@/lib/haptics';
 import { useDeferUntilClosed } from '@/lib/modal-nav';
-import { usePlusGate } from '@/lib/plus-gate';
+import { useRecipeGate } from '@/lib/recipe-gate';
 import { useGroceries } from '@/store/groceries';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -80,7 +80,7 @@ export function CreateSheet({
   const { colors } = useTheme();
   const t = useT();
   const { addList } = useGroceries();
-  const { locked, requirePlus } = usePlusGate();
+  const { openOrRedirect } = useRecipeGate();
   const [naming, setNaming] = useState(false);
   /*
    * The Modal has to outlive `visible` so the closing animation has something
@@ -130,10 +130,10 @@ export function CreateSheet({
   };
 
   const onRecipe = () => {
-    // The gate decides, not this component. `locked` is false for a trial user
-    // and for everyone while the tier is switched off, so this row simply works
-    // until billing goes live — see lib/plus-gate.ts.
-    whenClosed(locked ? requirePlus : () => router.push('/recipe'));
+    // The gate decides, not this component. `blocked` is false for a trial
+    // user and for everyone while the tier is switched off, so this row simply
+    // works until billing goes live — see lib/recipe-gate.ts.
+    whenClosed(() => openOrRedirect(() => router.push('/recipe')));
     onClose();
   };
 

@@ -342,5 +342,23 @@ assert(
   !__test.visibleText(ytPage(desc)).includes('coconut milk'),
 );
 
+/* ------------------------------------------------------------- language */
+
+// A French page came back with English item names — the model defaulted to
+// the prompt's own language, since nothing told it not to. Cannot test model
+// behaviour from here, but the instruction it depends on can be pinned so it
+// cannot be edited away without this failing.
+assert(
+  'the prompt forbids translating names into another language',
+  /same language/i.test(__test.SYSTEM_PROMPT) && /NEVER translate/.test(__test.SYSTEM_PROMPT),
+);
+// The one worked example in the prompt used to be English-only, which is
+// itself a few-shot nudge toward English output even alongside a rule saying
+// not to. A second example in another language pulls in the other direction.
+assert(
+  'the worked example demonstrates a non-English source, not just an English one',
+  /oignon/i.test(__test.SYSTEM_PROMPT),
+);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

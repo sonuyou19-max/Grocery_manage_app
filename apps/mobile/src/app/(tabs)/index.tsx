@@ -48,7 +48,7 @@ export default function ListsScreen() {
   const { household, members, myName } = useHousehold();
   const { user } = useAuth();
   // Shared with Insights and the Pantry — see lib/plus-gate.ts.
-  const { guard } = usePlusGate();
+  const { locked } = usePlusGate();
   const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
   const vibeVariant = vibeEmptyVariant();
@@ -163,19 +163,25 @@ export default function ListsScreen() {
 
         {/* Signed out there is no pantry to report on, and the empty branch below
             would cheerfully claim "nothing running low" about one that does not
-            exist. The weekly builder needs no such guard — it renders only when
-            it has suggestions, and a guest has none.
+            exist.
 
-            Plus gates this by PROMPTING, not hiding. The card's own subtitle
-            says how many items are low, so its value is legible from the
-            outside — removing it would read as the app having lost a feature
-            rather than as a feature being for sale. `guard` runs the push when
-            unlocked and opens the paywall when not; both branches live in one
-            place so they cannot be written the wrong way round here. */}
+            Plus gates BOTH of these by HIDING, not prompting — a deliberate
+            reversal of the read this card used to get. The reasoning was that
+            the subtitle already says how many items are low, so the value was
+            "legible from the outside" and removing it would read as a lost
+            feature. In practice that legible subtitle IS pantry prediction —
+            the very thing behind the paywall — delivered for free to an
+            account that has not paid for it, prompt or no prompt beneath it.
+            A free account simply does not see either card now, which is the
+            same shape as the pantry mix and staples cards on Insights: a
+            locked shell reads worse than absence for something this specific.
+            See lib/plus-gate.ts for where the "hide vs prompt" call is made
+            for every other Plus surface. */}
         {!editing &&
           user &&
+          !locked &&
           (vibeCount > 0 ? (
-            <Pressable onPress={guard(() => router.push('/vibe-check'))}>
+            <Pressable onPress={() => router.push('/vibe-check')}>
               <Card accented>
                 <View style={styles.vibeRow}>
                   <Text style={styles.vibeEmoji}>☕️</Text>
@@ -208,7 +214,11 @@ export default function ListsScreen() {
             </Card>
           ))}
 
-        {!editing && suggestions.length > 0 && (
+        {/* Same reasoning, and the gap this one was missing entirely: it had
+            no gate of any kind before this. Built from the identical pantry
+            prediction the Vibe Check card reports on, so the two now agree —
+            not just in what they show, but in whether they show at all. */}
+        {!editing && !locked && suggestions.length > 0 && (
           <Pressable
             onPress={() => setBuilderOpen(true)}
             style={[styles.buildRow, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}

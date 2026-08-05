@@ -40,14 +40,25 @@ import { useEntitlement } from '@/store/entitlement';
  *
  *   HIDE      The card is not rendered. For things that are meaningless
  *             without the data behind them — a pantry mix with nothing in it,
- *             a staples list of nothing. A locked shell would be worse than
- *             absence.
+ *             a staples list of nothing — AND for things whose "meaningless
+ *             without the data" teaser turned out to BE the paid data. The
+ *             dashboard's Vibe Check card and weekly-list builder used to be
+ *             the PROMPT example below: the reasoning was that the subtitle
+ *             ("2 items to review") made the card's value legible without
+ *             Plus. It shipped, and the subtitle WAS the pantry prediction —
+ *             free accounts got the paid feature's output with a paywall
+ *             stapled underneath it, prompt or not. Both are HIDE now.
  *
  *   PROMPT    The card stays, tapping it calls requirePlus(). For things whose
- *             VALUE IS VISIBLE FROM THE OUTSIDE: the Vibe Check card still
- *             says how many items are low, an item still shows it has a
- *             history. Removing those would look like the app forgot a feature
- *             rather than that a feature is for sale.
+ *             VALUE IS VISIBLE FROM THE OUTSIDE WITHOUT REVEALING THE PAID
+ *             DATA ITSELF — an item still shows it has a history (not what's
+ *             in it), Insights' spend chart still exists (just narrower).
+ *             Removing those would look like the app forgot a feature rather
+ *             than that a feature is for sale. The test that actually matters
+ *             is that one: does the visible-while-locked part require having
+ *             already computed the thing behind the paywall? If showing the
+ *             teaser means showing the prediction, it is HIDE, not PROMPT —
+ *             which is exactly the distinction the Vibe Check card missed.
  *
  *   NARROW    Show less of the same thing, silently. Only the history window
  *             does this, and only because five weeks of your own spending is a

@@ -88,6 +88,13 @@ export type AddOutcome = 'added' | 'revived' | 'already';
 
 interface GroceriesContext {
   lists: List[];
+  /**
+   * Has the FAST local read finished — AsyncStorage for a guest, the cloud
+   * cache-first read for a signed-in one? Not the network fetch behind it;
+   * see _layout.tsx for why waiting only for this, rather than for a live
+   * Supabase round trip, is the deliberate choice.
+   */
+  loaded: boolean;
   addList: (name: string) => string;
   deleteList: (listId: string) => void;
   reorderLists: (orderedIds: string[]) => void;
@@ -198,6 +205,17 @@ const LOCAL_KEY = 'korb.lists.v2';
 function LocalGroceriesProvider({ children }: PropsWithChildren) {
   const [lists, setLists] = useState<List[]>([]);
   const hydrated = useRef(false);
+  /**
+   * The externally-visible twin of `hydrated`.
+   *
+   * Not the same thing rewritten twice: `hydrated` is read INSIDE the save
+   * effect below, synchronously, to skip a write that would happen before the
+   * read — a ref is the right tool there because that check must not itself
+   * cause a re-render. `loaded` is read BY OTHER COMPONENTS (the splash gate
+   * in _layout.tsx) as ordinary render data, which categorically needs state.
+   * Both are set together, in the same callback, so they cannot drift.
+   */
+  const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -211,6 +229,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       .catch(() => {})
       .finally(() => {
         hydrated.current = true;
+        setLoaded(true);
       });
   }, []);
 
@@ -271,30 +290,65 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
   }, []);
 
   /**
+   * The AI upgrade a plain `categorizeSync` couldn't give at add time.
+   *
+   * Split out of `addItem` so `insertParsed` — quick-add, pantry re-adds, and
+   * now the recipe importer — can call it too. It used to be `addItem`'s
+   * alone: a hand-typed "leek" got the AI's answer and taught the shared
+   * lexicon what a leek looks like; an imported "Poireaux" landed in "Other"
+   * forever and taught it nothing, because the exact same three lines had
+   * only ever been written once.
+   */
+  const resolveIfUnknown = useCallback(
+    (listId: string, itemId: string, name: string, category: ItemCategory) => {
+      if (category !== 'other' || isKnown(name)) return;
+      resolveCategoryAsync(name).then((res) => {
+        if (!res || res.category === 'other') return;
+        patchItem(listId, itemId, { category: res.category });
+        // The real category may bring a unit with it — either the model's own
+        // answer or the category default now that we know the category. Only
+        // if the row still has none: the AI takes seconds to come back, and by
+        // then the user may have set one in the item sheet.
+        fillUnitIfEmpty(listId, itemId, seedUnit(name, res.category, res.unit, null));
+        void learnCategory(name, res.category);
+      });
+    },
+    [patchItem, fillUnitIfEmpty],
+  );
+
+  /**
    * Insert a structured item. Shared by quick-add and the pantry/vibe adds so
    * they enrich and remember identically.
    */
-  const insertParsed = useCallback((listId: string, p: ParsedItem) => {
-    // The AI sets quantity/unit from the sentence; fall back to remembered
-    // usuals for anything it left blank, and always prefill the usual store
-    // (which the AI never parses).
-    const usual = recallItemDetails(p.name);
-    const opts = {
-      quantity: p.quantity ?? usual?.quantity ?? null,
-      unit: seedUnit(p.name, p.category, p.unit, usual?.unit),
-      store: usual?.store ?? null,
-    };
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId ? { ...l, items: [...l.items, newItem(p.name, p.category, opts)] } : l,
-      ),
-    );
-    rememberItemList(p.name, listId);
-  }, []);
+  const insertParsed = useCallback(
+    (listId: string, p: ParsedItem) => {
+      // The AI sets quantity/unit from the sentence; fall back to remembered
+      // usuals for anything it left blank, and always prefill the usual store
+      // (which the AI never parses).
+      const usual = recallItemDetails(p.name);
+      const opts = {
+        quantity: p.quantity ?? usual?.quantity ?? null,
+        unit: seedUnit(p.name, p.category, p.unit, usual?.unit),
+        store: usual?.store ?? null,
+      };
+      const id = uuidv4();
+      setLists((prev) =>
+        prev.map((l) =>
+          l.id === listId
+            ? { ...l, items: [...l.items, { ...newItem(p.name, p.category, opts), id }] }
+            : l,
+        ),
+      );
+      rememberItemList(p.name, listId);
+      resolveIfUnknown(listId, id, p.name, p.category);
+    },
+    [resolveIfUnknown],
+  );
 
   const value = useMemo<GroceriesContext>(
     () => ({
       lists,
+      loaded,
       addList: (name) => {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
@@ -329,18 +383,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
           ),
         );
         rememberItemList(clean, listId);
-        if (category === 'other' && !isKnown(clean)) {
-          resolveCategoryAsync(clean).then((res) => {
-            if (!res || res.category === 'other') return;
-            patchItem(listId, id, { category: res.category });
-            // The real category may bring a unit with it — either the model's
-            // own answer or the category default now that we know the category.
-            // Only if the row still has none: the AI takes seconds to come
-            // back, and by then the user may have set one in the item sheet.
-            fillUnitIfEmpty(listId, id, seedUnit(clean, res.category, res.unit, null));
-            void learnCategory(clean, res.category);
-          });
-        }
+        resolveIfUnknown(listId, id, clean, category);
         return id;
       },
       addParsedItem: (listId, p) => insertParsed(listId, p),
@@ -388,7 +431,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       setClaim: () => {},
       shoppersOnline: EMPTY_SHOPPERS,
     }),
-    [lists, patchItem, setChecked, insertParsed],
+    [lists, loaded, patchItem, setChecked, insertParsed, resolveIfUnknown],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -567,6 +610,16 @@ function CloudGroceriesProvider({
   const [shoppers, setShoppers] = useState<string[]>(EMPTY_SHOPPERS);
   const cacheKey = `korb.lists.cloud.${householdId}`;
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * True once the CACHE read below has resolved — cache first for instant
+   * paint, same as the fetch effect's own comment says. Deliberately not tied
+   * to `fetchLists()`, the live network call: the splash gate in _layout.tsx
+   * reads this, and making a launch wait on a network round trip would trade
+   * a sub-second rendering bug for a screen that can hang on a bad connection.
+   * A stale cached list for one extra second is the honest trade; an
+   * indefinite splash is not.
+   */
+  const [loaded, setLoaded] = useState(false);
 
   const applyServer = useCallback(
     (rows: DbList[]) => {
@@ -626,7 +679,13 @@ function CloudGroceriesProvider({
       .then((raw) => {
         if (alive && raw) setLists(JSON.parse(raw) as List[]);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        // Loaded either way — an empty cache is still an answer, not a
+        // reason to keep the splash up waiting for one that will never come
+        // if this household genuinely has no lists yet.
+        if (alive) setLoaded(true);
+      });
     if (!appActive) return () => { alive = false; };
 
     // Bring a guest's lists across on the first cloud mount, then reload so the
@@ -704,6 +763,43 @@ function CloudGroceriesProvider({
     );
   }, []);
 
+  /**
+   * The AI upgrade a plain `categorizeSync` couldn't give at add time. See the
+   * same helper in the local store for why this has to be shared rather than
+   * `addItem`'s alone — an imported item bypassing it was exactly the bug.
+   *
+   * `addTimeUnit` is the unit already computed (and already written) when the
+   * row was first inserted. Passed in rather than re-read, purely so the DB
+   * update below can skip itself when we already know it would be a no-op —
+   * the `.is('unit', null)` guard makes that safe either way, this just saves
+   * the round trip.
+   */
+  const resolveIfUnknown = useCallback(
+    (listId: string, itemId: string, name: string, category: ItemCategory, addTimeUnit: string | null) => {
+      if (category !== 'other' || isKnown(name)) return;
+      resolveCategoryAsync(name).then((res) => {
+        if (!res || res.category === 'other') return;
+        patchLocalItem(listId, itemId, { category: res.category });
+        void supabase.from('list_items').update({ category: res.category }).eq('id', itemId);
+        // See the local store: only when the row still has no unit, since the
+        // user may have picked one while the call was in flight. The
+        // `is('unit', null)` on the update is the same guard applied to the
+        // row another member might have edited from their phone.
+        const learnedUnit = seedUnit(name, res.category, res.unit, null);
+        if (learnedUnit && addTimeUnit == null) {
+          fillUnitIfEmpty(listId, itemId, learnedUnit);
+          void supabase
+            .from('list_items')
+            .update({ unit: learnedUnit })
+            .eq('id', itemId)
+            .is('unit', null);
+        }
+        void learnCategory(name, res.category);
+      });
+    },
+    [patchLocalItem, fillUnitIfEmpty],
+  );
+
   const setCheckedLocal = useCallback((listId: string, itemId: string, checked: boolean) => {
     setLists((prev) =>
       prev.map((l) =>
@@ -768,10 +864,12 @@ function CloudGroceriesProvider({
           recoverFrom(error);
         });
       rememberItemList(p.name, listId);
+      resolveIfUnknown(listId, id, p.name, p.category, unit);
     };
 
     return {
       lists,
+      loaded,
       addList: (name) => {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
@@ -837,27 +935,7 @@ function CloudGroceriesProvider({
             recoverFrom(error);
           });
         rememberItemList(clean, listId);
-        if (category === 'other' && !isKnown(clean)) {
-          resolveCategoryAsync(clean).then((res) => {
-            if (!res || res.category === 'other') return;
-            patchLocalItem(listId, id, { category: res.category });
-            void supabase.from('list_items').update({ category: res.category }).eq('id', id);
-            // See the local backend: only when the row still has no unit, since
-            // the user may have picked one while the call was in flight. The
-            // `is('unit', null)` on the update is the same guard applied to the
-            // row another member might have edited from their phone.
-            const learnedUnit = seedUnit(clean, res.category, res.unit, null);
-            if (learnedUnit && unit == null) {
-              fillUnitIfEmpty(listId, id, learnedUnit);
-              void supabase
-                .from('list_items')
-                .update({ unit: learnedUnit })
-                .eq('id', id)
-                .is('unit', null);
-            }
-            void learnCategory(clean, res.category);
-          });
-        }
+        resolveIfUnknown(listId, id, clean, category, unit);
         return id;
       },
       addParsedItem: (listId, p) => insertParsed(listId, p),
@@ -958,7 +1036,18 @@ function CloudGroceriesProvider({
       },
       shoppersOnline: shoppers,
     };
-  }, [lists, shoppers, householdId, user, patchLocalItem, setCheckedLocal, scheduleRefetch, recoverFrom]);
+  }, [
+    lists,
+    loaded,
+    shoppers,
+    householdId,
+    user,
+    patchLocalItem,
+    setCheckedLocal,
+    scheduleRefetch,
+    recoverFrom,
+    resolveIfUnknown,
+  ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
