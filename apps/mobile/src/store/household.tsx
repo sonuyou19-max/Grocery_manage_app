@@ -98,18 +98,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   /** Members of every household the user belongs to, keyed by household id. */
   const [byHousehold, setByHousehold] = useState<Record<string, Member[]>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
-  /**
-   * Starts true, not false.
-   *
-   * `refresh()` only flips this once IT decides to — on mount, that decision
-   * hasn't run yet, so a default of `false` claimed "not loading" about data
-   * nobody had asked for. Nothing read this flag when that shipped, so it
-   * went unnoticed; it matters now because the splash screen (_layout.tsx)
-   * uses it to know when the dashboard is safe to reveal, and a flag that
-   * lies on the very first render is exactly the kind of lie a "wait until
-   * ready" gate cannot survive.
-   */
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   // Signature of the last-applied data, so background polling only re-renders
   // when something actually changed.
   const sigRef = useRef<string>('');
@@ -138,10 +127,6 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       sigRef.current = '';
       setHouseholds([]);
       setByHousehold({});
-      // There is nothing to wait for, but the flag still has to resolve — a
-      // signed-out visitor stuck at `loading: true` forever is worse than the
-      // bug this default was fixed to prevent.
-      setLoading(false);
       return;
     }
     setLoading(true);

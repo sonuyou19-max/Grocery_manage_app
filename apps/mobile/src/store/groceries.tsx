@@ -88,13 +88,6 @@ export type AddOutcome = 'added' | 'revived' | 'already';
 
 interface GroceriesContext {
   lists: List[];
-  /**
-   * Has the FAST local read finished — AsyncStorage for a guest, the cloud
-   * cache-first read for a signed-in one? Not the network fetch behind it;
-   * see _layout.tsx for why waiting only for this, rather than for a live
-   * Supabase round trip, is the deliberate choice.
-   */
-  loaded: boolean;
   addList: (name: string) => string;
   deleteList: (listId: string) => void;
   reorderLists: (orderedIds: string[]) => void;
@@ -205,17 +198,6 @@ const LOCAL_KEY = 'korb.lists.v2';
 function LocalGroceriesProvider({ children }: PropsWithChildren) {
   const [lists, setLists] = useState<List[]>([]);
   const hydrated = useRef(false);
-  /**
-   * The externally-visible twin of `hydrated`.
-   *
-   * Not the same thing rewritten twice: `hydrated` is read INSIDE the save
-   * effect below, synchronously, to skip a write that would happen before the
-   * read — a ref is the right tool there because that check must not itself
-   * cause a re-render. `loaded` is read BY OTHER COMPONENTS (the splash gate
-   * in _layout.tsx) as ordinary render data, which categorically needs state.
-   * Both are set together, in the same callback, so they cannot drift.
-   */
-  const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -229,7 +211,6 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       .catch(() => {})
       .finally(() => {
         hydrated.current = true;
-        setLoaded(true);
       });
   }, []);
 
@@ -348,7 +329,6 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
   const value = useMemo<GroceriesContext>(
     () => ({
       lists,
-      loaded,
       addList: (name) => {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
@@ -431,7 +411,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       setClaim: () => {},
       shoppersOnline: EMPTY_SHOPPERS,
     }),
-    [lists, loaded, patchItem, setChecked, insertParsed, resolveIfUnknown],
+    [lists, patchItem, setChecked, insertParsed, resolveIfUnknown],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -610,16 +590,6 @@ function CloudGroceriesProvider({
   const [shoppers, setShoppers] = useState<string[]>(EMPTY_SHOPPERS);
   const cacheKey = `korb.lists.cloud.${householdId}`;
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /**
-   * True once the CACHE read below has resolved — cache first for instant
-   * paint, same as the fetch effect's own comment says. Deliberately not tied
-   * to `fetchLists()`, the live network call: the splash gate in _layout.tsx
-   * reads this, and making a launch wait on a network round trip would trade
-   * a sub-second rendering bug for a screen that can hang on a bad connection.
-   * A stale cached list for one extra second is the honest trade; an
-   * indefinite splash is not.
-   */
-  const [loaded, setLoaded] = useState(false);
 
   const applyServer = useCallback(
     (rows: DbList[]) => {
@@ -679,13 +649,7 @@ function CloudGroceriesProvider({
       .then((raw) => {
         if (alive && raw) setLists(JSON.parse(raw) as List[]);
       })
-      .catch(() => {})
-      .finally(() => {
-        // Loaded either way — an empty cache is still an answer, not a
-        // reason to keep the splash up waiting for one that will never come
-        // if this household genuinely has no lists yet.
-        if (alive) setLoaded(true);
-      });
+      .catch(() => {});
     if (!appActive) return () => { alive = false; };
 
     // Bring a guest's lists across on the first cloud mount, then reload so the
@@ -869,7 +833,6 @@ function CloudGroceriesProvider({
 
     return {
       lists,
-      loaded,
       addList: (name) => {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
@@ -1038,7 +1001,6 @@ function CloudGroceriesProvider({
     };
   }, [
     lists,
-    loaded,
     shoppers,
     householdId,
     user,

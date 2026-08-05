@@ -1,36 +1,40 @@
 /**
- * The splash screen must always come down.
+ * Rules for anyone who tries to hold the splash screen again.
  *
  * ---------------------------------------------------------------------------
- * What happened
+ * What happened, and why this file outlived the feature it guarded
  * ---------------------------------------------------------------------------
  *
- * A gate was added to hold the splash until the app had really loaded, to stop
- * an empty dashboard flashing for ~200ms on launch. It waited on four flags,
- * one of which — `useHousehold().loading` — wraps two Supabase `select`s.
- * supabase-js applies no timeout of its own. One stalled request and
- * `setLoading(false)` never ran, so the splash never lifted, so the app never
- * started: the logo, forever, then an Android ANR.
+ * A gate was added to hold the native splash until the app had really loaded,
+ * to stop an empty dashboard flashing for ~200ms on launch. It shipped twice
+ * and broke the app both times — the logo on screen forever, then an Android
+ * ANR. The second attempt added an unconditional 2.5s timeout that should have
+ * made a hang impossible, and the app STILL never started, which means the
+ * failure was never the readiness logic at all: something about taking
+ * ownership of the native splash in this app does not release it.
  *
- * The gate's own doc comment said it waited on "the local read, not the
- * network fetch behind it". It was describing the design; the code on the next
- * line did the opposite. Prose cannot be trusted to hold an invariant, which
- * is the entire premise of this directory.
+ * That was three rounds of a user's time on a cosmetic flash. The gate has
+ * been reverted; Expo's default (hide on first frame) is back, which is the
+ * behaviour every working build has shipped with.
  *
- * ---------------------------------------------------------------------------
- * What is actually asserted
- * ---------------------------------------------------------------------------
+ * The feature is gone, so this file no longer asserts it exists. It asserts
+ * the conditions under which it may come BACK — because the flash is a real
+ * (if small) blemish and somebody will reasonably try again, and everything
+ * below was learned the expensive way:
  *
- *   1. Something calls preventAutoHideAsync — or the gate is decorative,
- *      because Expo hides the splash on first frame by default.
- *   2. An unconditional timeout exists that hides it regardless of state.
- *      This is what makes the worst case "a brief flash" instead of "a dead
- *      app", and it is the only assertion here that has to hold no matter how
- *      the readiness logic is rewritten later.
- *   3. The readiness expression names no network-backed flag. Kept as a
- *      denylist of the specific hooks known to wrap a fetch, because a general
- *      "is this local?" test is not something a regex can answer — and the
- *      failure being prevented is precise enough to name.
+ *   1. Do not call preventAutoHideAsync() without also being able to
+ *      demonstrate hideAsync() works in a release build on a device. A
+ *      release APK, not Expo Go, not a dev client.
+ *   2. If you hold it, an unconditional timer must release it. Necessary but
+ *      NOT sufficient — attempt two had exactly that and still hung.
+ *   3. Never gate the release on a network-backed flag. supabase-js applies
+ *      no timeout, so `useHousehold().loading` and friends can simply never
+ *      settle.
+ *
+ * The alternative worth trying first, which needs none of this: render a
+ * branded full-screen View *inside* React while the local reads are pending.
+ * It cannot outlive the JS that draws it, ErrorBoundary catches its failures,
+ * and no native API is involved.
  *
  * Run with `pnpm --filter mobile check:splash`.
  */
@@ -56,92 +60,73 @@ const read = (rel) => {
   }
 };
 
-/** Source with comments stripped — see the header for why that matters here. */
+/** Source with comments stripped, so this file's own prose cannot trip it. */
 const code = (text) =>
   text == null ? null : text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-const layout = read('app/_layout.tsx');
-if (!layout) {
-  fail('app/_layout.tsx is missing', ['Nothing else to check.']);
+const layout = code(read('app/_layout.tsx'));
+if (layout == null) {
+  fail('app/_layout.tsx is missing', ['Nothing to check.']);
   console.log(`\n${failures} FAILURE(S)`);
   process.exit(1);
 }
-const layoutCode = code(layout);
 
-/* ------------------------------- 1. the splash is actually held */
+const holdsSplash = /preventAutoHideAsync/.test(layout);
 
-if (!/preventAutoHideAsync/.test(layoutCode)) {
-  fail('nothing prevents the splash from auto-hiding', [
-    'Expo hides it on the first committed frame, which is before any hydration',
-    'has answered — the gate below would then be decorative.',
-  ]);
+if (!holdsSplash) {
+  console.log('ok   the splash is left to Expo (no manual hold) — see this file’s header');
 } else {
-  console.log('ok   the splash is held past the first frame');
-}
+  /*
+   * Someone has taken ownership again. Everything below is the minimum bar,
+   * and passing it is still not evidence the app launches — only a device is.
+   */
+  console.log('note the splash is held manually; checking the conditions for that');
 
-/* ------------------------------- 2. and it always comes back down */
-
-/*
- * A hideAsync inside a setTimeout, with no condition wrapped around the
- * timer's own creation. Matched loosely — what matters is that a timer exists
- * whose body hides the splash, not how it is spelled.
- */
-const hasTimeoutRelease = /setTimeout\(\s*\(\)\s*=>\s*\{[^}]*hideAsync/.test(layoutCode);
-if (!hasTimeoutRelease) {
-  fail('the splash has no unconditional timeout', [
-    'Every flag the gate waits on is a promise, and a promise that never',
-    'settles is an app that never starts — that shipped once already.',
-    'Keep a setTimeout that calls SplashScreen.hideAsync() regardless of state.',
-  ]);
-} else {
-  console.log('ok   the splash comes down on a timer no matter what');
-}
-
-/* --------------------- 3. readiness waits on local reads only */
-
-/**
- * Hooks whose "loading"/"loaded" flag is settled by a NETWORK round trip.
- * Waiting on any of these ties app launch to request latency, and — with no
- * client-side timeout in supabase-js — to whether the request settles at all.
- */
-const NETWORK_BACKED = ['useHousehold', 'useEntitlement', 'usePantryIntel'];
-
-const readyLine = layoutCode.match(/const ready = [^;]+;/)?.[0] ?? '';
-if (!readyLine) {
-  fail('could not find the readiness expression', [
-    'Expected a `const ready = ...;` inside the splash gate. If it was renamed,',
-    'rename it here too rather than deleting this check.',
-  ]);
-} else {
-  const gateBody = layoutCode.slice(
-    Math.max(0, layoutCode.indexOf('function AppReadyGate')),
-    layoutCode.indexOf(readyLine) + readyLine.length,
+  const hasTimeoutRelease = /setTimeout\(\s*(?:\(\)|async\s*\(\))\s*=>\s*\{[^}]*hideAsync/.test(
+    layout,
   );
-  const offenders = NETWORK_BACKED.filter((hook) => gateBody.includes(hook));
-  if (offenders.length) {
-    fail('the splash gate must not wait on a network-backed flag', [
-      ...offenders.map((h) => `${h}() resolves over the network; the splash gate reads it.`),
-      'supabase-js has no default timeout, so a stalled request becomes a launch',
-      'that never completes. Wait on AsyncStorage-backed flags only.',
+  if (!hasTimeoutRelease) {
+    fail('a held splash needs an unconditional timeout release', [
+      'Every readiness flag is a promise, and a promise that never settles is an',
+      'app that never starts. Add a setTimeout that calls hideAsync() regardless',
+      'of state — and note this was necessary but not sufficient last time.',
     ]);
   } else {
-    console.log('ok   readiness waits on local reads only');
+    console.log('ok   ...it is released on an unconditional timer');
+  }
+
+  /**
+   * Hooks whose flag is settled by a network round trip. Waiting on any of
+   * these ties launch to request latency and, with no client-side timeout in
+   * supabase-js, to whether the request settles at all.
+   */
+  const NETWORK_BACKED = ['useHousehold', 'useEntitlement', 'usePantryIntel'];
+  const readyLine = layout.match(/const ready = [^;]+;/)?.[0] ?? '';
+  const offenders = readyLine ? NETWORK_BACKED.filter((h) => layout.includes(`${h}(`)) : [];
+  if (offenders.length) {
+    fail('a held splash must not wait on a network-backed flag', [
+      ...offenders.map((h) => `${h}() resolves over the network and _layout.tsx calls it.`),
+      'Wait on AsyncStorage-backed flags only.',
+    ]);
+  } else {
+    console.log('ok   ...and does not wait on a network-backed flag');
   }
 }
 
-/* ------------------- 4. the session lookup cannot hang the gate */
+/* ------------------- always: the session lookup must settle ------------- */
 
 /*
- * `auth.initializing` IS one of the flags the gate waits on, and getSession()
- * can reject — it refreshes an expired token over the network. Without a
- * settled path on both outcomes it is another way to never finish launching.
+ * Independent of the splash. getSession() hits the network to refresh an
+ * expired token, so it can reject — and `initializing` gates the sign-in
+ * screen either way. An unsettled promise there is a stuck app whether or not
+ * anything is holding the splash, which is why this check stayed when the
+ * rest became conditional.
  */
 const auth = code(read('store/auth.tsx'));
 if (!auth || !/getSession\(\)[\s\S]{0,600}?\.catch\(/.test(auth)) {
   fail('auth.tsx: getSession() needs a rejection path', [
-    'It hits the network to refresh an expired token, so it can reject. The',
-    'splash gate waits on `initializing`; an unsettled promise there is a dead',
-    'launch. Treat a failure as signed-out and always clear the flag.',
+    'It refreshes an expired token over the network, so it can reject. Treat a',
+    'failure as signed-out and always clear `initializing`.',
   ]);
 } else if (!/getSession\(\)[\s\S]{0,900}?setInitializing\(false\)/.test(auth)) {
   fail('auth.tsx: initializing must be cleared on every path', [
