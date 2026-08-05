@@ -23,7 +23,7 @@
     "check:item-emoji": "node scripts/check-item-emoji.mjs",
     "check:lexicon": "node scripts/check-lexicon.mjs",
     "check:motion": "node scripts/check-motion.mjs",
-    "check:all": "pnpm typecheck && pnpm check:hooks && pnpm check:plus-gate && pnpm check:locales && pnpm check:i18n-keys && pnpm check:recap-markup && pnpm check:eco && pnpm check:recipe && pnpm check:barcode && pnpm check:purchase-log && pnpm check:price-intel && pnpm check:purchase-migration && pnpm check:pantry-intel && pnpm check:stats-from-purchases && pnpm check:item-emoji && pnpm check:item-category && pnpm check:item-unit && pnpm check:lexicon && pnpm check:ai-cost && pnpm check:motion && pnpm check:modal-nav && echo \"\n\u2713 all checks passed\"",
+    "check:all": "pnpm typecheck && pnpm check:hooks && pnpm check:plus-gate && pnpm check:locales && pnpm check:i18n-keys && pnpm check:recap-markup && pnpm check:eco && pnpm check:recipe && pnpm check:barcode && pnpm check:purchase-log && pnpm check:price-intel && pnpm check:purchase-migration && pnpm check:pantry-intel && pnpm check:stats-from-purchases && pnpm check:item-emoji && pnpm check:item-category && pnpm check:item-unit && pnpm check:lexicon && pnpm check:ai-cost && pnpm check:motion && pnpm check:modal-nav && pnpm check:splash && echo \"\n\u2713 all checks passed\"",
     "check:purchase-log:tz": "for tz in UTC Europe/Brussels Europe/Warsaw America/Los_Angeles Pacific/Kiritimati; do echo \"\u2014 $tz\"; TZ=$tz node scripts/check-purchase-log.mjs | tail -1; done",
     "check:item-unit": "node scripts/check-item-unit.mjs",
     "check:ai-cost": "node scripts/check-ai-cost.mjs",
@@ -32,7 +32,8 @@
     "check:item-category": "node scripts/check-item-category.mjs",
     "check:plus-gate": "node scripts/check-plus-gate.mjs",
     "check:price-intel": "node scripts/check-price-intel.mjs",
-    "check:modal-nav": "node scripts/check-modal-nav.mjs"
+    "check:modal-nav": "node scripts/check-modal-nav.mjs",
+    "check:splash": "node scripts/check-splash.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

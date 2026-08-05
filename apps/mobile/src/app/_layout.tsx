@@ -26,7 +26,7 @@ import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { useAuth, AuthProvider } from '@/store/auth';
 import { useGroceries, GroceriesProvider } from '@/store/groceries';
 import { EntitlementProvider } from '@/store/entitlement';
-import { useHousehold, HouseholdProvider } from '@/store/household';
+import { HouseholdProvider } from '@/store/household';
 import { LocaleProvider } from '@/store/locale';
 import { PantryIntelProvider } from '@/store/pantry-intel';
 import { palette } from '@/theme';
@@ -69,44 +69,74 @@ const navDark: NavTheme = {
 };
 
 /**
- * Lifts the splash once, and only once, every store agrees there is nothing
- * left to flash the wrong thing about.
+ * The longest the splash may EVER stay up, however unready the app claims to
+ * be.
+ *
+ * Not a tuning knob — a correctness bound. Everything below is a promise, and
+ * a promise that never settles would otherwise mean an app that never starts.
+ * That is not hypothetical: the first version of this gate shipped waiting on
+ * `useHousehold().loading`, which wraps two Supabase queries with no client
+ * timeout, and a single stalled request left users staring at the logo until
+ * Android killed the process with an ANR. A brief wrong-content flash is
+ * recoverable; a dead launch is not, so when the two are in tension the flash
+ * wins by default.
+ */
+const SPLASH_MAX_MS = 2500;
+
+/**
+ * Lifts the splash once every LOCAL read has answered — or after
+ * SPLASH_MAX_MS, whichever comes first.
  *
  * ---------------------------------------------------------------------------
  * The bug this exists to close
  * ---------------------------------------------------------------------------
  *
  * Expo's default behaviour hides the splash the instant the first frame
- * commits — which is BEFORE any of this app's own async hydration (AsyncStorage
- * for the lists, a network round trip for the household, a session lookup for
- * auth) has had a chance to answer anything. What painted in that gap was
- * whatever each store's INITIAL state happened to claim: no lists, no
- * household, sometimes the onboarding tour deciding — a beat later, once it
- * actually knew — that it should have taken over from the start. On a fast
- * device that gap is a fifth of a second. It still reads as the app
+ * commits — which is BEFORE any of this app's own async hydration has had a
+ * chance to answer anything. What painted in that gap was whatever each
+ * store's INITIAL state happened to claim: no lists, and the onboarding tour
+ * deciding a beat later that it should have taken over from the start. On a
+ * fast device that gap is a fifth of a second, and it reads as the app
  * forgetting your groceries every time you open it.
  *
  * ---------------------------------------------------------------------------
- * Why this waits on the local read, not the network fetch behind it
+ * LOCAL reads only — and the first version of this got that wrong
  * ---------------------------------------------------------------------------
  *
- * `groceries.loaded` and the household fetch both follow this codebase's
- * existing "cache first for instant paint" rule — the CACHED answer is what
- * gates the splash, not the live Supabase round trip refining it afterward.
- * Waiting for the network instead would trade a sub-second rendering bug for
- * a splash that can hang on a bad connection, which is a worse failure by the
- * app's own standard: a stale cached list for one more second is recoverable;
- * an indefinite splash looks exactly like a crash.
+ * `localHydrated` is AsyncStorage. `groceries.loaded` is AsyncStorage (the
+ * device copy for a guest, the cache-first read for a signed-in user — never
+ * the Supabase fetch refining it afterward). `auth.initializing` is a stored
+ * session, which can touch the network only to refresh an expired token.
+ *
+ * `useHousehold().loading` is NOT on that list, and the first version of this
+ * gate waited on it anyway — under a comment that said, in as many words,
+ * that it waited on local reads rather than the network fetch behind them.
+ * The comment described the design; the code did something else. It wraps
+ * `select` on two tables, supabase-js applies no timeout of its own, and one
+ * stalled query was the difference between "launches" and "does not launch".
+ *
+ * The household name arriving a beat after the dashboard is a much smaller
+ * problem than the one that trade was making, and it is not the flash this
+ * gate was built for — that was lists and onboarding, both of which are here.
  */
 function AppReadyGate({ localHydrated, children }: PropsWithChildren<{ localHydrated: boolean }>) {
   const { initializing: authInitializing } = useAuth();
-  const { loading: householdLoading } = useHousehold();
   const { loaded: groceriesLoaded } = useGroceries();
-  const ready = localHydrated && !authInitializing && !householdLoading && groceriesLoaded;
+  const ready = localHydrated && !authInitializing && groceriesLoaded;
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => {});
   }, [ready]);
+
+  // The backstop, armed once on mount and never re-armed. Independent of
+  // `ready` on purpose: if this depended on the same flags it is insuring
+  // against, it would inherit whichever one is stuck.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, SPLASH_MAX_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   return <>{children}</>;
 }

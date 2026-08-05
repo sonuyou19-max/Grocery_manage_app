@@ -67,10 +67,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setInitializing(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+      })
+      /*
+       * getSession() reads the stored session, and will hit the network to
+       * refresh an expired token — so it CAN reject, and this had no rejection
+       * path at all. That was invisible for as long as nothing waited on
+       * `initializing`; the moment the splash gate did, one failed refresh
+       * meant an app that never finished launching.
+       *
+       * Signed out is the correct interpretation of "we could not establish a
+       * session", and it is also the recoverable one: the sign-in screen works
+       * offline, whereas a permanent splash does not.
+       */
+      .catch(() => {
+        setSession(null);
+      })
+      .finally(() => {
+        setInitializing(false);
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
