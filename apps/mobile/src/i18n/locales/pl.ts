@@ -776,9 +776,7 @@ const pl = {
     joinHousehold: 'Dołącz do gospodarstwa',
   },
   authError: {
-    sendFailed:
-      'Nie udało się wysłać kodu — dostarczenie e-maila nie powiodło się. Sprawdź ustawienia SMTP i spróbuj ponownie.',
-    network: 'Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.',
+    sendFailed: 'Nie udało się teraz wysłać kodu. Spróbuj ponownie za chwilę.',
     codeWrong: 'Ten kod nie zadziałał. Sprawdź go i spróbuj ponownie.',
     createFailed: 'Nie udało się utworzyć konta.',
     confirmEmailOn:

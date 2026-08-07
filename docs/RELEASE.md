@@ -76,6 +76,49 @@ SPF, and DMARC all show green ✓.
 **Step 5 — test:** open the app's sign-in, enter your email, confirm the 6-digit
 code lands in your inbox (not spam). ☐ done
 
+### Troubleshooting: sign-in says the code couldn't be sent
+
+Read the server's own error first — the app only ever sees "sending failed":
+
+```
+Supabase Dashboard → Logs → Auth   (or: MCP get_logs, service "auth")
+```
+
+Errors seen so far, and what they actually mean:
+
+**`550 "The associated domain with your API key is not verified. Please, create
+a new API key with full access or with a verified domain."`**
+
+That is Resend's wording, and it is about the **API key**, not the domain and
+not the sender address. Resend keys can be scoped — *Full access*, *Sending
+access → all domains*, or *Sending access → one specific domain* — and a key
+scoped to a domain that is not verified 550s on every send no matter what
+`korb.app`'s own status says. The usual cause is creating the key while the
+DNS records were still propagating.
+
+Fix: Resend → **API Keys** → create a new one with **Full access** → paste it
+into Supabase → Auth → SMTP → Password. Confirm the sender in Supabase is on
+the verified domain (`no-reply@korb.app`).
+
+Isolate Resend from Supabase before touching Supabase at all — this answers
+"is it the key or the SMTP config?" in one call:
+
+```bash
+curl -X POST https://api.resend.com/emails \
+  -H "Authorization: Bearer re_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"no-reply@korb.app","to":"YOU@example.com","subject":"Korb SMTP test","text":"works"}'
+```
+
+A 200 with an id means the key is good and the problem is in Supabase's SMTP
+settings. A 403/422 repeating the 550 text means the key is the problem.
+
+**The email arrives but contains a link, not a 6-digit code.** The app's
+sign-in screen asks for a code, so a link is unusable. Supabase's stock Magic
+Link template ships `{{ .ConfirmationURL }}`; it needs `{{ .Token }}` — this
+is the Step-4 checklist item above, and it is easy to miss because SMTP
+working feels like being done.
+
 ## 2. Legal
 
 - Fill every `[PLACEHOLDER]` in `/legal/privacy-policy.md`, `/legal/terms-of-service.md`,

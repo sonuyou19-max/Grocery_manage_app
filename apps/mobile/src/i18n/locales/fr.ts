@@ -685,9 +685,7 @@ const fr = {
     joinHousehold: 'Rejoindre le foyer',
   },
   authError: {
-    sendFailed:
-      'Impossible d’envoyer le code — échec de l’envoi de l’e-mail. Vérifie tes réglages SMTP et réessaie.',
-    network: 'Impossible de joindre le serveur. Vérifie ta connexion et réessaie.',
+    sendFailed: 'Impossible d’envoyer le code pour l’instant. Réessaie dans un moment.',
     codeWrong: 'Ce code n’a pas fonctionné. Vérifie-le et réessaie.',
     createFailed: 'Impossible de créer le compte.',
     confirmEmailOn:

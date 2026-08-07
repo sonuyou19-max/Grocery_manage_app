@@ -685,9 +685,7 @@ const it = {
     joinHousehold: 'Unisciti alla famiglia',
   },
   authError: {
-    sendFailed:
-      'Non è stato possibile inviare il codice — invio e-mail fallito. Controlla le impostazioni SMTP e riprova.',
-    network: 'Non riesco a raggiungere il server. Controlla la connessione e riprova.',
+    sendFailed: 'Non è stato possibile inviare il codice ora. Riprova tra poco.',
     codeWrong: 'Quel codice non ha funzionato. Controllalo e riprova.',
     createFailed: 'Non è stato possibile creare l’account.',
     confirmEmailOn:

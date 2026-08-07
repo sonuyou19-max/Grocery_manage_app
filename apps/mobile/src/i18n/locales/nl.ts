@@ -683,9 +683,7 @@ const nl = {
     joinHousehold: 'Deelnemen aan huishouden',
   },
   authError: {
-    sendFailed:
-      'Kon de code niet versturen — e-mailbezorging mislukt. Controleer je SMTP-instellingen en probeer opnieuw.',
-    network: 'Kon de server niet bereiken. Controleer je verbinding en probeer opnieuw.',
+    sendFailed: 'Kon de code nu niet versturen. Probeer het zo meteen opnieuw.',
     codeWrong: 'Die code werkte niet. Controleer hem en probeer opnieuw.',
     createFailed: 'Kon het account niet aanmaken.',
     confirmEmailOn:

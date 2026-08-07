@@ -693,8 +693,7 @@ const en = {
     joinHousehold: 'Join household',
   },
   authError: {
-    sendFailed: 'Couldn’t send the code — email delivery failed. Check your SMTP settings and try again.',
-    network: 'Couldn’t reach the server. Check your connection and try again.',
+    sendFailed: 'We couldn’t send your code just now. Please try again in a moment.',
     codeWrong: 'That code didn’t work. Check it and try again.',
     createFailed: 'Couldn’t create the account.',
     confirmEmailOn:

@@ -684,9 +684,7 @@ const es = {
     joinHousehold: 'Unirse al hogar',
   },
   authError: {
-    sendFailed:
-      'No se pudo enviar el código — falló el envío del correo. Revisa tus ajustes SMTP e inténtalo de nuevo.',
-    network: 'No se pudo conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.',
+    sendFailed: 'No se pudo enviar el código ahora mismo. Inténtalo de nuevo en un momento.',
     codeWrong: 'Ese código no ha funcionado. Compruébalo e inténtalo de nuevo.',
     createFailed: 'No se pudo crear la cuenta.',
     confirmEmailOn:

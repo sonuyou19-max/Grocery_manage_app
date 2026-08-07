@@ -687,9 +687,7 @@ const de = {
     joinHousehold: 'Haushalt beitreten',
   },
   authError: {
-    sendFailed:
-      'Der Code ließ sich nicht senden — die E-Mail-Zustellung ist fehlgeschlagen. Prüfe deine SMTP-Einstellungen und versuch es erneut.',
-    network: 'Der Server war nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.',
+    sendFailed: 'Der Code ließ sich gerade nicht senden. Versuch es in einem Moment noch einmal.',
     codeWrong: 'Dieser Code hat nicht funktioniert. Prüfe ihn und versuch es erneut.',
     createFailed: 'Das Konto ließ sich nicht erstellen.',
     confirmEmailOn:
