@@ -54,6 +54,15 @@ export interface ThemeColors {
   meshScrim: string;
   /** Frosted-glass surfaces: translucent fill + thin, semi-transparent border. */
   glassFill: string;
+  /**
+   * The same surface where there is no blur under it — Android (see
+   * components/frosted.tsx). A blur does two jobs: it softens, and it hides
+   * whatever scrolls beneath. Without one, `glassFill` alone would leave list
+   * rows legibly sliding under the tab bar and the sheets, so this is denser.
+   * Still short of opaque, so the mesh's colour reads through and the surface
+   * is glass rather than a panel.
+   */
+  glassSolid: string;
   glassBorder: string;
   /** BlurView tint to use for glass/mesh in this scheme. */
   blurTint: 'light' | 'dark';
@@ -102,6 +111,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshC: '#CFE0DE',
     meshScrim: 'rgba(246,247,240,0.5)',
     glassFill: 'rgba(255,255,255,0.55)',
+    glassSolid: 'rgba(252,253,248,0.9)',
     glassBorder: 'rgba(20,26,16,0.22)',
     blurTint: 'light',
     plusFrom: '#6D5AE6',
@@ -130,6 +140,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshC: '#2A3312',
     meshScrim: 'rgba(11,15,9,0.42)',
     glassFill: 'rgba(30,36,27,0.55)',
+    glassSolid: 'rgba(26,32,23,0.9)',
     glassBorder: 'rgba(255,255,255,0.16)',
     blurTint: 'dark',
     // Lifted and desaturated for the dark surface: the light-mode violet goes

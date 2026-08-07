@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
@@ -26,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { UNITS } from '@korb/shared';
 
+import { Frosted } from '@/components/frosted';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { currencySymbolFor } from '@/i18n';
@@ -180,14 +180,9 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
           <Pressable style={styles.fillPlain} onPress={() => requestClose()} />
         </Animated.View>
         <Animated.View style={[styles.sheet, sheetStyle]}>
-          <BlurView
+          <Frosted
             intensity={scheme === 'dark' ? 40 : 60}
-            tint={colors.blurTint}
-            experimentalBlurMethod="dimezisBlurView"
             style={StyleSheet.absoluteFill}
-          />
-          <View
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]}
             pointerEvents="none"
           />
           {/* Drag zone: grab handle + header — pull down to dismiss */}

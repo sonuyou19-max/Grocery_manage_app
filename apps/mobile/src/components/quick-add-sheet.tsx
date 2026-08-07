@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -28,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ParsedItem } from '@korb/shared';
 
+import { Frosted } from '@/components/frosted';
 import { categoryLabel } from '@/lib/categorize';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { parseQuickAdd } from '@/lib/quick-add';
@@ -166,14 +166,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
         </Animated.View>
 
         <Animated.View style={[styles.sheet, sheetStyle]}>
-          <BlurView
+          <Frosted
             intensity={scheme === 'dark' ? 40 : 60}
-            tint={colors.blurTint}
-            experimentalBlurMethod="dimezisBlurView"
             style={StyleSheet.absoluteFill}
-          />
-          <View
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]}
             pointerEvents="none"
           />
           {/* Drag zone: grab handle + header — pull down to dismiss */}

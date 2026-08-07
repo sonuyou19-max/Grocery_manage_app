@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -29,6 +28,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Frosted } from '@/components/frosted';
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
 import { GlassView } from '@/components/glass';
@@ -595,10 +595,8 @@ export default function ListDetailScreen() {
 
       {/* Add bar — pinned above the keyboard by the screen-level
           KeyboardAvoidingView (padding on iOS, height on Android). */}
-      <BlurView
+      <Frosted
         intensity={scheme === 'dark' ? 40 : 60}
-        tint={colors.blurTint}
-        experimentalBlurMethod="dimezisBlurView"
         style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
       >
         <SafeAreaView edges={['bottom']}>
@@ -623,7 +621,7 @@ export default function ListDetailScreen() {
             </Pressable>
           </View>
         </SafeAreaView>
-      </BlurView>
+      </Frosted>
       </SafeAreaView>
       </KeyboardAvoidingView>
 

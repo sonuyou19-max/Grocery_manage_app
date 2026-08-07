@@ -8,6 +8,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import { StyleSheet, useColorScheme, View } from 'react-native';
 
 import { LocaleGreeting, LocaleSetup } from '@/components/locale-setup';
 import { i18n } from '@/i18n';
@@ -32,7 +33,16 @@ interface LocaleValue {
 const STORE_KEY = 'korb.locale.v1';
 const Ctx = createContext<LocaleValue | null>(null);
 
+/**
+ * The colours from app.json's expo-splash-screen config. Duplicated rather
+ * than imported because that config is consumed by the native build, not by
+ * the bundle — if either changes, both have to change. Keep them in step: the
+ * whole point is that the seam is invisible.
+ */
+const SPLASH_BG = { light: '#2E7442', dark: '#0E120C' } as const;
+
 export function LocaleProvider({ children }: PropsWithChildren) {
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const [state, setState] = useState<{ region: string; language: string } | null>(null);
   const [ready, setReady] = useState(false);
   /** Language to greet in, set the moment first-run setup completes. */
@@ -99,9 +109,27 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     };
   }, [state, setLocale]);
 
-  // Wait for the persisted choice before rendering, to avoid a flash of the
-  // wrong language (the splash screen covers this brief gap).
-  if (!ready) return null;
+  /*
+   * Wait for the persisted choice before rendering, to avoid a flash of the
+   * wrong language.
+   *
+   * This used to `return null`, on the belief that the splash screen covered
+   * the gap. It does not. Expo hides the splash on the app's FIRST FRAME — and
+   * with `null` here, the first frame is an empty tree. So the sequence a user
+   * actually saw was: logo, then a bare window with nothing in it, then the
+   * whole app appearing at once a moment later. That flash of nothing was read
+   * as the app stalling on launch, and it is the same blemish the (twice
+   * reverted, see scripts/check-splash.mjs) native splash gate was trying to
+   * paper over.
+   *
+   * A plain View in the splash's own colour fixes it with no native API at
+   * all: the handoff is now splash-green to splash-green, so there is nothing
+   * to see. It cannot outlive the JS that draws it, which is exactly why it is
+   * safe where holding the native splash was not.
+   */
+  if (!ready) {
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: SPLASH_BG[scheme] }]} />;
+  }
 
   // First launch (or after a data reset): choose region + language first.
   if (!state) {

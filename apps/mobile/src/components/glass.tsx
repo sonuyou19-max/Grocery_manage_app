@@ -1,44 +1,42 @@
-import { BlurView } from 'expo-blur';
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
+import { Frosted } from '@/components/frosted';
 import { radii, useTheme } from '@/theme';
 
 interface GlassViewProps extends PropsWithChildren {
   style?: StyleProp<ViewStyle>;
   /** Corner radius; defaults to the large token. */
   radius?: number;
-  /** Blur strength override (0–100). */
+  /** Blur strength override (0–100). iOS only — Android does not blur. */
   intensity?: number;
   /** Accent the hairline border (e.g. call-to-action cards). */
   accented?: boolean;
 }
 
 /**
- * Frosted-glass surface: a background blur under a translucent fill with a
- * thin, semi-transparent border. Use for floating menus, bottom sheets and
- * cards so they read as glass over the mesh gradient rather than flat panels.
+ * Frosted-glass surface: a translucent fill with a thin, semi-transparent
+ * border, blurred on iOS. Use for floating menus, bottom sheets and cards so
+ * they read as glass over the mesh gradient rather than flat panels.
+ *
+ * This is the highest-volume frosted surface in the app — every <Card> is one,
+ * and the Insights tab renders twenty-one of them. See components/frosted.tsx
+ * for why that made a real Android blur unaffordable.
  */
 export function GlassView({ children, style, radius = radii.lg, intensity, accented = false }: GlassViewProps) {
-  const { colors, scheme } = useTheme();
+  const { colors } = useTheme();
 
   return (
-    <BlurView
-      intensity={intensity ?? (scheme === 'dark' ? 34 : 55)}
-      tint={colors.blurTint}
-      experimentalBlurMethod="dimezisBlurView"
+    <Frosted
+      intensity={intensity}
       style={[
         styles.base,
         { borderRadius: radius, borderColor: accented ? colors.accent : colors.glassBorder },
         style,
       ]}
     >
-      <View
-        style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill, borderRadius: radius }]}
-        pointerEvents="none"
-      />
       {children}
-    </BlurView>
+    </Frosted>
   );
 }
 

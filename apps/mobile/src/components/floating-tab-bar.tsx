@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Frosted } from '@/components/frosted';
 import { CreateSheet } from '@/components/create-sheet';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/store/locale';
@@ -120,13 +120,10 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   return (
     <View style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }]} pointerEvents="box-none">
       <View style={styles.shadow}>
-        <BlurView
+        <Frosted
           intensity={scheme === 'dark' ? 40 : 60}
-          tint={colors.blurTint}
-          experimentalBlurMethod="dimezisBlurView"
           style={[styles.pill, { borderColor: colors.glassBorder }]}
         >
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassFill }]} pointerEvents="none" />
           {/* The inner padding lives on the pill, not on this row, so the row's
               measured width IS the width the five slots divide up and the
               absolutely-positioned highlight below shares one unambiguous
@@ -197,9 +194,9 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
               ];
             })}
           </View>
-        </BlurView>
+        </Frosted>
 
-        {/* Outside the BlurView, which has overflow:hidden — a child would be
+        {/* Outside the Frosted pill, which has overflow:hidden — a child would be
             cropped at the pill's edge exactly where this is meant to rise
             above it. */}
         <Pressable
