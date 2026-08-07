@@ -44,15 +44,29 @@ Resend shows the DNS records below.
 **Advanced DNS**). Copy each **full** value from Resend (use its copy button —
 never the truncated display). Host = prefix only (e.g. `send`, not `send.korb.app`):
 
-| Record | Where in Namecheap | Type | Host | Value | Priority | Status |
-|---|---|---|---|---|---|---|
-| DKIM | Host Records | TXT | `resend._domainkey` | `p=MIGfMA0…` (from Resend) | — | ✅ verified |
-| SPF (sending) | Host Records | TXT | `send` | `v=spf1 …amazonses.com ~all` | — | ✅ verified |
-| SPF (MX) | **Mail Settings → Custom MX** | MX | `send` | `feedback-smtp.…amazonses.com` | `10` | ✅ verified |
-| DMARC (recommended) | Host Records | TXT | `_dmarc` | `v=DMARC1; p=none;` | — | ✅ verified |
+| Record | Where in Namecheap | Type | Host | Value | Priority |
+|---|---|---|---|---|---|
+| DKIM | Host Records | TXT | `resend._domainkey` | `p=MIGfMA0…` (from Resend) | — |
+| SPF (sending) | Host Records | TXT | `send` | `v=spf1 …amazonses.com ~all` | — |
+| SPF (MX) | **Mail Settings → Custom MX** | MX | `send` | `feedback-smtp.…amazonses.com` | `10` |
+| DMARC (recommended) | Host Records | TXT | `_dmarc` | `v=DMARC1; p=none;` | — |
 
-Resend shows **Domain verified — ready to send** ✅. Remaining email steps:
-- ☐ Resend → create SMTP API key (`re_…`)
+> **This table used to carry a ✅ on every row and the line "Resend shows Domain
+> verified — ready to send ✅". None of that was true.** `korb.app` was added to
+> Resend on 20 Jul and has never verified: Resend polls for these records for 72
+> hours, gave up, and left the domain Failed. Sign-in kept working anyway,
+> because it was going out over a sender that does not depend on the domain —
+> which is exactly why nobody noticed for two and a half weeks.
+>
+> The ✅ marks were written as intent and read later as fact, by a human and by
+> Claude, both of whom then told the other the domain was fine. **Do not tick a
+> box in this file until the thing is observably true** — Resend's Domains page
+> green, or a 200 from the curl below. A checklist that lies is worse than no
+> checklist.
+
+Remaining email steps:
+- ☐ Resend → verify `korb.app` (Domains page must show Verified, not Pending/Failed)
+- ☐ Resend → create SMTP API key (`re_…`) with **Full access**, not scoped to a domain
 - ☐ Supabase → Auth → SMTP Settings (host `smtp.resend.com`, port 465, user `resend`, pass = API key, sender `no-reply@korb.app`)
 - ☐ Supabase → Auth → Email Templates → Magic Link → include `{{ .Token }}` (the 6-digit code)
 - ☐ Supabase → Auth → Rate Limits → raise "Emails per hour"
@@ -112,6 +126,32 @@ curl -X POST https://api.resend.com/emails \
 
 A 200 with an id means the key is good and the problem is in Supabase's SMTP
 settings. A 403/422 repeating the 550 text means the key is the problem.
+
+**`403 "The korb.app domain is not verified"` from the curl.** Different failure
+from the 550 above, and the difference is the whole diagnosis: the 550 is about
+the API key's *scope*, this is about the *sender's* domain. Getting this one
+means the key is fine and the domain is not.
+
+**"It worked for days, then stopped."** Then it was never sending from
+`@korb.app` — that domain has never verified. It was going out over one of the
+two senders that need no domain:
+
+- `onboarding@resend.dev`, Resend's shared sender, which only delivers to the
+  email address that owns the Resend account
+- Supabase's built-in mailer, with custom SMTP switched off, which only
+  delivers to Supabase org members and allows a handful per hour
+
+Both are fine for testing and neither can ship. So a sudden failure after a
+working stretch is almost always the moment someone moved the config toward
+production — pasting a domain-scoped key or changing the sender to
+`no-reply@korb.app` — before the domain was actually verified.
+
+**Resend → Emails** settles it in seconds: it logs every message actually sent,
+with its `from`. If the working ones say `onboarding@resend.dev`, nothing
+regressed and the config was changed. If they say `no-reply@korb.app`, the
+domain really did verify once and later broke — check Namecheap's Mail Settings
+is still on **Custom MX**, since switching off it silently drops the `send` MX
+row. An empty log means you were on Supabase's built-in mailer all along.
 
 **The email arrives but contains a link, not a 6-digit code.** The app's
 sign-in screen asks for a code, so a link is unusable. Supabase's stock Magic
