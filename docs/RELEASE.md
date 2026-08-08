@@ -51,56 +51,96 @@ never the truncated display). Host = prefix only (e.g. `send`, not `send.korb.ap
 | SPF (MX) | **Mail Settings → Custom MX** | MX | `send` | `feedback-smtp.…amazonses.com` | `10` |
 | DMARC (recommended) | Host Records | TXT | `_dmarc` | `v=DMARC1; p=none;` | — |
 
-> **This table used to carry a ✅ on every row and the line "Resend shows Domain
-> verified — ready to send ✅". None of that was true.** `korb.app` was added to
-> Resend on 20 Jul and has never verified: Resend polls for these records for 72
-> hours, gave up, and left the domain Failed. Sign-in kept working anyway,
-> because it was going out over a sender that does not depend on the domain —
-> which is exactly why nobody noticed for two and a half weeks.
+> **Check the DNS Type before anything else — it is what the table above
+> assumes.** Namecheap's Advanced DNS page only has a host record editor when
+> the domain is on **Namecheap BasicDNS**. On **Namecheap Web Hosting DNS**,
+> HOST RECORDS and MAIL SETTINGS are both replaced by "You can manage these in
+> your cPanel account, or transfer DNS back to Namecheap BasicDNS" — there is
+> nowhere on that screen to add a TXT or MX row at all.
 >
-> The ✅ marks were written as intent and read later as fact, by a human and by
-> Claude, both of whom then told the other the domain was fine. **Do not tick a
-> box in this file until the thing is observably true** — Resend's Domains page
-> green, or a 200 from the curl below. A checklist that lies is worse than no
-> checklist.
+> Namecheap keeps the BasicDNS zone whether or not BasicDNS is the active type,
+> so records added there survive a switch and start resolving the moment you
+> switch back. Switching is therefore usually the whole fix; you may not need to
+> re-enter anything. Before switching, load `https://korb.app` — if something is
+> being served from that cPanel, changing nameservers takes it down until an A
+> record is re-added. Hosting the legal docs is not a reason to stay on Web
+> Hosting DNS: GitHub Pages or Cloudflare Pages serves those fine.
 
-Remaining email steps:
-- ☐ Resend → verify `korb.app` (Domains page must show Verified, not Pending/Failed)
-- ☐ Resend → create SMTP API key (`re_…`) with **Full access**, not scoped to a domain
+**Known-good values**, resolved 8 Aug 2026 against `8.8.8.8` on BasicDNS. Diff
+against these if delivery ever breaks — drift shows up immediately, and none of
+it is secret (DKIM publishes a *public* key):
+
+```
+korb.app                    NS   dns1.registrar-servers.com, dns2.registrar-servers.com
+resend._domainkey.korb.app  TXT  p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCB… ends IDAQAB, 218 chars
+send.korb.app               TXT  v=spf1 include:amazonses.com ~all
+send.korb.app               MX   10 feedback-smtp.eu-west-1.amazonses.com
+_dmarc.korb.app             TXT  v=DMARC1; p=none;
+```
+
+Two things to check in those, because both are silent failures:
+
+- **DKIM must end in `IDAQAB`.** That sequence terminates a well-formed RSA
+  public key, so anything else means the paste was truncated — which Namecheap
+  accepts without complaint. Base64-decode it and you should get 162 bytes.
+- **The MX region must match the Resend region** (`eu-west-1` ↔ Ireland, shown
+  on the Resend domain page). A mismatch delivers, but routes bounce handling
+  through the wrong continent.
+
+Confirm records resolve BEFORE restarting verification in Resend — restarting
+against DNS that isn't there just fails again, instantly:
+
+```
+nslookup -type=TXT resend._domainkey.korb.app 8.8.8.8
+nslookup -type=TXT send.korb.app 8.8.8.8
+nslookup -type=MX  send.korb.app 8.8.8.8
+```
+
+Email steps:
+- ✅ Resend → `korb.app` verified (proven: a send from `no-reply@korb.app` returns a message id)
+- ✅ Resend → SMTP API key with **Full access**, not scoped to a domain
 - ☐ Supabase → Auth → SMTP Settings (host `smtp.resend.com`, port 465, user `resend`, pass = API key, sender `no-reply@korb.app`)
 - ☐ Supabase → Auth → Email Templates → Magic Link → include `{{ .Token }}` (the 6-digit code)
 - ☐ Supabase → Auth → Rate Limits → raise "Emails per hour"
 - ☐ Test sign-in from the app (code lands in inbox → enter → signed in)
 
-> **Check the DNS Type FIRST — this is what actually went wrong.** Everything
-> in the table above assumes the domain is on **Namecheap BasicDNS**. `korb.app`
-> was on **Namecheap Web Hosting DNS**, and on that setting the Advanced DNS
-> page has no host record editor at all — both HOST RECORDS and MAIL SETTINGS
-> are replaced by "You can manage these in your cPanel account, or transfer DNS
-> back to Namecheap BasicDNS". There is nowhere on that screen to add a TXT or
-> MX row.
+The end-to-end check, independent of Supabase — a message id back means Resend
+and DNS are both good and anything still broken is in Supabase's config:
+
+```bash
+curl -X POST https://api.resend.com/emails \
+  -H "Authorization: Bearer $RESEND_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"no-reply@korb.app","to":"YOU@example.com","subject":"Korb","text":"works"}'
+```
+
+> **Never paste the key into a screenshot, a chat, or this file.** Put it in a
+> shell variable as above. A leaked Resend key lets anyone send as `korb.app`,
+> and the cost is the domain's sending reputation, which is far more expensive to
+> recover than the key is to rotate. If one is ever exposed: Resend → API Keys →
+> delete it, create a replacement, update Supabase's SMTP password.
+
+> **Postmortem — why this took nineteen days.** The table above used to carry a
+> ✅ on every row plus the line "Resend shows Domain verified — ready to send ✅".
+> None of it was true. The domain was on Web Hosting DNS, so the records had
+> never been served; Resend polled for 72 hours, gave up, and left it Failed.
 >
-> So the records were never created — not added wrong, not truncated. Resend
-> reported "All required records are missing" for nineteen days and every
-> restart of verification failed instantly, while the debugging went looking at
-> API keys, key scopes and sender addresses. The tell was in Resend's own
-> wording: it names *all* records missing rather than one bad value.
+> Sign-in kept working the whole time, because it was going out over a sender
+> that does not depend on the domain (`onboarding@resend.dev`, or Supabase's
+> built-in mailer). That is why a three-week outage of a domain nobody was
+> sending from went unnoticed until the config moved toward production.
 >
-> Fix: **Advanced DNS → Change DNS Type → Namecheap BasicDNS**, then add the
-> rows. (Or add them in cPanel's Zone Editor and ignore the Namecheap-specific
-> steps entirely.) Before switching, load `https://korb.app` — if something is
-> being served from that cPanel, changing nameservers takes it down until an A
-> record is re-added. Hosting the legal docs is not a reason to stay: GitHub
-> Pages or Cloudflare Pages serves those fine.
+> Two lessons, both cheap:
 >
-> Confirm the records actually resolve BEFORE restarting verification in
-> Resend — restarting against DNS that isn't there just fails again:
->
-> ```
-> nslookup -type=TXT resend._domainkey.korb.app 8.8.8.8
-> nslookup -type=TXT send.korb.app 8.8.8.8
-> nslookup -type=MX  send.korb.app 8.8.8.8
-> ```
+> 1. **Do not tick a box here until the thing is observably true.** Those ✅
+>    marks were written as intent and read back later as fact — by a human and
+>    by Claude, each of whom then told the other the domain was fine. A
+>    checklist that lies is worse than no checklist.
+> 2. **Read the error's exact wording.** Resend said "**All** required records
+>    are missing" — *all*, not one. No amount of mis-pasting or a forgotten MX
+>    row produces that; it means the zone itself is not being served. Three
+>    rounds went into API keys and key scopes before anyone took the word "all"
+>    literally.
 
 > **MX gotcha (BasicDNS only):** Namecheap does NOT list MX in the Host Records dropdown. Scroll
 > to the separate **MAIL SETTINGS** section, switch it to **Custom MX**, then add
