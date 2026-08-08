@@ -72,7 +72,37 @@ Remaining email steps:
 - ☐ Supabase → Auth → Rate Limits → raise "Emails per hour"
 - ☐ Test sign-in from the app (code lands in inbox → enter → signed in)
 
-> **MX gotcha:** Namecheap does NOT list MX in the Host Records dropdown. Scroll
+> **Check the DNS Type FIRST — this is what actually went wrong.** Everything
+> in the table above assumes the domain is on **Namecheap BasicDNS**. `korb.app`
+> was on **Namecheap Web Hosting DNS**, and on that setting the Advanced DNS
+> page has no host record editor at all — both HOST RECORDS and MAIL SETTINGS
+> are replaced by "You can manage these in your cPanel account, or transfer DNS
+> back to Namecheap BasicDNS". There is nowhere on that screen to add a TXT or
+> MX row.
+>
+> So the records were never created — not added wrong, not truncated. Resend
+> reported "All required records are missing" for nineteen days and every
+> restart of verification failed instantly, while the debugging went looking at
+> API keys, key scopes and sender addresses. The tell was in Resend's own
+> wording: it names *all* records missing rather than one bad value.
+>
+> Fix: **Advanced DNS → Change DNS Type → Namecheap BasicDNS**, then add the
+> rows. (Or add them in cPanel's Zone Editor and ignore the Namecheap-specific
+> steps entirely.) Before switching, load `https://korb.app` — if something is
+> being served from that cPanel, changing nameservers takes it down until an A
+> record is re-added. Hosting the legal docs is not a reason to stay: GitHub
+> Pages or Cloudflare Pages serves those fine.
+>
+> Confirm the records actually resolve BEFORE restarting verification in
+> Resend — restarting against DNS that isn't there just fails again:
+>
+> ```
+> nslookup -type=TXT resend._domainkey.korb.app 8.8.8.8
+> nslookup -type=TXT send.korb.app 8.8.8.8
+> nslookup -type=MX  send.korb.app 8.8.8.8
+> ```
+
+> **MX gotcha (BasicDNS only):** Namecheap does NOT list MX in the Host Records dropdown. Scroll
 > to the separate **MAIL SETTINGS** section, switch it to **Custom MX**, then add
 > the MX row there. Switching to Custom MX disables Namecheap's built-in email
 > forwarding — fine; use Cloudflare Email Routing for `support@` later.
