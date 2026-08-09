@@ -12,6 +12,12 @@ interface GlassViewProps extends PropsWithChildren {
   intensity?: number;
   /** Accent the hairline border (e.g. call-to-action cards). */
   accented?: boolean;
+  /**
+   * What sits behind this surface — see components/frosted.tsx. Sheets, menus
+   * and dialogs must pass `content`, or on Android the rows and buttons under
+   * them read straight through.
+   */
+  over?: 'mesh' | 'content';
 }
 
 /**
@@ -23,12 +29,20 @@ interface GlassViewProps extends PropsWithChildren {
  * and the Insights tab renders twenty-one of them. See components/frosted.tsx
  * for why that made a real Android blur unaffordable.
  */
-export function GlassView({ children, style, radius = radii.lg, intensity, accented = false }: GlassViewProps) {
+export function GlassView({
+  children,
+  style,
+  radius = radii.lg,
+  intensity,
+  accented = false,
+  over = 'mesh',
+}: GlassViewProps) {
   const { colors } = useTheme();
 
   return (
     <Frosted
       intensity={intensity}
+      over={over}
       style={[
         styles.base,
         { borderRadius: radius, borderColor: accented ? colors.accent : colors.glassBorder },

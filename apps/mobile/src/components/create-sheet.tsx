@@ -152,7 +152,7 @@ export function CreateSheet({
           {/* Stops a tap on the sheet itself from closing it. */}
           <Pressable onPress={() => {}}>
             <Animated.View style={[styles.origin, { marginBottom: bottomClearance }, cardStyle]}>
-            <GlassView radius={radii.lg} style={styles.card}>
+            <GlassView over="content" radius={radii.lg} style={styles.card}>
               <Text style={[type.h2, { color: colors.ink }]}>{t('create.title')}</Text>
 
               <Pressable

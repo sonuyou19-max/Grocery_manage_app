@@ -210,7 +210,11 @@ export default function CardsScreen() {
             {/* Stop taps on the card itself from dismissing — a hand resting on
                 the phone at the till shouldn't close it. */}
             <Pressable onPress={() => {}}>
-              <GlassView radius={radii.lg} style={styles.openCard}>
+              {/* over="content": this is the card held up to a scanner at the
+                  till. A translucent surface puts the wallet list behind it
+                  straight through the barcode, which is not a styling problem —
+                  it is a barcode that may not read. */}
+              <GlassView over="content" radius={radii.lg} style={styles.openCard}>
                 <View style={styles.openHead}>
                   <BrandMark store={open.store} size={38} onColor={false} />
                   <Text style={[type.h2, { color: colors.ink, flex: 1 }]} numberOfLines={2}>

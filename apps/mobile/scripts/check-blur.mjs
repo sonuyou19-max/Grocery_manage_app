@@ -113,7 +113,60 @@ if (importers.length) {
   console.log('ok   expo-blur is imported only by Frosted and the teaser');
 }
 
-/* ---------------- 3. the always-on background stays free ------------------ */
+/* ---------------- 3. overlays are opaque, not translucent ---------------- */
+
+/*
+ * The Android build without a real blur shipped every frosted surface at the
+ * same 90% fill. On a card that is right — the mesh behind it has nothing
+ * legible in it. On a sheet or a menu it was not: list rows, icons and buttons
+ * read straight through, and the result looked, in the user's words, "very
+ * bad". A blur used to hide that no matter what the alpha was.
+ *
+ * So `over="content"` selects an opaque fill, and anything inside a <Modal> is
+ * over content by definition. That file-level rule is coarse — a file could
+ * legitimately hold both a modal and a card over the mesh — but it holds across
+ * the whole app today, and the one file that broke it was a genuine miss: the
+ * loyalty card held up to a scanner at the till, where a translucent surface
+ * puts the wallet list through the barcode.
+ *
+ * It does NOT catch overlays that are not modals (the tab bar, the toast, the
+ * add bar). Those are marked by hand; nothing here can infer them.
+ */
+/*
+ * Built fresh per use, NOT hoisted to a module const.
+ *
+ * A /g regex carries `lastIndex` between calls, so reusing one object for both
+ * `.test()` in a filter and `.matchAll()` later makes each test resume where
+ * the previous one stopped — and files get silently skipped. The first draft of
+ * this check did exactly that and reported 7 files where 11 qualify, which is
+ * the failure mode a guard can least afford: quietly checking less than it says.
+ */
+const surfaceTags = (src) => [...src.matchAll(/<(GlassView|Frosted)\b([^>]*)>/g)];
+
+const modalFiles = files.filter(
+  (f) => f.rel !== OWNER && /<Modal\b/.test(f.src) && surfaceTags(f.src).length > 0,
+);
+
+const bare = [];
+for (const f of modalFiles) {
+  for (const m of surfaceTags(f.src)) {
+    if (!/over=\{?["']content["']\}?/.test(m[2])) bare.push(`${f.rel}: <${m[1]} …>`);
+  }
+}
+
+if (bare.length) {
+  fail('a surface inside a <Modal> is translucent', [
+    ...bare.map((b) => `  ${b}`),
+    'Anything in a Modal sits on app content, so on Android the rows and',
+    'buttons underneath show through a 90% fill. Pass over="content" for an',
+    'opaque one. If this really is a card over the mesh that happens to share',
+    'a file with a modal, move it to its own file rather than weakening this.',
+  ]);
+} else {
+  console.log(`ok   all surfaces inside a <Modal> are over="content" (${modalFiles.length} files)`);
+}
+
+/* ---------------- 4. the always-on background stays free ------------------ */
 
 const mesh = files.find((f) => f.rel === 'components/mesh-background.tsx');
 if (!mesh) {
@@ -130,7 +183,7 @@ if (!mesh) {
   console.log('ok   the mesh background does no per-frame work');
 }
 
-/* ---------------- 4. the first frame is never empty ---------------------- */
+/* ---------------- 5. the first frame is never empty ---------------------- */
 
 /*
  * Expo hides the native splash on the app's first frame. If the provider that

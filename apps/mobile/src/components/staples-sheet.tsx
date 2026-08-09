@@ -36,7 +36,7 @@ export function StaplesSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable onPress={() => {}}>
-          <GlassView radius={radii.lg} style={styles.card}>
+          <GlassView over="content" radius={radii.lg} style={styles.card}>
             <View style={styles.grabber} />
             <Text style={[type.h2, { color: colors.ink }]}>{t('insights.staplesTitle')}</Text>
             {/* Bounded height, not flex: the sheet must not grow past the

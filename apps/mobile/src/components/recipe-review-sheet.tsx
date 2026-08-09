@@ -189,7 +189,7 @@ export function RecipeReviewSheet({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable onPress={() => {}}>
           <Animated.View style={sheetStyle}>
-          <GlassView radius={radii.lg} style={styles.card}>
+          <GlassView over="content" radius={radii.lg} style={styles.card}>
             <View style={styles.grabber} />
 
             {mode === 'create' ? (

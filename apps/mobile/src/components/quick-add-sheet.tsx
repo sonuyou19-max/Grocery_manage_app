@@ -167,6 +167,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
         <Animated.View style={[styles.sheet, sheetStyle]}>
           <Frosted
+            over="content"
             intensity={scheme === 'dark' ? 40 : 60}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"

@@ -121,6 +121,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
     <View style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }]} pointerEvents="box-none">
       <View style={styles.shadow}>
         <Frosted
+          over="content"
           intensity={scheme === 'dark' ? 40 : 60}
           style={[styles.pill, { borderColor: colors.glassBorder }]}
         >

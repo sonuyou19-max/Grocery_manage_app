@@ -181,6 +181,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
         </Animated.View>
         <Animated.View style={[styles.sheet, sheetStyle]}>
           <Frosted
+            over="content"
             intensity={scheme === 'dark' ? 40 : 60}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"

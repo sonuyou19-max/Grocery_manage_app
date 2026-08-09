@@ -65,7 +65,7 @@ export function StapleSheet({
       <Pressable style={styles.backdrop} onPress={onClose}>
         {/* Swallow taps on the sheet so adjusting settings doesn't dismiss it. */}
         <Pressable onPress={() => {}} style={styles.sheetWrap}>
-          <GlassView radius={radii.lg} style={styles.sheet}>
+          <GlassView over="content" radius={radii.lg} style={styles.sheet}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
               <View>
                 <Text style={[type.h2, { color: colors.ink }]} numberOfLines={2}>

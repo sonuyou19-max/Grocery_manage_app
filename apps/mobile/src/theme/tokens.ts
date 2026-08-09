@@ -63,6 +63,18 @@ export interface ThemeColors {
    * is glass rather than a panel.
    */
   glassSolid: string;
+  /**
+   * Overlays that sit on APP CONTENT rather than on the mesh — sheets, menus,
+   * dialogs, the tab bar, the toast.
+   *
+   * Opaque, and that is the point. A card floats over a smooth gradient, so a
+   * translucent fill there still reads as glass and there is nothing legible
+   * behind it to distract. A menu floats over list rows and buttons, and at 90%
+   * those show straight through: the first Android build without a real blur
+   * behind them looked, in the user's words, "very bad". A blur used to hide
+   * that regardless of alpha; nothing does now, so the fill has to.
+   */
+  overlaySolid: string;
   glassBorder: string;
   /** BlurView tint to use for glass/mesh in this scheme. */
   blurTint: 'light' | 'dark';
@@ -112,6 +124,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshScrim: 'rgba(246,247,240,0.5)',
     glassFill: 'rgba(255,255,255,0.55)',
     glassSolid: 'rgba(252,253,248,0.9)',
+    overlaySolid: '#FBFCF7',
     glassBorder: 'rgba(20,26,16,0.22)',
     blurTint: 'light',
     plusFrom: '#6D5AE6',
@@ -141,6 +154,7 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshScrim: 'rgba(11,15,9,0.42)',
     glassFill: 'rgba(30,36,27,0.55)',
     glassSolid: 'rgba(26,32,23,0.9)',
+    overlaySolid: '#1A2017',
     glassBorder: 'rgba(255,255,255,0.16)',
     blurTint: 'dark',
     // Lifted and desaturated for the dark surface: the light-mode violet goes

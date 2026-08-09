@@ -48,7 +48,7 @@ export function ListPickerSheet({ visible, title, onCancel, onPick }: ListPicker
         onRequestClose={onCancel}
       >
         <Pressable style={styles.backdrop} onPress={onCancel}>
-          <GlassView radius={radii.lg} style={styles.card}>
+          <GlassView over="content" radius={radii.lg} style={styles.card}>
             <Text style={[type.h2, { color: colors.ink }]}>{heading}</Text>
 
             <Pressable style={styles.row} onPress={() => setCreating(true)}>

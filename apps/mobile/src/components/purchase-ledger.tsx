@@ -60,7 +60,7 @@ export function PurchaseLedger({
           onPress={() => {}}
           style={[styles.sheetWrap, { paddingBottom: spacing.md + insets.bottom }]}
         >
-          <GlassView radius={radii.lg} style={styles.sheet}>
+          <GlassView over="content" radius={radii.lg} style={styles.sheet}>
             <View style={styles.head}>
               <ItemEmoji name={name} category={category} size={22} />
               <View style={styles.grow}>

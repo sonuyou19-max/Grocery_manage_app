@@ -596,6 +596,7 @@ export default function ListDetailScreen() {
       {/* Add bar — pinned above the keyboard by the screen-level
           KeyboardAvoidingView (padding on iOS, height on Android). */}
       <Frosted
+        over="content"
         intensity={scheme === 'dark' ? 40 : 60}
         style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
       >

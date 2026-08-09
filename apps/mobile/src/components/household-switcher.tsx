@@ -44,7 +44,7 @@ export function HouseholdSwitcher({ fallback }: { fallback: string }) {
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <GlassView radius={radii.lg} style={styles.card}>
+          <GlassView over="content" radius={radii.lg} style={styles.card}>
             {households.map((h) => {
               const active = h.id === household.id;
               return (

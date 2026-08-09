@@ -119,7 +119,7 @@ function ToastView({
       pointerEvents="none"
       accessibilityLiveRegion="polite"
     >
-      <GlassView radius={radii.pill} style={styles.pill}>
+      <GlassView over="content" radius={radii.pill} style={styles.pill}>
         <Text style={[type.sub, { color: colors.ink }]} numberOfLines={2}>
           {message}
         </Text>

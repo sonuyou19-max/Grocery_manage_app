@@ -173,7 +173,7 @@ export function RangePicker({ value, onChange }: { value: Range; onChange: (r: R
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <GlassView radius={radii.lg} style={styles.menu}>
+          <GlassView over="content" radius={radii.lg} style={styles.menu}>
             {RANGES.map((r) => {
               const active = r === value;
               const paid = isPaid(r);

@@ -41,13 +41,21 @@ import { useTheme } from '@/theme';
  *
  * On iOS, keep the real blur: it is a native effect view and costs nothing.
  *
- * On Android, render a plain translucent View. The look survives because the
- * only thing behind these surfaces is the mesh gradient (see mesh-background),
- * which is a smooth, low-frequency field — there is no fine detail for a blur
- * to smear, so blurring it and tinting it produce nearly the same pixels. What
- * a blur DOES do there is hide content scrolling underneath, so Android uses a
- * denser fill (`colors.glassSolid`) than iOS's `colors.glassFill` to get the
- * same opacity without the per-frame cost.
+ * On Android, render a plain View with a fill instead — and WHICH fill depends
+ * on what is behind it, which is the distinction the first version of this
+ * component missed.
+ *
+ * A card sits on the mesh gradient: a smooth, low-frequency field with no fine
+ * detail for a blur to smear, so a translucent fill there produces nearly the
+ * same pixels a blur would, and still reads as glass. That is `over="mesh"`,
+ * the default.
+ *
+ * A sheet, menu, dialog, toast or the tab bar sits on APP CONTENT — list rows,
+ * icons, buttons. A blur used to make those unreadable no matter what the alpha
+ * was. Nothing does now, so at 90% they showed straight through and the result
+ * looked, in the user's words, "very bad". Those surfaces pass `over="content"`
+ * and get an opaque fill. Legibility is not a thing to trade for a material
+ * effect that Android cannot afford anyway.
  *
  * The one place a real blur is load-bearing is components/teaser.tsx, where it
  * exists to make invented sample figures unreadable. That one keeps its
@@ -56,16 +64,24 @@ import { useTheme } from '@/theme';
 interface FrostedProps extends PropsWithChildren {
   /** iOS blur strength (0–100). Ignored on Android, which does not blur. */
   intensity?: number;
+  /**
+   * What is behind this surface. `mesh` (default) is the gradient background —
+   * a translucent fill is right there. `content` is anything else, and gets an
+   * opaque fill so text and controls underneath cannot read through. See the
+   * note above; getting this wrong is visible immediately.
+   */
+  over?: 'mesh' | 'content';
   style?: StyleProp<ViewStyle>;
   pointerEvents?: ViewStyle['pointerEvents'];
 }
 
-export function Frosted({ intensity, style, pointerEvents, children }: FrostedProps) {
+export function Frosted({ intensity, over = 'mesh', style, pointerEvents, children }: FrostedProps) {
   const { colors, scheme } = useTheme();
 
   if (Platform.OS !== 'ios') {
+    const fill = over === 'content' ? colors.overlaySolid : colors.glassSolid;
     return (
-      <View style={[style, { backgroundColor: colors.glassSolid }]} pointerEvents={pointerEvents}>
+      <View style={[style, { backgroundColor: fill }]} pointerEvents={pointerEvents}>
         {children}
       </View>
     );
