@@ -1,5 +1,8 @@
 // AI-drafted Dutch. Recommend a native review before store launch.
 const nl = {
+  boot: {
+    loading: 'Korb wordt geladen',
+  },
   tabs: { lists: 'Lijsten', pantry: 'Voorraad', insights: 'Inzichten', settings: 'Instellingen' },
   common: {
     listJoin: ', ',
@@ -684,6 +687,7 @@ const nl = {
   },
   authError: {
     sendFailed: 'Kon de code nu niet versturen. Probeer het zo meteen opnieuw.',
+    network: 'Kon de server niet bereiken. Controleer je verbinding en probeer opnieuw.',
     codeWrong: 'Die code werkte niet. Controleer hem en probeer opnieuw.',
     createFailed: 'Kon het account niet aanmaken.',
     confirmEmailOn:

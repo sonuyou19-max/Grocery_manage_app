@@ -113,6 +113,81 @@ if (!holdsSplash) {
   }
 }
 
+/* ----------------------- the React boot gate ---------------------------- */
+
+/*
+ * The replacement for the native splash gate: components/boot-gate.tsx holds a
+ * loading screen INSIDE React until launch resolves. It is allowed to exist
+ * where the native version was not, because it cannot outlive the JS that
+ * draws it — but only as long as it keeps to the two rules below, which are
+ * exactly the ones the native attempts broke.
+ */
+const gate = code(read('components/boot-gate.tsx'));
+if (gate == null) {
+  console.log('ok   no React boot gate present (nothing to check)');
+} else {
+  if (/expo-splash-screen/.test(gate)) {
+    fail('the boot gate reaches for the native splash', [
+      'This component is safe because a broken bundle makes it render NOTHING,',
+      'rather than leaving a native screen only JS can dismiss. Calling',
+      'preventAutoHideAsync() from here gives back the exact failure mode that',
+      'broke the app twice. Expo hides the splash on the first frame and',
+      'store/locale paints that frame — the handover needs no native call.',
+    ]);
+  } else {
+    console.log('ok   the boot gate does not touch the native splash');
+  }
+
+  const capped = /useEffect\(\(\)\s*=>\s*\{\s*const\s+\w+\s*=\s*setTimeout\(/.test(gate);
+  if (!capped) {
+    fail('the boot gate has no unconditional timeout', [
+      'Every readiness flag is a promise, and a promise that never settles is',
+      'an app that never starts. Arm a setTimeout on mount — empty deps, no',
+      'conditions — that reveals the app regardless of any flag.',
+    ]);
+  } else {
+    console.log('ok   ...and is released by an unconditional timer');
+  }
+
+  /*
+   * Flags that settle over the network. supabase-js applies no client timeout,
+   * so any of these can fail to resolve at all — waiting on one is what hung
+   * the app the first time. `restored` and `hydrated` are the AsyncStorage
+   * counterparts and are the only readiness flags the gate may read.
+   */
+  const bad = [];
+
+  /*
+   * Destructured names, NOT "the hook is called" — the gate legitimately calls
+   * useHousehold() for `restored`. Match inside the braces, because in
+   * `const { restored, loading } = useHousehold()` the offending name appears
+   * BEFORE the call, not after it. An earlier version of this check looked
+   * after the call and therefore passed on exactly the code it exists to
+   * reject.
+   */
+  const BANNED_HOUSEHOLD = ['loading', 'households', 'household'];
+  for (const m of gate.matchAll(/const\s*\{([^}]*)\}\s*=\s*useHousehold\(\)/g)) {
+    const names = m[1].split(',').map((n) => n.split(':')[0].trim());
+    for (const n of names) {
+      if (BANNED_HOUSEHOLD.includes(n)) bad.push(`useHousehold().${n}`);
+    }
+  }
+  for (const hook of ['useEntitlement', 'usePantryIntel']) {
+    if (new RegExp(`${hook}\\(`).test(gate)) bad.push(`${hook}()`);
+  }
+
+  if (bad.length) {
+    fail('the boot gate waits on a network-backed flag', [
+      ...bad.map((n) => `${n} settles over the network, and the gate reads it.`),
+      'Wait on AsyncStorage-backed flags only — useHousehold().restored and',
+      'useGroceries().hydrated. Note `loading` is false BOTH before the fetch',
+      'starts and after it ends, so it cannot answer "has this resolved yet".',
+    ]);
+  } else {
+    console.log('ok   ...and waits only on flags that settle on-device');
+  }
+}
+
 /* ------------------- always: the session lookup must settle ------------- */
 
 /*

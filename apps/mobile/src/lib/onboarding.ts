@@ -93,3 +93,19 @@ export async function markGetStartedSeen(): Promise<void> {
     // best-effort
   }
 }
+
+/**
+ * Both first-run flags, read together.
+ *
+ * components/boot-gate holds the loading screen until this resolves, so the
+ * dashboard's FIRST render already knows whether the tour is owed. Reading them
+ * after the dashboard mounts is what made the tour slide in over an
+ * already-painted empty screen.
+ *
+ * Neither call below can reject — each catches its own storage failure and
+ * fails closed — so this settles unconditionally, which is what makes it safe
+ * to wait on.
+ */
+export async function hydrateFirstRunFlags(): Promise<void> {
+  await Promise.all([hydrateOnboarding(), hydrateGetStarted()]);
+}

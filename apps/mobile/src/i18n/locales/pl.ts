@@ -5,6 +5,9 @@
 // `other` mirrors `many` as a safety net for non-integer counts. The matching
 // CLDR rule is registered in `src/i18n/index.ts`.
 const pl = {
+  boot: {
+    loading: 'Wczytywanie Korb',
+  },
   tabs: { lists: 'Listy', pantry: 'Spiżarnia', insights: 'Analizy', settings: 'Ustawienia' },
   common: {
     listJoin: ', ',
@@ -777,6 +780,7 @@ const pl = {
   },
   authError: {
     sendFailed: 'Nie udało się teraz wysłać kodu. Spróbuj ponownie za chwilę.',
+    network: 'Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.',
     codeWrong: 'Ten kod nie zadziałał. Sprawdź go i spróbuj ponownie.',
     createFailed: 'Nie udało się utworzyć konta.',
     confirmEmailOn:

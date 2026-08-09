@@ -11,6 +11,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { BootGate } from '@/components/boot-gate';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ToastProvider } from '@/components/toast';
 import { hydrateCategoryCache } from '@/lib/categorize';
@@ -112,6 +113,11 @@ export default function RootLayout() {
           <HouseholdProvider>
             <GroceriesProvider>
               <PantryIntelProvider>
+                {/* Innermost, so it can read the readiness flags of everything
+                    above it — and so the local→cloud backend choice in
+                    GroceriesProvider is settled behind the loading screen
+                    rather than in front of the user. */}
+                <BootGate>
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="list/[id]" />
@@ -140,6 +146,7 @@ export default function RootLayout() {
                     options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }}
                   />
                 </Stack>
+                </BootGate>
                 <StatusBar style="auto" />
               </PantryIntelProvider>
             </GroceriesProvider>

@@ -1,5 +1,8 @@
 // AI-drafted French. Recommend a native review before store launch.
 const fr = {
+  boot: {
+    loading: 'Chargement de Korb',
+  },
   tabs: { lists: 'Listes', pantry: 'Garde-manger', insights: 'Analyses', settings: 'Réglages' },
   common: {
     listJoin: ', ',
@@ -686,6 +689,7 @@ const fr = {
   },
   authError: {
     sendFailed: 'Impossible d’envoyer le code pour l’instant. Réessaie dans un moment.',
+    network: 'Impossible de joindre le serveur. Vérifie ta connexion et réessaie.',
     codeWrong: 'Ce code n’a pas fonctionné. Vérifie-le et réessaie.',
     createFailed: 'Impossible de créer le compte.',
     confirmEmailOn:

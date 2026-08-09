@@ -1,5 +1,8 @@
 // AI-drafted Spanish (informal "tú"). Recommend a native review before store launch.
 const es = {
+  boot: {
+    loading: 'Cargando Korb',
+  },
   tabs: { lists: 'Listas', pantry: 'Despensa', insights: 'Análisis', settings: 'Ajustes' },
   common: {
     listJoin: ', ',
@@ -685,6 +688,7 @@ const es = {
   },
   authError: {
     sendFailed: 'No se pudo enviar el código ahora mismo. Inténtalo de nuevo en un momento.',
+    network: 'No se pudo conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.',
     codeWrong: 'Ese código no ha funcionado. Compruébalo e inténtalo de nuevo.',
     createFailed: 'No se pudo crear la cuenta.',
     confirmEmailOn:

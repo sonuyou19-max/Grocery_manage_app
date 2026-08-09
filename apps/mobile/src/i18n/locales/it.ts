@@ -1,5 +1,8 @@
 // AI-drafted Italian (informal "tu"). Recommend a native review before store launch.
 const it = {
+  boot: {
+    loading: 'Caricamento di Korb',
+  },
   tabs: { lists: 'Liste', pantry: 'Dispensa', insights: 'Analisi', settings: 'Impostazioni' },
   common: {
     listJoin: ', ',
@@ -686,6 +689,7 @@ const it = {
   },
   authError: {
     sendFailed: 'Non è stato possibile inviare il codice ora. Riprova tra poco.',
+    network: 'Non riesco a raggiungere il server. Controlla la connessione e riprova.',
     codeWrong: 'Quel codice non ha funzionato. Controllalo e riprova.',
     createFailed: 'Non è stato possibile creare l’account.',
     confirmEmailOn:

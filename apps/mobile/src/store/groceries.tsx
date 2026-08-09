@@ -117,6 +117,14 @@ interface GroceriesContext {
    * nothing rather than a "nobody here" state.
    */
   shoppersOnline: string[];
+  /**
+   * Whether the on-device read that seeds `lists` has finished.
+   *
+   * LOCAL only — it says the cache has been read, never that the server has
+   * answered. components/boot-gate waits on it, and that distinction is the
+   * point: a flag that settles over the network can fail to settle at all.
+   */
+  hydrated: boolean;
 }
 
 const Ctx = createContext<GroceriesContext | null>(null);
@@ -175,11 +183,34 @@ const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {})
 
 export function GroceriesProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
-  const { household } = useHousehold();
+  const { household, activeId } = useHousehold();
 
-  if (user && household) {
+  /*
+   * The remembered id first, the fetched household only as a fallback.
+   *
+   * This used to read `household.id`, which is derived from a network fetch —
+   * so every launch for a signed-in user mounted the WHOLE APP under the local
+   * backend, then threw it away and mounted it again under the cloud one when
+   * the fetch landed. Swapping the component type at this position unmounts
+   * everything below: the navigator, every screen, every animation in flight.
+   * That full remount, half a second into launch, is a large part of what read
+   * as the app being "confused about what to do next".
+   *
+   * `activeId` is the same id read straight off the device, so on a returning
+   * user the cloud backend is chosen on the first render and there is no swap
+   * at all. It can be stale — the household was left, deleted, or this is a
+   * different user — in which case `household` resolves to something else and
+   * the key changes, costing exactly the one remount we used to pay every time.
+   *
+   * The cloud provider seeds itself from its own AsyncStorage cache keyed by
+   * this id, so choosing it early also means real lists on the first paint
+   * rather than an empty screen waiting on the network.
+   */
+  const householdId = activeId ?? household?.id ?? null;
+
+  if (user && householdId) {
     return (
-      <CloudGroceriesProvider householdId={household.id} key={household.id}>
+      <CloudGroceriesProvider householdId={householdId} key={householdId}>
         {children}
       </CloudGroceriesProvider>
     );
@@ -198,6 +229,9 @@ const LOCAL_KEY = 'korb.lists.v2';
 function LocalGroceriesProvider({ children }: PropsWithChildren) {
   const [lists, setLists] = useState<List[]>([]);
   const hydrated = useRef(false);
+  // Same fact as the ref, in state: the ref gates the debounced save (read
+  // inside effects), this re-renders the boot gate that is waiting on it.
+  const [hydratedState, setHydratedState] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -211,6 +245,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       .catch(() => {})
       .finally(() => {
         hydrated.current = true;
+        setHydratedState(true);
       });
   }, []);
 
@@ -410,8 +445,9 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       // unconditionally and simply render nothing.
       setClaim: () => {},
       shoppersOnline: EMPTY_SHOPPERS,
+      hydrated: hydratedState,
     }),
-    [lists, patchItem, setChecked, insertParsed, resolveIfUnknown],
+    [lists, hydratedState, patchItem, setChecked, insertParsed, resolveIfUnknown],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -586,6 +622,9 @@ function CloudGroceriesProvider({
   const { user } = useAuth();
   const appActive = useAppActive();
   const [lists, setLists] = useState<List[]>([]);
+  // Set once the cache read below settles, however it settles. See the
+  // `hydrated` note on GroceriesContext: local only, never the network.
+  const [hydratedState, setHydratedState] = useState(false);
   /** Other members with the app open, from presence. Never persisted. */
   const [shoppers, setShoppers] = useState<string[]>(EMPTY_SHOPPERS);
   const cacheKey = `korb.lists.cloud.${householdId}`;
@@ -649,7 +688,10 @@ function CloudGroceriesProvider({
       .then((raw) => {
         if (alive && raw) setLists(JSON.parse(raw) as List[]);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setHydratedState(true);
+      });
     if (!appActive) return () => { alive = false; };
 
     // Bring a guest's lists across on the first cloud mount, then reload so the
@@ -998,9 +1040,11 @@ function CloudGroceriesProvider({
           });
       },
       shoppersOnline: shoppers,
+      hydrated: hydratedState,
     };
   }, [
     lists,
+    hydratedState,
     shoppers,
     householdId,
     user,

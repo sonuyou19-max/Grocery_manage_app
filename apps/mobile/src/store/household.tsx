@@ -49,6 +49,24 @@ interface HouseholdContext {
   households: Household[];
   /** The one everything else is scoped to — lists, pantry, insights, recap. */
   household: Household | null;
+  /**
+   * The remembered household id, straight off the device — available before
+   * (and independently of) the network fetch that produces `household`.
+   *
+   * The grocery store picks its backend from this, not from `household`. See
+   * the note on the provider selector in store/groceries.
+   */
+  activeId: string | null;
+  /**
+   * Whether the on-device read of `activeId` has finished. LOCAL and always
+   * settles, unlike `loading` — components/boot-gate waits on this, and the
+   * distinction is the whole reason it is a separate flag.
+   *
+   * `loading` is false both before the fetch starts and after it ends, so it
+   * cannot answer "has this resolved yet"; waiting on it is what hung the app
+   * twice (see scripts/check-splash.mjs).
+   */
+  restored: boolean;
   setActiveHousehold: (householdId: string) => void;
   /** Members of the active household. */
   members: Member[];
@@ -105,7 +123,12 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
 
   // Restore the previously selected household before the first fetch, so the
   // app reopens where it left off instead of flashing another household.
+  //
+  // Mirrored into state as well as the ref: the ref is read inside effects,
+  // while `restored` has to re-render consumers — the boot gate is waiting on
+  // it, and a ref would leave it waiting forever.
   const restoredRef = useRef(false);
+  const [restored, setRestored] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem(ACTIVE_KEY)
       .then((id) => {
@@ -114,6 +137,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       .catch(() => {})
       .finally(() => {
         restoredRef.current = true;
+        setRestored(true);
       });
   }, []);
 
@@ -253,6 +277,8 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     () => ({
       households,
       household,
+      activeId,
+      restored,
       setActiveHousehold,
       members,
       membersOf: (householdId) => byHousehold[householdId] ?? [],
@@ -347,6 +373,8 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     [
       households,
       household,
+      activeId,
+      restored,
       setActiveHousehold,
       members,
       byHousehold,

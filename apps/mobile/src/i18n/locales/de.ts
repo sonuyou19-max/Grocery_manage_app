@@ -1,5 +1,8 @@
 // AI-drafted German (informal "du"). Recommend a native review before store launch.
 const de = {
+  boot: {
+    loading: 'Korb wird geladen',
+  },
   tabs: { lists: 'Listen', pantry: 'Vorrat', insights: 'Einblicke', settings: 'Einstellungen' },
   common: {
     listJoin: ', ',
@@ -688,6 +691,7 @@ const de = {
   },
   authError: {
     sendFailed: 'Der Code ließ sich gerade nicht senden. Versuch es in einem Moment noch einmal.',
+    network: 'Der Server war nicht erreichbar. Prüfe deine Verbindung und versuch es erneut.',
     codeWrong: 'Dieser Code hat nicht funktioniert. Prüfe ihn und versuch es erneut.',
     createFailed: 'Das Konto ließ sich nicht erstellen.',
     confirmEmailOn:

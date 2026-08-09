@@ -4,6 +4,9 @@
  * safe. Keys are grouped by area; add new UI strings here first.
  */
 const en = {
+  boot: {
+    loading: 'Loading Korb',
+  },
   tabs: {
     lists: 'Lists',
     pantry: 'Pantry',
@@ -694,6 +697,7 @@ const en = {
   },
   authError: {
     sendFailed: 'We couldn’t send your code just now. Please try again in a moment.',
+    network: 'Couldn’t reach the server. Check your connection and try again.',
     codeWrong: 'That code didn’t work. Check it and try again.',
     createFailed: 'Couldn’t create the account.',
     confirmEmailOn:
