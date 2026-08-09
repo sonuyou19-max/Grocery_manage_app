@@ -3,12 +3,10 @@ import type { ItemCategory } from '@korb/shared';
 import { useCallback, useMemo, useState } from 'react';
 import {
   LayoutAnimation,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -53,10 +51,12 @@ import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-// Enable the smooth expand/collapse animation on Android too.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+/*
+ * No setLayoutAnimationEnabledExperimental call here, deliberately — see the
+ * same note in components/store-groups.tsx. It is a no-op on the New
+ * Architecture that warns in dev, and Fabric enables LayoutAnimations for
+ * Android unconditionally, so there is nothing to switch on.
+ */
 
 type Colors = ReturnType<typeof useTheme>['colors'];
 

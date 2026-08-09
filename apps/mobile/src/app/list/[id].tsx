@@ -5,14 +5,12 @@ import {
   Alert,
   LayoutAnimation,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -53,10 +51,20 @@ import { useLocale } from '@/store/locale';
 import { usePantryIntel, type PurchaseDetail } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
-// Enable the collapse/expand animation on Android too (same guard as Pantry).
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+/*
+ * No setLayoutAnimationEnabledExperimental call here, deliberately.
+ *
+ * Both files that use LayoutAnimation used to open with the usual
+ * `Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental(true)`
+ * incantation. On this app that was dead code AND dev-console noise:
+ * BridgelessUIManager implements it as a no-op that warns
+ * ("currently a no-op in the New Architecture") on every launch in dev.
+ *
+ * It is unnecessary because Reanimated 4 requires the New Architecture, so
+ * Fabric is on — and per LayoutAnimation.js, "In Fabric, LayoutAnimations are
+ * unconditionally enabled for Android". The animations below work; nothing has
+ * to switch them on.
+ */
 
 // Set this to the store/app link at launch. While empty, the invite tells the
 // recipient how to join by code inside the app.

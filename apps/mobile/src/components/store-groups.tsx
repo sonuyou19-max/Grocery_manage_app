@@ -2,11 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
   LayoutAnimation,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from 'react-native';
 
@@ -17,9 +15,20 @@ import { supermarketLabel } from '@/lib/supermarkets';
 import { useGroceries, type Item } from '@/store/groceries';
 import { spacing, type, useTheme } from '@/theme';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+/*
+ * No setLayoutAnimationEnabledExperimental call here, deliberately.
+ *
+ * Both files that use LayoutAnimation used to open with the usual
+ * `Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental(true)`
+ * incantation. On this app that was dead code AND dev-console noise:
+ * BridgelessUIManager implements it as a no-op that warns
+ * ("currently a no-op in the New Architecture") on every launch in dev.
+ *
+ * It is unnecessary because Reanimated 4 requires the New Architecture, so
+ * Fabric is on — and per LayoutAnimation.js, "In Fabric, LayoutAnimations are
+ * unconditionally enabled for Android". The animations below work; nothing has
+ * to switch them on.
+ */
 
 interface StoreEntry {
   store: string;
