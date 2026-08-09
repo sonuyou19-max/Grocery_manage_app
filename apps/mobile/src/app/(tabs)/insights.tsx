@@ -1,41 +1,68 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState, type ReactNode } from 'react';
-import { LayoutAnimation, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  LayoutAnimation,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import type { ItemCategory } from '@korb/shared';
+import type { ItemCategory } from "@korb/shared";
 
-import { AnimatedMoney } from '@/components/animated-money';
-import { Card } from '@/components/card';
-import { EcoBar } from '@/components/eco-bar';
-import { RangePicker, withinRange, type Range } from '@/components/range-picker';
-import { StaplesSheet } from '@/components/staples-sheet';
-import { InsightsTeaser } from '@/components/insights-teaser';
-import { PlusBadge } from '@/components/plus-badge';
-import { Screen } from '@/components/screen';
-import { SupermarketBadge } from '@/components/supermarket-badge';
-import { WeeklyRecapCard } from '@/components/weekly-recap-card';
-import { SpendTrendChart } from '@/components/spend-trend-chart';
-import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
-import { haptics } from '@/lib/haptics';
-import { heaviestStaple, weeklyEco, type EcoScore, type EcoWeek, type HeaviestStaple } from '@/lib/eco';
-import { ecoScoreFor } from '@/lib/item-carbon';
-import { basketBalance, GROUP_COLORS, groupLabel, type BalanceSlice } from '@/lib/nutrition';
-import { isResting } from '@/lib/pantry-intel';
-import { inSeason } from '@/lib/seasonal';
-import { cheaperStoreHints, spendByStore } from '@/lib/price-intel';
+import { AnimatedMoney } from "@/components/animated-money";
+import { Recalc } from "@/components/recalc";
+import { Card } from "@/components/card";
+import { EcoBar } from "@/components/eco-bar";
+import {
+  RangePicker,
+  withinRange,
+  type Range,
+} from "@/components/range-picker";
+import { StaplesSheet } from "@/components/staples-sheet";
+import { InsightsTeaser } from "@/components/insights-teaser";
+import { PlusBadge } from "@/components/plus-badge";
+import { Screen } from "@/components/screen";
+import { SupermarketBadge } from "@/components/supermarket-badge";
+import { WeeklyRecapCard } from "@/components/weekly-recap-card";
+import { SpendTrendChart } from "@/components/spend-trend-chart";
+import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
+import { haptics } from "@/lib/haptics";
+import {
+  heaviestStaple,
+  weeklyEco,
+  type EcoScore,
+  type EcoWeek,
+  type HeaviestStaple,
+} from "@/lib/eco";
+import { ecoScoreFor } from "@/lib/item-carbon";
+import {
+  basketBalance,
+  GROUP_COLORS,
+  groupLabel,
+  type BalanceSlice,
+} from "@/lib/nutrition";
+import { isResting } from "@/lib/pantry-intel";
+import { inSeason } from "@/lib/seasonal";
+import { cheaperStoreHints, spendByStore } from "@/lib/price-intel";
 // `priced` is imported under a longer name on purpose. As `priced` it sat one
 // character away from the `pricedItems` array below, and `priced.length` — the
 // arity of a function, which is 1 — type-checked perfectly as a number and shipped
 // "1 priced" onto a Spending card totalling €0.00. See the card itself.
-import { priced as pricedPurchases, priceMoves, spendTrend, weekStartOf } from '@/lib/purchase-log';
-import { supermarketLabel } from '@/lib/supermarkets';
-import { usePlusGate } from '@/lib/plus-gate';
-import { useAuth } from '@/store/auth';
-import { useEntitlement } from '@/store/entitlement';
-import { useGroceries } from '@/store/groceries';
-import { useLocale } from '@/store/locale';
-import { usePantryIntel } from '@/store/pantry-intel';
-import { radii, spacing, type, useTheme } from '@/theme';
+import {
+  priced as pricedPurchases,
+  priceMoves,
+  spendTrend,
+  weekStartOf,
+} from "@/lib/purchase-log";
+import { supermarketLabel } from "@/lib/supermarkets";
+import { usePlusGate } from "@/lib/plus-gate";
+import { useAuth } from "@/store/auth";
+import { useEntitlement } from "@/store/entitlement";
+import { useGroceries } from "@/store/groceries";
+import { useLocale } from "@/store/locale";
+import { usePantryIntel } from "@/store/pantry-intel";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -114,21 +141,32 @@ function SignedInInsights() {
    * them, and because a card that owned its own state would reset every time
    * the tab re-rendered for an unrelated reason.
    */
-  const [spendRange, setSpendRange] = useState<Range>('month');
-  const [storeRange, setStoreRange] = useState<Range>('month');
-  const [stapleRange, setStapleRange] = useState<Range>('month');
+  const [spendRange, setSpendRange] = useState<Range>("month");
+  const [storeRange, setStoreRange] = useState<Range>("month");
+  const [stapleRange, setStapleRange] = useState<Range>("month");
   const [staplesOpen, setStaplesOpen] = useState(false);
 
   const cart = useMemo(
-    () => basketBalance(lists.flatMap((l) => l.items).map((it) => ({ name: it.name, category: it.category }))),
+    () =>
+      basketBalance(
+        lists
+          .flatMap((l) => l.items)
+          .map((it) => ({ name: it.name, category: it.category })),
+      ),
     [lists],
   );
   // Resting items are out of every reading here: they're history Korb keeps but
   // no longer tracks, so counting them would describe a pantry you don't have.
-  const tracked = useMemo(() => Object.values(stats).filter((s) => !isResting(s)), [stats]);
+  const tracked = useMemo(
+    () => Object.values(stats).filter((s) => !isResting(s)),
+    [stats],
+  );
 
   const pantry = useMemo(
-    () => basketBalance(tracked.map((s) => ({ name: s.display, category: s.category }))),
+    () =>
+      basketBalance(
+        tracked.map((s) => ({ name: s.display, category: s.category })),
+      ),
     [tracked],
   );
 
@@ -142,7 +180,10 @@ function SignedInInsights() {
    * question.
    */
   const staples = useMemo(() => {
-    const counts = new Map<string, { key: string; display: string; times: number }>();
+    const counts = new Map<
+      string,
+      { key: string; display: string; times: number }
+    >();
     for (const p of withinRange(purchases, stapleRange, now)) {
       const found = counts.get(p.key);
       if (found) found.times += 1;
@@ -178,7 +219,7 @@ function SignedInInsights() {
       // is a fact about the filter rather than an assumption about the data.
       pricedPurchases(purchases).map((p) => ({
         name: p.name,
-        category: statsByKey.get(p.key)?.category ?? ('other' as ItemCategory),
+        category: statsByKey.get(p.key)?.category ?? ("other" as ItemCategory),
         priceCents: p.priceCents as number,
         store: p.store,
         // Carried through, not dropped. Without these the cheaper-elsewhere
@@ -213,7 +254,8 @@ function SignedInInsights() {
   const spendTotal = spendScoped.reduce((sum, it) => sum + it.priceCents, 0);
   const spendByCat = useMemo(() => {
     const m = new Map<ItemCategory, number>();
-    for (const it of spendScoped) m.set(it.category, (m.get(it.category) ?? 0) + it.priceCents);
+    for (const it of spendScoped)
+      m.set(it.category, (m.get(it.category) ?? 0) + it.priceCents);
     return CATEGORY_ORDER.map((c) => ({ category: c, cents: m.get(c) ?? 0 }))
       .filter((x) => x.cents > 0)
       .sort((a, b) => b.cents - a.cents);
@@ -249,7 +291,7 @@ function SignedInInsights() {
       ecoScoreFor(
         ecoPurchases.map((p) => ({
           name: p.name,
-          category: p.category ?? ('other' as ItemCategory),
+          category: p.category ?? ("other" as ItemCategory),
           bio: p.bio,
         })),
       ),
@@ -271,7 +313,7 @@ function SignedInInsights() {
 
   return (
     <Screen
-      title={t('tabs.insights')}
+      title={t("tabs.insights")}
       /* The tier sits on the status line, exactly as it does on the dashboard,
          instead of in a card at the foot of the tab. That card was the last
          thing you reached after scrolling every chart — the worst place to
@@ -281,7 +323,9 @@ function SignedInInsights() {
          same screen. One description of Plus, one way in. */
       subtitle={
         <View style={styles.statusRow}>
-          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.subtitle')}</Text>
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("insights.subtitle")}
+          </Text>
           <PlusBadge />
         </View>
       }
@@ -295,11 +339,13 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="nutrition-outline"
-            title={t('insights.basketTitle')}
-            hint={t('insights.basketHint', { count: cart.total })}
+            title={t("insights.basketTitle")}
+            hint={t("insights.basketHint", { count: cart.total })}
           />
           <BalanceBar slices={cart.slices} />
-          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.basketNote')}</Text>
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("insights.basketNote")}
+          </Text>
         </Card>
       )}
 
@@ -319,8 +365,8 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="file-tray-full-outline"
-            title={t('insights.pantryMixTitle')}
-            hint={t('insights.pantryMixHint', { count: pantry.total })}
+            title={t("insights.pantryMixTitle")}
+            hint={t("insights.pantryMixHint", { count: pantry.total })}
           />
           <BalanceBar slices={pantry.slices} />
         </Card>
@@ -332,36 +378,47 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="repeat-outline"
-            title={t('insights.staplesTitle')}
-            action={<RangePicker value={stapleRange} onChange={setStapleRange} />}
+            title={t("insights.staplesTitle")}
+            action={
+              <RangePicker value={stapleRange} onChange={setStapleRange} />
+            }
           />
-          {/* Five, then a door. A household with sixty tracked items turned this
+          <Recalc trigger={stapleRange} style={styles.recalc}>
+            {/* Five, then a door. A household with sixty tracked items turned this
               card into most of the tab, and the sixtieth staple is not what
               anybody came for — but it should still be reachable. */}
-          {staples.slice(0, STAPLES_SHOWN).map((s) => (
-            <View key={s.key} style={styles.row}>
-              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
-                {s.display}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {t('insights.boughtTimes', { count: s.times })}
-              </Text>
-            </View>
-          ))}
-          {staples.length > STAPLES_SHOWN && (
-            <Pressable
-              onPress={() => {
-                haptics.tick();
-                setStaplesOpen(true);
-              }}
-              style={styles.moreRow}
-            >
-              <Text style={[type.sub, { color: colors.accent }]}>
-                {t('insights.viewAllStaples', { count: staples.length })}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.accent} />
-            </Pressable>
-          )}
+            {staples.slice(0, STAPLES_SHOWN).map((s) => (
+              <View key={s.key} style={styles.row}>
+                <Text
+                  style={[type.body, styles.grow, { color: colors.ink }]}
+                  numberOfLines={1}
+                >
+                  {s.display}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {t("insights.boughtTimes", { count: s.times })}
+                </Text>
+              </View>
+            ))}
+            {staples.length > STAPLES_SHOWN && (
+              <Pressable
+                onPress={() => {
+                  haptics.tick();
+                  setStaplesOpen(true);
+                }}
+                style={styles.moreRow}
+              >
+                <Text style={[type.sub, { color: colors.accent }]}>
+                  {t("insights.viewAllStaples", { count: staples.length })}
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.accent}
+                />
+              </Pressable>
+            )}
+          </Recalc>
         </Card>
       )}
 
@@ -378,26 +435,36 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="stats-chart-outline"
-            title={t('insights.trendTitle')}
-            hint={t('insights.trendWeeks', { count: trend.weeks.length })}
+            title={t("insights.trendTitle")}
+            hint={t("insights.trendWeeks", { count: trend.weeks.length })}
           />
           <View style={styles.heroRow}>
-            <AnimatedMoney value={trend.averageCents} style={[type.h1, { color: colors.ink }]} />
-            <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendPerWeek')}</Text>
+            <AnimatedMoney
+              value={trend.averageCents}
+              style={[type.h1, { color: colors.ink }]}
+            />
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t("insights.trendPerWeek")}
+            </Text>
           </View>
           {trend.weekOverWeek != null && (
             <View style={styles.deltaRow}>
               <Ionicons
-                name={trend.weekOverWeek >= 0 ? 'arrow-up' : 'arrow-down'}
+                name={trend.weekOverWeek >= 0 ? "arrow-up" : "arrow-down"}
                 size={14}
                 // Neither direction is good or bad — spending more isn't a
                 // failure — so this stays ink, not a status colour.
                 color={colors.muted}
               />
               <Text style={[type.sub, { color: colors.muted }]}>
-                {t(trend.weekOverWeek >= 0 ? 'insights.trendUp' : 'insights.trendDown', {
-                  percent: Math.abs(Math.round(trend.weekOverWeek * 100)),
-                })}
+                {t(
+                  trend.weekOverWeek >= 0
+                    ? "insights.trendUp"
+                    : "insights.trendDown",
+                  {
+                    percent: Math.abs(Math.round(trend.weekOverWeek * 100)),
+                  },
+                )}
               </Text>
             </View>
           )}
@@ -407,7 +474,9 @@ function SignedInInsights() {
             peakWeekStart={trend.peak?.weekStart ?? null}
             averageCents={trend.averageCents}
           />
-          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendCaveat')}</Text>
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("insights.trendCaveat")}
+          </Text>
           {/* The one sentence worth keeping from the Plus card that used to sit
               at the foot of this tab. It belongs on the chart it is about: a
               free reader looking at five weeks of bars needs to know the axis is
@@ -416,7 +485,7 @@ function SignedInInsights() {
               badge in the header is where the selling happens. */}
           {locked && (
             <Text style={[type.sub, { color: colors.muted }]}>
-              {t('plus.showingWeeks', { count: freeWeeks })}
+              {t("plus.showingWeeks", { count: freeWeeks })}
             </Text>
           )}
         </Card>
@@ -429,21 +498,27 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="swap-vertical-outline"
-            title={t('insights.movesTitle')}
-            hint={t('insights.movesHint')}
+            title={t("insights.movesTitle")}
+            hint={t("insights.movesHint")}
           />
           {moves.slice(0, 5).map((m) => (
             <View key={m.key} style={styles.row}>
               <Ionicons
-                name={m.change > 0 ? 'trending-up' : 'trending-down'}
+                name={m.change > 0 ? "trending-up" : "trending-down"}
                 size={18}
                 color={m.change > 0 ? colors.warn : colors.accent}
               />
-              <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={1}>
+              <Text
+                style={[type.body, styles.grow, { color: colors.ink }]}
+                numberOfLines={1}
+              >
                 {m.name}
               </Text>
-              <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-                {t(m.change > 0 ? 'insights.moveUp' : 'insights.moveDown', {
+              <Text
+                style={[type.sub, { color: colors.muted }]}
+                numberOfLines={1}
+              >
+                {t(m.change > 0 ? "insights.moveUp" : "insights.moveDown", {
                   percent: Math.abs(Math.round(m.change * 100)),
                   price: money(m.latestCents),
                   usual: money(m.baselineCents),
@@ -464,24 +539,41 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="cash-outline"
-            title={t('insights.spendingTitle')}
+            title={t("insights.spendingTitle")}
             action={<RangePicker value={spendRange} onChange={setSpendRange} />}
           />
-          <View style={styles.spendTotal}>
-            <Text style={[type.sub, { color: colors.muted }]}>{t('insights.totalLogged')}</Text>
-            <AnimatedMoney value={spendTotal} style={[type.h2, { color: colors.ink }]} />
-          </View>
-          {spendByCat.map((x) => (
-            <View key={x.category} style={styles.row}>
-              <Text style={[type.sub, styles.grow, { color: colors.ink }]}>{categoryLabel(x.category, t)}</Text>
-              <Text style={[type.sub, { color: colors.muted }]}>{money(x.cents)}</Text>
+          <Recalc trigger={spendRange} style={styles.recalc}>
+            <View style={styles.spendTotal}>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t("insights.totalLogged")}
+              </Text>
+              <AnimatedMoney
+                value={spendTotal}
+                style={[type.h2, { color: colors.ink }]}
+              />
             </View>
-          ))}
+            {spendByCat.map((x) => (
+              <View key={x.category} style={styles.row}>
+                <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+                  {categoryLabel(x.category, t)}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {money(x.cents)}
+                </Text>
+              </View>
+            ))}
+          </Recalc>
         </Card>
       ) : (
         <Card>
-          <CardHead icon="pricetag-outline" title={t('insights.spendingTitle')} hint={t('insights.spendingOptional')} />
-          <Text style={[type.sub, { color: colors.muted }]}>{t('insights.spendingEmpty')}</Text>
+          <CardHead
+            icon="pricetag-outline"
+            title={t("insights.spendingTitle")}
+            hint={t("insights.spendingOptional")}
+          />
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("insights.spendingEmpty")}
+          </Text>
         </Card>
       )}
 
@@ -490,22 +582,35 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="storefront-outline"
-            title={t('insights.whereTitle')}
+            title={t("insights.whereTitle")}
             action={<RangePicker value={storeRange} onChange={setStoreRange} />}
           />
-          {storeSpend.map((s) => (
-            <View key={s.store ?? 'none'} style={styles.row}>
-              {s.store ? (
-                <SupermarketBadge store={s.store} size={20} />
-              ) : (
-                <Ionicons name="pricetag-outline" size={20} color={colors.muted} />
-              )}
-              <Text style={[type.sub, styles.grow, { color: colors.ink }]} numberOfLines={1}>
-                {s.store ? supermarketLabel(s.store) ?? s.store : t('insights.noStore')}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>{money(s.cents)}</Text>
-            </View>
-          ))}
+          <Recalc trigger={storeRange} style={styles.recalc}>
+            {storeSpend.map((s) => (
+              <View key={s.store ?? "none"} style={styles.row}>
+                {s.store ? (
+                  <SupermarketBadge store={s.store} size={20} />
+                ) : (
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={20}
+                    color={colors.muted}
+                  />
+                )}
+                <Text
+                  style={[type.sub, styles.grow, { color: colors.ink }]}
+                  numberOfLines={1}
+                >
+                  {s.store
+                    ? (supermarketLabel(s.store) ?? s.store)
+                    : t("insights.noStore")}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {money(s.cents)}
+                </Text>
+              </View>
+            ))}
+          </Recalc>
         </Card>
       )}
 
@@ -518,10 +623,17 @@ function SignedInInsights() {
           they are reading. */}
       {!locked && cheaper.length > 0 && (
         <Card>
-          <CardHead icon="trending-down-outline" title={t('insights.cheaperTitle')} hint={t('insights.cheaperHint')} />
+          <CardHead
+            icon="trending-down-outline"
+            title={t("insights.cheaperTitle")}
+            hint={t("insights.cheaperHint")}
+          />
           {cheaper.slice(0, 6).map((h) => (
             <View key={h.name} style={styles.hintRow}>
-              <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+              <Text
+                style={[type.body, { color: colors.ink }]}
+                numberOfLines={1}
+              >
                 {h.name}
               </Text>
               <View style={styles.hintDetail}>
@@ -531,8 +643,14 @@ function SignedInInsights() {
                     were the same size, the same weight and one step apart in
                     colour, which made the reader compare two numbers instead of
                     being handed the answer. */}
-                <Text style={[type.sub, styles.cheapPrice, { color: colors.accent }]}>
-                  {t('insights.cheaperAt', {
+                <Text
+                  style={[
+                    type.sub,
+                    styles.cheapPrice,
+                    { color: colors.accent },
+                  ]}
+                >
+                  {t("insights.cheaperAt", {
                     price: perUnitPrice(h.cheapCents, h.perUnit),
                     store: supermarketLabel(h.cheapStore) ?? h.cheapStore,
                   })}
@@ -540,8 +658,12 @@ function SignedInInsights() {
                 {/* Still legible — it is half the comparison and removing it
                     would leave a price with nothing to be cheaper THAN — but
                     set back so the eye reaches it second. */}
-                <Text style={[type.sub, styles.dearPrice, { color: colors.muted }]}>
-                  {t('insights.cheaperVs', { price: perUnitPrice(h.dearCents, h.perUnit) })}
+                <Text
+                  style={[type.sub, styles.dearPrice, { color: colors.muted }]}
+                >
+                  {t("insights.cheaperVs", {
+                    price: perUnitPrice(h.dearCents, h.perUnit),
+                  })}
                 </Text>
               </View>
             </View>
@@ -556,8 +678,8 @@ function SignedInInsights() {
         <Card>
           <CardHead
             icon="trending-up-outline"
-            title={t('eco.trendTitle')}
-            hint={t('eco.trendHint', { count: ecoScored.length })}
+            title={t("eco.trendTitle")}
+            hint={t("eco.trendHint", { count: ecoScored.length })}
           />
           <EcoTrend weeks={ecoWeeks} />
           {(() => {
@@ -568,17 +690,23 @@ function SignedInInsights() {
             const last = ecoScored[ecoScored.length - 1].score as number;
             const delta = last - first;
             if (Math.abs(delta) < 3) {
-              return <Text style={[type.sub, { color: colors.muted }]}>{t('eco.trendFlat')}</Text>;
+              return (
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {t("eco.trendFlat")}
+                </Text>
+              );
             }
             return (
               <View style={styles.row}>
                 <Ionicons
-                  name={delta > 0 ? 'arrow-up' : 'arrow-down'}
+                  name={delta > 0 ? "arrow-up" : "arrow-down"}
                   size={14}
                   color={delta > 0 ? colors.accent : colors.muted}
                 />
                 <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
-                  {t(delta > 0 ? 'eco.trendUp' : 'eco.trendDown', { points: Math.abs(delta) })}
+                  {t(delta > 0 ? "eco.trendUp" : "eco.trendDown", {
+                    points: Math.abs(delta),
+                  })}
                 </Text>
               </View>
             );
@@ -636,8 +764,13 @@ function CardHead({
   return (
     <View style={styles.cardHead}>
       <Ionicons name={icon} size={20} color={colors.accent} />
-      <Text style={[type.body, styles.grow, { color: colors.ink }]}>{title}</Text>
-      {action ?? (hint ? <Text style={[type.sub, { color: colors.muted }]}>{hint}</Text> : null)}
+      <Text style={[type.body, styles.grow, { color: colors.ink }]}>
+        {title}
+      </Text>
+      {action ??
+        (hint ? (
+          <Text style={[type.sub, { color: colors.muted }]}>{hint}</Text>
+        ) : null)}
     </View>
   );
 }
@@ -685,22 +818,28 @@ function EcoCard({
     <Card>
       <View style={styles.cardHead}>
         <Ionicons name="leaf-outline" size={18} color={colors.accent} />
-        <Text style={[type.label, styles.grow, { color: colors.ink }]}>{t('eco.cardTitle')}</Text>
+        <Text style={[type.label, styles.grow, { color: colors.ink }]}>
+          {t("eco.cardTitle")}
+        </Text>
         <Text style={[type.sub, { color: colors.muted }]}>
-          {t('eco.cardHint', { count: eco.total })}
+          {t("eco.cardHint", { count: eco.total })}
         </Text>
         <Pressable
           onPress={() => {
             haptics.tick();
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            LayoutAnimation.configureNext(
+              LayoutAnimation.Presets.easeInEaseOut,
+            );
             setExplained((v) => !v);
           }}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel={t('eco.whatIsThis')}
+          accessibilityLabel={t("eco.whatIsThis")}
         >
           <Ionicons
-            name={explained ? 'information-circle' : 'information-circle-outline'}
+            name={
+              explained ? "information-circle" : "information-circle-outline"
+            }
             size={18}
             color={colors.muted}
           />
@@ -709,11 +848,15 @@ function EcoCard({
 
       <View style={styles.heroRow}>
         <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
-        <Text style={[type.sub, { color: colors.muted }]}>{t('eco.outOf')}</Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t("eco.outOf")}
+        </Text>
       </View>
       <EcoBar shares={eco.shares} counts={eco.counts} />
       {explained && (
-        <Text style={[type.sub, { color: colors.muted }]}>{t('eco.cardNote')}</Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t("eco.cardNote")}
+        </Text>
       )}
 
       {eco.bioCount > 0 && (
@@ -723,7 +866,7 @@ function EcoCard({
         <View style={styles.row}>
           <Ionicons name="leaf" size={16} color={colors.accent} />
           <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
-            {t('eco.bioCount', { count: eco.bioCount })}
+            {t("eco.bioCount", { count: eco.bioCount })}
           </Text>
         </View>
       )}
@@ -732,9 +875,13 @@ function EcoCard({
           why there is no "try swapping" on the end of it. */}
       {heaviest && (
         <View style={styles.row}>
-          <Ionicons name="arrow-up-circle-outline" size={16} color={colors.muted} />
+          <Ionicons
+            name="arrow-up-circle-outline"
+            size={16}
+            color={colors.muted}
+          />
           <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
-            {t('eco.heaviest', { item: heaviest.name })}
+            {t("eco.heaviest", { item: heaviest.name })}
           </Text>
         </View>
       )}
@@ -743,8 +890,10 @@ function EcoCard({
         <View style={styles.row}>
           <Ionicons name="sunny-outline" size={16} color={colors.accent} />
           <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
-            {t('eco.inSeason', {
-              items: season.map((k) => t(`eco.season.${k}`)).join(t('common.listJoin')),
+            {t("eco.inSeason", {
+              items: season
+                .map((k) => t(`eco.season.${k}`))
+                .join(t("common.listJoin")),
             })}
           </Text>
         </View>
@@ -765,7 +914,10 @@ function EcoCard({
 function EcoTrend({ weeks }: { weeks: EcoWeek[] }) {
   const { colors } = useTheme();
   const { t, language } = useLocale();
-  const dayMonth = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short' });
+  const dayMonth = new Intl.DateTimeFormat(language, {
+    day: "numeric",
+    month: "short",
+  });
   const first = weeks[0];
 
   return (
@@ -788,9 +940,11 @@ function EcoTrend({ weeks }: { weeks: EcoWeek[] }) {
       <View style={[styles.ecoAxis, { backgroundColor: colors.line }]} />
       <View style={styles.ecoLabels}>
         <Text style={[type.sub, { color: colors.muted }]}>
-          {first ? dayMonth.format(new Date(first.weekStart)) : ''}
+          {first ? dayMonth.format(new Date(first.weekStart)) : ""}
         </Text>
-        <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendThisWeek')}</Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t("insights.trendThisWeek")}
+        </Text>
       </View>
     </View>
   );
@@ -804,13 +958,18 @@ function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
     <View style={{ gap: spacing.md }}>
       <View style={[styles.bar, { backgroundColor: colors.line }]}>
         {slices.map((s) => (
-          <View key={s.group} style={{ flex: s.count, backgroundColor: GROUP_COLORS[s.group] }} />
+          <View
+            key={s.group}
+            style={{ flex: s.count, backgroundColor: GROUP_COLORS[s.group] }}
+          />
         ))}
       </View>
       <View style={styles.legend}>
         {slices.map((s) => (
           <View key={s.group} style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: GROUP_COLORS[s.group] }]} />
+            <View
+              style={[styles.dot, { backgroundColor: GROUP_COLORS[s.group] }]}
+            />
             <Text style={[type.sub, { color: colors.ink }]}>
               {groupLabel(s.group, t)} {Math.round(s.fraction * 100)}%
             </Text>
@@ -824,32 +983,70 @@ function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
 const styles = StyleSheet.create({
   // Mirrors the dashboard's status row: wraps rather than squeezing the
   // subtitle, which is what broke the greeting into three lines last time.
-  statusRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
   grow: { flex: 1, minWidth: 0 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
-  bar: { flexDirection: 'row', height: 16, borderRadius: radii.sm, overflow: 'hidden' },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xs },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  cardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  bar: {
+    flexDirection: "row",
+    height: 16,
+    borderRadius: radii.sm,
+    overflow: "hidden",
+  },
+  legend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    columnGap: spacing.md,
+    rowGap: spacing.xs,
+  },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },
   moreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.xs,
     paddingTop: spacing.sm,
   },
   ecoPlot: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
     height: 56,
     gap: spacing.xs,
   },
-  ecoColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  ecoColumn: { flex: 1, alignItems: "center", justifyContent: "flex-end" },
   ecoAxis: { height: StyleSheet.hairlineWidth, borderRadius: radii.sm },
-  ecoLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
-  spendTotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.xs },
+  ecoLabels: { flexDirection: "row", justifyContent: "space-between" },
+  /**
+   * The gap <Card> used to apply BETWEEN these rows.
+   *
+   * Card sets `gap: spacing.sm` on its children, so wrapping a card's rows in
+   * <Recalc> turns N spaced children into one — and the rows inside collapse
+   * against each other. The wrapper has to carry the gap it displaced.
+   */
+  recalc: { gap: spacing.sm },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  spendTotal: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
+  },
   // marginBottom, because the chart that follows draws its peak label at the
   // very top of its own box: without clearance the label sat on the baseline of
   // "a week, on average" and the two overlapped. flexWrap keeps the caption on
@@ -857,16 +1054,26 @@ const styles = StyleSheet.create({
   // "tygodniowo, średnio"), and alignItems baseline keeps them on one line when
   // it isn't.
   heroRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "baseline",
     gap: spacing.sm,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     marginBottom: spacing.sm,
   },
-  deltaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
+  deltaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
   hintRow: { gap: spacing.xs, paddingVertical: spacing.xs },
-  hintDetail: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
-  cheapPrice: { fontWeight: '700' },
+  hintDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexWrap: "wrap",
+  },
+  cheapPrice: { fontWeight: "700" },
   /**
    * 0.9, and that is the floor rather than a taste call.
    *
