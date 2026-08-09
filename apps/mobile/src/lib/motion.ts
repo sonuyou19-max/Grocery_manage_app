@@ -82,6 +82,17 @@ export const SPRING: Record<string, WithSpringConfig> = {
 
   /** Layout settling with no gesture behind it. Calm, no overshoot. */
   gentle: { damping: 20, stiffness: 130, mass: 1, overshootClamping: true },
+
+  /**
+   * A control acknowledging a tap — the swell half of a squash-and-settle.
+   *
+   * Deliberately stiff and underdamped: there is no gesture velocity to inherit
+   * here, so the snap has to come from the spring itself or the element merely
+   * eases up to its peak and the "I felt that" is lost. Always the first leg of
+   * a withSequence, with `settle` or `snappy` landing it back at rest — used by
+   * the tab icon you just selected and the bag catching an item.
+   */
+  punch: { damping: 12, stiffness: 320 },
 };
 
 /**

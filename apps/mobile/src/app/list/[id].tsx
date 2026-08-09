@@ -249,7 +249,7 @@ export default function ListDetailScreen() {
   const onGlyphArrive = () => {
     haptics.tick();
     bagScale.value = withSequence(
-      withSpring(1.28, { damping: 12, stiffness: 320 }),
+      withSpring(1.28, SPRING.punch),
       withSpring(1, SPRING.settle),
     );
   };

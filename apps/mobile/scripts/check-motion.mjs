@@ -15,8 +15,8 @@
  *
  * Run with `pnpm --filter mobile check:motion`.
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
@@ -133,5 +133,57 @@ check('fling is overshoot-clamped', SPRING.fling.overshootClamping, true);
 check('settle is allowed to overshoot', Boolean(SPRING.settle.overshootClamping), false);
 check('snappy is allowed to overshoot', Boolean(SPRING.snappy.overshootClamping), false);
 
-console.log(failures === 0 ? 'ALL PASS' : `\n${failures} FAILURE(S)`);
+/* --------------------------- presets are the only spring configs ---------- */
+
+/*
+ * lib/motion.ts opens by saying presets exist "so two sheets can never drift
+ * apart by one damping point". That was aspirational: the tab bar carried two
+ * inline configs, one of them character-for-character identical to SPRING.snappy
+ * and the other a fourth unnamed spring, and the bag squash in list/[id] a
+ * fifth. A file of presets nothing is required to use is documentation, not a
+ * design system.
+ *
+ * So: a spring config literal may only be written here. Naming it forces the
+ * question the presets exist to answer — what IS this thing that is moving? —
+ * and two call sites that answer the same way now share a value rather than
+ * two numbers that happen to match today.
+ */
+const APP = join(here, '..', 'src');
+
+const walk = (dir) => {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...walk(full));
+    else if (/\.tsx?$/.test(name)) out.push(full);
+  }
+  return out;
+};
+
+const stripComments = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+const inline = [];
+for (const file of walk(APP)) {
+  if (file === SRC) continue;
+  const text = stripComments(readFileSync(file, 'utf8'));
+  // A spring config is recognisable by its keys, not by where it sits: damping
+  // and stiffness are the two nobody omits.
+  for (const m of text.matchAll(/withSpring\s*\([^;]*?\{[^}]*\b(damping|stiffness)\b/g)) {
+    inline.push(relative(APP, file).split('\\').join('/'));
+    break;
+  }
+}
+
+if (inline.length) {
+  failures += 1;
+  console.log('FAIL a spring config is written outside lib/motion.ts');
+  for (const rel of [...new Set(inline)]) console.log(`  ${rel}`);
+  console.log('  Add a named preset instead. Two call sites that want the same');
+  console.log('  motion should share one value, not two literals that agree today.');
+} else {
+  console.log('ok   every spring config is a named preset');
+}
+
+console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

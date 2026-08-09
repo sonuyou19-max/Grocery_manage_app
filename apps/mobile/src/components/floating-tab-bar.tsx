@@ -3,12 +3,19 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Frosted } from '@/components/frosted';
 import { CreateSheet } from '@/components/create-sheet';
 import { haptics } from '@/lib/haptics';
+import { SPRING } from '@/lib/motion';
 import { useT } from '@/store/locale';
 import { spacing, useTheme } from '@/theme';
 
@@ -91,8 +98,24 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   // create button when Insights is selected and stop one place short thereafter.
   const active = useSharedValue(slotFor(state.index));
   useEffect(() => {
-    active.value = withSpring(slotFor(state.index), { damping: 15, stiffness: 150, mass: 0.7 });
+    active.value = withSpring(slotFor(state.index), SPRING.snappy);
   }, [state.index, active]);
+
+  /*
+   * The tap acknowledgement: the icon you just selected swells and settles.
+   *
+   * One shared value for the whole bar, not one per tab. Only the focused icon
+   * reads it, and focus is exclusive, so a single driver is enough — and it
+   * means switching tabs cannot leave a half-finished pop on the tab you left.
+   *
+   * Two legs, the same shape as the bag catching an item in list/[id]: `punch`
+   * swells it, `snappy` lands it back at rest. Both are presets, so the two
+   * acknowledgements in the app cannot drift apart by a damping point.
+   */
+  const pop = useSharedValue(0);
+  useEffect(() => {
+    pop.value = withSequence(withSpring(1, SPRING.punch), withSpring(0, SPRING.snappy));
+  }, [state.index, pop]);
 
   // Lozenge centred under each tab's icon; slides one slot-width per step.
   // Hidden until the row has been measured, so it cannot flash at x=0 on the
@@ -110,7 +133,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   // feel like the icon turned rather than that a value was interpolated.
   const open = useSharedValue(0);
   useEffect(() => {
-    open.value = withSpring(creating ? 1 : 0, { damping: 14, stiffness: 180, mass: 0.6 });
+    open.value = withSpring(creating ? 1 : 0, SPRING.snappy);
   }, [creating, open]);
 
   const plusStyle = useAnimatedStyle(() => ({
@@ -164,34 +187,14 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
 
               return [
                 spacer,
-                <Pressable
+                <TabButton
                   key={route.key}
                   onPress={onPress}
-                  style={styles.tab}
-                  accessibilityRole="button"
-                  accessibilityState={focused ? { selected: true } : {}}
-                  accessibilityLabel={label}
-                >
-                  <View style={styles.iconZone}>
-                    <Ionicons
-                      name={focused ? activeIcon : inactiveIcon}
-                      size={22}
-                      color={focused ? colors.accent : colors.muted}
-                    />
-                  </View>
-                  {/* Tab labels translate longer than English ("Settings" →
-                      "Einstellungen"/"Instellingen"), which overruns a quarter
-                      of the pill on narrow phones. Shrink a little before
-                      falling back to truncation. */}
-                  <Text
-                    style={[styles.label, { color: focused ? colors.accent : colors.muted }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.8}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>,
+                  focused={focused}
+                  label={label}
+                  icon={focused ? activeIcon : inactiveIcon}
+                  pop={pop}
+                />,
               ];
             })}
           </View>
@@ -246,6 +249,58 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
         bottomClearance={insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + FAB_LIFT + spacing.md}
       />
     </View>
+  );
+}
+
+/**
+ * One tab. A component rather than JSX inside the map because it owns a hook —
+ * useAnimatedStyle cannot be called in a loop, and check-hooks.mjs would say so.
+ */
+function TabButton({
+  onPress,
+  focused,
+  label,
+  icon,
+  pop,
+}: {
+  onPress: () => void;
+  focused: boolean;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  pop: SharedValue<number>;
+}) {
+  const { colors } = useTheme();
+
+  // Only the focused icon reacts. An unfocused one reads the same driver and
+  // multiplies it by zero, so there is no branch on the UI thread and no way
+  // for two icons to animate at once.
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: focused ? 1 + pop.value * 0.18 : 1 }],
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={styles.tab}
+      accessibilityRole="button"
+      accessibilityState={focused ? { selected: true } : {}}
+      accessibilityLabel={label}
+    >
+      <Animated.View style={[styles.iconZone, iconStyle]}>
+        <Ionicons name={icon} size={22} color={focused ? colors.accent : colors.muted} />
+      </Animated.View>
+      {/* Tab labels translate longer than English ("Settings" →
+          "Einstellungen"/"Instellingen"), which overruns a quarter of the pill
+          on narrow phones. Shrink a little before falling back to truncation. */}
+      <Text
+        style={[styles.label, { color: focused ? colors.accent : colors.muted }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
