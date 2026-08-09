@@ -1,24 +1,17 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { GlassView } from '@/components/glass';
-import { TextPromptModal } from '@/components/text-prompt-modal';
-import { haptics } from '@/lib/haptics';
-import { useDeferUntilClosed } from '@/lib/modal-nav';
-import { useRecipeGate } from '@/lib/recipe-gate';
-import { useGroceries } from '@/store/groceries';
-import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { GlassView } from "@/components/glass";
+import { Sheet, useSheetDismiss } from "@/components/sheet";
+import { TextPromptModal } from "@/components/text-prompt-modal";
+import { haptics } from "@/lib/haptics";
+import { useRecipeGate } from "@/lib/recipe-gate";
+import { useGroceries } from "@/store/groceries";
+import { useT } from "@/store/locale";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 /**
  * "Create something new" — what the centre button opens.
@@ -55,10 +48,6 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * layout for a correction nobody can see.
  */
 
-/** Long enough to read as a movement, short enough not to sit in the way. */
-const OPEN_MS = 220;
-const CLOSE_MS = 160;
-
 export function CreateSheet({
   visible,
   onClose,
@@ -82,146 +71,33 @@ export function CreateSheet({
   const { addList } = useGroceries();
   const { openOrRedirect } = useRecipeGate();
   const [naming, setNaming] = useState(false);
-  /*
-   * The Modal has to outlive `visible` so the closing animation has something
-   * to play on — RN would otherwise tear the window down on the same frame the
-   * prop flips and the fold-away would never be seen. `mounted` is therefore
-   * driven up by the prop and down by the animation's own completion.
-   */
-  const [mounted, setMounted] = useState(visible);
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      progress.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
-    } else {
-      progress.value = withTiming(
-        0,
-        { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) },
-        (done) => {
-          if (done) runOnJS(setMounted)(false);
-        },
-      );
-    }
-  }, [visible, progress]);
-
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    // 0.82, not 0: shrinking to nothing reads as a card being destroyed. A
-    // shallow scale reads as one folding away, which is the thing being said.
-    transform: [{ scale: 0.82 + progress.value * 0.18 }],
-  }));
 
   /*
-   * Both rows leave this screen, and neither may do it while the Modal is still
-   * up — see lib/modal-nav.ts. `mounted` is the Modal's own visibility, so the
-   * queued move runs the instant the sheet is really gone.
+   * TextPromptModal defers its own onSubmit until its sheet has really closed
+   * (see that file), so by the time this runs there is no Modal window left to
+   * navigate underneath. This used to need a deferral of its own.
    */
-  const whenClosed = useDeferUntilClosed(mounted);
-
   const openNewList = (name: string) => {
     const id = addList(name);
     setNaming(false);
-    whenClosed(() => router.push({ pathname: '/list/[id]', params: { id } }));
-    onClose();
-  };
-
-  const onRecipe = () => {
-    // The gate decides, not this component. `blocked` is false for a trial
-    // user and for everyone while the tier is switched off, so this row simply
-    // works until billing goes live — see lib/recipe-gate.ts.
-    whenClosed(() => openOrRedirect(() => router.push('/recipe')));
-    onClose();
+    router.push({ pathname: "/list/[id]", params: { id } });
   };
 
   return (
     <>
-      <Modal
-        visible={mounted && !naming}
-        transparent
-        // "none": the scale/fade below IS the transition. RN's own fade would
-        // run underneath it and the two would fight.
-        animationType="none"
-        onRequestClose={onClose}
+      <Sheet
+        visible={visible && !naming}
+        onClose={onClose}
+        bottomClearance={bottomClearance}
       >
-        {/*
-          * The clearance is PADDING on this backdrop, not margin on the card,
-          * and that is the whole fix for a dead button.
-          *
-          * It used to be `marginBottom` on the card — which sits inside the
-          * no-op Pressable below, whose only job is to stop a tap on the card
-          * itself from closing the sheet. Margin counts toward that Pressable's
-          * height, so its touch area covered the card PLUS the entire clearance
-          * strip: exactly the tab bar and the create button. Tapping the cross
-          * hit the swallow-everything Pressable and did nothing at all, so the
-          * only way out was tapping the page above the sheet.
-          *
-          * As padding it belongs to the backdrop, which closes. The button is
-          * reachable, and tapping it does what tapping it obviously should.
-          */}
-        <Pressable style={[styles.backdrop, { paddingBottom: bottomClearance }]} onPress={onClose}>
-          {/* Stops a tap on the sheet itself from closing it. Wraps the card
-              and nothing else — see above. */}
-          <Pressable onPress={() => {}}>
-            <Animated.View style={[styles.origin, cardStyle]}>
-            <GlassView over="content" radius={radii.lg} style={styles.card}>
-              <Text style={[type.h2, { color: colors.ink }]}>{t('create.title')}</Text>
-
-              <Pressable
-                style={[styles.row, { borderColor: colors.line }]}
-                onPress={() => {
-                  haptics.tick();
-                  setNaming(true);
-                }}
-              >
-                <View style={[styles.iconBox, { backgroundColor: colors.accentSoft }]}>
-                  <Ionicons name="list-outline" size={22} color={colors.accent} />
-                </View>
-                <View style={styles.grow}>
-                  <Text style={[type.body, { color: colors.ink }]}>{t('create.blankTitle')}</Text>
-                  <Text style={[type.sub, { color: colors.muted }]}>{t('create.blankBody')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-              </Pressable>
-
-              <Pressable
-                style={[styles.row, { borderColor: colors.line }]}
-                onPress={() => {
-                  haptics.tick();
-                  onRecipe();
-                }}
-              >
-                <View style={[styles.iconBox, { backgroundColor: colors.plusSoft }]}>
-                  <Ionicons name="sparkles" size={20} color={colors.plusInk} />
-                </View>
-                <View style={styles.grow}>
-                  <View style={styles.titleRow}>
-                    <Text style={[type.body, { color: colors.ink }]}>{t('create.recipeTitle')}</Text>
-                    <LinearGradient
-                      colors={[colors.plusFrom, colors.plusTo]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.badge}
-                    >
-                      <Text style={[type.label, styles.badgeText]}>{t('plus.badge')}</Text>
-                    </LinearGradient>
-                  </View>
-                  <Text style={[type.sub, { color: colors.muted }]}>{t('create.recipeBody')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-              </Pressable>
-            </GlassView>
-            </Animated.View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <CreateMenu onNameList={() => setNaming(true)} />
+      </Sheet>
 
       <TextPromptModal
         visible={naming}
-        title={t('lists.newList')}
-        placeholder={t('lists.newListPlaceholder')}
-        confirmLabel={t('lists.create')}
+        title={t("lists.newList")}
+        placeholder={t("lists.newListPlaceholder")}
+        confirmLabel={t("lists.create")}
         onCancel={() => {
           setNaming(false);
           onClose();
@@ -232,16 +108,91 @@ export function CreateSheet({
   );
 }
 
+/**
+ * The two rows, inside the <Sheet> so they can call useSheetDismiss().
+ *
+ * Both leave this screen, and neither may do it while the Modal window is still
+ * up — that is the blank-screen bug in lib/modal-nav.ts, which this sheet has
+ * hit before. `dismiss(action)` is now the only way out, so the ordering is not
+ * something to remember.
+ */
+function CreateMenu({ onNameList }: { onNameList: () => void }) {
+  const { colors } = useTheme();
+  const t = useT();
+  const { openOrRedirect } = useRecipeGate();
+  const dismiss = useSheetDismiss();
+
+  return (
+    <GlassView over="content" radius={radii.lg} style={styles.card}>
+      <Text style={[type.h2, { color: colors.ink }]}>{t("create.title")}</Text>
+
+      <Pressable
+        style={[styles.row, { borderColor: colors.line }]}
+        onPress={() => {
+          haptics.tick();
+          dismiss(onNameList);
+        }}
+      >
+        <View style={[styles.iconBox, { backgroundColor: colors.accentSoft }]}>
+          <Ionicons name="list-outline" size={22} color={colors.accent} />
+        </View>
+        <View style={styles.grow}>
+          <Text style={[type.body, { color: colors.ink }]}>
+            {t("create.blankTitle")}
+          </Text>
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("create.blankBody")}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+      </Pressable>
+
+      <Pressable
+        style={[styles.row, { borderColor: colors.line }]}
+        onPress={() => {
+          haptics.tick();
+          // The gate decides, not this component. `blocked` is false
+          // for a trial user and for everyone while the tier is off, so
+          // this row simply works until billing goes live — see
+          // lib/recipe-gate.ts.
+          dismiss(() => openOrRedirect(() => router.push("/recipe")));
+        }}
+      >
+        <View style={[styles.iconBox, { backgroundColor: colors.plusSoft }]}>
+          <Ionicons name="sparkles" size={20} color={colors.plusInk} />
+        </View>
+        <View style={styles.grow}>
+          <View style={styles.titleRow}>
+            <Text style={[type.body, { color: colors.ink }]}>
+              {t("create.recipeTitle")}
+            </Text>
+            <LinearGradient
+              colors={[colors.plusFrom, colors.plusTo]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.badge}
+            >
+              <Text style={[type.label, styles.badgeText]}>
+                {t("plus.badge")}
+              </Text>
+            </LinearGradient>
+          </View>
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("create.recipeBody")}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+      </Pressable>
+    </GlassView>
+  );
+}
+
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', padding: spacing.lg },
-  // Bottom centre: where the create button is. Everything scales out of and
-  // back into that point.
-  origin: { transformOrigin: 'center bottom' },
   card: { padding: spacing.lg, gap: spacing.md },
   grow: { flex: 1, minWidth: 0 },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     padding: spacing.md,
     borderWidth: 1,
@@ -251,10 +202,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  badge: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radii.pill },
-  badgeText: { color: '#FFFFFF' },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+  },
+  badgeText: { color: "#FFFFFF" },
 });

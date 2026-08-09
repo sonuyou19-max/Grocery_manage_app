@@ -43,32 +43,35 @@
  *
  * Run with `pnpm --filter mobile check:modal-nav`.
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, '..', 'src');
 
-/** Files that navigate, or open the paywall, from inside a Modal they own. */
-const MUST_DEFER = [
-  'components/create-sheet.tsx',
-  'components/range-picker.tsx',
-  'app/(tabs)/pantry.tsx',
-  // Reports its own close via `onDismissed`, built on this same primitive —
-  // see the header comment for why its old InteractionManager-based cousin in
-  // recipe.tsx was not actually a fix.
-  'components/recipe-review-sheet.tsx',
-];
-
 /** The one place the deferral is implemented. */
 const OWNER = 'lib/modal-nav.ts';
+
+/** The shared dialog that applies the deferral for everything inside it. */
+const SHEET = 'components/sheet.tsx';
 
 let failures = 0;
 const fail = (title, lines) => {
   failures += 1;
   console.log(`FAIL ${title}`);
   for (const line of lines) console.log(`  ${line}`);
+};
+
+/** Every .ts/.tsx under src, as paths relative to it. */
+const walk = (dir, base = dir) => {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...walk(full, base));
+    else if (/\.tsx?$/.test(name)) out.push(relative(base, full).split('\\').join('/'));
+  }
+  return out;
 };
 
 const read = (rel) => {
@@ -116,20 +119,103 @@ if (owner && /setTimeout/.test(code(owner))) {
   console.log('ok   the deferral observes the close rather than timing it');
 }
 
-/* ---------------------------------------- 2. every known site still uses it */
+/* --------------------------- 2. every navigating modal defers, found not listed */
 
-const missing = MUST_DEFER.filter((rel) => {
-  const text = read(rel);
-  return !text || !/useDeferUntilClosed/.test(text);
-});
-if (missing.length) {
-  fail('every modal that navigates must defer until it has closed', [
-    ...missing.map((rel) => `${rel} no longer imports useDeferUntilClosed.`),
-    'If the modal genuinely no longer navigates, remove it from MUST_DEFER above',
-    'and say so — do not delete the import and leave the entry.',
+/*
+ * This used to be a hand-maintained list of files known to navigate from inside
+ * a Modal. It passed for months while components/household-switcher.tsx did
+ * exactly the forbidden thing — `setOpen(false)` then `router.push(...)` on the
+ * next line — because nobody had added it. A list of known offenders cannot
+ * catch the one you did not know about, which is the only kind that ships.
+ *
+ * So the files are found instead of named. A file owning a raw <Modal> AND
+ * navigating out of it must defer; going through <Sheet> satisfies that by
+ * construction, since the only way out of a Sheet is dismiss(action).
+ */
+const NAVIGATES = /\brouter\.(push|replace|back|navigate)\s*\(|\brequirePlus\s*\(/;
+
+/**
+ * The JSX inside each <Modal>…</Modal>, so navigation ELSEWHERE in the file
+ * does not read as navigation from inside the dialog.
+ *
+ * The first version compared at file level and flagged settings.tsx, which
+ * presents the locale chooser in a full-screen Modal and separately pushes
+ * routes from the settings list below it. A guard that cries wolf on correct
+ * code gets switched off, so it has to be able to tell where the call is.
+ *
+ * KNOWN LIMIT: this sees navigation written in the Modal's own JSX, not
+ * navigation inside a child component the Modal renders. All four historical
+ * bugs were the former — an onPress written inline — so it catches the shape
+ * that has actually shipped. The latter is covered from the other direction:
+ * a child of a <Sheet> can only leave via dismiss(), which always waits.
+ */
+const modalRegions = (text) => {
+  const out = [];
+  let i = 0;
+  for (;;) {
+    const start = text.indexOf('<Modal', i);
+    if (start === -1) break;
+    const end = text.indexOf('</Modal>', start);
+    out.push(text.slice(start, end === -1 ? text.length : end));
+    i = end === -1 ? text.length : end + 8;
+  }
+  return out;
+};
+
+const offenders = [];
+for (const rel of walk(SRC)) {
+  if (rel === OWNER || rel === SHEET) continue;
+  const text = code(read(rel));
+  if (!text) continue;
+  // Raw <Modal> only: a <Sheet> already carries the deferral.
+  if (/useDeferUntilClosed|useSheetDismiss/.test(text)) continue;
+  if (modalRegions(text).some((region) => NAVIGATES.test(region))) offenders.push(rel);
+}
+
+if (offenders.length) {
+  fail('a modal navigates without waiting for its own window to close', [
+    ...offenders.map((rel) => `  ${rel}`),
+    'On Android a <Modal> is its own native window, so a route pushed while it',
+    'is up lands UNDERNEATH it and the user gets a blank screen. Either render',
+    `the dialog with <Sheet> (${SHEET}) and leave via dismiss(action), or call`,
+    'useDeferUntilClosed keyed on the Modal\'s real visibility.',
   ]);
 } else {
-  console.log(`ok   all ${MUST_DEFER.length} navigating modals defer until closed`);
+  console.log('ok   no modal navigates before its window is gone');
+}
+
+/* ------------------------- 2b. a transparent modal drives its own animation */
+
+/*
+ * RN's `animationType` cross-fades or slides the whole native window, which
+ * cannot be coordinated with anything drawn inside it and looks nothing like
+ * the rest of the app. Every dialog now scales out of the screen edge via
+ * <Sheet>, so a transparent Modal must sit at "none".
+ *
+ * Full-screen (non-transparent) modals are exempt: settings presents the locale
+ * chooser as a screen, where a native slide is exactly right.
+ */
+const stock = [];
+for (const rel of walk(SRC)) {
+  if (rel === SHEET) continue;
+  const text = code(read(rel));
+  if (!text) continue;
+  for (const m of text.matchAll(/<Modal\b([^>]*)>/g)) {
+    const props = m[1];
+    if (!/\btransparent\b/.test(props)) continue;
+    if (!/animationType=["']none["']/.test(props)) stock.push(rel);
+  }
+}
+
+if (stock.length) {
+  fail('a transparent modal uses React Native\'s own animation', [
+    ...[...new Set(stock)].map((rel) => `  ${rel}`),
+    'animationType fades or slides the native window, which cannot be timed',
+    'against anything drawn inside it. Use <Sheet>, or set animationType="none"',
+    'and drive the motion with Reanimated as item-sheet and quick-add-sheet do.',
+  ]);
+} else {
+  console.log('ok   every transparent modal drives its own animation');
 }
 
 /* ------------------- 3. nobody trusts InteractionManager for this again */
@@ -141,7 +227,7 @@ if (missing.length) {
  * story is a sign someone is reaching for the thing that already failed here
  * once, so this fails loud rather than trusting a call site to remember why.
  */
-const suspects = [...MUST_DEFER, 'app/recipe.tsx'];
+const suspects = [...walk(SRC).filter((rel) => /<Modal\b/.test(read(rel) ?? '')), 'app/recipe.tsx'];
 const reachedForIt = suspects.filter((rel) => {
   const text = read(rel);
   return text && /InteractionManager/.test(code(text));

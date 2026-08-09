@@ -1,12 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text } from "react-native";
 
-import { GlassView } from '@/components/glass';
-import { TextPromptModal } from '@/components/text-prompt-modal';
-import { useGroceries } from '@/store/groceries';
-import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { Sheet } from "@/components/sheet";
+import { GlassView } from "@/components/glass";
+import { TextPromptModal } from "@/components/text-prompt-modal";
+import { useGroceries } from "@/store/groceries";
+import { useT } from "@/store/locale";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 interface ListPickerSheetProps {
   visible: boolean;
@@ -30,51 +31,66 @@ interface ListPickerSheetProps {
  * a new one inline, and hands the chosen list id back. Used by the pantry
  * "Add to list" swipe and the weekly-list builder.
  */
-export function ListPickerSheet({ visible, title, onCancel, onPick }: ListPickerSheetProps) {
+export function ListPickerSheet({
+  visible,
+  title,
+  onCancel,
+  onPick,
+}: ListPickerSheetProps) {
   const { colors } = useTheme();
   const t = useT();
   const { lists, addList } = useGroceries();
   const [creating, setCreating] = useState(false);
-  const heading = title ?? t('pantry.addToList');
+  const heading = title ?? t("pantry.addToList");
 
   return (
     <>
       {/* Hidden (not stacked) while the create prompt is up, to avoid two
           transparent modals fighting on Android. */}
-      <Modal
+      <Sheet
         visible={visible && !creating}
-        transparent
-        animationType="fade"
-        onRequestClose={onCancel}
+        onClose={onCancel}
+        align="center"
+        scrim
+        gutter={spacing.xl}
       >
-        <Pressable style={styles.backdrop} onPress={onCancel}>
-          <GlassView over="content" radius={radii.lg} style={styles.card}>
-            <Text style={[type.h2, { color: colors.ink }]}>{heading}</Text>
+        <GlassView over="content" radius={radii.lg} style={styles.card}>
+          <Text style={[type.h2, { color: colors.ink }]}>{heading}</Text>
 
-            <Pressable style={styles.row} onPress={() => setCreating(true)}>
-              <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
-              <Text style={[type.body, { color: colors.accent, flex: 1 }]}>
-                {t('lists.newListInline')}
+          <Pressable style={styles.row} onPress={() => setCreating(true)}>
+            <Ionicons
+              name="add-circle-outline"
+              size={22}
+              color={colors.accent}
+            />
+            <Text style={[type.body, { color: colors.accent, flex: 1 }]}>
+              {t("lists.newListInline")}
+            </Text>
+          </Pressable>
+
+          {lists.map((l) => (
+            <Pressable
+              key={l.id}
+              style={styles.row}
+              onPress={() => onPick(l.id, l.name)}
+            >
+              <Ionicons name="list-outline" size={22} color={colors.muted} />
+              <Text
+                style={[type.body, { color: colors.ink, flex: 1 }]}
+                numberOfLines={1}
+              >
+                {l.name}
               </Text>
             </Pressable>
-
-            {lists.map((l) => (
-              <Pressable key={l.id} style={styles.row} onPress={() => onPick(l.id, l.name)}>
-                <Ionicons name="list-outline" size={22} color={colors.muted} />
-                <Text style={[type.body, { color: colors.ink, flex: 1 }]} numberOfLines={1}>
-                  {l.name}
-                </Text>
-              </Pressable>
-            ))}
-          </GlassView>
-        </Pressable>
-      </Modal>
+          ))}
+        </GlassView>
+      </Sheet>
 
       <TextPromptModal
         visible={creating}
-        title={t('lists.newList')}
-        placeholder={t('lists.newListPlaceholder')}
-        confirmLabel={t('lists.create')}
+        title={t("lists.newList")}
+        placeholder={t("lists.newListPlaceholder")}
+        confirmLabel={t("lists.create")}
         onCancel={() => setCreating(false)}
         onSubmit={(name) => {
           const id = addList(name);
@@ -87,16 +103,10 @@ export function ListPickerSheet({ visible, title, onCancel, onPick }: ListPicker
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(12,18,10,0.45)',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
   card: { padding: spacing.lg, gap: spacing.xs },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.md,
   },

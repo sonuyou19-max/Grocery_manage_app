@@ -1,8 +1,9 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { GlassView } from '@/components/glass';
-import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { Sheet } from "@/components/sheet";
+import { GlassView } from "@/components/glass";
+import { useT } from "@/store/locale";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 export interface StapleRow {
   key: string;
@@ -33,47 +34,44 @@ export function StaplesSheet({
   const t = useT();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable onPress={() => {}}>
-          <GlassView over="content" radius={radii.lg} style={styles.card}>
-            <View style={styles.grabber} />
-            <Text style={[type.h2, { color: colors.ink }]}>{t('insights.staplesTitle')}</Text>
-            {/* Bounded height, not flex: the sheet must not grow past the
+    <Sheet visible={visible} onClose={onClose} scrim gutter={0}>
+      <GlassView over="content" radius={radii.lg} style={styles.card}>
+        <View style={styles.grabber} />
+        <Text style={[type.h2, { color: colors.ink }]}>
+          {t("insights.staplesTitle")}
+        </Text>
+        {/* Bounded height, not flex: the sheet must not grow past the
                 screen on a household with a hundred tracked items, and the
                 scroll has to live inside the card rather than under it. */}
-            <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-              {staples.map((s, i) => (
-                <View key={s.key} style={styles.row}>
-                  <Text style={[type.sub, styles.rank, { color: colors.muted }]}>{i + 1}</Text>
-                  <Text
-                    style={[type.body, styles.grow, { color: colors.ink }]}
-                    numberOfLines={1}
-                  >
-                    {s.display}
-                  </Text>
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {t('insights.boughtTimes', { count: s.times })}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-            <Pressable onPress={onClose} style={styles.done} hitSlop={8}>
-              <Text style={[type.body, { color: colors.accent }]}>{t('common.done')}</Text>
-            </Pressable>
-          </GlassView>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {staples.map((s, i) => (
+            <View key={s.key} style={styles.row}>
+              <Text style={[type.sub, styles.rank, { color: colors.muted }]}>
+                {i + 1}
+              </Text>
+              <Text
+                style={[type.body, styles.grow, { color: colors.ink }]}
+                numberOfLines={1}
+              >
+                {s.display}
+              </Text>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t("insights.boughtTimes", { count: s.times })}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+        <Pressable onPress={onClose} style={styles.done} hitSlop={8}>
+          <Text style={[type.body, { color: colors.accent }]}>
+            {t("common.done")}
+          </Text>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </GlassView>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(12,18,10,0.45)',
-    justifyContent: 'flex-end',
-  },
   card: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
@@ -82,21 +80,21 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
   },
   grabber: {
-    alignSelf: 'center',
+    alignSelf: "center",
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(128,128,128,0.4)',
+    backgroundColor: "rgba(128,128,128,0.4)",
     marginBottom: spacing.xs,
   },
   scroll: { maxHeight: 380 },
   grow: { flex: 1, minWidth: 0 },
-  rank: { width: 22, fontVariant: ['tabular-nums'] },
+  rank: { width: 22, fontVariant: ["tabular-nums"] },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.sm,
   },
-  done: { alignSelf: 'center', paddingTop: spacing.sm },
+  done: { alignSelf: "center", paddingTop: spacing.sm },
 });

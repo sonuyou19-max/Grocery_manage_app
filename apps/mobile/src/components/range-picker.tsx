@@ -1,14 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { GlassView } from '@/components/glass';
-import { haptics } from '@/lib/haptics';
-import { useDeferUntilClosed } from '@/lib/modal-nav';
-import { usePlusGate } from '@/lib/plus-gate';
-import { useEntitlement } from '@/store/entitlement';
-import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { GlassView } from "@/components/glass";
+import { Sheet, useSheetDismiss } from "@/components/sheet";
+import { haptics } from "@/lib/haptics";
+import { usePlusGate } from "@/lib/plus-gate";
+import { useEntitlement } from "@/store/entitlement";
+import { useT } from "@/store/locale";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 /**
  * The window a card is reporting on, and the control that changes it.
@@ -28,11 +28,11 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * one prints its own range in its own header rather than relying on a control
  * somewhere above.
  */
-export const RANGES = ['week', 'month', 'quarter', 'year', 'all'] as const;
+export const RANGES = ["week", "month", "quarter", "year", "all"] as const;
 export type Range = (typeof RANGES)[number];
 
 /** Days in each window. `all` has no cutoff — see `rangeCutoff`. */
-const RANGE_DAYS: Record<Exclude<Range, 'all'>, number> = {
+const RANGE_DAYS: Record<Exclude<Range, "all">, number> = {
   week: 7,
   month: 30,
   quarter: 91,
@@ -54,7 +54,7 @@ const RANGE_DAYS: Record<Exclude<Range, 'all'>, number> = {
  * actively trying to reason about.
  */
 export function rangeCutoff(range: Range, now: number): number | null {
-  if (range === 'all') return null;
+  if (range === "all") return null;
   return now - RANGE_DAYS[range] * 86_400_000;
 }
 
@@ -128,32 +128,22 @@ export function withinRange<T extends { at: number }>(
  * that happens to be tappable — a bordered control here would compete with the
  * card's own title for the eye at the top of every card on the tab.
  */
-export function RangePicker({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
+export function RangePicker({
+  value,
+  onChange,
+}: {
+  value: Range;
+  onChange: (r: Range) => void;
+}) {
   const { colors } = useTheme();
   const t = useT();
   const [open, setOpen] = useState(false);
   const { locked, requirePlus } = usePlusGate();
   const { historyCutoff } = useEntitlement();
-  // This menu is a <Modal>, so opening the paywall from it has to wait for it
-  // to close. See lib/modal-nav.ts for the three times that was learned.
-  const whenClosed = useDeferUntilClosed(open);
 
   const now = Date.now();
-  const isPaid = (r: Range) => locked && beyondFreeWindow(r, now, historyCutoff);
-
-  const pick = (r: Range) => {
-    setOpen(false);
-    if (r === value) return;
-    // A paid range is offered, not hidden. Somebody has to be able to see that
-    // a year of history exists before they can decide they want it — and the
-    // row already carries the badge, so the paywall is not a surprise.
-    if (isPaid(r)) {
-      whenClosed(requirePlus);
-      return;
-    }
-    haptics.snap();
-    onChange(r);
-  };
+  const isPaid = (r: Range) =>
+    locked && beyondFreeWindow(r, now, historyCutoff);
 
   return (
     <>
@@ -167,49 +157,118 @@ export function RangePicker({ value, onChange }: { value: Range; onChange: (r: R
         accessibilityRole="button"
         accessibilityLabel={t(`range.${value}`)}
       >
-        <Text style={[type.sub, { color: colors.muted }]}>{t(`range.${value}`)}</Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t(`range.${value}`)}
+        </Text>
         <Ionicons name="chevron-down" size={13} color={colors.muted} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <GlassView over="content" radius={radii.lg} style={styles.menu}>
-            {RANGES.map((r) => {
-              const active = r === value;
-              const paid = isPaid(r);
-              return (
-                <Pressable key={r} style={styles.option} onPress={() => pick(r)}>
-                  <Ionicons
-                    name={active ? 'radio-button-on' : 'radio-button-off'}
-                    size={20}
-                    color={active ? colors.accent : colors.muted}
-                  />
-                  <Text
-                    style={[
-                      type.body,
-                      styles.grow,
-                      { color: active ? colors.accent : paid ? colors.muted : colors.ink },
-                    ]}
-                  >
-                    {t(`range.${r}`)}
-                  </Text>
-                  {paid && (
-                    <View style={[styles.badge, { borderColor: colors.plusInk }]}>
-                      <Text style={[type.label, { color: colors.plusInk }]}>{t('plus.badge')}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </GlassView>
-        </Pressable>
-      </Modal>
+      <Sheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        align="center"
+        scrim
+        gutter={spacing.xl}
+      >
+        <RangeMenu
+          value={value}
+          onChange={onChange}
+          isPaid={isPaid}
+          requirePlus={requirePlus}
+        />
+      </Sheet>
     </>
   );
 }
 
+/**
+ * The menu itself, a separate component so it can sit INSIDE the <Sheet> and
+ * therefore call useSheetDismiss().
+ *
+ * That is the whole reason for the split. Opening the paywall means navigating
+ * out of a Modal, which on Android must wait until the Modal's window is really
+ * gone — and only something rendered inside the Sheet can see when that is. The
+ * old code kept its own `useDeferUntilClosed(open)`, which was correct while
+ * `open` was also the Modal's visibility; with a shared Sheet the window
+ * outlives `open` by a whole exit animation, so keying on it would have fired
+ * the paywall too early. Reusing the primitive means reusing its notion of
+ * closed.
+ */
+function RangeMenu({
+  value,
+  onChange,
+  isPaid,
+  requirePlus,
+}: {
+  value: Range;
+  onChange: (r: Range) => void;
+  isPaid: (r: Range) => boolean;
+  requirePlus: () => void;
+}) {
+  const { colors } = useTheme();
+  const t = useT();
+  const dismiss = useSheetDismiss();
+
+  const pick = (r: Range) => {
+    if (r === value) {
+      dismiss();
+      return;
+    }
+    // A paid range is offered, not hidden. Somebody has to be able to see that
+    // a year of history exists before they can decide they want it — and the
+    // row already carries the badge, so the paywall is not a surprise.
+    if (isPaid(r)) {
+      dismiss(requirePlus);
+      return;
+    }
+    haptics.snap();
+    onChange(r);
+    dismiss();
+  };
+
+  return (
+    <GlassView over="content" radius={radii.lg} style={styles.menu}>
+      {RANGES.map((r) => {
+        const active = r === value;
+        const paid = isPaid(r);
+        return (
+          <Pressable key={r} style={styles.option} onPress={() => pick(r)}>
+            <Ionicons
+              name={active ? "radio-button-on" : "radio-button-off"}
+              size={20}
+              color={active ? colors.accent : colors.muted}
+            />
+            <Text
+              style={[
+                type.body,
+                styles.grow,
+                {
+                  color: active
+                    ? colors.accent
+                    : paid
+                      ? colors.muted
+                      : colors.ink,
+                },
+              ]}
+            >
+              {t(`range.${r}`)}
+            </Text>
+            {paid && (
+              <View style={[styles.badge, { borderColor: colors.plusInk }]}>
+                <Text style={[type.label, { color: colors.plusInk }]}>
+                  {t("plus.badge")}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </GlassView>
+  );
+}
+
 const styles = StyleSheet.create({
-  trigger: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  trigger: { flexDirection: "row", alignItems: "center", gap: 2 },
   grow: { flex: 1 },
   // Outlined, not filled — the same treatment the Unlock Plus badge uses, so a
   // paid thing looks the same everywhere it is offered.
@@ -219,16 +278,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
   },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(12,18,10,0.45)',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
   menu: { padding: spacing.md, gap: spacing.xs },
   option: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,

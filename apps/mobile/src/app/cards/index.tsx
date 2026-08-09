@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import { useState } from "react";
 import {
   Alert,
   Modal,
@@ -10,30 +10,35 @@ import {
   Text,
   useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
-} from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { CardCode } from '@/components/card-code';
-import { CardsSignInGate } from '@/components/cards-sign-in-gate';
-import { EmptyState } from '@/components/empty-state';
-import { FormatToggle } from '@/components/format-toggle';
-import { Fab } from '@/components/fab';
-import { GlassView } from '@/components/glass';
-import { MeshBackground } from '@/components/mesh-background';
-import { formatCardValue, formatOf } from '@/lib/barcode';
-import { haptics } from '@/lib/haptics';
-import { useLoyaltyCards, type LoyaltyCard } from '@/lib/loyalty-cards';
-import { customInitials, getSupermarket, supermarketLabel } from '@/lib/supermarkets';
-import { useAuth } from '@/store/auth';
-import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { Sheet } from "@/components/sheet";
+import { CardCode } from "@/components/card-code";
+import { CardsSignInGate } from "@/components/cards-sign-in-gate";
+import { EmptyState } from "@/components/empty-state";
+import { FormatToggle } from "@/components/format-toggle";
+import { Fab } from "@/components/fab";
+import { GlassView } from "@/components/glass";
+import { MeshBackground } from "@/components/mesh-background";
+import { formatCardValue, formatOf } from "@/lib/barcode";
+import { haptics } from "@/lib/haptics";
+import { useLoyaltyCards, type LoyaltyCard } from "@/lib/loyalty-cards";
+import {
+  customInitials,
+  getSupermarket,
+  supermarketLabel,
+} from "@/lib/supermarkets";
+import { useAuth } from "@/store/auth";
+import { useT } from "@/store/locale";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 /**
  * The card wallet — every loyalty card, stacked.
@@ -78,11 +83,12 @@ function shade(hex: string, amount: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return hex;
   const n = parseInt(m[1], 16);
-  const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c * (1 - amount))));
+  const mix = (c: number) =>
+    Math.max(0, Math.min(255, Math.round(c * (1 - amount))));
   const r = mix((n >> 16) & 0xff);
   const g = mix((n >> 8) & 0xff);
   const b = mix(n & 0xff);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
 export default function CardsScreen() {
@@ -91,9 +97,8 @@ export default function CardsScreen() {
   const { user, initializing } = useAuth();
   // undefined while the session is still being restored, so someone who *is*
   // signed in never gets flashed the sign-in prompt on the way in.
-  const { cards, loading, needsSignIn, removeCard, setCardFormat } = useLoyaltyCards(
-    initializing ? undefined : user?.id ?? null,
-  );
+  const { cards, loading, needsSignIn, removeCard, setCardFormat } =
+    useLoyaltyCards(initializing ? undefined : (user?.id ?? null));
   const { width } = useWindowDimensions();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -106,19 +111,22 @@ export default function CardsScreen() {
   });
 
   // Room for every card at its resting position, plus the last card's body.
-  const stackHeight = cards.length > 0 ? (cards.length - 1) * STEP + cardHeight : 0;
+  const stackHeight =
+    cards.length > 0 ? (cards.length - 1) * STEP + cardHeight : 0;
 
   const open = cards.find((c) => c.id === openId) ?? null;
 
   const confirmRemove = (card: LoyaltyCard) => {
     Alert.alert(
-      t('cards.removeTitle'),
-      t('cards.removeBody', { store: supermarketLabel(card.store) ?? card.store }),
+      t("cards.removeTitle"),
+      t("cards.removeBody", {
+        store: supermarketLabel(card.store) ?? card.store,
+      }),
       [
-        { text: t('common.cancel'), style: 'cancel' },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: t('cards.remove'),
-          style: 'destructive',
+          text: t("cards.remove"),
+          style: "destructive",
           onPress: () => {
             setOpenId(null);
             removeCard(card.id);
@@ -131,17 +139,19 @@ export default function CardsScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
           </Pressable>
           <View style={styles.grow}>
-            <Text style={[type.h2, { color: colors.ink }]}>{t('cards.title')}</Text>
+            <Text style={[type.h2, { color: colors.ink }]}>
+              {t("cards.title")}
+            </Text>
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={2}>
               {cards.length > 0
-                ? t('cards.countAndPrivacy', { count: cards.length })
-                : t('cards.subtitle')}
+                ? t("cards.countAndPrivacy", { count: cards.length })
+                : t("cards.subtitle")}
             </Text>
           </View>
         </View>
@@ -164,8 +174,8 @@ export default function CardsScreen() {
             !loading && (
               <EmptyState
                 icon="card-outline"
-                title={t('cards.emptyTitle')}
-                body={t('cards.emptyBody')}
+                title={t("cards.emptyTitle")}
+                body={t("cards.emptyBody")}
               />
             )
           )}
@@ -192,69 +202,86 @@ export default function CardsScreen() {
           route, so there's no tab bar to clear. */}
       {!needsSignIn && (
         <Fab
-          label={t('cards.addCard')}
-          onPress={() => router.push('/cards/add')}
+          label={t("cards.addCard")}
+          onPress={() => router.push("/cards/add")}
           aboveTabBar={false}
         />
       )}
 
       {/* Full-size card, for holding up to a scanner. */}
-      <Modal
+      {/* Taps on the card itself do not dismiss — a hand resting on the phone
+          at the till must not close it. Sheet's own inner wrapper handles that. */}
+      <Sheet
         visible={open !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpenId(null)}
+        onClose={() => setOpenId(null)}
+        align="center"
+        scrim
       >
+        {/* over="content": this is the card held up to a scanner at the till.
+            A translucent surface puts the wallet list behind it straight through
+            the barcode, which is not a styling problem — it is a barcode that
+            may not read. */}
         {open && (
-          <Pressable style={styles.backdrop} onPress={() => setOpenId(null)}>
-            {/* Stop taps on the card itself from dismissing — a hand resting on
-                the phone at the till shouldn't close it. */}
-            <Pressable onPress={() => {}}>
-              {/* over="content": this is the card held up to a scanner at the
-                  till. A translucent surface puts the wallet list behind it
-                  straight through the barcode, which is not a styling problem —
-                  it is a barcode that may not read. */}
-              <GlassView over="content" radius={radii.lg} style={styles.openCard}>
-                <View style={styles.openHead}>
-                  <BrandMark store={open.store} size={38} onColor={false} />
-                  <Text style={[type.h2, { color: colors.ink, flex: 1 }]} numberOfLines={2}>
-                    {supermarketLabel(open.store) ?? open.store}
-                  </Text>
-                </View>
+          <GlassView over="content" radius={radii.lg} style={styles.openCard}>
+            <View style={styles.openHead}>
+              <BrandMark store={open.store} size={38} onColor={false} />
+              <Text
+                style={[type.h2, { color: colors.ink, flex: 1 }]}
+                numberOfLines={2}
+              >
+                {supermarketLabel(open.store) ?? open.store}
+              </Text>
+            </View>
 
-                <CardCode symbology={open.symbology} value={open.value} width={cardWidth - spacing.lg} />
+            <CardCode
+              symbology={open.symbology}
+              value={open.value}
+              width={cardWidth - spacing.lg}
+            />
 
-                <Text style={[type.sub, { color: colors.muted, textAlign: 'center' }]}>
-                  {t('cards.showAtTill')}
-                </Text>
+            <Text
+              style={[type.sub, { color: colors.muted, textAlign: "center" }]}
+            >
+              {t("cards.showAtTill")}
+            </Text>
 
-                {/* Fixable at the till, which is the point. Whether a chain reads
+            {/* Fixable at the till, which is the point. Whether a chain reads
                     1D or 2D isn't in the number, so the first sign of a wrong
                     guess is usually a scanner refusing the card — and standing at
                     a checkout is the worst possible moment to have to re-add it. */}
-                <FormatToggle
-                  label={t('cards.wontScanLabel')}
-                  value={formatOf(open.symbology)}
-                  onChange={(format) => {
-                    haptics.tick();
-                    setCardFormat(open.id, format);
-                  }}
-                />
+            <FormatToggle
+              label={t("cards.wontScanLabel")}
+              value={formatOf(open.symbology)}
+              onChange={(format) => {
+                haptics.tick();
+                setCardFormat(open.id, format);
+              }}
+            />
 
-                <View style={styles.openActions}>
-                  <Pressable onPress={() => confirmRemove(open)} hitSlop={8} style={styles.openAction}>
-                    <Ionicons name="trash-outline" size={18} color={colors.crit} />
-                    <Text style={[type.sub, { color: colors.crit }]}>{t('cards.remove')}</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setOpenId(null)} hitSlop={8} style={styles.openAction}>
-                    <Text style={[type.body, { color: colors.accent }]}>{t('common.done')}</Text>
-                  </Pressable>
-                </View>
-              </GlassView>
-            </Pressable>
-          </Pressable>
+            <View style={styles.openActions}>
+              <Pressable
+                onPress={() => confirmRemove(open)}
+                hitSlop={8}
+                style={styles.openAction}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.crit} />
+                <Text style={[type.sub, { color: colors.crit }]}>
+                  {t("cards.remove")}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setOpenId(null)}
+                hitSlop={8}
+                style={styles.openAction}
+              >
+                <Text style={[type.body, { color: colors.accent }]}>
+                  {t("common.done")}
+                </Text>
+              </Pressable>
+            </View>
+          </GlassView>
         )}
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -289,7 +316,7 @@ function StackedCard({
   // app's own green. That keeps an unbranded card a first-class card rather than
   // a grey placeholder among coloured ones.
   const base = chain?.color ?? colors.accent;
-  const ink = chain?.darkText ? '#1B2417' : '#FFFFFF';
+  const ink = chain?.darkText ? "#1B2417" : "#FFFFFF";
   // Light diagonal wash: the brand colour into a deeper version of itself.
   const gradient = [shade(base, -0.06), base, shade(base, 0.28)] as const;
 
@@ -312,11 +339,7 @@ function StackedCard({
 
   return (
     <Animated.View
-      style={[
-        styles.stacked,
-        { width, height, zIndex: index },
-        animated,
-      ]}
+      style={[styles.stacked, { width, height, zIndex: index }, animated]}
     >
       <Pressable onPress={onPress} style={styles.fill}>
         <LinearGradient
@@ -333,11 +356,23 @@ function StackedCard({
               <Text style={[styles.faceName, { color: ink }]} numberOfLines={1}>
                 {label}
               </Text>
-              <Text style={[type.sub, { color: ink, opacity: 0.75 }]} numberOfLines={1}>
-                {t(formatOf(card.symbology) === 'qr' ? 'cards.faceQr' : 'cards.faceBarcode')}
+              <Text
+                style={[type.sub, { color: ink, opacity: 0.75 }]}
+                numberOfLines={1}
+              >
+                {t(
+                  formatOf(card.symbology) === "qr"
+                    ? "cards.faceQr"
+                    : "cards.faceBarcode",
+                )}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={ink} style={styles.faceChevron} />
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={ink}
+              style={styles.faceChevron}
+            />
           </View>
 
           {/* Below the fold, so only the fully-revealed card shows its number. */}
@@ -349,8 +384,20 @@ function StackedCard({
               page colour — the detail that makes a rectangle read as a card
               rather than a coloured box. Sits at the fold line so it lands on
               the visible strip of every card in the stack, not just the last. */}
-          <View style={[styles.notch, styles.notchLeft, { backgroundColor: colors.bg }]} />
-          <View style={[styles.notch, styles.notchRight, { backgroundColor: colors.bg }]} />
+          <View
+            style={[
+              styles.notch,
+              styles.notchLeft,
+              { backgroundColor: colors.bg },
+            ]}
+          />
+          <View
+            style={[
+              styles.notch,
+              styles.notchRight,
+              { backgroundColor: colors.bg },
+            ]}
+          />
         </LinearGradient>
       </Pressable>
     </Animated.View>
@@ -383,23 +430,33 @@ function BrandMark({
   const { colors } = useTheme();
   const chain = getSupermarket(store);
   const initials = chain?.initials ?? customInitials(store);
-  const plate = onColor ? 'rgba(255,255,255,0.92)' : chain?.color ?? colors.accentSoft;
+  const plate = onColor
+    ? "rgba(255,255,255,0.92)"
+    : (chain?.color ?? colors.accentSoft);
   const text = onColor
-    ? '#1B2417'
+    ? "#1B2417"
     : chain
       ? chain.darkText
-        ? '#1B2417'
-        : '#FFFFFF'
+        ? "#1B2417"
+        : "#FFFFFF"
       : colors.accent;
 
   return (
     <View
       style={[
         styles.mark,
-        { width: size, height: size, borderRadius: size * 0.3, backgroundColor: plate },
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.3,
+          backgroundColor: plate,
+        },
       ]}
     >
-      <Text style={[styles.markText, { fontSize: size * 0.4, color: text }]} numberOfLines={1}>
+      <Text
+        style={[styles.markText, { fontSize: size * 0.4, color: text }]}
+        numberOfLines={1}
+      >
         {initials}
       </Text>
     </View>
@@ -408,12 +465,12 @@ function BrandMark({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  safe: { flex: 1, backgroundColor: 'transparent' },
+  safe: { flex: 1, backgroundColor: "transparent" },
   grow: { flex: 1, minWidth: 0 },
   fill: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
@@ -422,58 +479,74 @@ const styles = StyleSheet.create({
   // left: 0 is the *padding* edge, not the border edge — absolute children are
   // positioned inside the container's padding. Adding spacing.lg again here
   // would double the inset and push each card off the right side.
-  stacked: { position: 'absolute', left: 0, top: 0 },
+  stacked: { position: "absolute", left: 0, top: 0 },
   face: {
     flex: 1,
     borderRadius: radii.lg,
     padding: spacing.lg,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     // Clips the notches to the rounded rectangle, so the one on a card's edge
     // can't paint outside the corner radius.
-    overflow: 'hidden',
+    overflow: "hidden",
     // A real shadow is what separates one card from the next in the pile.
-    shadowColor: '#000000',
+    shadowColor: "#000000",
     shadowOpacity: 0.22,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: -2 },
     elevation: 6,
   },
-  faceHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  faceName: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
+  faceHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  faceName: { fontSize: 17, fontWeight: "700", letterSpacing: -0.2 },
   // Nudged down so it optically centres against the two-line block beside it.
   faceChevron: { opacity: 0.6 },
   // Monospaced-ish spacing so a long card number reads in groups rather than as
   // one run of digits.
-  faceValue: { fontSize: 15, fontWeight: '600', letterSpacing: 1.4, opacity: 0.9 },
-  mark: { alignItems: 'center', justifyContent: 'center' },
-  markText: { fontWeight: '800' },
+  faceValue: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 1.4,
+    opacity: 0.9,
+  },
+  mark: { alignItems: "center", justifyContent: "center" },
+  markText: { fontWeight: "800" },
 
   // Half of each circle hangs outside the card and is clipped away by the
   // face's overflow:hidden, leaving a clean bite in the edge.
-  notch: { position: 'absolute', width: 18, height: 18, borderRadius: 9, top: STEP - 9 },
+  notch: {
+    position: "absolute",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    top: STEP - 9,
+  },
   notchLeft: { left: -9 },
   notchRight: { right: -9 },
 
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,18,10,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(12,18,10,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: spacing.lg,
   },
-  openCard: { padding: spacing.lg, gap: spacing.md, alignItems: 'center' },
+  openCard: { padding: spacing.lg, gap: spacing.md, alignItems: "center" },
   openHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
-    alignSelf: 'stretch',
+    alignSelf: "stretch",
   },
   openActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    alignSelf: 'stretch',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
     paddingTop: spacing.xs,
   },
-  openAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.sm },
+  openAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
 });
