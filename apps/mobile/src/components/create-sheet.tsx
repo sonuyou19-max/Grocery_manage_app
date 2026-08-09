@@ -113,8 +113,6 @@ export function CreateSheet({
     transform: [{ scale: 0.82 + progress.value * 0.18 }],
   }));
 
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
-
   /*
    * Both rows leave this screen, and neither may do it while the Modal is still
    * up — see lib/modal-nav.ts. `mounted` is the Modal's own visibility, so the
@@ -147,11 +145,26 @@ export function CreateSheet({
         animationType="none"
         onRequestClose={onClose}
       >
-        <Animated.View style={[StyleSheet.absoluteFill, styles.dim, backdropStyle]} />
-        <Pressable style={styles.backdrop} onPress={onClose}>
-          {/* Stops a tap on the sheet itself from closing it. */}
+        {/*
+          * The clearance is PADDING on this backdrop, not margin on the card,
+          * and that is the whole fix for a dead button.
+          *
+          * It used to be `marginBottom` on the card — which sits inside the
+          * no-op Pressable below, whose only job is to stop a tap on the card
+          * itself from closing the sheet. Margin counts toward that Pressable's
+          * height, so its touch area covered the card PLUS the entire clearance
+          * strip: exactly the tab bar and the create button. Tapping the cross
+          * hit the swallow-everything Pressable and did nothing at all, so the
+          * only way out was tapping the page above the sheet.
+          *
+          * As padding it belongs to the backdrop, which closes. The button is
+          * reachable, and tapping it does what tapping it obviously should.
+          */}
+        <Pressable style={[styles.backdrop, { paddingBottom: bottomClearance }]} onPress={onClose}>
+          {/* Stops a tap on the sheet itself from closing it. Wraps the card
+              and nothing else — see above. */}
           <Pressable onPress={() => {}}>
-            <Animated.View style={[styles.origin, { marginBottom: bottomClearance }, cardStyle]}>
+            <Animated.View style={[styles.origin, cardStyle]}>
             <GlassView over="content" radius={radii.lg} style={styles.card}>
               <Text style={[type.h2, { color: colors.ink }]}>{t('create.title')}</Text>
 
@@ -220,9 +233,6 @@ export function CreateSheet({
 }
 
 const styles = StyleSheet.create({
-  // The dim is its own layer so it can fade with the card instead of snapping
-  // on and off with the Modal window.
-  dim: { backgroundColor: 'rgba(12,18,10,0.45)' },
   backdrop: { flex: 1, justifyContent: 'flex-end', padding: spacing.lg },
   // Bottom centre: where the create button is. Everything scales out of and
   // back into that point.
