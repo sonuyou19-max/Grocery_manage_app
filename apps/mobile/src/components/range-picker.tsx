@@ -67,16 +67,34 @@ export function rangeCutoff(range: Range, now: number): number | null {
  * moves the moment that SQL function does, and cannot drift from the sentence
  * the Insights tab prints above the chart.
  *
- * The free window is five weeks, not four, BECAUSE of this function: 30 days is
- * the default view, and a four-week window (28 days) would put a free account's
- * own default card behind the paywall. Migration 0028 carries that reasoning and
- * is the one that turns the tier on. If anyone ever narrows it below 30 days
- * again, this is where the damage shows up.
+ * Derivation has one floor under it: FREE_FLOOR_DAYS. The free tier is sold as
+ * including recent spending, and 30 days is the default view every Insights
+ * card opens on — so no server value may put that view behind the paywall.
+ *
+ * That floor is not hypothetical. The window shipped at 520 weeks (migration
+ * 0025, gate wired but not biting), and 0028 turns it on. 0028 was drafted at
+ * four weeks and later changed to five precisely because 28 days is two days
+ * short of the default card — and a database that ran the four-week draft put a
+ * PLUS badge on "Last 30 days" for a free user, which is the tier's own
+ * headline feature sitting behind its own paywall.
+ *
+ * Deriving from the server was still right; the mistake was deriving without a
+ * bound. The server decides how much history it will SERVE, and it can be
+ * tuned freely. What it may not do is decide that something the app advertises
+ * as free is paid. If the product ever stops promising 30 free days, change
+ * FREE_FLOOR_DAYS — deliberately, here, where the promise is written down.
  *
  * Null cutoff — signed out, or the first answer has not arrived — gates nothing.
  * A guess in this direction shows a paywall to someone who has not been told
  * they need one.
  */
+
+/**
+ * The shortest window that may ever be free, in days. Tied to the default range
+ * rather than written as `30`, so the two cannot drift apart.
+ */
+export const FREE_FLOOR_DAYS = RANGE_DAYS.month;
+
 export function beyondFreeWindow(
   range: Range,
   now: number,
@@ -85,7 +103,12 @@ export function beyondFreeWindow(
   if (historyCutoff == null) return false;
   const cutoff = rangeCutoff(range, now);
   // "All time" has no cutoff, so it is always beyond a bounded window.
-  return cutoff == null || cutoff < historyCutoff;
+  if (cutoff == null) return true;
+  // Whichever reaches further back: what the server allows, or the floor the
+  // app promises. A server window wider than the floor is used as-is, so this
+  // changes nothing on a correctly configured database.
+  const effective = Math.min(historyCutoff, now - FREE_FLOOR_DAYS * 86_400_000);
+  return cutoff < effective;
 }
 
 /** Keep only what falls inside the window. */

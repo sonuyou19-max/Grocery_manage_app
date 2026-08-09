@@ -29,6 +29,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const SRC = join(ROOT, 'src');
@@ -51,6 +53,40 @@ const fail = (title, lines) => {
   failures += 1;
   console.log(`FAIL ${title}`);
   for (const line of lines) console.log(`  ${line}`);
+};
+
+/**
+ * Load a .tsx module and run it in Node.
+ *
+ * range-picker.tsx is a component file, but the free/paid split lives in pure
+ * functions inside it — and those are worth executing rather than pattern
+ * matching, since the bug they had was arithmetic, not wording. Every import is
+ * stubbed with a proxy that answers to any property and any call, which is
+ * enough for the module's top-level StyleSheet.create and theme token reads to
+ * evaluate without React Native present.
+ */
+const stub = new Proxy(function stubFn() {}, {
+  get: (_t, key) => (key === '__esModule' ? false : stub),
+  apply: () => stub,
+});
+
+const compile = (path) => {
+  const js = ts.transpileModule(readFileSync(path, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: 'react' },
+  }).outputText;
+  const mod = { exports: {} };
+  new Function('module', 'exports', 'require', js)(mod, mod.exports, () => stub);
+  return mod.exports;
+};
+
+const assert = (title, ok) => {
+  if (ok) console.log(`ok   ${title}`);
+  else fail(title, ['expected true', 'actual   false']);
+};
+
+const check = (title, actual, expected) => {
+  if (Object.is(actual, expected)) console.log(`ok   ${title}`);
+  else fail(title, [`expected ${JSON.stringify(expected)}`, `actual   ${JSON.stringify(actual)}`]);
 };
 
 const files = sources(SRC).map((f) => ({
@@ -282,6 +318,69 @@ if (!pillars) {
       console.log(`ok   ${ids.length} capabilities in 3 pillars, all with copy`);
     }
   }
+}
+
+/* ------------------------------------------------ the free history window */
+
+/*
+ * "Last 30 days" showed a PLUS badge to a free user — the free tier's own
+ * headline feature behind its own paywall.
+ *
+ * The gate is derived from the server's window, which was right. What was
+ * missing was a floor under it. free_history_weeks() shipped at 520 weeks
+ * (0025, wired but not biting) and 0028 turns it on; 0028 was drafted at FOUR
+ * weeks and later changed to five precisely because 28 days is two days short
+ * of the 30-day default every Insights card opens on. A database running the
+ * four-week draft produces exactly the reported screenshot.
+ *
+ * The first time this was investigated it was reported as "not a bug", on the
+ * strength of running the function against a database with the FIVE-week
+ * version applied. That tested the fix, not the field. So this runs the real
+ * beyondFreeWindow against every window the server could plausibly be set to,
+ * including the ones that caused the bug.
+ */
+const rangePicker = compile(join(SRC, 'components', 'range-picker.tsx'));
+const { beyondFreeWindow, RANGES, FREE_FLOOR_DAYS } = rangePicker;
+
+const NOW = Date.UTC(2026, 7, 8, 12, 0, 0);
+const days = (n) => NOW - n * 86_400_000;
+
+check('the floor is the 30-day default range, not a loose number', FREE_FLOOR_DAYS, 30);
+
+/** [label, server window in days, which ranges must show PLUS] */
+const CONFIGS = [
+  // The bug: 0028 drafted at four weeks.
+  ['4 weeks (the 0028 draft)', 28, ['quarter', 'year', 'all']],
+  // The shipped value.
+  ['5 weeks (0028 as shipped)', 35, ['quarter', 'year', 'all']],
+  // Gate wired but not biting (0025). Only "all time" is unbounded.
+  ['520 weeks (0025, gate off)', 3640, ['all']],
+  // Someone tightens it hard. The floor must still protect the default view.
+  ['1 week (someone got aggressive)', 7, ['quarter', 'year', 'all']],
+];
+
+for (const [label, windowDays, expectPaid] of CONFIGS) {
+  const cutoff = days(windowDays);
+  const actual = RANGES.filter((r) => beyondFreeWindow(r, NOW, cutoff));
+  check(`free window ${label}`, actual.join(','), expectPaid.join(','));
+  assert(
+    `...and "Last 30 days" is free at ${label}`,
+    !beyondFreeWindow('month', NOW, cutoff),
+  );
+  assert(`...and "Last 7 days" is free at ${label}`, !beyondFreeWindow('week', NOW, cutoff));
+}
+
+// The floor must not widen anything: a server that is more generous than the
+// promise still decides, so the paid ranges above stay paid.
+assert(
+  'a generous server window is used as-is, not clamped down to the floor',
+  !beyondFreeWindow('quarter', NOW, days(3640)),
+);
+
+// Signed out, or before the first answer lands: gate nothing rather than
+// paywall someone who has not been told there is a wall.
+for (const r of RANGES) {
+  assert(`a null cutoff gates nothing (${r})`, !beyondFreeWindow(r, NOW, null));
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
