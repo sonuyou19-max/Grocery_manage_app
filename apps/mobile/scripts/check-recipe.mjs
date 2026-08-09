@@ -344,21 +344,122 @@ assert(
 
 /* ------------------------------------------------------------- language */
 
-// A French page came back with English item names — the model defaulted to
-// the prompt's own language, since nothing told it not to. Cannot test model
-// behaviour from here, but the instruction it depends on can be pinned so it
-// cannot be edited away without this failing.
+/*
+ * A French recipe came back with English item names. The first fix told the
+ * model more firmly not to translate, and a few items still did — because the
+ * prompt also asked for "the SHOPPING name, not the recipe phrasing", and
+ * rewriting a phrase into its canonical form, in a model whose canonical
+ * vocabulary is English, IS translating it.
+ *
+ * The contract now says `name` must be obtainable from `source` by deleting
+ * words. That is a property this file can actually TEST, rather than an
+ * instruction it can only pin in place — everything below runs the real code.
+ */
+
+const { groundedIn, nameFromSource } = __test;
+
+// --- the check that catches a translation --------------------------------
+
 assert(
-  'the prompt forbids translating names into another language',
-  /same language/i.test(__test.SYSTEM_PROMPT) && /NEVER translate/.test(__test.SYSTEM_PROMPT),
+  'a translated name is not grounded in its source line',
+  !groundedIn("Olive oil", "2 c. à s. d'huile d'olive"),
 );
-// The one worked example in the prompt used to be English-only, which is
-// itself a few-shot nudge toward English output even alongside a rule saying
-// not to. A second example in another language pulls in the other direction.
+assert('"onion" is not grounded in "1 gros oignon"', !groundedIn('onion', '1 gros oignon, émincé'));
+assert('"flour" is not grounded in "500 g Mehl"', !groundedIn('flour', '500 g Mehl, gesiebt'));
+assert('"garlic" is not grounded in "2 spicchi d\'aglio"', !groundedIn('garlic', "2 spicchi d'aglio"));
+
+// --- ...without rejecting names that are genuinely fine -------------------
+
+assert('the source-language name passes', groundedIn("huile d'olive", "2 c. à s. d'huile d'olive"));
+assert('case differences pass', groundedIn('Mehl', '500 g mehl, gesiebt'));
+// The one rewrite worth tolerating: rejecting it would send correct names
+// through the repair path for nothing.
+assert('singularising a plural still passes', groundedIn('oignon', '3 oignons rouges'));
+assert('pluralising still passes', groundedIn('oignons', '1 oignon rouge'));
+assert('a multi-word name passes', groundedIn('verse peterselie', 'een handvol verse peterselie'));
+
+// The four-character floor is what stops the prefix rule becoming a licence to
+// match anything. Without it "oil" would ground itself against "olive".
+assert('a short accidental prefix does not ground a word', !groundedIn('oil', 'olive olie'));
+
+// --- the repair, which is what the user actually sees ---------------------
+
+const repairs = [
+  ['1 gros oignon, émincé', 'gros oignon'],
+  ['200 g de farine', 'farine'],
+  ['500 g Mehl, gesiebt', 'Mehl'],
+  ["2 spicchi d'aglio", "spicchi d'aglio"],
+  ['een handvol verse peterselie', 'een handvol verse peterselie'],
+  ['3 oignons rouges (bio)', 'oignons rouges'],
+  ['1 1/2 kg pommes de terre', 'pommes de terre'],
+];
+for (const [line, want] of repairs) {
+  check(`repair: "${line}"`, nameFromSource(line), want);
+}
+
+// Deleting only. Whatever comes out must have been in what went in — that is
+// the property that makes the repair language-agnostic.
+for (const [line] of repairs) {
+  const out = nameFromSource(line).toLowerCase();
+  assert(
+    `repair invents no words: "${line}"`,
+    out.split(/[^\p{L}\p{N}]+/u).filter(Boolean).every((w) => line.toLowerCase().includes(w)),
+  );
+}
+
+// A line that is nothing but a measure must not repair to an empty name.
+assert('a degenerate line still yields something', nameFromSource('200 g').length > 0);
+
+// --- end to end through sanitizeItems ------------------------------------
+
+const payload = JSON.stringify({
+  ingredientLines: ["2 c. à s. d'huile d'olive", '1 gros oignon, émincé', '200 g de farine'],
+});
+
+const fromModel = __test.sanitizeItems(
+  [
+    // The model translated these two — exactly what was shipped to the user.
+    { source: "2 c. à s. d'huile d'olive", name: 'Olive oil', quantity: 30, unit: 'ml' },
+    { source: '1 gros oignon, émincé', name: 'Onion', quantity: 1, unit: 'pcs' },
+    // ...and got this one right.
+    { source: '200 g de farine', name: 'farine', quantity: 200, unit: 'g' },
+  ],
+  payload,
+);
+
+check('the translated oil name is repaired', fromModel[0].name, "huile d'olive");
+check('the translated onion name is repaired', fromModel[1].name, 'gros oignon');
+check('a correct name is left alone', fromModel[2].name, 'farine');
+// Units are the one machine vocabulary and must survive the repair untouched.
+check('quantity survives the repair', fromModel[0].quantity, 30);
+check('unit survives the repair', fromModel[0].unit, 'ml');
+
+// An invented source line cannot be trusted to repair from, so the model's own
+// name stands rather than being replaced by something worse.
+const invented = __test.sanitizeItems(
+  [{ source: 'a line that was never on the page', name: 'Saffron', quantity: null, unit: null }],
+  payload,
+);
+check('an ungrounded source line leaves the name alone', invented[0].name, 'Saffron');
+
+// --- and the prompt still carries the rule it all rests on ----------------
+
 assert(
-  'the worked example demonstrates a non-English source, not just an English one',
-  /oignon/i.test(__test.SYSTEM_PROMPT),
+  'the prompt states the deletion-only rule',
+  // \s+ not a space: the prompt wraps, and an assertion that depends on where
+  // a line happens to break is a false failure waiting to happen.
+  /DELETING\s+words/i.test(__test.SYSTEM_PROMPT) &&
+    /may only\s+DELETE/i.test(__test.SYSTEM_PROMPT),
 );
+assert(
+  'the prompt asks for the source line alongside the name',
+  /"source"/.test(__test.SYSTEM_PROMPT),
+);
+// Worked examples in several languages, pulling against the prompt's own
+// English as a few-shot signal.
+for (const word of ['oignon', 'Mehl', 'peterselie', 'aglio']) {
+  assert(`the prompt shows a ${word} example`, __test.SYSTEM_PROMPT.includes(word));
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

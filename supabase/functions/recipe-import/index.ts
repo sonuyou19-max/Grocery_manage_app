@@ -241,37 +241,61 @@ export function youtubeDescription(html: string): { title: string; description: 
 
 const SYSTEM_PROMPT = `You extract the shopping-relevant parts of a recipe.
 Return ONLY a JSON object, no prose, no code fences:
-{"name": "...", "servings": 4, "items": [{"name": "...", "quantity": 2, "unit": "g"}]}
+{"name": "...", "language": "fr", "servings": 4,
+ "items": [{"source": "1 gros oignon, émincé", "name": "oignon", "quantity": 1, "unit": null}]}
 
-Write every name — the dish and every ingredient — in the SAME LANGUAGE the
-source is written in. These instructions are in English; that is not a
-signal to answer in English. A French page produces French output, a German
-video description produces German output. NEVER translate: the person who
-wrote "poireaux" is going to look for "poireaux" on the shelf, and English
-would send them looking for the wrong word in the wrong aisle.
+======================= THE ONE RULE THAT MATTERS =======================
 
-name is the dish, as a person would write it on a shopping list. Strip the
-website's own name, "Recipe", and any SEO padding. Keep it under 60 characters.
+For every item you return TWO strings:
+
+  source  the ingredient line COPIED CHARACTER-FOR-CHARACTER from the input.
+  name    what to write on a shopping list, produced from source by DELETING
+          words and nothing else.
+
+You may only DELETE. You may not substitute a word, re-spell a word, correct a
+word, singularise a word, or supply a word that is not already in source. If
+name contains a letter that is not in source, you have broken the rule.
+
+This is not a style preference. Someone reading "poireaux" is going to look for
+"poireaux" on the shelf; "Leeks" sends them down the wrong aisle in a shop that
+has never heard of the word. These instructions are written in English and that
+is NOT a signal to answer in English.
+
+  "1 gros oignon, émincé"            -> "oignon"          NOT "onion"
+  "2 c. à s. d'huile d'olive"        -> "huile d'olive"   NOT "olive oil"
+  "500 g Mehl, gesiebt"              -> "Mehl"            NOT "flour"
+  "een handvol verse peterselie"     -> "verse peterselie" NOT "parsley"
+  "2 spicchi d'aglio"                -> "aglio"           NOT "garlic"
+
+Delete: quantities, units, and preparation ("finely diced", "at room
+temperature", "gesiebt", "émincé"). Keep the thing you buy, spelled exactly as
+the source spells it. When in doubt, delete less — a slightly long name in the
+right language is correct, a tidy one in the wrong language is not.
+
+language is the ISO 639-1 code of the source text ("fr", "de", "nl", "it").
+Decide it BEFORE writing any item, and let it be the language of every name.
+
+=========================================================================
+
+name (top level) is the dish, in the source language, as a person would write it
+on a shopping list. Strip the website's own name, "Recipe", and SEO padding.
+Under 60 characters.
 
 servings is the number the recipe makes, or null if it does not say. Never guess.
 
-items is the ingredient list, one entry per ingredient:
-- name is the SHOPPING name, not the recipe phrasing: "1 large onion, finely
-  diced" -> "Onion" (or, from a French source, "1 gros oignon, émincé" ->
-  "Oignon" — same operation, source language kept). Drop preparation
-  ("chopped", "at room temperature"), drop size adjectives, keep the thing you
-  buy. Singular where natural.
-- quantity is a number, or null when the recipe gives none ("salt to taste",
-  "a handful of parsley"). Convert fractions and ranges to a single number:
-  "1 1/2" -> 1.5, "2-3" -> 3. Never invent one.
-- unit is one of: ${UNITS.join(', ')}, or null.
+quantity is a number, or null when the recipe gives none ("salt to taste", "a
+handful of parsley"). Convert fractions and ranges to a single number: "1 1/2"
+-> 1.5, "2-3" -> 3. Never invent one.
+
+unit is one of: ${UNITS.join(', ')}, or null.
   Convert cooking measures to what a European shopper buys: tablespoons and
   cups of a liquid -> ml, ounces and pounds -> g, "2 cloves" -> pcs with
   quantity 2. If a conversion would be a guess, use null for the unit and keep
-  the quantity.
-- Skip water, and skip anything that is not bought (ice, "oil for frying" if
-  oil already appears).
-- At most 40 items.
+  the quantity. (Units are a fixed machine vocabulary — they are the ONLY
+  field that is not in the source language.)
+
+Skip water, and skip anything that is not bought (ice, "oil for frying" if oil
+already appears). At most 40 items.
 
 The text may be a video description rather than a recipe page. If so, ignore
 chapter timestamps ("0:00 Intro"), links, hashtags, sponsor and discount-code
@@ -281,6 +305,120 @@ inventing one from the dish name.
 
 Do NOT return the method, the instructions, or any prose from the page. Only the
 ingredient list.`;
+
+/* ------------------------------------------------------------------------ */
+/* Keeping the source language — enforced, not requested                     */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * The prompt above asks for deletion-only extraction. This section checks that
+ * it happened, and repairs it deterministically when it did not.
+ *
+ * The previous version asked for "the SHOPPING name, not the recipe phrasing"
+ * and, separately, to never translate. Those two instructions are in tension:
+ * rewriting a phrase into its canonical shopping form, in a model whose
+ * canonical vocabulary is English, IS translation. Most items survived; a few
+ * came back as "Olive oil" and "Flour". Telling it more firmly not to would
+ * have been the third attempt at the same approach.
+ *
+ * So the contract changed shape. `name` must now be obtainable from `source` by
+ * deleting characters, which is a property we can TEST — and when the test
+ * fails we do not ask again, we build the name from the source line ourselves.
+ * A slightly clumsy name in the right language beats a tidy one in the wrong
+ * language, which is the user's stated priority and the whole point of the
+ * feature for a non-English speaker.
+ */
+
+/** Letter runs, lowercased. Splits on punctuation, so "d'huile" -> d, huile. */
+function wordsOf(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * Is every word of `name` present in `source`?
+ *
+ * Prefix matching in both directions, because the one rewrite worth tolerating
+ * is a plural/singular shift — "oignons" -> "oignon" is still French, still
+ * findable on a shelf, and rejecting it would send a correct name through the
+ * repair path for nothing. A four-character floor keeps that from being a
+ * licence to match anything: "onion" and "oignon" share only "o" and "oi"
+ * respectively in the wrong order, so the pair that started this fails.
+ */
+function groundedIn(name: string, source: string): boolean {
+  const hay = wordsOf(source);
+  if (hay.length === 0) return false;
+  return wordsOf(name).every((w) =>
+    hay.some((h) => {
+      const need = Math.min(4, w.length, h.length);
+      if (w.length <= 3 || h.length <= 3) return w === h;
+      return w.slice(0, need) === h.slice(0, need) && (w.startsWith(h) || h.startsWith(w));
+    }),
+  );
+}
+
+/**
+ * Measure abbreviations, deliberately only the unambiguous ones.
+ *
+ * Words like "cuillère", "tasse" and "gousse" are left in: stripping them turns
+ * "2 gousses d'ail" into "d'ail", and a shopping list reading "gousses d'ail"
+ * is perfectly good French. This list exists to drop "200 g", not to parse
+ * cooking measures — the model already did that into `quantity` and `unit`.
+ */
+const MEASURE_TOKENS = new Set([
+  'g', 'gr', 'gg', 'kg', 'mg', 'ml', 'cl', 'dl', 'l', 'lt',
+  'oz', 'lb', 'lbs', 'tbsp', 'tsp', 'el', 'tl', 'msp', 'cs', 'cc',
+]);
+
+/**
+ * Connectors and measure-phrase glue left stranded once the quantity is gone —
+ * "200 g DE farine", and the middle of French "c. À s." (cuillère à soupe).
+ */
+const LEADING_CONNECTORS = new Set([
+  'de', 'd', 'du', 'des', 'di', 'del', 'della', 'van', 'von', 'of', 'à', 'a', 'al',
+]);
+
+/**
+ * Build a shopping name out of an ingredient line, using only deletion.
+ *
+ * The fallback when the model's own `name` is not grounded in its `source`.
+ * Deterministic and language-agnostic: it never introduces a word, so whatever
+ * comes out is in the language that went in.
+ */
+function nameFromSource(source: string): string {
+  // Preparation almost always follows a comma, a dash or a bracket.
+  let text = source.split(/[,(–—]|\s-\s/)[0];
+  // Leading quantity: digits, fractions, vulgar fractions, ranges.
+  text = text.replace(/^[\s\d.,\/\u00BC-\u00BE\u2150-\u215E×x*+-]+/u, '');
+
+  let parts = text.split(/\s+/).filter(Boolean);
+  /*
+   * Peel measure tokens and the glue between them. Bounded, and never down to
+   * nothing, so a line that is all units cannot empty the name.
+   *
+   * Single letters go too, which is what makes the abbreviated French measures
+   * work: "2 c. à s. d'huile d'olive" arrives here as [c.] [à] [s.] [d'huile]
+   * [d'olive], and only a rule that drops "c", "à" and "s" reaches the oil. No
+   * ingredient anywhere starts with a bare one-letter word, so the risk this
+   * carries is theoretical and the abbreviations are not.
+   */
+  for (let pass = 0; pass < 4 && parts.length > 1; pass += 1) {
+    const head = parts[0].replace(/[.\u00B7]/g, '').toLowerCase();
+    const droppable =
+      MEASURE_TOKENS.has(head) || LEADING_CONNECTORS.has(head) || [...head].length === 1;
+    if (droppable) parts = parts.slice(1);
+    else break;
+  }
+
+  let out = parts.join(' ').replace(/\s+/g, ' ').trim();
+  // An elided article welded to the first real word: "d'huile" -> "huile".
+  // Only at the front — "huile d'olive" must keep its own.
+  out = out.replace(/^(?:d|l|dell|nell|all|un|una)['\u2019]\s*/iu, '');
+  // Never return nothing: a whole line beats an empty row.
+  return (out || source.trim()).slice(0, 60);
+}
 
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
@@ -296,15 +434,38 @@ interface OutItem {
   unit: Unit | null;
 }
 
-/** Narrow whatever the model returned to the contract the app relies on. */
-function sanitizeItems(raw: unknown): OutItem[] {
+/**
+ * Narrow whatever the model returned to the contract the app relies on, and
+ * hold it to the deletion-only rule.
+ *
+ * `haystack` is the text that actually went to the model. An item's `source`
+ * has to appear in it, or the line was invented and cannot be trusted to repair
+ * from — in that case the model's own name is the best we have. Passing "" (no
+ * haystack) skips that outer check and grounds names against `source` alone.
+ */
+function sanitizeItems(raw: unknown, haystack = ''): OutItem[] {
   if (!Array.isArray(raw)) return [];
+  const hay = haystack.toLowerCase().replace(/\s+/g, ' ');
   const out: OutItem[] = [];
   for (const entry of raw.slice(0, 40)) {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
-    const name = String(e.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    let name = String(e.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
     if (!name) continue;
+
+    /*
+     * The language check. `source` is the line the model claims to have copied;
+     * when it is real, `name` must be derivable from it by deleting words. If
+     * it is not, the model rewrote — which is how "huile d'olive" became "Olive
+     * oil" — and we rebuild the name from the source line instead of shipping
+     * the rewrite.
+     */
+    const source = String(e.source ?? '').replace(/\s+/g, ' ').trim();
+    const sourceIsReal =
+      source.length > 1 && (hay === '' || hay.includes(source.toLowerCase()));
+    if (sourceIsReal && !groundedIn(name, source)) {
+      name = nameFromSource(source);
+    }
 
     const q = typeof e.quantity === 'number' ? e.quantity : Number(e.quantity);
     // A non-positive or absurd quantity is treated as absent rather than
@@ -406,7 +567,10 @@ Deno.serve(async (req) => {
     const s = Number(parsed.servings);
     // The page's own yield wins over the model's reading of it.
     if (servings == null && Number.isFinite(s)) servings = clampServings(s);
-    items = sanitizeItems(parsed.items);
+    // Everything the model was shown, so an item's `source` can be checked
+    // against it. Scraped ingredient lines and free text alike live in
+    // `payload`, which is exactly what was sent.
+    items = sanitizeItems(parsed.items, payload);
   } catch {
     // fall through to the empty check below
   }
@@ -431,6 +595,9 @@ Deno.serve(async (req) => {
 /** Test seam: the pure helpers, so check-recipe.mjs can exercise them. */
 export const __test = {
   sanitizeItems,
+  groundedIn,
+  nameFromSource,
+  wordsOf,
   parseServings,
   visibleText,
   pageTitle,
