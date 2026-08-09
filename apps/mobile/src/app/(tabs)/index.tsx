@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AnimatedMoney } from '@/components/animated-money';
 import { Card } from '@/components/card';
 import { EditList } from '@/components/edit-list';
 import { EmptyState } from '@/components/empty-state';
@@ -345,7 +346,7 @@ function ListCard({
             </Text>
           </View>
           {priced.length > 0 ? (
-            <Text style={[type.price, { color: colors.ink }]}>{money(total)}</Text>
+            <AnimatedMoney value={total} style={[type.price, { color: colors.ink }]} />
           ) : (
             <Ionicons name="chevron-forward" size={20} color={colors.muted} />
           )}

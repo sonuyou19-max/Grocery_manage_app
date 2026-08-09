@@ -76,16 +76,57 @@ const CURRENCY_SYMBOL: Record<string, string> = {
 export const currencySymbolFor = (currency: string): string =>
   CURRENCY_SYMBOL[currency] ?? '€';
 
+/** Symbol-suffix currencies (zł, kr, Kč, lei, Ft) read better after the number. */
+const SUFFIX_CURRENCIES = ['PLN', 'SEK', 'DKK', 'NOK', 'CZK', 'RON', 'HUF'];
+
+/** Everything about a currency+language that formatting depends on. */
+export interface MoneyParts {
+  symbol: string;
+  /** Decimal comma rather than point. */
+  comma: boolean;
+  /** Symbol after the number rather than before it. */
+  suffix: boolean;
+}
+
+/**
+ * Resolve the formatting rules once. Separated from the assembly below so a
+ * caller animating a number can look these up on the JS thread and hand the
+ * results — plain strings and booleans — to a worklet.
+ */
+export function moneyParts(currency: string, language: string): MoneyParts {
+  return {
+    symbol: CURRENCY_SYMBOL[currency] ?? '€',
+    comma: COMMA_DECIMAL.has(language),
+    suffix: SUFFIX_CURRENCIES.includes(currency),
+  };
+}
+
+/**
+ * Assemble the string. Marked `worklet`, which is what lets a counting number
+ * format itself on the UI thread sixty times a second.
+ *
+ * This is the ONLY place the assembly is written. A second copy inside the
+ * animated component was the obvious way to do it and would have been a
+ * formatter that silently disagrees with the static one — in Polish, or in a
+ * comma-decimal locale, on whichever screen nobody rebuilt. A worklet is a
+ * normal function when called from JS, so both threads run these same lines.
+ *
+ * Everything it touches is a primitive: no Set lookups, no module state, no
+ * Intl. That is a requirement, not a coincidence — captured values are copied
+ * into the UI runtime and the richer ones do not survive the trip.
+ */
+export function assembleMoney(minor: number, p: MoneyParts): string {
+  'worklet';
+  const amount = (minor / 100).toFixed(2);
+  const shown = p.comma ? amount.replace('.', ',') : amount;
+  return p.suffix ? `${shown} ${p.symbol}` : `${p.symbol}${p.comma ? ' ' : ''}${shown}`;
+}
+
 /**
  * Format integer minor units (e.g. cents) for a region + language. Values are
  * stored currency-agnostically, so this only changes the symbol and separators
  * — it does not convert amounts.
  */
 export function formatMoney(minor: number, currency: string, language: string): string {
-  const symbol = CURRENCY_SYMBOL[currency] ?? '€';
-  const amount = (minor / 100).toFixed(2);
-  const shown = COMMA_DECIMAL.has(language) ? amount.replace('.', ',') : amount;
-  // Symbol-suffix currencies (zł, kr, Kč, lei, Ft) read better after the number.
-  const suffix = ['PLN', 'SEK', 'DKK', 'NOK', 'CZK', 'RON', 'HUF'].includes(currency);
-  return suffix ? `${shown} ${symbol}` : `${symbol}${COMMA_DECIMAL.has(language) ? ' ' : ''}${shown}`;
+  return assembleMoney(minor, moneyParts(currency, language));
 }

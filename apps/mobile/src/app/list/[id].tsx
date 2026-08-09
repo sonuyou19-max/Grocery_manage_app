@@ -28,6 +28,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AnimatedMoney } from '@/components/animated-money';
 import { Frosted } from '@/components/frosted';
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { FlyToCart, type FlyToCartHandle } from '@/components/fly-to-cart';
@@ -477,8 +478,8 @@ export default function ListDetailScreen() {
       <GlassView radius={radii.md} style={styles.budget}>
         {budget.hasPrices ? (
           <>
-            <Stat label={t('listDetail.toBuy')} value={money(budget.toBuy)} colors={colors} />
-            <Stat label={t('listDetail.inCartLabel')} value={money(budget.inCart)} colors={colors} />
+            <Stat label={t('listDetail.toBuy')} cents={budget.toBuy} colors={colors} />
+            <Stat label={t('listDetail.inCartLabel')} cents={budget.inCart} colors={colors} />
             <Stat
               label={t('listDetail.priced')}
               value={t('listDetail.pricedOf', { count: budget.pricedCount, total: budget.totalCount })}
@@ -833,19 +834,29 @@ function SwipeableItemRow({
   );
 }
 
-function Stat({
-  label,
-  value,
-  colors,
-}: {
-  label: string;
-  value: string;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
+/**
+ * One figure in the basket-balance card.
+ *
+ * Money arrives as `cents` rather than a formatted string, so the figure can
+ * count to its new value as items are checked off — which is exactly when this
+ * card is being read. The third stat ("3 of 7 priced") is a sentence, not an
+ * amount, so it takes `value` and stays static; the union makes passing both
+ * a type error rather than a silent precedence rule.
+ */
+type StatProps = { label: string; colors: ReturnType<typeof useTheme>['colors'] } & (
+  | { cents: number; value?: never }
+  | { value: string; cents?: never }
+);
+
+function Stat({ label, cents, value, colors }: StatProps) {
   return (
     <View style={styles.stat}>
       <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
-      <Text style={[type.body, { color: colors.ink }]}>{value}</Text>
+      {cents != null ? (
+        <AnimatedMoney value={cents} style={[type.body, { color: colors.ink }]} />
+      ) : (
+        <Text style={[type.body, { color: colors.ink }]}>{value}</Text>
+      )}
     </View>
   );
 }

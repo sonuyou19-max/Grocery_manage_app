@@ -4,6 +4,7 @@ import { LayoutAnimation, Pressable, StyleSheet, Text, View } from 'react-native
 
 import type { ItemCategory } from '@korb/shared';
 
+import { AnimatedMoney } from '@/components/animated-money';
 import { Card } from '@/components/card';
 import { EcoBar } from '@/components/eco-bar';
 import { RangePicker, withinRange, type Range } from '@/components/range-picker';
@@ -381,7 +382,7 @@ function SignedInInsights() {
             hint={t('insights.trendWeeks', { count: trend.weeks.length })}
           />
           <View style={styles.heroRow}>
-            <Text style={[type.h1, { color: colors.ink }]}>{money(trend.averageCents)}</Text>
+            <AnimatedMoney value={trend.averageCents} style={[type.h1, { color: colors.ink }]} />
             <Text style={[type.sub, { color: colors.muted }]}>{t('insights.trendPerWeek')}</Text>
           </View>
           {trend.weekOverWeek != null && (
@@ -468,7 +469,7 @@ function SignedInInsights() {
           />
           <View style={styles.spendTotal}>
             <Text style={[type.sub, { color: colors.muted }]}>{t('insights.totalLogged')}</Text>
-            <Text style={[type.h2, { color: colors.ink }]}>{money(spendTotal)}</Text>
+            <AnimatedMoney value={spendTotal} style={[type.h2, { color: colors.ink }]} />
           </View>
           {spendByCat.map((x) => (
             <View key={x.category} style={styles.row}>
