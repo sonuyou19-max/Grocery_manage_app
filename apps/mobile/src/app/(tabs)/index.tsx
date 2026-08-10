@@ -1,36 +1,40 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { AnimatedMoney } from '@/components/animated-money';
-import { Card } from '@/components/card';
-import { EditList } from '@/components/edit-list';
-import { EmptyState } from '@/components/empty-state';
-import { ListPickerSheet } from '@/components/list-picker-sheet';
-import { Screen } from '@/components/screen';
-import { HouseholdSwitcher } from '@/components/household-switcher';
-import { MemberAvatars, type AvatarMember } from '@/components/member-avatars';
-import { usePlusGate } from '@/lib/plus-gate';
-import { PlusBadge } from '@/components/plus-badge';
-import { TrialNudge } from '@/components/trial-nudge';
-import { WeeklyListSheet } from '@/components/weekly-list-sheet';
-import { onboardingSeen } from '@/lib/onboarding';
-import { normalizeKey } from '@/lib/pantry-intel';
-import { buildWeeklySuggestions, type WeeklySuggestion } from '@/lib/weekly-list';
-import { useAuth } from '@/store/auth';
-import { useGroceries, type List } from '@/store/groceries';
-import { useHousehold } from '@/store/household';
-import { useLocale, useT } from '@/store/locale';
-import { usePantryIntel, useVibeDeck } from '@/store/pantry-intel';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { AnimatedMoney } from "@/components/animated-money";
+import { InviteButton } from "@/components/invite-button";
+import { Card } from "@/components/card";
+import { EditList } from "@/components/edit-list";
+import { EmptyState } from "@/components/empty-state";
+import { ListPickerSheet } from "@/components/list-picker-sheet";
+import { Screen } from "@/components/screen";
+import { HouseholdSwitcher } from "@/components/household-switcher";
+import { MemberAvatars, type AvatarMember } from "@/components/member-avatars";
+import { usePlusGate } from "@/lib/plus-gate";
+import { PlusBadge } from "@/components/plus-badge";
+import { TrialNudge } from "@/components/trial-nudge";
+import { WeeklyListSheet } from "@/components/weekly-list-sheet";
+import { onboardingSeen } from "@/lib/onboarding";
+import { normalizeKey } from "@/lib/pantry-intel";
+import {
+  buildWeeklySuggestions,
+  type WeeklySuggestion,
+} from "@/lib/weekly-list";
+import { useAuth } from "@/store/auth";
+import { useGroceries, type List } from "@/store/groceries";
+import { useHousehold } from "@/store/household";
+import { useLocale, useT } from "@/store/locale";
+import { usePantryIntel, useVibeDeck } from "@/store/pantry-intel";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 /** Time-of-day greeting key based on the device's local clock. */
-function greetingKey(date = new Date()): 'morning' | 'afternoon' | 'evening' {
+function greetingKey(date = new Date()): "morning" | "afternoon" | "evening" {
   const h = date.getHours();
-  if (h < 12) return 'morning';
-  if (h < 18) return 'afternoon';
-  return 'evening';
+  if (h < 12) return "morning";
+  if (h < 18) return "afternoon";
+  return "evening";
 }
 
 /** Deterministic 1..3 that advances once per day, for the rotating "all set" copy. */
@@ -92,7 +96,7 @@ export default function ListsScreen() {
   useEffect(() => {
     if (tourRouted || seen === null) return;
     tourRouted = true;
-    if (!seen) router.push('/onboarding');
+    if (!seen) router.push("/onboarding");
   }, [seen]);
 
   // Who can see these lists. Household-wide for now, so every card shows the
@@ -132,7 +136,7 @@ export default function ListsScreen() {
         unit: s.unit,
       });
     }
-    router.push({ pathname: '/list/[id]', params: { id: listId } });
+    router.push({ pathname: "/list/[id]", params: { id: listId } });
   };
 
   const empty = lists.length === 0;
@@ -152,11 +156,19 @@ export default function ListsScreen() {
         title={firstName ?? base}
         subtitle={
           <View style={styles.statusRow}>
-            <HouseholdSwitcher fallback={t('greeting.subtitle')} />
+            <HouseholdSwitcher fallback={t("greeting.subtitle")} />
             <PlusBadge />
           </View>
         }
-        headerAction={<WalletButton />}
+        headerAction={
+          <View style={styles.headerActions}>
+            {/* Invite sits to the LEFT so the wallet keeps the corner it has
+                always had — moving a control people already reach for costs
+                more than it gains. */}
+            <InviteButton />
+            <WalletButton />
+          </View>
+        }
       >
         {/* Renders nothing at all unless a free month is genuinely days from
             ending on an account that could act on it. See the component. */}
@@ -182,32 +194,49 @@ export default function ListsScreen() {
           user &&
           !locked &&
           (vibeCount > 0 ? (
-            <Pressable onPress={() => router.push('/vibe-check')}>
+            <Pressable onPress={() => router.push("/vibe-check")}>
               <Card accented>
                 <View style={styles.vibeRow}>
                   <Text style={styles.vibeEmoji}>☕️</Text>
                   <View style={styles.grow}>
-                    <Text style={[type.body, { color: colors.ink }]}>{t('lists.vibeTitle')}</Text>
+                    <Text style={[type.body, { color: colors.ink }]}>
+                      {t("lists.vibeTitle")}
+                    </Text>
                     <Text style={[type.sub, { color: colors.muted }]}>
-                      {t('lists.vibeReview', { count: vibeCount })}
+                      {t("lists.vibeReview", { count: vibeCount })}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.accent}
+                  />
                 </View>
               </Card>
             </Pressable>
           ) : (
             <Card>
-              <View style={[styles.vibeRow, { alignItems: 'flex-start' }]}>
-                <Ionicons name="checkmark-circle" size={26} color={colors.accent} />
+              <View style={[styles.vibeRow, { alignItems: "flex-start" }]}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={26}
+                  color={colors.accent}
+                />
                 <View style={styles.grow}>
-                  <Text style={[type.label, { color: colors.muted, marginBottom: 3 }]}>
-                    {t('lists.vibeTitle')}
+                  <Text
+                    style={[
+                      type.label,
+                      { color: colors.muted, marginBottom: 3 },
+                    ]}
+                  >
+                    {t("lists.vibeTitle")}
                   </Text>
                   <Text style={[type.body, { color: colors.ink }]}>
                     {t(`lists.vibeEmpty${vibeVariant}Title`)}
                   </Text>
-                  <Text style={[type.sub, { color: colors.muted, marginTop: 2 }]}>
+                  <Text
+                    style={[type.sub, { color: colors.muted, marginTop: 2 }]}
+                  >
                     {t(`lists.vibeEmpty${vibeVariant}Body`)}
                   </Text>
                 </View>
@@ -222,12 +251,27 @@ export default function ListsScreen() {
         {!editing && !locked && suggestions.length > 0 && (
           <Pressable
             onPress={() => setBuilderOpen(true)}
-            style={[styles.buildRow, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}
+            style={[
+              styles.buildRow,
+              {
+                borderColor: colors.accent,
+                backgroundColor: colors.accentSoft,
+              },
+            ]}
           >
             <Ionicons name="sparkles" size={18} color={colors.accent} />
-            <Text style={[type.body, { color: colors.accent, flex: 1 }]}>{t('lists.buildWeekly')}</Text>
-            <View style={[styles.buildPill, { backgroundColor: colors.accent }]}>
-              <Text style={[type.sub, { color: colors.accentInk, fontWeight: '700' }]}>
+            <Text style={[type.body, { color: colors.accent, flex: 1 }]}>
+              {t("lists.buildWeekly")}
+            </Text>
+            <View
+              style={[styles.buildPill, { backgroundColor: colors.accent }]}
+            >
+              <Text
+                style={[
+                  type.sub,
+                  { color: colors.accentInk, fontWeight: "700" },
+                ]}
+              >
                 {suggestions.length}
               </Text>
             </View>
@@ -237,29 +281,37 @@ export default function ListsScreen() {
         {empty ? (
           <EmptyState
             icon="basket-outline"
-            title={t('lists.emptyTitle')}
-            body={t('lists.emptyBody')}
+            title={t("lists.emptyTitle")}
+            body={t("lists.emptyBody")}
           />
         ) : (
           <>
             <View style={styles.listsHead}>
-              <Text style={[type.label, { color: colors.muted }]}>{t('lists.yourLists')}</Text>
+              <Text style={[type.label, { color: colors.muted }]}>
+                {t("lists.yourLists")}
+              </Text>
               {editing ? (
                 <Pressable onPress={() => setEditing(false)} hitSlop={8}>
-                  <Text style={[type.body, { color: colors.accent }]}>{t('common.done')}</Text>
+                  <Text style={[type.body, { color: colors.accent }]}>
+                    {t("common.done")}
+                  </Text>
                 </Pressable>
               ) : (
                 <Text
                   style={[type.sub, styles.holdHint, { color: colors.muted }]}
                   numberOfLines={1}
                 >
-                  {t('lists.holdToEdit')}
+                  {t("lists.holdToEdit")}
                 </Text>
               )}
             </View>
 
             {editing ? (
-              <EditList lists={lists} onDelete={deleteList} onReorder={reorderLists} />
+              <EditList
+                lists={lists}
+                onDelete={deleteList}
+                onReorder={reorderLists}
+              />
             ) : (
               lists.map((l) => (
                 <ListCard
@@ -286,7 +338,7 @@ export default function ListsScreen() {
       />
       <ListPickerSheet
         visible={pendingItems.length > 0}
-        title={t('lists.addTheseTo')}
+        title={t("lists.addTheseTo")}
         onCancel={() => setPendingItems([])}
         onPick={addWeeklyToList}
       />
@@ -303,11 +355,14 @@ function WalletButton() {
   const t = useT();
   return (
     <Pressable
-      onPress={() => router.push('/cards')}
+      onPress={() => router.push("/cards")}
       hitSlop={10}
       accessibilityRole="button"
-      accessibilityLabel={t('cards.title')}
-      style={[styles.wallet, { backgroundColor: colors.accentSoft, borderColor: colors.line }]}
+      accessibilityLabel={t("cards.title")}
+      style={[
+        styles.wallet,
+        { backgroundColor: colors.accentSoft, borderColor: colors.line },
+      ]}
     >
       <Ionicons name="card-outline" size={22} color={colors.accent} />
     </Pressable>
@@ -332,7 +387,9 @@ function ListCard({
 
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/list/[id]', params: { id: list.id } })}
+      onPress={() =>
+        router.push({ pathname: "/list/[id]", params: { id: list.id } })
+      }
       onLongPress={onLongPress}
       delayLongPress={350}
     >
@@ -341,12 +398,16 @@ function ListCard({
           <View style={styles.grow}>
             <Text style={[type.body, { color: colors.ink }]}>{list.name}</Text>
             <Text style={[type.sub, { color: colors.muted }]}>
-              {list.store ? `${list.store} · ` : ''}
-              {t('lists.itemsCount', { count: list.items.length })} · {t('lists.inCart', { count: checked })}
+              {list.store ? `${list.store} · ` : ""}
+              {t("lists.itemsCount", { count: list.items.length })} ·{" "}
+              {t("lists.inCart", { count: checked })}
             </Text>
           </View>
           {priced.length > 0 ? (
-            <AnimatedMoney value={total} style={[type.price, { color: colors.ink }]} />
+            <AnimatedMoney
+              value={total}
+              style={[type.price, { color: colors.ink }]}
+            />
           ) : (
             <Ionicons name="chevron-forward" size={20} color={colors.muted} />
           )}
@@ -354,7 +415,10 @@ function ListCard({
         {list.items.length > 0 && (
           <View style={[styles.track, { backgroundColor: colors.line }]}>
             <View
-              style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: colors.accent }]}
+              style={[
+                styles.fill,
+                { width: `${progress * 100}%`, backgroundColor: colors.accent },
+              ]}
             />
           </View>
         )}
@@ -367,44 +431,49 @@ function ListCard({
 }
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
   wallet: {
     width: 44,
     height: 44,
     borderRadius: radii.md,
     borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     // Nudge down so it optically centres against the tall display title.
     marginTop: spacing.xs,
   },
   listsHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
   // Translations run much longer than the English "hold to edit" (German is
   // ~2.5×), so let the hint give way instead of pushing the row out of bounds.
-  holdHint: { flexShrink: 1, textAlign: 'right' },
+  holdHint: { flexShrink: 1, textAlign: "right" },
   grow: { flex: 1, minWidth: 0 },
   // Household name and Plus badge share the line under the name. Wrapping is
   // allowed because a long household name plus a long translated badge can
   // exceed the width, and dropping to a second line beats squashing either.
   statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: spacing.sm,
   },
-  vibeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  vibeRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   vibeEmoji: { fontSize: 26 },
-  listHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  track: { height: 5, borderRadius: 3, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 3 },
+  listHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  track: { height: 5, borderRadius: 3, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 3 },
   buildRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radii.md,
@@ -416,7 +485,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
