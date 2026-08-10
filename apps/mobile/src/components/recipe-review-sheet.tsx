@@ -147,9 +147,24 @@ export function RecipeReviewSheet({
   const adding = useMemo(() => checkedCount(rows), [rows]);
   const known = useMemo(() => inPantryCount(rows), [rows]);
 
+  /**
+   * How far up the stepper goes.
+   *
+   * A flat 50 was wrong for a recipe that already states more than that: the
+   * server accepts any stated count up to 100, so a 60-serving recipe arrived
+   * with 60 as its baseline and a + button that did nothing, because it was
+   * already over the ceiling. It could only be scaled down.
+   *
+   * Doubling, floored at 50, means the answer is always "at least twice what
+   * the recipe makes, and never less than 50" — which is the same promise for
+   * a four-serving dinner as for a sixty-serving batch. The bound exists to
+   * stop absurd input, not to be exact.
+   */
+  const maxServings = Math.max(50, (original ?? 0) * 2);
+
   const step = (delta: number) => {
     if (servings == null) return;
-    const next = Math.min(50, Math.max(1, servings + delta));
+    const next = Math.min(maxServings, Math.max(1, servings + delta));
     if (next === servings) return;
     haptics.tick();
     setServings(next);
