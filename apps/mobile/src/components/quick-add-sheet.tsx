@@ -1,5 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -11,9 +11,9 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-} from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import Animated, {
   cancelAnimation,
   Extrapolation,
@@ -22,18 +22,18 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { ParsedItem } from '@korb/shared';
+import type { ParsedItem } from "@korb/shared";
 
-import { Frosted } from '@/components/frosted';
-import { categoryLabel } from '@/lib/categorize';
-import { rubberBand, SPRING, springTo } from '@/lib/motion';
-import { parseQuickAdd } from '@/lib/quick-add';
-import { useGroceries, useList } from '@/store/groceries';
-import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { Frosted } from "@/components/frosted";
+import { categoryLabel } from "@/lib/categorize";
+import { rubberBand, SPRING, springTo } from "@/lib/motion";
+import { parseQuickAdd } from "@/lib/quick-add";
+import { useGroceries, useList } from "@/store/groceries";
+import { useT } from "@/store/locale";
+import { radii, spacing, type, useTheme } from "@/theme";
 
 interface QuickAddSheetProps {
   visible: boolean;
@@ -46,7 +46,11 @@ interface QuickAddSheetProps {
  * potatoes and coffee"), the model turns it into structured items, and you
  * confirm which to add. Voice works via the keyboard's own dictation mic.
  */
-export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) {
+export function QuickAddSheet({
+  visible,
+  listId,
+  onClose,
+}: QuickAddSheetProps) {
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
@@ -57,12 +61,13 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   // Names already on this list, normalised, so quick-add doesn't silently add a
   // second "Milk" — matches the duplicate guard on the manual add bar.
   const existingNames = useMemo(
-    () => new Set((list?.items ?? []).map((it) => it.name.trim().toLowerCase())),
+    () =>
+      new Set((list?.items ?? []).map((it) => it.name.trim().toLowerCase())),
     [list],
   );
 
-  const [text, setText] = useState('');
-  const [phase, setPhase] = useState<'input' | 'loading' | 'review'>('input');
+  const [text, setText] = useState("");
+  const [phase, setPhase] = useState<"input" | "loading" | "review">("input");
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [selected, setSelected] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -80,8 +85,8 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
   useEffect(() => {
     if (visible) {
-      setText('');
-      setPhase('input');
+      setText("");
+      setPhase("input");
       setItems([]);
       setSelected([]);
       setError(null);
@@ -98,9 +103,13 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const requestClose = (velocity = 0) => {
     Keyboard.dismiss();
     cancelAnimation(sheetY);
-    sheetY.value = withSpring(screenH, { ...SPRING.sheet, velocity }, (finished) => {
-      if (finished) runOnJS(onClose)();
-    });
+    sheetY.value = withSpring(
+      screenH,
+      { ...SPRING.sheet, velocity },
+      (finished) => {
+        if (finished) runOnJS(onClose)();
+      },
+    );
   };
 
   /**
@@ -114,16 +123,27 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const dragGesture = Gesture.Pan()
     .activeOffsetY(8)
     .onUpdate((e) => {
-      sheetY.value = e.translationY >= 0 ? e.translationY : -rubberBand(-e.translationY, 0, 44);
+      sheetY.value =
+        e.translationY >= 0
+          ? e.translationY
+          : -rubberBand(-e.translationY, 0, 44);
     })
     .onEnd((e) => {
-      if (sheetY.value > 110 || e.velocityY > 800) runOnJS(requestClose)(e.velocityY);
+      if (sheetY.value > 110 || e.velocityY > 800)
+        runOnJS(requestClose)(e.velocityY);
       else sheetY.value = springTo(0, e.velocityY, SPRING.sheet);
     });
 
-  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetY.value }],
+  }));
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sheetY.value, [0, screenH * 0.7], [1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(
+      sheetY.value,
+      [0, screenH * 0.7],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
   }));
   const keyboardSpacerStyle = useAnimatedStyle(() => ({
     height: Math.max(-kbHeight.value, insets.bottom),
@@ -132,19 +152,21 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
   const runParse = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    setPhase('loading');
+    setPhase("loading");
     setError(null);
     const { items: parsed, error: err } = await parseQuickAdd(trimmed);
     if (err || !parsed) {
-      setError(err ? t(`quickAdd.err.${err}`) : t('quickAdd.somethingWrong'));
-      setPhase('input');
+      setError(err ? t(`quickAdd.err.${err}`) : t("quickAdd.somethingWrong"));
+      setPhase("input");
       return;
     }
     setItems(parsed);
     // Pre-tick everything except items already on the list — those default to
     // skipped so you don't add duplicates without meaning to.
-    setSelected(parsed.map((p) => !existingNames.has(p.name.trim().toLowerCase())));
-    setPhase('review');
+    setSelected(
+      parsed.map((p) => !existingNames.has(p.name.trim().toLowerCase())),
+    );
+    setPhase("review");
   };
 
   const confirmAdd = () => {
@@ -156,10 +178,15 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
   const selectedCount = selected.filter(Boolean).length;
   const hasText = text.trim().length > 0;
-  const canParse = hasText && phase !== 'loading';
+  const canParse = hasText && phase !== "loading";
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={() => requestClose()}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={() => requestClose()}
+    >
       <View style={styles.fill}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable style={styles.fillPlain} onPress={() => requestClose()} />
@@ -168,7 +195,7 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
         <Animated.View style={[styles.sheet, sheetStyle]}>
           <Frosted
             over="content"
-            intensity={scheme === 'dark' ? 40 : 60}
+            intensity={scheme === "dark" ? 40 : 60}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
@@ -179,7 +206,9 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 
               <View style={styles.header}>
                 <Ionicons name="sparkles" size={20} color={colors.accent} />
-                <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>{t('quickAdd.title')}</Text>
+                <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
+                  {t("quickAdd.title")}
+                </Text>
                 <Pressable onPress={() => requestClose()} hitSlop={10}>
                   <Ionicons name="close" size={24} color={colors.muted} />
                 </Pressable>
@@ -187,33 +216,60 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
             </View>
           </GestureDetector>
 
-          {phase === 'review' ? (
-            <ScrollView style={styles.scrollArea} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-              <Text style={[type.sub, { color: colors.muted }]}>{t('quickAdd.tapToInclude')}</Text>
+          {phase === "review" ? (
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.body}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t("quickAdd.tapToInclude")}
+              </Text>
               {items.map((item, i) => {
                 const on = selected[i];
                 const dup = existingNames.has(item.name.trim().toLowerCase());
                 return (
                   <Pressable
                     key={`${item.name}-${i}`}
-                    onPress={() => setSelected((prev) => prev.map((v, idx) => (idx === i ? !v : v)))}
-                    style={[styles.itemRow, { borderColor: on ? colors.accent : colors.line }]}
+                    onPress={() =>
+                      setSelected((prev) =>
+                        prev.map((v, idx) => (idx === i ? !v : v)),
+                      )
+                    }
+                    style={[
+                      styles.itemRow,
+                      { borderColor: on ? colors.accent : colors.line },
+                    ]}
                   >
                     <Ionicons
-                      name={on ? 'checkmark-circle' : 'ellipse-outline'}
+                      name={on ? "checkmark-circle" : "ellipse-outline"}
                       size={22}
                       color={on ? colors.accent : colors.muted}
                     />
                     <View style={styles.grow}>
-                      <Text style={[type.body, { color: colors.ink }]}>{item.name}</Text>
+                      <Text style={[type.body, { color: colors.ink }]}>
+                        {item.name}
+                      </Text>
                       <Text style={[type.sub, { color: colors.muted }]}>
                         {categoryLabel(item.category, t)}
-                        {item.quantity != null ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}
+                        {item.quantity != null
+                          ? ` · ${item.quantity}${item.unit ? ` ${item.unit}` : ""}`
+                          : ""}
                       </Text>
                     </View>
                     {dup && (
-                      <View style={[styles.dupTag, { backgroundColor: colors.bg, borderColor: colors.line }]}>
-                        <Text style={[type.sub, { color: colors.muted }]}>{t('quickAdd.alreadyOnList')}</Text>
+                      <View
+                        style={[
+                          styles.dupTag,
+                          {
+                            backgroundColor: colors.bg,
+                            borderColor: colors.line,
+                          },
+                        ]}
+                      >
+                        <Text style={[type.sub, { color: colors.muted }]}>
+                          {t("quickAdd.alreadyOnList")}
+                        </Text>
                       </View>
                     )}
                   </Pressable>
@@ -233,59 +289,80 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
                 ref={inputRef}
                 value={text}
                 onChangeText={setText}
-                placeholder={t('quickAdd.placeholder')}
+                placeholder={t("quickAdd.placeholder")}
                 placeholderTextColor={colors.muted}
                 style={[
                   styles.input,
                   // Compact screens: a shorter field so the button and mic hint
                   // still fit above the keyboard without scrolling.
                   screenH < 700 && styles.inputCompact,
-                  { color: colors.ink, backgroundColor: colors.bg, borderColor: colors.line },
+                  {
+                    color: colors.ink,
+                    backgroundColor: colors.bg,
+                    borderColor: colors.line,
+                  },
                 ]}
                 multiline
-                editable={phase !== 'loading'}
+                scrollEnabled
+                editable={phase !== "loading"}
               />
-              {/* Button sits directly under the field so the keyboard never hides it. */}
+              {/* Button sits directly under the field so the keyboard never hides
+                  it — which holds because the field above is height-capped. */}
               <Pressable
                 onPress={runParse}
                 disabled={!canParse}
-                style={[styles.primaryBlock, { backgroundColor: colors.accent }]}
+                style={[
+                  styles.primaryBlock,
+                  { backgroundColor: colors.accent },
+                ]}
               >
-                {phase === 'loading' ? (
+                {phase === "loading" ? (
                   <ActivityIndicator color={colors.accentInk} />
                 ) : (
-                  <Text style={[type.body, { color: colors.accentInk }]}>{t('quickAdd.addWithAi')}</Text>
+                  <Text style={[type.body, { color: colors.accentInk }]}>
+                    {t("quickAdd.addWithAi")}
+                  </Text>
                 )}
               </Pressable>
-              {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
+              {error ? (
+                <Text style={[type.sub, { color: colors.crit }]}>{error}</Text>
+              ) : null}
               <View style={styles.hint}>
                 <Ionicons name="mic-outline" size={15} color={colors.muted} />
                 <Text style={[type.sub, { color: colors.muted, flex: 1 }]}>
-                  {t('quickAdd.micHint')}
+                  {t("quickAdd.micHint")}
                 </Text>
               </View>
             </ScrollView>
           )}
 
-          {phase === 'review' && (
+          {phase === "review" && (
             <View style={[styles.footer, { borderTopColor: colors.line }]}>
               <View style={styles.footerRow}>
                 <Pressable
                   onPress={() => {
-                    setPhase('input');
+                    setPhase("input");
                     setTimeout(focusInput, 60);
                   }}
                   style={styles.back}
                 >
-                  <Text style={[type.body, { color: colors.muted }]}>{t('common.back')}</Text>
+                  <Text style={[type.body, { color: colors.muted }]}>
+                    {t("common.back")}
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={confirmAdd}
                   disabled={selectedCount === 0}
-                  style={[styles.primary, { backgroundColor: colors.accent, opacity: selectedCount ? 1 : 0.45 }]}
+                  style={[
+                    styles.primary,
+                    {
+                      backgroundColor: colors.accent,
+                      opacity: selectedCount ? 1 : 0.45,
+                    },
+                  ]}
                 >
                   <Text style={[type.body, { color: colors.accentInk }]}>
-                    {t('common.addCount', { count: selectedCount })}
+                    {t("common.addCount", { count: selectedCount })}
                   </Text>
                 </Pressable>
               </View>
@@ -303,40 +380,63 @@ export function QuickAddSheet({ visible, listId, onClose }: QuickAddSheetProps) 
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, justifyContent: 'flex-end' },
+  fill: { flex: 1, justifyContent: "flex-end" },
   fillPlain: { flex: 1 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,18,10,0.45)' },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(12,18,10,0.45)",
+  },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: spacing.sm,
-    maxHeight: '88%',
-    overflow: 'hidden',
+    maxHeight: "88%",
+    overflow: "hidden",
   },
-  grab: { width: 44, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: spacing.sm },
+  grab: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: "center",
+    marginBottom: spacing.sm,
+  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
   scrollArea: { flexShrink: 1 },
-  body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.md },
+  body: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
+  },
   grow: { flex: 1, minWidth: 0 },
   input: {
     minHeight: 96,
+    /**
+     * Capped for the same reason as the recipe screen's field: a multiline
+     * TextInput sizes to its content, and the Add button sits directly under
+     * it inside the scroller. That placement is what keeps the button clear of
+     * the keyboard — but only while the field is short, so a long paste would
+     * push it away exactly as it did there. Bounded, the text scrolls inside
+     * the box and the button stays put.
+     */
+    maxHeight: 160,
     borderWidth: 1,
     borderRadius: radii.md,
     padding: spacing.md,
     fontSize: 16,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
-  inputCompact: { minHeight: 64 },
-  hint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Short screens: less room above the keyboard, so both bounds come in.
+  inputCompact: { minHeight: 64, maxHeight: 110 },
+  hint: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     borderWidth: 1.5,
     borderRadius: radii.md,
@@ -354,11 +454,22 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
   },
-  footerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  footerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   back: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
-  primary: { flex: 1, height: 50, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  primary: {
+    flex: 1,
+    height: 50,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   // Same as primary but for a vertical (column) context — no flex, so its
   // height isn't collapsed to zero. Stretches full width via the column's
   // default align-items: stretch.
-  primaryBlock: { height: 50, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  primaryBlock: {
+    height: 50,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
