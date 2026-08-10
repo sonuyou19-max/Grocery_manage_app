@@ -242,7 +242,8 @@ export function youtubeDescription(html: string): { title: string; description: 
 const SYSTEM_PROMPT = `You extract the shopping-relevant parts of a recipe.
 Return ONLY a JSON object, no prose, no code fences:
 {"name": "...", "language": "fr", "servings": 4,
- "items": [{"source": "1 gros oignon, émincé", "name": "oignon", "quantity": 1, "unit": null}]}
+ "items": [{"source": "2 c. à s. d'huile d'olive", "name": "huile d'olive",
+            "amount": "2", "measure": "c. à s.", "form": "liquid"}]}
 
 ======================= THE ONE RULE THAT MATTERS =======================
 
@@ -283,19 +284,36 @@ Under 60 characters.
 
 servings is the number the recipe makes, or null if it does not say. Never guess.
 
-quantity is a number, or null when the recipe gives none ("salt to taste", "a
-handful of parsley"). Convert fractions and ranges to a single number: "1 1/2"
--> 1.5, "2-3" -> 3. Never invent one.
+=================== DO NOT CONVERT ANYTHING. REPORT IT. ===================
 
-unit is one of: ${UNITS.join(', ')}, or null.
-  Convert cooking measures to what a European shopper buys: tablespoons and
-  cups of a liquid -> ml, ounces and pounds -> g, "2 cloves" -> pcs with
-  quantity 2. If a conversion would be a guess, use null for the unit and keep
-  the quantity. (Units are a fixed machine vocabulary — they are the ONLY
-  field that is not in the source language.)
+amount and measure are what the line SAYS, copied, not worked out:
 
-Skip water, and skip anything that is not bought (ice, "oil for frying" if oil
-already appears). At most 40 items.
+  "2 tsp"              -> amount "2",   measure "tsp"
+  "1/2 tsp"            -> amount "1/2", measure "tsp"
+  "120-130 ml"         -> amount "120-130", measure "ml"
+  "2 medium (150 gms)" -> amount "2",   measure "medium"
+  "8-9"                -> amount "8-9", measure ""
+  "a pinch"            -> amount "",    measure "pinch"
+  "to taste"           -> amount "",    measure ""
+
+Do not add up, scale, round, or change a unit into another unit. A previous
+version of this prompt asked for conversions and got "2 tsp" back as "2 kg" —
+the number kept, the unit swapped. Code downstream does the arithmetic and can
+be tested; you cannot. Copy the two strings and stop.
+
+form is "dry" or "liquid": would this ingredient be measured by weight or
+poured? Oil, milk, stock, yoghurt, juice, wine -> liquid. Flour, spices, rice,
+sugar, chopped vegetables -> dry. This IS a judgement, and it is the only one
+asked for here — get it right and the conversion downstream is right.
+
+===========================================================================
+
+Skip water and ice. Nothing else: if it appears in the ingredient list, it goes
+in the output, INCLUDING things that arrive prepared. "Boiled eggs" is bought
+as eggs — return it, with "eggs" as the name. A previous run silently dropped
+the eggs from an egg curry. At most 40 items.
+
+Return one entry per ingredient line you are given, in the order given.
 
 The text may be a video description rather than a recipe page. If so, ignore
 chapter timestamps ("0:00 Intro"), links, hashtags, sponsor and discount-code
@@ -420,6 +438,262 @@ function nameFromSource(source: string): string {
   return (out || source.trim()).slice(0, 60);
 }
 
+/* ------------------------------------------------------------------------ */
+/* Finding the list, so the model does not have to                           */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * A pasted recipe lost its first three ingredients — the eggs, the cumin and
+ * the cardamom — while everything from the fourth line on came through. Not
+ * random: the text opened with a wall of SEO titles and an affiliate link,
+ * then one lone bullet, then a "Tempering:" sub-heading with its own bullets.
+ * The model locked onto the first sub-headed block and read everything above
+ * it as preamble.
+ *
+ * The URL path never has this problem, because scrapeJsonLd hands over an
+ * explicit `recipeIngredient` array — the model is never asked where the list
+ * begins. The text path was asking it to do discovery and parsing at once.
+ *
+ * This does the discovery in code so both paths give the model the same, much
+ * smaller job: read one line at a time. It is deliberately conservative — it
+ * only takes over when the text is clearly a bulleted list, and otherwise
+ * returns null and the raw text goes through as before.
+ */
+
+/** Where the ingredients stop and the cooking starts. */
+const METHOD_HEADING =
+  /^\s*[*\-•–]?\s*(preparation|process|method|instructions?|directions?|steps?|to\s+make|procedure)\b/i;
+
+const BULLET = /^\s*[*\-•–—]\s+/;
+
+export function ingredientLinesFromText(text: string): string[] | null {
+  const lines = String(text ?? '').split(/\r?\n/);
+
+  // Everything after a method heading is cooking, and it is bulleted too —
+  // without this cut, "Boil and shell around 9 eggs" arrives as an ingredient.
+  const stop = lines.findIndex((l) => METHOD_HEADING.test(l));
+  const head = stop === -1 ? lines : lines.slice(0, stop);
+
+  const bullets = head
+    .filter((l) => BULLET.test(l))
+    .map((l) => l.replace(BULLET, '').replace(/\s+/g, ' ').trim())
+    // A bulleted sub-heading ("Tempering:") is not an ingredient.
+    .filter((l) => l.length > 1 && !l.endsWith(':'))
+    .slice(0, 60);
+
+  // Three is the point where "this is a list" beats "this is prose with a
+  // stray dash in it". Below that, hand the model the text and let it read.
+  return bullets.length >= 3 ? bullets : null;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Quantities: the model reports, the code calculates                        */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * A real import produced "2 tsp" -> "2 kg", "1.5 tsp" -> "2 kg", "4 tbsp" ->
+ * "4 ml" and "1/4 tsp" -> "1". Every one of those has the same shape: the
+ * NUMBER survived and the UNIT was relabelled. And every quantity that came
+ * out right was one that needed no arithmetic — "(around 10 gms)", "(150
+ * gms)", "120-130 ml", bare counts.
+ *
+ * So the model copies reliably and calculates unreliably, which is not a
+ * surprise and not something a firmer prompt fixes. It now reports what the
+ * line SAYS — the amount and the measure word, verbatim — plus one judgement
+ * it is genuinely good at, whether the thing is dry or liquid. Everything
+ * numeric happens below, where it can be tested.
+ */
+
+/** Unicode fractions, which recipe sites use freely. */
+const VULGAR: Record<string, number> = {
+  '½': 0.5, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 0.25, '¾': 0.75,
+  '⅕': 0.2, '⅖': 0.4, '⅗': 0.6, '⅘': 0.8, '⅙': 1 / 6, '⅛': 0.125, '⅜': 0.375, '⅝': 0.625, '⅞': 0.875,
+};
+
+/**
+ * "2", "1.5", "1/2", "1 1/2", "2-3", "8-9", "½" -> a number, or null.
+ *
+ * A range resolves to its TOP. "Boil 8-9 eggs" means buy nine; rounding a
+ * shopping quantity down is the one direction that sends someone back to the
+ * shop.
+ */
+export function parseAmount(raw: string): number | null {
+  const text = String(raw ?? '').trim().replace(/,/g, '.');
+  if (!text) return null;
+
+  // Ranges first, so "2-3" is not read as a subtraction or as just "2".
+  const range = text.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+  if (range) {
+    const hi = parseAmount(range[2]);
+    const lo = parseAmount(range[1]);
+    if (hi != null) return hi;
+    if (lo != null) return lo;
+    return null;
+  }
+
+  let total = 0;
+  let seen = false;
+  for (const part of text.split(/\s+/)) {
+    if (VULGAR[part] != null) {
+      total += VULGAR[part];
+      seen = true;
+      continue;
+    }
+    const frac = part.match(/^(\d+)\/(\d+)$/);
+    if (frac) {
+      const d = Number(frac[2]);
+      if (d !== 0) {
+        total += Number(frac[1]) / d;
+        seen = true;
+      }
+      continue;
+    }
+    // A number with a vulgar fraction stuck to it: "1½".
+    const mixed = part.match(/^(\d*\.?\d+)([¼-¾⅐-⅞])$/);
+    if (mixed) {
+      total += Number(mixed[1]) + (VULGAR[mixed[2]] ?? 0);
+      seen = true;
+      continue;
+    }
+    if (/^\d*\.?\d+$/.test(part)) {
+      total += Number(part);
+      seen = true;
+    }
+  }
+  return seen && Number.isFinite(total) && total > 0 ? total : null;
+}
+
+/**
+ * Volume measures, in millilitres. Liquids only — see convertAmount.
+ *
+ * Seven languages, because the importer is built to keep a recipe in the
+ * language it was written in — and a French page that returns "huile d'olive"
+ * correctly and then loses every quantity is only half a feature. Keys are in
+ * the normalised form: lower case, dots removed, single-spaced, so "C. à S."
+ * and "c.à.s." both arrive as "c à s".
+ */
+const VOLUME_ML: Record<string, number> = {
+  // English
+  tsp: 5, teaspoon: 5, teaspoons: 5,
+  tbsp: 15, tbs: 15, tablespoon: 15, tablespoons: 15,
+  cup: 240, cups: 240,
+  'fl oz': 30, floz: 30,
+  // French
+  'c à c': 5, cac: 5, 'cuillère à café': 5, 'cuillères à café': 5, 'cuillere a cafe': 5,
+  'c à s': 15, cas: 15, 'cuillère à soupe': 15, 'cuillères à soupe': 15, 'cuillere a soupe': 15,
+  tasse: 240, tasses: 240,
+  // German / Dutch
+  tl: 5, teelöffel: 5, teeloffel: 5, theelepel: 5,
+  el: 15, esslöffel: 15, essloffel: 15, eetlepel: 15,
+  kop: 240, kopje: 240,
+  // Italian
+  cucchiaino: 5, cucchiaini: 5, cucchiaio: 15, cucchiai: 15, tazza: 240, tazze: 240,
+  // Spanish
+  cucharadita: 5, cucharaditas: 5, cucharada: 15, cucharadas: 15, taza: 240, tazas: 240,
+  // Polish
+  łyżeczka: 5, łyżeczki: 5, łyżka: 15, łyżki: 15, szklanka: 250, szklanki: 250,
+  // Metric, everywhere
+  ml: 1, milliliter: 1, millilitre: 1, cc: 1, cl: 10, dl: 100,
+  l: 1000, litre: 1000, liter: 1000, litres: 1000, liters: 1000, litr: 1000,
+};
+
+/** Mass measures, in grams. */
+const MASS_G: Record<string, number> = {
+  g: 1, gm: 1, gms: 1, gr: 1, gram: 1, grams: 1, gramme: 1, grammes: 1,
+  kg: 1000, kgs: 1000, kilo: 1000, kilos: 1000, kilogram: 1000, kilograms: 1000,
+  oz: 28, ounce: 28, ounces: 28,
+  lb: 454, lbs: 454, pound: 454, pounds: 454,
+};
+
+/** Measures that are really "how many of the thing". */
+const COUNTED = new Set([
+  '', 'pcs', 'pc', 'piece', 'pieces', 'clove', 'cloves', 'sprig', 'sprigs',
+  'stick', 'sticks', 'bunch', 'bunches', 'stalk', 'stalks', 'leaf', 'leaves',
+  'medium', 'large', 'small', 'whole', 'x',
+]);
+
+/**
+ * Below this, a gram or millilitre figure is not shopping information.
+ *
+ * Nobody buys ten grams of chilli powder; they buy a jar. Printing "10 g"
+ * beside it invites exactly the reaction the wrong conversions did — that the
+ * app is confidently telling you something silly. Counts are exempt: "5 pcs"
+ * of cloves is a real instruction.
+ */
+const MIN_USEFUL = 25;
+
+/**
+ * Turn what the line said into what the app stores.
+ *
+ * The rule that matters: a DRY volume never becomes a mass. A teaspoon of
+ * saffron and a teaspoon of salt weigh an order of magnitude apart, so
+ * "tsp -> grams" is a guess wearing a number's clothing — and guessing is what
+ * produced "2 kg of chilli powder". Dry volumes lose their quantity instead,
+ * which loses nothing a shopper needed.
+ */
+export function convertAmount(
+  amount: number | null,
+  measure: string,
+  form: string,
+): { quantity: number | null; unit: Unit | null } {
+  // "C. à S." and "c.à.s." are the same measure; so are "tsp" and "tsp.".
+  const m = String(measure ?? '')
+    .toLowerCase()
+    .replace(/\./g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const liquid = String(form ?? '').toLowerCase() === 'liquid';
+
+  if (MASS_G[m] != null) {
+    if (amount == null) return { quantity: null, unit: null };
+    const grams = amount * MASS_G[m];
+    if (grams >= 1000) return { quantity: round(grams / 1000), unit: 'kg' };
+    return grams < MIN_USEFUL ? { quantity: null, unit: null } : { quantity: round(grams), unit: 'g' };
+  }
+
+  if (VOLUME_ML[m] != null) {
+    if (amount == null) return { quantity: null, unit: null };
+    // A dry thing measured by spoon or cup: no honest mass, so no quantity.
+    if (!liquid && VOLUME_ML[m] < 1000 && m !== 'ml' && m !== 'cl' && m !== 'dl') {
+      return { quantity: null, unit: null };
+    }
+    const ml = amount * VOLUME_ML[m];
+    if (ml >= 1000) return { quantity: round(ml / 1000), unit: 'L' };
+    return ml < MIN_USEFUL ? { quantity: null, unit: null } : { quantity: round(ml), unit: 'ml' };
+  }
+
+  if (COUNTED.has(m)) {
+    if (amount == null) return { quantity: null, unit: null };
+    // Half a bay leaf is not a thing to buy; round up to something countable.
+    return { quantity: Math.max(1, Math.round(amount)), unit: 'pcs' };
+  }
+
+  // An unrecognised measure ("pinch", "handful", "to taste"): no number at all
+  // rather than a number whose meaning we cannot state.
+  return { quantity: null, unit: null };
+}
+
+const round = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * A metric amount written plainly in the line — "(around 10 gms)", "(150
+ * gms)", "120-130 ml".
+ *
+ * When the source has already done the conversion, use it: that is the one
+ * number in the line nobody had to derive. This is why onions and curd came
+ * through correct while the spices did not.
+ */
+export function metricInLine(source: string): { quantity: number | null; unit: Unit | null } | null {
+  const re = /(\d[\d.,]*)\s*(?:[-–—]\s*(\d[\d.,]*)\s*)?(gms?|grams?|grammes?|gr|g|kgs?|kilograms?|ml|cl|dl|litres?|liters?|l)\b/gi;
+  let last: RegExpExecArray | null = null;
+  for (let m = re.exec(source); m; m = re.exec(source)) last = m;
+  if (!last) return null;
+  const amount = parseAmount(last[2] ?? last[1]);
+  if (amount == null) return null;
+  // `liquid` so a stated ml stays ml; a stated gram hits the mass branch first.
+  return convertAmount(amount, last[3], 'liquid');
+}
+
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
   const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -467,14 +741,21 @@ function sanitizeItems(raw: unknown, haystack = ''): OutItem[] {
       name = nameFromSource(source);
     }
 
-    const q = typeof e.quantity === 'number' ? e.quantity : Number(e.quantity);
-    // A non-positive or absurd quantity is treated as absent rather than
-    // corrected: "0 onions" is a parse failure, and the app renders a missing
-    // quantity perfectly well.
-    const quantity = Number.isFinite(q) && q > 0 && q < 100_000 ? q : null;
-
-    const u = String(e.unit ?? '');
-    const unit = (UNITS as readonly string[]).includes(u) ? (u as Unit) : null;
+    /*
+     * The quantity, computed here rather than trusted from the model.
+     *
+     * Order matters. A metric amount written plainly in the line is the best
+     * answer available — nobody had to derive it — so "(around 10 gms)" and
+     * "(150 gms)" win over anything reconstructed from "2 tsp" or "2 medium".
+     * Only when the line states no metric amount do we fall back to converting
+     * what the model read off it.
+     */
+    const stated = sourceIsReal ? metricInLine(source) : null;
+    const { quantity, unit } = stated ?? convertAmount(
+      parseAmount(String(e.amount ?? '')),
+      String(e.measure ?? ''),
+      String(e.form ?? ''),
+    );
 
     out.push({ name, quantity, unit });
   }
@@ -531,13 +812,24 @@ Deno.serve(async (req) => {
   // The exact path: the publisher's own ingredient array. Still goes through the
   // model, but only to normalise "1 large onion, finely diced" into something
   // buyable — the ingredient SET is the page's, not the model's.
+  /*
+   * Both paths hand over an explicit list wherever one can be found. A scraped
+   * page already has `recipeIngredient`; a pasted bulleted recipe gets the
+   * same treatment from ingredientLinesFromText. Only genuinely unstructured
+   * text falls through to "here is the page, find the list" — which is the
+   * shape that lost three ingredients off the top.
+   */
+  const pastedLines = scraped ? null : ingredientLinesFromText(forModel);
+
   const payload = scraped
     ? JSON.stringify({
         name: scraped.name,
         servings: scraped.servings,
         ingredientLines: scraped.ingredients,
       })
-    : JSON.stringify({ title: titleHint, text: forModel });
+    : pastedLines
+      ? JSON.stringify({ title: titleHint, ingredientLines: pastedLines })
+      : JSON.stringify({ title: titleHint, text: forModel });
 
   if (!payload || payload.length < 8) {
     return Response.json({ error: 'no_recipe' }, { status: 422 });
@@ -595,6 +887,10 @@ Deno.serve(async (req) => {
 /** Test seam: the pure helpers, so check-recipe.mjs can exercise them. */
 export const __test = {
   sanitizeItems,
+  ingredientLinesFromText,
+  parseAmount,
+  convertAmount,
+  metricInLine,
   groundedIn,
   nameFromSource,
   wordsOf,
