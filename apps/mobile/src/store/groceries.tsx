@@ -438,7 +438,15 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       addParsedItem: (listId, p) => insertParsed(listId, p),
       addOrReviveItem: (listId, p) => {
         const key = normalizeKey(p.name);
-        const existing = lists
+        /*
+         * The SWEPT list, not the raw one. A settled row is one the sweep is
+         * deleting or has already deleted, so reviving it would either update a
+         * row that no longer exists — the item silently never arrives — or win
+         * the race and then be deleted anyway. Treating it as absent inserts a
+         * fresh row, which is what "add it back to the list" means once
+         * yesterday's shop has left.
+         */
+        const existing = visibleLists
           .find((l) => l.id === listId)
           ?.items.find((it) => normalizeKey(it.name) === key);
         if (existing) {
@@ -488,7 +496,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       shoppersOnline: EMPTY_SHOPPERS,
       hydrated: hydratedState,
     }),
-    [lists, hydratedState, patchItem, setChecked, insertParsed, resolveIfUnknown],
+    [lists, visibleLists, hydratedState, patchItem, setChecked, insertParsed, resolveIfUnknown],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -1016,7 +1024,15 @@ function CloudGroceriesProvider({
       addParsedItem: (listId, p) => insertParsed(listId, p),
       addOrReviveItem: (listId, p) => {
         const key = normalizeKey(p.name);
-        const existing = lists
+        /*
+         * The SWEPT list, not the raw one. A settled row is one the sweep is
+         * deleting or has already deleted, so reviving it would either update a
+         * row that no longer exists — the item silently never arrives — or win
+         * the race and then be deleted anyway. Treating it as absent inserts a
+         * fresh row, which is what "add it back to the list" means once
+         * yesterday's shop has left.
+         */
+        const existing = visibleLists
           .find((l) => l.id === listId)
           ?.items.find((it) => normalizeKey(it.name) === key);
         if (existing) {
