@@ -581,11 +581,19 @@ export default function ListDetailScreen() {
               </Text>
             )}
 
-            {/* In the cart.
+            {/* Where the shop ends up.
             Collapsed by default and sitting after everything else, so the list
             proper is what's still to buy. It exists at all because unticking has
             to stay reachable: a mistap must be correctable here, not only from
-            another screen. */}
+            another screen — and unticking a row here returns it to its category
+            group above, which is what makes it the undo for a whole trip.
+
+            It says "added to pantry" rather than "in cart" because it outlives
+            the trip. A trolley you are no longer pushing is not a trolley, and
+            a list that still claims ten things are in one the week after you
+            shopped is describing a moment that has passed. Where those items
+            actually went is the pantry — except for a signed-out user, who has
+            no pantry to go to, so they are told the true and smaller thing. */}
             {inCartItems.length > 0 && (
               <View style={styles.cartSection}>
                 <Pressable
@@ -599,11 +607,18 @@ export default function ListDetailScreen() {
                   style={styles.catRow}
                   hitSlop={6}
                 >
-                  <Ionicons name="bag-check" size={15} color={colors.muted} />
+                  <Ionicons
+                    name={user ? "file-tray-full" : "bag-check"}
+                    size={15}
+                    color={colors.muted}
+                  />
                   <Text style={[type.label, { color: colors.muted }]}>
-                    {t("listDetail.inCartSection", {
-                      count: inCartItems.length,
-                    })}
+                    {t(
+                      user
+                        ? "listDetail.inCartSection"
+                        : "listDetail.inCartSectionGuest",
+                      { count: inCartItems.length },
+                    )}
                   </Text>
                   <View
                     style={[styles.catLine, { backgroundColor: colors.line }]}

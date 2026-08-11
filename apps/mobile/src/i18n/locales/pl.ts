@@ -622,8 +622,9 @@ const pl = {
   listDetail: {
     gone: 'Ta lista już nie istnieje.',
     anyStore: 'Dowolny sklep',
-    inCartCount: '%{checked}/%{total} w koszyku',
-    inCartSection: { one: '%{count} w koszyku', few: '%{count} w koszyku', many: '%{count} w koszyku', other: '%{count} w koszyku' },
+    inCartCount: '%{checked}/%{total} kupionych',
+    inCartSection: { one: '%{count} dodany do spiżarni', few: '%{count} dodane do spiżarni', many: '%{count} dodanych do spiżarni', other: '%{count} dodanych do spiżarni' },
+    inCartSectionGuest: { one: '%{count} kupiony', few: '%{count} kupione', many: '%{count} kupionych', other: '%{count} kupionych' },
     toBuy: 'Do kupienia',
     inCartLabel: 'W koszyku',
     priced: 'Z ceną',

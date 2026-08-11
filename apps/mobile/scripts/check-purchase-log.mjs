@@ -328,5 +328,90 @@ check('a future-stamped record is not "recent"',
   mod.recentRecordFor([{ ...ago(0), at: NOW + 60000 }], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
 check('empty log is handled', mod.recentRecordFor([], 'milk', NOW, mod.SESSION_WINDOW_MS), null);
 
+/* ------------------------------------------- what an untick is allowed to undo */
+
+/*
+ * The reported bug, as tests.
+ *
+ * "Tick an item, untick it, and it sits in the Pantry under Running low saying
+ * bought today." Two causes, and the first only appears after eleven minutes of
+ * fiddling, which is why it survived every quick manual check:
+ *
+ *   - foldPurchase pins `at` to the FIRST tick of a session so a long shop
+ *     cannot extend its own window. The delete rule read that same `at`, so the
+ *     correction window expired ten minutes after the first tick and could
+ *     never reset. Every untick after that silently did nothing.
+ *   - and elapsed time is the wrong test anyway when the record is the item's
+ *     only one: there is no earlier purchase for this to be a restock of.
+ *
+ * The restock case is the one that must NOT change, so it is asserted hardest —
+ * deleting a real purchase because someone put milk back on the list would
+ * quietly rewrite their spend history.
+ */
+const undoable = (log, now = NOW) =>
+  mod.undoableRecordFor(log, 'milk', now, mod.MISTAKE_WINDOW_MS);
+
+const sole = ago(5);
+check('a sole purchase, just ticked, is undoable', undoable([sole]) !== null, true);
+check(
+  'a sole purchase is STILL undoable an hour later — nothing to restock',
+  undoable([ago(60)]) !== null,
+  true,
+);
+check(
+  'a sole purchase is undoable a day later',
+  undoable([ago(60 * 24)]) !== null,
+  true,
+);
+
+// With history behind it, the time rule applies exactly as before.
+const history = { ...buy('Milk', 300, '2026-06-24T10:00:00') };
+check(
+  'with an earlier purchase, a fresh tick is still undoable',
+  undoable([ago(5), history]) !== null,
+  true,
+);
+check(
+  'with an earlier purchase, an 11-minute-old tick is a restock and stands',
+  undoable([ago(11), history]),
+  null,
+);
+
+// The regression itself: a re-tick refreshes touchedAt, so the window resets.
+const retickedLate = { ...ago(30), touchedAt: NOW - 2 * 60000 };
+check(
+  'a record re-ticked 2 min ago is undoable even though `at` is 30 min old',
+  undoable([retickedLate, history]) !== null,
+  true,
+);
+check(
+  '...and `at` is left alone, so the purchase keeps its real time',
+  undoable([retickedLate, history]).at,
+  NOW - 30 * 60000,
+);
+const retickedStale = { ...ago(30), touchedAt: NOW - 20 * 60000 };
+check(
+  'a record last touched 20 min ago is outside the window again',
+  undoable([retickedStale, history]),
+  null,
+);
+
+check('nothing logged, nothing to undo', undoable([]), null);
+check(
+  'another item is never undone',
+  mod.undoableRecordFor([ago(5)], 'bread', NOW, mod.MISTAKE_WINDOW_MS),
+  null,
+);
+check(
+  'a future-stamped record is not picked as the latest',
+  mod.undoableRecordFor(
+    [{ ...ago(0), at: NOW + 60000 }, ago(5)],
+    'milk',
+    NOW,
+    mod.MISTAKE_WINDOW_MS,
+  ).at,
+  NOW - 5 * 60000,
+);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

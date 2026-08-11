@@ -76,6 +76,23 @@ export interface Purchase {
    * reading — nobody could tick a box that did not exist.
    */
   bio: boolean;
+  /**
+   * When this record was last written to, as opposed to when the purchase
+   * happened. Absent on anything loaded from the server or from an older
+   * cache; callers fall back to `at`.
+   *
+   * These are the same number until a re-tick, and the gap between them is a
+   * bug this field exists to close. `foldPurchase` deliberately PINS `at` to
+   * the first tick of a session, so a long shop cannot keep pushing its own
+   * window forward. But the delete rule was reading the same `at`, which meant
+   * the correction window ran out ten minutes after the FIRST tick and never
+   * reset — so on the eleventh minute of tapping a row on and off, the record
+   * became permanently un-undoable and the item stuck in the pantry.
+   *
+   * Splitting them lets each rule read the clock it actually meant: `at` is
+   * when the shopping happened, `touchedAt` is when the user last touched it.
+   */
+  touchedAt?: number;
 }
 
 /**
@@ -126,6 +143,57 @@ export function recentRecordFor(
     if (!best || p.at > best.at) best = p;
   }
   return best;
+}
+
+/**
+ * The record an untick should DELETE, or null if the untick means "we need this
+ * again" and the purchase stands.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not just recentRecordFor with the mistake window
+ * ---------------------------------------------------------------------------
+ *
+ * It was, and it had two holes that produced the same visible bug: an item you
+ * never bought sitting in the Pantry, labelled "bought today" and filed under
+ * Running low — running low because unticking put it back on a list, and
+ * bought today because the tick that created it was never undone.
+ *
+ *   1. The clock. `recentRecordFor` measures from `at`, which foldPurchase pins
+ *      to the first tick of the session. Tap a row on and off past the ten
+ *      minute mark and every untick from then on is outside a window that can
+ *      no longer reset. `touchedAt` is the clock the user is actually acting
+ *      against, so the window measures from the last tick.
+ *
+ *   2. The history. Elapsed time is the wrong question when the record is the
+ *      only one the item has. An item bought every week, unticked three days
+ *      later, is a restock and its history must survive — that rule is why the
+ *      window exists and it is kept. An item with no other purchase has no
+ *      history to protect: the tick is the entire reason it is in the pantry
+ *      at all, so undoing the tick has to undo the item. Ten minutes or an
+ *      hour, "I tapped this and then untapped it" cannot be a shopping cycle
+ *      when there is no earlier cycle to be the second half of.
+ *
+ * Sole-purchase items are therefore undoable for as long as they stay ticked,
+ * and everything else keeps the time rule exactly as it was.
+ */
+export function undoableRecordFor(
+  purchases: Purchase[],
+  key: string,
+  now: number,
+  window: number,
+): Purchase | null {
+  let latest: Purchase | null = null;
+  let countForKey = 0;
+  for (const p of purchases) {
+    if (p.key !== key) continue;
+    countForKey += 1;
+    // Same jumped-clock guard as recentRecordFor, for the same reason.
+    if (p.at > now) continue;
+    if (!latest || p.at > latest.at) latest = p;
+  }
+  if (!latest) return null;
+  if (countForKey === 1) return latest;
+  return now - (latest.touchedAt ?? latest.at) <= window ? latest : null;
 }
 
 /* --------------------------------------------------------------- spend trend */

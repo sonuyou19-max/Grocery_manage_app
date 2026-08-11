@@ -531,8 +531,9 @@ const fr = {
   listDetail: {
     gone: 'Cette liste n’existe plus.',
     anyStore: 'N’importe quel magasin',
-    inCartCount: '%{checked}/%{total} dans le panier',
-    inCartSection: { one: '%{count} dans le panier', other: '%{count} dans le panier' },
+    inCartCount: '%{checked}/%{total} achetés',
+    inCartSection: { one: '%{count} ajouté au garde-manger', other: '%{count} ajoutés au garde-manger' },
+    inCartSectionGuest: { one: '%{count} acheté', other: '%{count} achetés' },
     toBuy: 'À acheter',
     inCartLabel: 'Dans le panier',
     priced: 'Avec prix',

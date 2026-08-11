@@ -532,8 +532,9 @@ const de = {
   listDetail: {
     gone: 'Diese Liste gibt es nicht mehr.',
     anyStore: 'Beliebiges Geschäft',
-    inCartCount: '%{checked}/%{total} im Wagen',
-    inCartSection: { one: '%{count} im Wagen', other: '%{count} im Wagen' },
+    inCartCount: '%{checked}/%{total} gekauft',
+    inCartSection: { one: '%{count} in der Vorratskammer', other: '%{count} in der Vorratskammer' },
+    inCartSectionGuest: { one: '%{count} gekauft', other: '%{count} gekauft' },
     toBuy: 'Zu kaufen',
     inCartLabel: 'Im Wagen',
     priced: 'Mit Preis',

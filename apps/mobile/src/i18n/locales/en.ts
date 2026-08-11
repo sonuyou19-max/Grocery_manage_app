@@ -542,8 +542,9 @@ const en = {
   listDetail: {
     gone: 'This list no longer exists.',
     anyStore: 'Any store',
-    inCartCount: '%{checked}/%{total} in cart',
-    inCartSection: { one: '%{count} in cart', other: '%{count} in cart' },
+    inCartCount: '%{checked}/%{total} bought',
+    inCartSection: { one: '%{count} added to pantry', other: '%{count} added to pantry' },
+    inCartSectionGuest: { one: '%{count} bought', other: '%{count} bought' },
     toBuy: 'To buy',
     inCartLabel: 'In cart',
     priced: 'Priced',

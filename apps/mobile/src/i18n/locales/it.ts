@@ -531,8 +531,9 @@ const it = {
   listDetail: {
     gone: 'Questa lista non esiste più.',
     anyStore: 'Qualsiasi negozio',
-    inCartCount: '%{checked}/%{total} nel carrello',
-    inCartSection: { one: '%{count} nel carrello', other: '%{count} nel carrello' },
+    inCartCount: '%{checked}/%{total} acquistati',
+    inCartSection: { one: '%{count} aggiunto alla dispensa', other: '%{count} aggiunti alla dispensa' },
+    inCartSectionGuest: { one: '%{count} acquistato', other: '%{count} acquistati' },
     toBuy: 'Da comprare',
     inCartLabel: 'Nel carrello',
     priced: 'Con prezzo',

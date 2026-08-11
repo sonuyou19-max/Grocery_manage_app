@@ -34,6 +34,7 @@ import {
   MISTAKE_WINDOW_MS,
   recentRecordFor,
   SESSION_WINDOW_MS,
+  undoableRecordFor,
   type Purchase,
 } from '@/lib/purchase-log';
 import { purchasesToMigrate } from '@/lib/purchase-migration';
@@ -80,10 +81,10 @@ interface PantryIntelContext {
   /** Every logged purchase, newest first — priced or not. */
   purchases: Purchase[];
   /**
-   * An item was UNchecked. Removes the transaction only if it is younger than
-   * MISTAKE_WINDOW_MS, on the reasoning that unticking seconds after ticking is
-   * a mistap, while unticking hours later is "we need this again" — a new
-   * shopping cycle, which must leave the earlier purchase standing.
+   * An item was UNchecked. Removes the transaction when the untick reads as a
+   * correction rather than a restock — inside MISTAKE_WINDOW_MS of the last
+   * tick, or at any time when this is the only purchase the item has ever had.
+   * See undoableRecordFor for why elapsed time alone was the wrong test.
    */
   unlogRecent: (name: string) => void;
   /** Swipe left: user confirms it's running low (caller adds it to a list). */
@@ -190,11 +191,16 @@ function toPurchase(
  */
 function foldPurchase(existing: Purchase[], entry: Purchase): Purchase[] {
   const open = recentRecordFor(existing, entry.key, entry.at, SESSION_WINDOW_MS);
-  if (!open) return [entry, ...existing];
+  if (!open) return [{ ...entry, touchedAt: entry.at }, ...existing];
   // Keep the ORIGINAL id and timestamp: this is the same transaction being
   // corrected, not a new one. Moving the timestamp forward would let a long
   // shop keep extending its own window indefinitely.
-  const merged: Purchase = { ...entry, id: open.id, at: open.at };
+  //
+  // `touchedAt` DOES move, and must: it is the record of this tick, not of the
+  // shop. Leaving it pinned alongside `at` is what let a row tapped on and off
+  // for a quarter of an hour become impossible to untick — see
+  // undoableRecordFor for the full account.
+  const merged: Purchase = { ...entry, id: open.id, at: open.at, touchedAt: entry.at };
   return existing.map((p) => (p.id === open.id ? merged : p));
 }
 
@@ -346,7 +352,7 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       unlogRecent: (name) => {
         const key = normalizeKey(name);
         setPurchases((prev) => {
-          const doomed = recentRecordFor(prev, key, Date.now(), MISTAKE_WINDOW_MS);
+          const doomed = undoableRecordFor(prev, key, Date.now(), MISTAKE_WINDOW_MS);
           if (!doomed) return prev;
           const next = prev.filter((p) => p.id !== doomed.id);
           AsyncStorage.setItem(LOCAL_PURCHASES_KEY, JSON.stringify(next)).catch(() => {});
@@ -835,7 +841,7 @@ function CloudPantryIntelProvider({
       },
       unlogRecent: (name) => {
         const key = normalizeKey(name);
-        const doomed = recentRecordFor(purchasesRef.current, key, Date.now(), MISTAKE_WINDOW_MS);
+        const doomed = undoableRecordFor(purchasesRef.current, key, Date.now(), MISTAKE_WINDOW_MS);
         if (!doomed) return;
         const remaining = purchasesRef.current.filter((p) => p.id !== doomed.id);
         applyPurchases(remaining);
