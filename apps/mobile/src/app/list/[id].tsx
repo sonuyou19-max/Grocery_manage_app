@@ -45,6 +45,7 @@ import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { emojiFor } from "@/lib/item-emoji";
 import { haptics } from "@/lib/haptics";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
+import { normalizeKey } from "@/lib/pantry-intel";
 import { useAuth } from "@/store/auth";
 import { useGroceries, useList, type Item } from "@/store/groceries";
 import { useHousehold } from "@/store/household";
@@ -351,9 +352,19 @@ export default function ListDetailScreen() {
     const name = draft.trim();
     if (!name) return;
 
-    const duplicate = list.items.find(
-      (it) => it.name.trim().toLowerCase() === name.toLowerCase(),
-    );
+    /*
+     * normalizeKey, not a local trim-and-lowercase.
+     *
+     * The database decides this too — `item_key` is a generated column and a
+     * unique index over the unticked rows (migration 0018) — and it collapses
+     * runs of whitespace, which this check did not. "Olive  oil" with two
+     * spaces therefore passed here, was rejected by Postgres, and the item
+     * simply never appeared: the insert is optimistic, so the failure showed up
+     * as the row quietly vanishing. One rule, one implementation, or the two
+     * disagree exactly where nobody is looking.
+     */
+    const key = normalizeKey(name);
+    const duplicate = list.items.find((it) => normalizeKey(it.name) === key);
     if (duplicate) {
       Alert.alert(
         t("listDetail.dupTitle"),

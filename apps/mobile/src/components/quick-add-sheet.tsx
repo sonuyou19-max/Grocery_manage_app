@@ -30,6 +30,7 @@ import type { ParsedItem } from "@korb/shared";
 import { Frosted } from "@/components/frosted";
 import { categoryLabel } from "@/lib/categorize";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
+import { normalizeKey } from "@/lib/pantry-intel";
 import { parseQuickAdd } from "@/lib/quick-add";
 import { useGroceries, useList } from "@/store/groceries";
 import { useT } from "@/store/locale";
@@ -58,11 +59,18 @@ export function QuickAddSheet({
   const list = useList(listId);
   const { height: screenH } = useWindowDimensions();
 
-  // Names already on this list, normalised, so quick-add doesn't silently add a
-  // second "Milk" — matches the duplicate guard on the manual add bar.
-  const existingNames = useMemo(
-    () =>
-      new Set((list?.items ?? []).map((it) => it.name.trim().toLowerCase())),
+  /*
+   * Names already on this list, so quick-add doesn't silently add a second
+   * "Milk".
+   *
+   * normalizeKey, not a local trim-and-lowercase. Item identity is decided in
+   * exactly one place in this app, and the database enforces the same rule as a
+   * generated column — so a check that normalises differently here does not
+   * merely miss a duplicate, it lets through an insert Postgres will reject.
+   * See lib/pantry-intel.normalizeKey and migration 0018.
+   */
+  const existingKeys = useMemo(
+    () => new Set((list?.items ?? []).map((it) => normalizeKey(it.name))),
     [list],
   );
 
@@ -164,7 +172,7 @@ export function QuickAddSheet({
     // Pre-tick everything except items already on the list — those default to
     // skipped so you don't add duplicates without meaning to.
     setSelected(
-      parsed.map((p) => !existingNames.has(p.name.trim().toLowerCase())),
+      parsed.map((p) => !existingKeys.has(normalizeKey(p.name))),
     );
     setPhase("review");
   };
@@ -227,7 +235,7 @@ export function QuickAddSheet({
               </Text>
               {items.map((item, i) => {
                 const on = selected[i];
-                const dup = existingNames.has(item.name.trim().toLowerCase());
+                const dup = existingKeys.has(normalizeKey(item.name));
                 return (
                   <Pressable
                     key={`${item.name}-${i}`}

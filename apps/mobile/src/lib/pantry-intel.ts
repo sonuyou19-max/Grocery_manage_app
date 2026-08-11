@@ -93,7 +93,37 @@ export interface DeckCard {
   keepStocked: boolean;
 }
 
-export const normalizeKey = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, ' ');
+/**
+ * Whitespace, as POSTGRES defines it — which is not what JavaScript does.
+ *
+ * `item_key` on list_items is a generated column using `[[:space:]]`, and that
+ * resolves through glibc's iswspace, which is false for every NON-BREAKING
+ * space. JavaScript's `\s` is true for all of them. Measured against a real
+ * Postgres 16, the two classes agree on every whitespace codepoint except
+ * exactly four:
+ *
+ *   U+00A0 no-break space          U+2007 figure space
+ *   U+202F narrow no-break space   U+FEFF zero-width no-break space (BOM)
+ *
+ * Using `\s` here therefore made the client normalise MORE than the database:
+ * a name pasted from a web page — where U+00A0 is everywhere, and the recipe
+ * importer takes pasted text by design — read as one item to the pantry and a
+ * different one to the unique index. This class is `\s` minus those four, so
+ * both sides now answer identically.
+ *
+ * Which behaviour is nicer is a separate question: collapsing a no-break space
+ * would let pasted text match typed text, and that would be an improvement.
+ * It also means changing a generated column and rewriting the table, so it is
+ * not this. Agreeing is the property that prevents silent failures; agreeing on
+ * the prettier rule is an upgrade on top of it.
+ *
+ * check-item-identity asserts the boundary, so a future edit that reintroduces
+ * `\s` fails rather than drifting.
+ */
+const PG_SPACE = /[\t\n\v\f\r \u1680\u2000-\u2006\u2008-\u200a\u2028\u2029\u205f\u3000]+/g;
+
+export const normalizeKey = (name: string): string =>
+  name.replace(PG_SPACE, ' ').replace(/^ +| +$/g, '').toLowerCase();
 
 /**
  * The interval to predict against, in days, most authoritative first:
