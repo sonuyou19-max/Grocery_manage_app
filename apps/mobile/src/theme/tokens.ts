@@ -151,7 +151,10 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     meshA: '#1C3A28',
     meshB: '#13291E',
     meshC: '#2A3312',
-    meshScrim: 'rgba(11,15,9,0.42)',
+    // Much lighter than the light-mode scrim, deliberately. A flat wash
+    // compresses the mesh gradient into fewer 8-bit steps, and at low
+    // luminance the eye resolves those steps as rings — see mesh-background.
+    meshScrim: 'rgba(11,15,9,0.16)',
     glassFill: 'rgba(30,36,27,0.55)',
     glassSolid: 'rgba(26,32,23,0.9)',
     overlaySolid: '#1A2017',

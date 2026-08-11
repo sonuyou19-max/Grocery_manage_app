@@ -1,4 +1,4 @@
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme';
@@ -38,6 +38,13 @@ import { useTheme } from '@/theme';
  * bitmap, no pre-draw listener, and no per-frame work at all. It renders once
  * and then costs nothing until the window resizes.
  *
+ * Plus one noise tile on top. Losing the blur also lost the only thing that was
+ * hiding 8-bit quantisation, and dark mode showed the result as concentric
+ * rings; the tile dithers them away for the cost of a single static draw. The
+ * two remedies are separate and both are needed — the falloff below fixes a
+ * ring this file put there itself, the tile fixes the ones the display puts
+ * there.
+ *
  * Purely decorative — never intercepts touches.
  *
  * `dim` deepens everything into a near-black moody field for full-screen focus
@@ -53,7 +60,29 @@ import { useTheme } from '@/theme';
  * instead — otherwise the same hex values read noticeably more saturated than
  * the build this replaces.
  */
-const PEAK = { light: 0.8, dark: 0.9 } as const;
+const PEAK = { light: 0.8, dark: 0.8 } as const;
+
+/**
+ * The blob's falloff, as gradient stops.
+ *
+ * This replaced a three-stop ramp — full, then 62% at offset 0.55, then zero —
+ * and that middle stop was a mistake I could see in the numbers before anyone
+ * reported it: it is a discrete change of SLOPE at one radius, which draws a
+ * ring. Three blobs, three rings, and dark mode showed them plainly.
+ *
+ * A gaussian has no corner anywhere, which is what a blurred circle actually
+ * looks like and what this is imitating. Sampled at ten stops the renderer's
+ * linear interpolation between them is far below the eye's threshold.
+ *
+ * Normalised so the edge reaches exactly zero: exp(-3) is 0.05, and leaving
+ * that residue would put a visible disc boundary where the ellipse ends —
+ * trading a soft ring for a hard one.
+ */
+const FALLOFF = Array.from({ length: 10 }, (_, i) => {
+  const t = i / 9;
+  const g = Math.exp(-3 * t * t);
+  return { offset: t, weight: (g - Math.exp(-3)) / (1 - Math.exp(-3)) };
+});
 
 /** How far past the old circle's radius the gradient reaches before it hits
  *  zero. A blur spread the colour well beyond the shape it started from; the
@@ -92,13 +121,14 @@ export function MeshBackground({ dim = false }: { dim?: boolean }) {
         <Defs>
           {blobs.map((b, i) => (
             <RadialGradient key={i} id={`mesh${i}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor={b.color} stopOpacity={peak} />
-              {/* The middle stop is what stops this looking like a vignette.
-                  A straight 1→0 ramp falls off linearly and reads as a ring;
-                  holding most of the colour to just past halfway and then
-                  dropping it gives the soft shoulder a blur produces. */}
-              <Stop offset="0.55" stopColor={b.color} stopOpacity={peak * 0.62} />
-              <Stop offset="1" stopColor={b.color} stopOpacity={0} />
+              {FALLOFF.map((s) => (
+                <Stop
+                  key={s.offset}
+                  offset={s.offset}
+                  stopColor={b.color}
+                  stopOpacity={peak * s.weight}
+                />
+              ))}
             </RadialGradient>
           ))}
         </Defs>
@@ -113,8 +143,40 @@ export function MeshBackground({ dim = false }: { dim?: boolean }) {
           />
         ))}
       </Svg>
+      {/*
+        * The scrim keeps the mesh subtle — and costs contrast to do it, which
+        * matters more than it looks.
+        *
+        * It is a flat wash, so it does not just darken: it COMPRESSES whatever
+        * range the gradient had into fewer 8-bit steps, and fewer steps over
+        * the same distance means wider, more visible bands. Dark mode was
+        * spending 42% of its range that way over a ramp only ~39 levels deep
+        * to begin with. Held much lower there now, with the blob peak brought
+        * down to match so the result is no louder than before.
+        */}
       <View
         style={[StyleSheet.absoluteFill, { backgroundColor: dim ? 'rgba(5,7,4,0.7)' : colors.meshScrim }]}
+      />
+      {/*
+        * Dither. Last, over everything, because it corrects the rounding that
+        * everything above it has already done.
+        *
+        * A smooth curve does not survive an 8-bit destination: dark mode's ramp
+        * spans ~29 values over a ~260dp radius, so there is a hard-edged arc
+        * every ~9dp no matter how continuous the maths was. One step of white
+        * noise breaks each arc into an interleaving of the two values either
+        * side of it, and the eye reads the mix as the ramp it was supposed to
+        * be. See scripts/gen-mesh-dither.mjs for the arithmetic — including why
+        * the same tile is, correctly, worth almost nothing in light mode.
+        *
+        * `fadeDuration` off: Android cross-fades images in over 300ms by
+        * default, and the background must not announce itself on every mount.
+        */}
+      <Image
+        source={require('../../assets/images/mesh-dither.png')}
+        style={StyleSheet.absoluteFill}
+        resizeMode="repeat"
+        fadeDuration={0}
       />
     </View>
   );

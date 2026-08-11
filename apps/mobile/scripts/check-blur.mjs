@@ -42,7 +42,7 @@
  *
  * Run with `pnpm --filter mobile check:blur`.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -183,7 +183,48 @@ if (!mesh) {
   console.log('ok   the mesh background does no per-frame work');
 }
 
-/* ---------------- 5. the first frame is never empty ---------------------- */
+/* ---------------- 5. ...and is still dithered ---------------------------- */
+
+/*
+ * Removing the blur removed the only thing masking 8-bit quantisation, and dark
+ * mode reported back as concentric rings. Two things fix it and both are easy
+ * to lose to a tidy-up, because neither looks load-bearing:
+ *
+ *   - the noise tile, which is one <Image> that appears to do nothing;
+ *   - the gaussian falloff, which replaced a three-stop ramp whose middle stop
+ *     was a slope discontinuity — one ring per blob, drawn deliberately.
+ *
+ * Both are checked structurally rather than by name, so renaming the constant
+ * is fine and deleting the mechanism is not.
+ */
+if (mesh) {
+  const meshFails = [];
+  if (!/mesh-dither\.png/.test(mesh.src)) {
+    meshFails.push('the noise tile is gone (assets/images/mesh-dither.png)');
+  } else if (!/resizeMode=["']repeat["']/.test(mesh.src)) {
+    meshFails.push('the noise tile no longer repeats — scaled up it is blobs, not dither');
+  }
+  if (!existsSync(join(SRC, '..', 'assets', 'images', 'mesh-dither.png'))) {
+    meshFails.push('assets/images/mesh-dither.png is missing (pnpm gen:mesh-dither)');
+  }
+  // A hand-written stop list is the shape of the bug: a gaussian is generated.
+  const stops = (mesh.src.match(/<Stop\b/g) ?? []).length;
+  if (stops !== 1 || !/Math\.exp\(/.test(mesh.src)) {
+    meshFails.push('the blob falloff is no longer a generated smooth curve');
+  }
+  if (meshFails.length) {
+    fail('the mesh background will band again', [
+      ...meshFails.map((m) => `  ${m}`),
+      'See the header of components/mesh-background.tsx and',
+      'scripts/gen-mesh-dither.mjs. Both remedies are needed: one fixes a ring',
+      'this code drew itself, the other fixes the ones the display draws.',
+    ]);
+  } else {
+    console.log('ok   ...and is still dithered, with a generated falloff');
+  }
+}
+
+/* ---------------- 6. the first frame is never empty ---------------------- */
 
 /*
  * Expo hides the native splash on the app's first frame. If the provider that
