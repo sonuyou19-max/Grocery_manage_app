@@ -636,7 +636,23 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
     reportWriteFailure('shopping_lists.migrate', listError);
     if (listError) return;
 
-    const items = local.flatMap((l) =>
+    /*
+     * Swept before it is uploaded, for two reasons that happen to coincide.
+     *
+     * The obvious one: yesterday's shop has left this device's lists already,
+     * so uploading it would resurrect it in the cloud and the user would sign
+     * in to a list they had watched empty itself.
+     *
+     * The load-bearing one: a ticked item cached by a build older than
+     * migration 0029 has no `checkedAt` at all, and mapping it straight across
+     * produces `checked = true` with `checked_at = null` — the one state
+     * migration 0030's CHECK constraint forbids. The whole upsert would be
+     * rejected, and this is the sign-in transfer, so the cost would be the
+     * user's offline lists. `isSettled` already treats a stamp-less ticked row
+     * as settled, so sweeping first removes exactly those rows and every
+     * survivor satisfies the constraint by construction rather than by care.
+     */
+    const items = liveLists(local, Date.now()).flatMap((l) =>
       l.items.map((it, i) => ({
         id: it.id,
         list_id: l.id,

@@ -29,6 +29,11 @@ const js = ts.transpileModule(readFileSync(SRC, 'utf8'), {
 const mod = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
 
 let failures = 0;
+const fail = (title, lines = []) => {
+  failures += 1;
+  console.log(`FAIL ${title}`);
+  for (const line of lines) console.log(`  ${line}`);
+};
 const check = (title, actual, expected) => {
   if (Object.is(actual, expected)) {
     console.log(`ok   ${title}`);
@@ -120,6 +125,120 @@ check(
   mod.liveLists(cleanOnly, NOON),
   cleanOnly,
 );
+
+/* ============ the invariant the database now enforces (migration 0030) ==== */
+
+/*
+ * `checked` and `checked_at` must be written together. A row where they
+ * disagree is not cosmetic: `isSettled` treats a ticked row with no stamp as
+ * settled, so such a row vanishes from the list the instant it is read — the
+ * user ticks an item and watches it disappear instead of moving to the section
+ * below.
+ *
+ * Postgres rejects it since 0030. That is the real defence; this exists so the
+ * failure surfaces here rather than as a rejected write on someone's phone,
+ * and because the constraint cannot see the LOCAL backend at all — that one has
+ * no database, and a signed-out user's lists live entirely in AsyncStorage.
+ */
+const { readdirSync, statSync } = await import('node:fs');
+const SRC_DIR = join(here, '..', 'src');
+const MIGRATIONS = join(here, '..', '..', '..', 'supabase', 'migrations');
+
+const walk = (dir) => {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) out.push(...walk(full));
+    else if (/\.tsx?$/.test(name)) out.push(full);
+  }
+  return out;
+};
+const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+const storeSrc = walk(SRC_DIR)
+  .filter((f) => f.includes('store'))
+  .map((f) => ({ name: f.split('/').pop(), src: strip(readFileSync(f, 'utf8')) }));
+
+/*
+ * Object literals passed to a supabase write. If one names either column it
+ * must name both — `{ checked: next }` alone is the exact shape that produced
+ * the state 0030 forbids.
+ */
+const lone = [];
+for (const f of storeSrc) {
+  for (const m of f.src.matchAll(/\.(?:update|insert|upsert)\(\s*\{([^{}]*)\}/g)) {
+    // The closing brace is re-attached: a property written last has nothing
+    // after it inside the capture, so `{ checked }` would otherwise match
+    // NEITHER test and the two would agree at false — a check that passes by
+    // seeing nothing at all.
+    const body = m[1] + '}';
+    const hasCol = /\bchecked\s*[,:}]/.test(body);
+    const hasStamp = /\bchecked_at\s*[,:}]/.test(body);
+    if (hasCol !== hasStamp) {
+      lone.push(`${f.name}: { ${body.trim().replace(/\s+/g, ' ').slice(0, 70)} }`);
+    }
+  }
+}
+if (lone.length) {
+  fail('a supabase write sets one of checked / checked_at without the other', [
+    ...lone.map((l) => `  ${l}`),
+    'Migration 0030 rejects the resulting row, so this write fails on device.',
+    'Set both in the same statement — see store/groceries.tsx toggleItem.',
+  ]);
+} else {
+  console.log('ok   every write sets checked and checked_at together');
+}
+
+// The same pairing in the LOCAL backend, which no constraint can reach.
+const loneLocal = [];
+for (const f of storeSrc) {
+  for (const m of f.src.matchAll(/\{\s*\.\.\.it,([^{}]*)\}/g)) {
+    const body = m[1] + '}'; // see above
+    if (/\bchecked\s*[,:}]/.test(body) !== /\bcheckedAt\s*[,:}]/.test(body)) {
+      loneLocal.push(`${f.name}: { ...it,${body.trim().replace(/\s+/g, ' ').slice(0, 60)} }`);
+    }
+  }
+}
+if (loneLocal.length) {
+  fail('a local-state update sets one of checked / checkedAt without the other', [
+    ...loneLocal.map((l) => `  ${l}`),
+    'Signed out there is no database to catch this, and isSettled reads a',
+    'ticked row with no stamp as settled — the item disappears on tick.',
+  ]);
+} else {
+  console.log('ok   ...and so does every local-state update');
+}
+
+/*
+ * The sign-in transfer must sweep before it uploads. A ticked item cached by a
+ * build older than 0029 carries no stamp at all, and mapping it straight across
+ * produces exactly the row 0030 rejects — failing the whole upsert, which is
+ * the user's offline lists.
+ */
+const groceries = storeSrc.find((f) => f.name === 'groceries.tsx');
+if (!groceries) {
+  fail('store/groceries.tsx is missing');
+} else if (!/liveLists\(\s*local\s*,/.test(groceries.src)) {
+  fail('the sign-in transfer no longer sweeps before uploading', [
+    'migrateLocalLists must map from liveLists(local, …), not from `local`.',
+    'An unswept ticked row with no checkedAt violates migration 0030 and takes',
+    "the whole transfer down with it — and that transfer is the user's lists.",
+  ]);
+} else {
+  console.log('ok   the sign-in transfer sweeps before uploading');
+}
+
+const constraint = readdirSync(MIGRATIONS)
+  .map((f) => readFileSync(join(MIGRATIONS, f), 'utf8'))
+  .join('\n');
+if (!/check\s*\(\s*checked\s*=\s*\(\s*checked_at is not null\s*\)\s*\)/i.test(constraint)) {
+  fail('no migration declares the checked / checked_at invariant', [
+    'The checks above are a courtesy; the constraint is the guarantee. Losing',
+    'it means the two columns can disagree again on any path nobody scanned.',
+  ]);
+} else {
+  console.log('ok   a migration still declares the invariant to Postgres');
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
