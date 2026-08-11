@@ -13,6 +13,7 @@ import { AppState } from 'react-native';
 
 import { setHomeListScope } from '@/lib/item-home-list';
 import { useProfileName } from '@/lib/profile-name';
+import { reportWriteFailure } from '@/lib/monitoring';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
@@ -325,6 +326,10 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
           .from('households')
           .update({ name: clean })
           .eq('id', householdId);
+        // Surfaced to the user AND reported: a rename that fails for everyone —
+        // an RLS change, say — looks like one person's bad luck from inside the
+        // app and like nothing at all from outside it.
+        reportWriteFailure('households.rename', error);
         if (error) {
           await refresh();
           return { error: friendlyError(error.message, t) };

@@ -84,6 +84,58 @@ export function trackRoute(route: string): void {
   }
 }
 
+/**
+ * A write to the server failed and the user was not told.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this needs to exist
+ * ---------------------------------------------------------------------------
+ *
+ * Every mutation in this app is optimistic: the row appears the instant you tap,
+ * and the network call follows. When that call fails the store re-reads from the
+ * server, so the optimistic row quietly disappears and the screen goes back to
+ * the truth. That recovery is correct — the alternative is a UI that insists on
+ * a row the database never accepted — but it is also completely silent. The
+ * user sees an item they added not be there, and nobody else ever learns it
+ * happened.
+ *
+ * The unique-violation case makes the point. `recoverFrom` has always had a
+ * branch for SQLSTATE 23505, so the code has always KNOWN this occurs, and said
+ * nothing. Some of those are the deliberate two-members-added-the-same-thing
+ * race that migration 0018 pushes onto the database — a steady trickle there is
+ * the design working. A spike is not: it is the client and the database
+ * disagreeing about what counts as the same item, which is exactly the kind of
+ * fault that never reproduces on the developer's phone.
+ *
+ * ---------------------------------------------------------------------------
+ * What is sent, and what is deliberately not
+ * ---------------------------------------------------------------------------
+ *
+ * `op` is a fixed string per call site (`list_items.insert`), never
+ * interpolated, so one issue in Sentry means one code path. `code` is the
+ * SQLSTATE. `message` is Postgres's own summary, which names the constraint
+ * rather than the data.
+ *
+ * `details` and `hint` are dropped on purpose: PostgREST puts the offending
+ * VALUES in them — `Key (list_id, item_key)=(…, milk) already exists` — and
+ * that is the user's shopping list leaving the device through the crash
+ * reporter. Same reason trackRoute sends `/list/[id]` and not the id.
+ */
+export function reportWriteFailure(
+  op: string,
+  error: { code?: string; message?: string } | null | undefined,
+): void {
+  if (!error) return;
+  // An Error, not the raw object: Sentry groups by stack and message, and a
+  // bare `{code, message}` from PostgREST collapses every failure in the app
+  // into one unreadable issue.
+  captureException(new Error(`write failed: ${op}`), {
+    op,
+    code: error.code ?? 'unknown',
+    message: error.message ?? '',
+  });
+}
+
 /** Report a handled error. Safe everywhere; never throws. */
 export function captureException(error: unknown, context?: Record<string, unknown>): void {
   if (__DEV__) {

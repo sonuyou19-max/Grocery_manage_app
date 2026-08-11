@@ -13,6 +13,7 @@ import {
 import type { ItemCategory } from '@korb/shared';
 
 import { categorizeSync } from '@/lib/categorize';
+import { reportWriteFailure } from '@/lib/monitoring';
 import { supabase } from '@/lib/supabase';
 import { uuidv4 } from '@/lib/uuid';
 import { useAppActive } from '@/lib/use-app-active';
@@ -518,6 +519,14 @@ async function migrateLocalPurchases(
           recorded_at: new Date(p.at).toISOString(),
         })),
       );
+      /*
+       * The costliest silent failure in the app. This is the sign-in transfer:
+       * everything the user logged before they had an account. Leaving the flag
+       * unset means the next launch tries again, which is the right recovery —
+       * but if it never succeeds, the user is told their history is safe and it
+       * is sitting on one device.
+       */
+      reportWriteFailure('price_entries.migrate', insertError);
       if (insertError) return;
     }
 
@@ -591,7 +600,8 @@ async function seedPantryFromLog(log: Purchase[], householdId: string): Promise<
       }));
     if (rows.length === 0) return;
 
-    await supabase.from('pantry_items').insert(rows);
+    const { error: seedError } = await supabase.from('pantry_items').insert(rows);
+    reportWriteFailure('pantry_items.seed', seedError);
   } catch {
     // See above: never fatal.
   }
@@ -792,6 +802,7 @@ function CloudPantryIntelProvider({
         .from('pantry_items')
         .upsert(rows, { onConflict: 'household_id,item_key' })
         .then(({ error }) => {
+          reportWriteFailure('pantry_items.upsert', error);
           if (error) scheduleRefetch();
         });
     };
@@ -835,7 +846,10 @@ function CloudPantryIntelProvider({
 
         write.then(({ error }) => {
           // Re-sync on failure so the optimistic row doesn't linger as a
-          // purchase that only this device believes in.
+          // purchase that only this device believes in — and report it, because
+          // that resync is silent and a lost purchase is a hole in the spend
+          // history nobody will ever notice from the inside.
+          reportWriteFailure(open ? 'price_entries.update' : 'price_entries.insert', error);
           if (error) void fetchPurchases();
         });
       },
@@ -861,7 +875,8 @@ function CloudPantryIntelProvider({
             .from('pantry_items')
             .delete()
             .eq('household_id', householdId)
-            .eq('item_key', key);
+            .eq('item_key', key)
+            .then(({ error }) => reportWriteFailure('pantry_items.delete', error));
         }
 
         supabase
@@ -869,6 +884,7 @@ function CloudPantryIntelProvider({
           .delete()
           .eq('id', doomed.id)
           .then(({ error }) => {
+            reportWriteFailure('price_entries.delete', error);
             if (error) void fetchPurchases();
           });
       },

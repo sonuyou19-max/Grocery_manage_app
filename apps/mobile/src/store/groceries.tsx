@@ -16,6 +16,7 @@ import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/
 import { unitFor } from '@/lib/item-unit';
 import { forgetHomeList, rememberItemList } from '@/lib/item-home-list';
 import { recallItemDetails } from '@/lib/item-memory';
+import { reportWriteFailure } from '@/lib/monitoring';
 import { normalizeKey } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
@@ -632,6 +633,7 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
       })),
       { onConflict: 'id', ignoreDuplicates: true },
     );
+    reportWriteFailure('shopping_lists.migrate', listError);
     if (listError) return;
 
     const items = local.flatMap((l) =>
@@ -655,7 +657,8 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
       const { error: itemError } = await supabase
         .from('list_items')
         .upsert(items, { onConflict: 'id', ignoreDuplicates: true });
-      if (itemError) return;
+      reportWriteFailure('list_items.migrate', itemError);
+    if (itemError) return;
     }
 
     await AsyncStorage.setItem(LISTS_MIGRATED_KEY, '1');
@@ -723,8 +726,17 @@ function CloudGroceriesProvider({
    * later. Everything else keeps the debounce, which coalesces bursts.
    */
   const recoverFrom = useCallback(
-    (error: { code?: string } | null) => {
+    (op: string, error: { code?: string; message?: string } | null) => {
       if (!error) return;
+      /*
+       * Recover, then say so. The resync below puts the screen back to the
+       * truth, which is right and is also the whole problem: the user watches
+       * the thing they just added vanish and there is no other trace that it
+       * ever failed. `op` is a literal at each call site so one Sentry issue
+       * means one code path — see reportWriteFailure for what is and is not
+       * sent with it.
+       */
+      reportWriteFailure(op, error);
       if (error.code === '23505') void fetchLists();
       else scheduleRefetch();
     },
@@ -838,7 +850,11 @@ function CloudGroceriesProvider({
       resolveCategoryAsync(name).then((res) => {
         if (!res || res.category === 'other') return;
         patchLocalItem(listId, itemId, { category: res.category });
-        void supabase.from('list_items').update({ category: res.category }).eq('id', itemId);
+        void supabase
+          .from('list_items')
+          .update({ category: res.category })
+          .eq('id', itemId)
+          .then(({ error }) => reportWriteFailure('list_items.category', error));
         // See the local store: only when the row still has no unit, since the
         // user may have picked one while the call was in flight. The
         // `is('unit', null)` on the update is the same guard applied to the
@@ -850,7 +866,8 @@ function CloudGroceriesProvider({
             .from('list_items')
             .update({ unit: learnedUnit })
             .eq('id', itemId)
-            .is('unit', null);
+            .is('unit', null)
+            .then(({ error }) => reportWriteFailure('list_items.unit', error));
         }
         void learnCategory(name, res.category);
       });
@@ -891,7 +908,15 @@ function CloudGroceriesProvider({
   useEffect(() => {
     const doomed = lists.flatMap((l) => settledIds(l.items, day));
     if (doomed.length === 0) return;
-    void supabase.from('list_items').delete().in('id', doomed);
+    void supabase
+      .from('list_items')
+      .delete()
+      .in('id', doomed)
+      // No refetch: the filter has already hidden these rows, so a failure
+      // costs nothing today and the next launch tries again. It is still worth
+      // knowing about — a sweep that never succeeds means the table grows
+      // without bound behind a UI that looks fine.
+      .then(({ error }) => reportWriteFailure('list_items.sweep', error));
   }, [lists, day]);
 
   const value = useMemo<GroceriesContext>(() => {
@@ -945,7 +970,7 @@ function CloudGroceriesProvider({
           added_by: user?.id ?? null,
         })
         .then(({ error }) => {
-          recoverFrom(error);
+          recoverFrom('list_items.insert.parsed', error);
         });
       rememberItemList(p.name, listId);
       resolveIfUnknown(listId, id, p.name, p.category, unit);
@@ -960,6 +985,7 @@ function CloudGroceriesProvider({
           .from('shopping_lists')
           .insert({ id, household_id: householdId, name, position: lists.length })
           .then(({ error }) => {
+            reportWriteFailure('shopping_lists.insert', error);
             if (error) scheduleRefetch();
           });
         return id;
@@ -972,6 +998,7 @@ function CloudGroceriesProvider({
           .delete()
           .eq('id', listId)
           .then(({ error }) => {
+            reportWriteFailure('shopping_lists.delete', error);
             if (error) scheduleRefetch();
           });
       },
@@ -983,7 +1010,11 @@ function CloudGroceriesProvider({
           );
         });
         orderedIds.forEach((id, i) => {
-          void supabase.from('shopping_lists').update({ position: i }).eq('id', id);
+          void supabase
+            .from('shopping_lists')
+            .update({ position: i })
+            .eq('id', id)
+            .then(({ error }) => reportWriteFailure('shopping_lists.reorder', error));
         });
       },
       addItem: (listId, name) => {
@@ -1015,7 +1046,7 @@ function CloudGroceriesProvider({
             added_by: user?.id ?? null,
           })
           .then(({ error }) => {
-            recoverFrom(error);
+            recoverFrom('list_items.insert', error);
           });
         rememberItemList(clean, listId);
         resolveIfUnknown(listId, id, clean, category, unit);
@@ -1048,7 +1079,7 @@ function CloudGroceriesProvider({
             .update({ checked: false, checked_at: null })
             .eq('id', existing.id)
             .then(({ error }) => {
-              recoverFrom(error);
+              recoverFrom('list_items.revive', error);
             });
           rememberItemList(p.name, listId);
           return 'revived';
@@ -1071,7 +1102,7 @@ function CloudGroceriesProvider({
           .update({ checked: next, checked_at: at })
           .eq('id', itemId)
           .then(({ error }) => {
-            recoverFrom(error);
+            recoverFrom('list_items.toggle', error);
           });
       },
       updateItem: (listId, itemId, patch) => {
@@ -1081,7 +1112,7 @@ function CloudGroceriesProvider({
           .update(dbPatch(patch))
           .eq('id', itemId)
           .then(({ error }) => {
-            recoverFrom(error);
+            recoverFrom('list_items.update', error);
           });
         if (patch.category) {
           const target = lists.find((l) => l.id === listId)?.items.find((it) => it.id === itemId);
@@ -1097,6 +1128,7 @@ function CloudGroceriesProvider({
           .delete()
           .eq('id', itemId)
           .then(({ error }) => {
+            reportWriteFailure('list_items.delete', error);
             if (error) scheduleRefetch();
           });
       },
@@ -1126,6 +1158,7 @@ function CloudGroceriesProvider({
           })
           .eq('id', itemId)
           .then(({ error }) => {
+            reportWriteFailure('list_items.claim', error);
             if (error) scheduleRefetch();
           });
       },
