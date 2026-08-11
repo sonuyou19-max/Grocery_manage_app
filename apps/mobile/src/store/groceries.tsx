@@ -20,6 +20,8 @@ import { normalizeKey } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { uuidv4 } from '@/lib/uuid';
+import { liveLists, settledIds } from '@/lib/list-sweep';
+import { useLocalDay } from '@/lib/use-local-day';
 import { useAuth } from '@/store/auth';
 import { useHousehold } from '@/store/household';
 
@@ -49,6 +51,13 @@ export interface Item {
   /** Supermarket id (see lib/supermarkets) or a custom store name; optional. */
   store: string | null;
   checked: boolean;
+  /**
+   * When it was ticked, or null when it is not. Drives the sweep that lets a
+   * finished shop leave the list — see lib/list-sweep.ts, which owns the rule.
+   * Always written in the same breath as `checked`; the two disagreeing is the
+   * one state that must never exist.
+   */
+  checkedAt: number | null;
   /**
    * The member who said "I'm getting this" — a hint to stop two people buying
    * the same thing, not a lock. Null on local lists, which have no one to
@@ -170,6 +179,7 @@ const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {})
   priceCents: null,
   store: null,
   checked: false,
+  checkedAt: null,
   // Local lists have nobody to coordinate with, so nothing is ever claimed.
   claimedBy: null,
   claimedAt: null,
@@ -299,7 +309,12 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
-          ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, checked } : it)) }
+          ? {
+              ...l,
+              items: l.items.map((it) =>
+                it.id === itemId ? { ...it, checked, checkedAt: checked ? Date.now() : null } : it,
+              ),
+            }
           : l,
       ),
     );
@@ -361,9 +376,28 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
     [resolveIfUnknown],
   );
 
+  /*
+   * Yesterday's shop leaves the list.
+   *
+   * Applied here rather than in each screen because "the list" is read in
+   * something like thirty places — the dashboard's counts, the eco strip, the
+   * vibe deck's exclusions, the settings tally — and a rule enforced at the
+   * call sites is a rule that holds until somebody adds a thirty-first. The
+   * store hands out a list that is already correct.
+   *
+   * Local lists ARE the storage, so the same effect does the sweeping: dropping
+   * the settled rows from state is the deletion. Cloud has to reach a server
+   * for it, which is why that backend does the two separately.
+   */
+  const day = useLocalDay();
+  useEffect(() => {
+    setLists((prev) => liveLists(prev, day));
+  }, [day]);
+  const visibleLists = useMemo(() => liveLists(lists, day), [lists, day]);
+
   const value = useMemo<GroceriesContext>(
     () => ({
-      lists,
+      lists: visibleLists,
       addList: (name) => {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
@@ -425,7 +459,14 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
-              ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, checked: !it.checked } : it)) }
+              ? {
+                  ...l,
+                  items: l.items.map((it) =>
+                    it.id === itemId
+                      ? { ...it, checked: !it.checked, checkedAt: it.checked ? null : Date.now() }
+                      : it,
+                  ),
+                }
               : l,
           ),
         ),
@@ -466,6 +507,7 @@ interface DbItem {
   price_cents: number | null;
   store: string | null;
   checked: boolean;
+  checked_at: string | null;
   created_at: string;
   claimed_by: string | null;
   claimed_at: string | null;
@@ -488,6 +530,7 @@ const mapItem = (r: DbItem): Item => ({
   priceCents: r.price_cents,
   store: r.store,
   checked: r.checked,
+  checkedAt: r.checked_at ? Date.parse(r.checked_at) : null,
   bio: r.bio ?? false,
   claimedBy: r.claimed_by,
   claimedAt: r.claimed_at ? Date.parse(r.claimed_at) : null,
@@ -595,6 +638,7 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
         bio: it.bio,
         store: it.store,
         checked: it.checked,
+        checked_at: it.checkedAt ? new Date(it.checkedAt).toISOString() : null,
         position: i,
         added_by: userId,
       })),
@@ -810,11 +854,37 @@ function CloudGroceriesProvider({
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
-          ? { ...l, items: l.items.map((it) => (it.id === itemId ? { ...it, checked } : it)) }
+          ? {
+              ...l,
+              items: l.items.map((it) =>
+                it.id === itemId ? { ...it, checked, checkedAt: checked ? Date.now() : null } : it,
+              ),
+            }
           : l,
       ),
     );
   }, []);
+
+  /*
+   * Yesterday's shop leaves the list — the cloud half. See the local backend
+   * above for why this is the store's job rather than each screen's.
+   *
+   * Two steps here where local needed one, because the rows live on a server:
+   * `visibleLists` makes the UI correct immediately and offline, and the effect
+   * removes the rows for good. If the delete fails there is nothing to retry —
+   * the filter already hid them, and the next launch tries again.
+   *
+   * Deliberately not gated on "am I the one who ticked it": any member sweeping
+   * is the right outcome, and the delete is idempotent, so two phones doing it
+   * at the same moment is a no-op rather than a conflict.
+   */
+  const day = useLocalDay();
+  const visibleLists = useMemo(() => liveLists(lists, day), [lists, day]);
+  useEffect(() => {
+    const doomed = lists.flatMap((l) => settledIds(l.items, day));
+    if (doomed.length === 0) return;
+    void supabase.from('list_items').delete().in('id', doomed);
+  }, [lists, day]);
 
   const value = useMemo<GroceriesContext>(() => {
     const dbPatch = (patch: ItemPatch): Record<string, unknown> => {
@@ -874,7 +944,7 @@ function CloudGroceriesProvider({
     };
 
     return {
-      lists,
+      lists: visibleLists,
       addList: (name) => {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
@@ -959,7 +1029,7 @@ function CloudGroceriesProvider({
           setCheckedLocal(listId, existing.id, false);
           supabase
             .from('list_items')
-            .update({ checked: false })
+            .update({ checked: false, checked_at: null })
             .eq('id', existing.id)
             .then(({ error }) => {
               recoverFrom(error);
@@ -975,10 +1045,14 @@ function CloudGroceriesProvider({
           .find((l) => l.id === listId)
           ?.items.find((it) => it.id === itemId);
         const next = !(current?.checked ?? false);
-        patchLocalItem(listId, itemId, { checked: next } as ItemPatch);
+        // Both columns in one UPDATE. A row whose `checked` and `checked_at`
+        // disagree either never settles or settles while still on the list, so
+        // they are never written apart — see lib/list-sweep.ts.
+        const at = next ? new Date().toISOString() : null;
+        setCheckedLocal(listId, itemId, next);
         supabase
           .from('list_items')
-          .update({ checked: next })
+          .update({ checked: next, checked_at: at })
           .eq('id', itemId)
           .then(({ error }) => {
             recoverFrom(error);
