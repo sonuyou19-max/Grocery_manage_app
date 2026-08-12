@@ -713,8 +713,25 @@ function CloudGroceriesProvider({
   const fetchLists = useCallback(async () => {
     const { data, error } = await supabase
       .from('shopping_lists')
+      /*
+       * Every column mapItem reads has to be named here.
+       *
+       * This is a string, and the result is cast `as unknown as DbList[]`, so
+       * nothing checks the two against each other — adding a field to DbItem
+       * and to mapItem and forgetting this line typechecks perfectly and
+       * returns `undefined` for that column at runtime.
+       *
+       * `checked_at` was missed exactly that way, and the consequence was not
+       * a missing detail: mapItem turned the undefined into `checkedAt: null`,
+       * and lib/list-sweep reads a ticked row with no stamp as SETTLED — the
+       * rule that clears the pre-0029 backlog. So every item vanished from its
+       * list a second after being ticked, on the first realtime refetch, while
+       * the optimistic local row had looked correct right up until then.
+       *
+       * check-list-sweep now compares this string against mapItem.
+       */
       .select(
-        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, created_at, claimed_by, claimed_at, bio)',
+        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, checked_at, created_at, claimed_by, claimed_at, bio)',
       )
       .eq('household_id', householdId)
       .eq('archived', false)

@@ -104,6 +104,25 @@ check('liveItems drops only the settled', mod.liveItems(mixed, NOON).map((i) => 
 check('settledIds names only the settled', mod.settledIds(mixed, NOON).join(','), 'a');
 
 /*
+ * Hiding and DELETING are separate decisions, and settledIds is the delete list.
+ *
+ * A ticked row with no stamp is hidden (isSettled true, so the pre-0029 backlog
+ * clears from the display) but must never be deleted: since migration 0030 the
+ * database cannot hold that state, so seeing it means the CLIENT failed to read
+ * the column — which is precisely what happened when checked_at was missing
+ * from the select. Every ticked row looked settled and the sweep destroyed 15
+ * of them on the server in one afternoon.
+ */
+const stampless = [{ id: 'nostamp', checked: true, checkedAt: null }];
+check('a stamp-less ticked row is HIDDEN', mod.isSettled(stampless[0], NOON), true);
+check('...but is never DELETED', mod.settledIds(stampless, NOON).length, 0);
+check(
+  'a properly stamped old row is still deleted',
+  mod.settledIds([{ id: 'old', checked: true, checkedAt: local(2026, 8, 10, 12) }], NOON).join(','),
+  'old',
+);
+
+/*
  * Identity preservation is not a micro-optimisation here — this sits between
  * the store's state and its context value, so a fresh array every render would
  * invalidate every memo in every screen that reads a list, once per render,
@@ -277,6 +296,63 @@ if (!/check\s*\(\s*checked\s*=\s*\(\s*checked_at is not null\s*\)\s*\)/i.test(co
   ]);
 } else {
   console.log('ok   a migration still declares the invariant to Postgres');
+}
+
+/* ========= the fetch must actually SELECT what the mapper reads ========== */
+
+/*
+ * The single worst bug in this feature, and it typechecked.
+ *
+ * The list fetch names its columns in a string and the result is cast
+ * `as unknown as DbList[]`, so TypeScript compares nothing. `checked_at` was
+ * added to DbItem and to mapItem and left out of the select — which does not
+ * error, it just yields `undefined`, which mapItem turns into
+ * `checkedAt: null`, which isSettled reads as "ticked before 0029 existed",
+ * which sweeps the row on sight.
+ *
+ * The symptom was an item vanishing from its list about a second after being
+ * ticked: the optimistic row was right, and the first realtime refetch replaced
+ * it with a row the sweep then deleted. A whole feature silently inverted by
+ * one absent column name.
+ *
+ * So: every snake_case column mapItem reads must appear in the select string.
+ * Derived from the mapper rather than listed here, so a NEW column is covered
+ * the day it is added and this check never becomes a second thing to remember.
+ */
+if (!groceries) {
+  // Already reported by the scan assertion above.
+} else {
+  const selectStr = groceries.src.match(/\.select\(\s*'([^']*list_items\([^)]*\)[^']*)'/)?.[1];
+  const mapItemBody = groceries.src.match(/const mapItem[^=]*=\s*\(r:[^)]*\)[^=]*=>\s*\(\{([\s\S]*?)\n\}\)/)?.[1];
+
+  if (!selectStr) {
+    fail('could not find the list_items select string in groceries.tsx', [
+      'This check reads it to compare against mapItem. If the query moved,',
+      'move this with it — do not delete it, the bug it catches typechecks.',
+    ]);
+  } else if (!mapItemBody) {
+    fail('could not find mapItem in groceries.tsx', [
+      'Same: the check derives the required columns from the mapper so a new',
+      'field is covered automatically.',
+    ]);
+  } else {
+    // Every `r.some_column` the mapper dereferences.
+    const read = [...new Set([...mapItemBody.matchAll(/\br\.([a-z_]+)\b/g)].map((m) => m[1]))];
+    const missing = read.filter((col) => !new RegExp(`\\b${col}\\b`).test(selectStr));
+    if (missing.length) {
+      fail(`the list fetch does not select ${missing.join(', ')}`, [
+        `  select : ${selectStr.slice(0, 100)}...`,
+        `  mapItem reads: ${read.join(', ')}`,
+        '',
+        'A column the mapper reads but the query omits comes back undefined,',
+        'and nothing warns you — the response is cast, so TypeScript compares',
+        'the string to the interface not at all. For checked_at the result was',
+        'every ticked item being swept off its list a second later.',
+      ]);
+    } else {
+      console.log(`ok   the list fetch selects all ${read.length} columns mapItem reads`);
+    }
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

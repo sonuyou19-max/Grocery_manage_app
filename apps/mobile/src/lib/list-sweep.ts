@@ -77,12 +77,35 @@ export function liveItems<T extends Settleable>(items: T[], now: number): T[] {
   return items.some((it) => isSettled(it, now)) ? items.filter((it) => !isSettled(it, now)) : items;
 }
 
-/** Ids of rows the sweep should actually delete. */
+/**
+ * Ids of rows the sweep may actually DELETE — deliberately stricter than
+ * `isSettled`, and this gap is load-bearing.
+ *
+ * Hiding a row and destroying it are not the same decision and must not share a
+ * predicate. `isSettled` returns true for a ticked row with NO stamp, because
+ * that is how the pre-0029 backlog gets cleared from the display. But since
+ * migration 0030 the database guarantees `checked = (checked_at is not null)`,
+ * so a ticked row arriving here without a stamp cannot be real data — it can
+ * only mean the client failed to READ the column.
+ *
+ * Which is exactly what happened. `checked_at` was missing from the list
+ * fetch's select string, every ticked row came back with `checkedAt: null`,
+ * every one of them looked settled, and the sweep deleted them from the server
+ * a second after they were ticked. Fifteen rows in one afternoon, permanently,
+ * while the purchases they logged survived — so the damage was invisible in
+ * Insights and total on the list.
+ *
+ * So: no stamp, no delete. A row we cannot date stays on the server. The worst
+ * case becomes a row that lingers where the user can see and remove it, which
+ * is recoverable, instead of one that is gone, which is not.
+ */
 export function settledIds<T extends Settleable & { id: string }>(
   items: T[],
   now: number,
 ): string[] {
-  return items.filter((it) => isSettled(it, now)).map((it) => it.id);
+  return items
+    .filter((it) => it.checkedAt != null && isSettled(it, now))
+    .map((it) => it.id);
 }
 
 /** Lists with their settled items removed. Preserves the identity of every list
