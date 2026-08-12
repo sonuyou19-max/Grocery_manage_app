@@ -1,5 +1,14 @@
+import { useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Sheet } from "@/components/sheet";
@@ -40,6 +49,55 @@ export function PurchaseLedger({
   const { colors, scheme } = useTheme();
   const { t, money } = useLocale();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+
+  /*
+   * Why the scroll cap is a MEASURED number, not a percentage on the card.
+   *
+   * The card used to carry `maxHeight: '80%'` and rely on that squeezing the
+   * ScrollView beneath it through Sheet's own wrapping — a Pressable, inside an
+   * Animated.View, inside another Pressable, inside the backdrop. None of those
+   * intermediate nodes have a height of their own; each is sized from its
+   * content, which is exactly the condition under which a percentage height has
+   * to be resolved through several layers of "ask my content how tall I am"
+   * before Yoga can answer "what's 80% of that".
+   *
+   * With a long history the content is taller than 80% of the screen, which
+   * forces a real, unambiguous number early in that resolution and everything
+   * beneath — including the ScrollView — inherits a concrete constraint. With
+   * one or two rows the card never approaches the cap, so nothing forces that
+   * resolution, and the ScrollView could end up laid out against a stale or
+   * degenerate constraint from the layout pass instead of its own content
+   * height — the header showing and everything below it clipped, which is
+   * exactly what a short history did.
+   *
+   * Every other capped ScrollView in this app avoids the question entirely by
+   * putting a real number directly on the ScrollView itself — see
+   * staples-sheet's `maxHeight: 380` and recipe-review-sheet's `maxHeight:
+   * 320`. This does the same thing, computed from the window rather than
+   * hard-coded, because "80% of the screen" was the actual intent.
+   *
+   * The header's height is subtracted so the cap describes the SCROLL AREA,
+   * not the whole card — capping the card at 80% would leave less room for
+   * rows than the design intended once the header is added on top. It is
+   * measured via onLayout rather than guessed, because the header's real
+   * height depends on the item's name wrapping, the locale's word lengths, and
+   * font scaling, none of which a constant could account for. The estimate
+   * below is only what paints on the very first frame, before onLayout has
+   * fired once; it does not need to be exact, because the sheet is still
+   * fading and scaling in for another 220ms after mount, and any correction
+   * lands inside that window rather than after it.
+   */
+  const [headerHeight, setHeaderHeight] = useState(72);
+  const onHeaderLayout = (e: LayoutChangeEvent) => {
+    setHeaderHeight(e.nativeEvent.layout.height);
+  };
+  // The safety net around the whole card, same reasoning as scrollCap below:
+  // a real number the outer GlassView can size against on its own, rather
+  // than a '80%' string it can only resolve by asking its content — which is
+  // the ScrollView several layers down — how tall it wants to be first.
+  const cardCap = Math.round(windowHeight * 0.8);
+  const scrollCap = Math.max(120, cardCap - headerHeight);
 
   if (!name) return null;
   const rows = historyFor(purchases, name);
@@ -62,8 +120,12 @@ export function PurchaseLedger({
       gutter={spacing.md}
       bottomClearance={spacing.md + insets.bottom}
     >
-      <GlassView over="content" radius={radii.lg} style={styles.sheet}>
-        <View style={styles.head}>
+      <GlassView
+        over="content"
+        radius={radii.lg}
+        style={[styles.sheet, { maxHeight: cardCap }]}
+      >
+        <View style={styles.head} onLayout={onHeaderLayout}>
           <ItemEmoji name={name} category={category} size={22} />
           <View style={styles.grow}>
             <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
@@ -86,10 +148,14 @@ export function PurchaseLedger({
           showsVerticalScrollIndicator
           indicatorStyle={scheme === "dark" ? "white" : "black"}
           contentContainerStyle={styles.list}
-          // The sheet is only as tall as its rows (up to the cap), so a
-          // short history must not leave the ScrollView stretched over
-          // empty space with the rows stranded at the top.
-          style={styles.scroll}
+          // A measured number, not a percentage inherited through Sheet's
+          // Animated.View — see the comment above scrollCap for why the
+          // percentage version broke for exactly one or two rows. The sheet
+          // is only as tall as its rows up to this cap: flexShrink lets the
+          // ScrollView size down TO its content, never up past it, so a
+          // short history does not leave empty space with the rows stranded
+          // at the top.
+          style={[styles.scroll, { maxHeight: scrollCap }]}
           bounces={false}
         >
           {rows.map((p, i) => (
@@ -144,13 +210,12 @@ export function PurchaseLedger({
 }
 
 const styles = StyleSheet.create({
-  // Capped so a long history scrolls instead of covering the whole screen;
-  // shorter than the cap it shrinks to fit, because flexShrink on the scroll
-  // view lets the sheet size to its content.
-  // maxHeight now RESOLVES: components/sheet gives the wrapper a definite
-  // bound, which it did not have before, so this was silently doing nothing.
-  // flexShrink lets the cap actually bite instead of the card overflowing.
-  sheet: { maxHeight: "80%", flexShrink: 1 },
+  // The numeric maxHeight is applied inline (cardCap, from useWindowDimensions)
+  // — a StyleSheet entry can't hold a value computed at render time. flexShrink
+  // stays here as the static half of that pairing, and is what lets the cap
+  // actually squeeze the card instead of the card overflowing it.
+  sheet: { flexShrink: 1 },
+  // Ditto: scrollCap is applied inline, alongside these two statics.
   scroll: { flexGrow: 0, flexShrink: 1 },
   head: {
     flexDirection: "row",

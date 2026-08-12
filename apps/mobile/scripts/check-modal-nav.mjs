@@ -349,5 +349,47 @@ if (!/sheet:\s*\{[^}]*flexShrink:\s*1/.test(ledger)) {
   console.log('ok   the ledger shrinks and shows that it scrolls');
 }
 
+/*
+ * The ledger used to cap itself with `maxHeight: '80%'` on the outer card,
+ * relying on that percentage resolving through Sheet's Pressable / Animated.View
+ * / Pressable chain to eventually squeeze the ScrollView several levels down.
+ * That resolution needs something in the chain to be forced to a concrete size
+ * before Yoga can answer "80% of what", and a long history supplies that
+ * (content alone exceeds the cap) while one or two rows do not — which is
+ * exactly why "many purchases scrolls correctly, one or two cuts off the row"
+ * was the reported symptom rather than a uniform failure.
+ *
+ * The fix is a measured NUMBER (useWindowDimensions × 0.8, minus the header's
+ * real height from onLayout) applied directly to the card and the ScrollView,
+ * matching the pattern every other capped sheet in this app already uses —
+ * see staples-sheet's `maxHeight: 380` and recipe-review-sheet's `maxHeight:
+ * 320`. Both checks below fail if the file drifts back toward the percentage
+ * version, in either half: the computation itself, or its use in the JSX.
+ */
+if (/maxHeight:\s*["']\d+%["']/.test(ledger)) {
+  fail('the purchase ledger has a percentage maxHeight again', [
+    'That is the exact shape of the regression: it resolves through several',
+    "content-sized ancestors and is unreliable for short lists. Use a number",
+    'computed from useWindowDimensions instead — see cardCap / scrollCap.',
+  ]);
+} else if (!/=\s*useWindowDimensions\(\)/.test(ledger)) {
+  // The identifier alone is not enough — it still matches the import line
+  // after the CALL is deleted, which is exactly the shape a "clean up an
+  // unused-looking hook" edit takes. Require the call, not just the name.
+  fail('the purchase ledger no longer measures the window', [
+    'cardCap and scrollCap both derive from useWindowDimensions. Without it',
+    'there is no numeric replacement for the percentage this component used',
+    'to rely on, and nothing bounds the card at all.',
+  ]);
+} else if (!/maxHeight:\s*cardCap/.test(ledger) || !/maxHeight:\s*scrollCap/.test(ledger)) {
+  fail('the computed caps are no longer wired to the card and the scroll area', [
+    'cardCap must reach the GlassView and scrollCap must reach the ScrollView.',
+    'A cap that is computed but not applied is silent — nothing fails, the',
+    'sheet just goes back to being unbounded.',
+  ]);
+} else {
+  console.log('ok   the ledger caps itself with a measured number, not a percentage');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
