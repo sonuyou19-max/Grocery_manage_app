@@ -166,6 +166,35 @@ const storeSrc = walk(SRC_DIR)
   .map((f) => ({ name: basename(f), src: strip(readFileSync(f, 'utf8')) }));
 
 /*
+ * Prove the scan found something before trusting anything it says.
+ *
+ * Every check below iterates `storeSrc` looking for violations, which means an
+ * EMPTY storeSrc reports "ok" for all of them — a clean pass that inspected
+ * nothing. That is not hypothetical: when the filename lookup was broken on
+ * Windows, the two pairing checks printed ok while only the one that asks for a
+ * file BY NAME failed. The suite said one thing was wrong when three were
+ * unverified.
+ *
+ * So the scan asserts its own inputs first, and names what it did find — which
+ * turns "missing" on a machine I cannot reproduce into a one-line answer
+ * instead of another round trip.
+ */
+const EXPECTED_STORES = ['groceries.tsx', 'pantry-intel.tsx'];
+const found = storeSrc.map((f) => f.name);
+const absent = EXPECTED_STORES.filter((n) => !found.includes(n));
+const scanOk = absent.length === 0;
+if (!scanOk) {
+  fail(`the store scan did not find ${absent.join(', ')}`, [
+    `  it found: ${found.length ? found.join(', ') : '(nothing)'}`,
+    '',
+    'Every check below looks for violations in this set, so an empty or wrong',
+    'set makes them all pass while inspecting nothing. If the names above look',
+    'like full paths, a path was cut on a literal "/" somewhere — see',
+    'check-scripts-portable.',
+  ]);
+}
+
+/*
  * Object literals passed to a supabase write. If one names either column it
  * must name both — `{ checked: next }` alone is the exact shape that produced
  * the state 0030 forbids.
@@ -185,7 +214,9 @@ for (const f of storeSrc) {
     }
   }
 }
-if (lone.length) {
+if (!scanOk) {
+  console.log('--   skipped: the write pairing checks need the store files above');
+} else if (lone.length) {
   fail('a supabase write sets one of checked / checked_at without the other', [
     ...lone.map((l) => `  ${l}`),
     'Migration 0030 rejects the resulting row, so this write fails on device.',
@@ -205,7 +236,9 @@ for (const f of storeSrc) {
     }
   }
 }
-if (loneLocal.length) {
+if (!scanOk) {
+  // Already reported above; saying "ok" here would be a claim about nothing.
+} else if (loneLocal.length) {
   fail('a local-state update sets one of checked / checkedAt without the other', [
     ...loneLocal.map((l) => `  ${l}`),
     'Signed out there is no database to catch this, and isSettled reads a',
@@ -223,7 +256,7 @@ if (loneLocal.length) {
  */
 const groceries = storeSrc.find((f) => f.name === 'groceries.tsx');
 if (!groceries) {
-  fail('store/groceries.tsx is missing');
+  // Already reported, with the diagnostics, by the scan assertion above.
 } else if (!/liveLists\(\s*local\s*,/.test(groceries.src)) {
   fail('the sign-in transfer no longer sweeps before uploading', [
     'migrateLocalLists must map from liveLists(local, …), not from `local`.',
