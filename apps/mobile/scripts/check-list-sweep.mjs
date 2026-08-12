@@ -15,7 +15,7 @@
  * Run with `pnpm --filter mobile check:list-sweep`.
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
@@ -157,7 +157,13 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm,
 
 const storeSrc = walk(SRC_DIR)
   .filter((f) => f.includes('store'))
-  .map((f) => ({ name: f.split('/').pop(), src: strip(readFileSync(f, 'utf8')) }));
+  /*
+   * basename, not split('/'). `join` emits backslashes on Windows, so splitting
+   * on a literal '/' returns the whole path and every filename lookup below
+   * misses — the check then reports groceries.tsx as MISSING on Windows and
+   * passes everywhere I can test. Which is exactly what happened.
+   */
+  .map((f) => ({ name: basename(f), src: strip(readFileSync(f, 'utf8')) }));
 
 /*
  * Object literals passed to a supabase write. If one names either column it
