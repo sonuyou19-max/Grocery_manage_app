@@ -1,6 +1,7 @@
 import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
+import { MESH_DITHER_URI } from '@/lib/mesh-dither';
 import { useTheme } from '@/theme';
 
 /**
@@ -166,14 +167,21 @@ export function MeshBackground({ dim = false }: { dim?: boolean }) {
         * every ~9dp no matter how continuous the maths was. One step of white
         * noise breaks each arc into an interleaving of the two values either
         * side of it, and the eye reads the mix as the ramp it was supposed to
-        * be. See scripts/gen-mesh-dither.mjs for the arithmetic — including why
-        * the same tile is, correctly, worth almost nothing in light mode.
+        * be. See lib/mesh-dither for the arithmetic — including why the same
+        * tile is, correctly, worth almost nothing in light mode.
+        *
+        * A data: URI, NOT a required .png. As a bundled asset this lands in
+        * res/drawable-mdpi and Android density-scales it ~2.75x with bilinear
+        * filtering before the view sees it, which turns per-pixel noise into a
+        * smooth ripple and cancels the whole effect — the widest band measured
+        * exactly as wide as with no dither at all. A data: URI skips the
+        * resource system, so the tile lands 1:1 on device pixels everywhere.
         *
         * `fadeDuration` off: Android cross-fades images in over 300ms by
         * default, and the background must not announce itself on every mount.
         */}
       <Image
-        source={require('../../assets/images/mesh-dither.png')}
+        source={{ uri: MESH_DITHER_URI }}
         style={StyleSheet.absoluteFill}
         resizeMode="repeat"
         fadeDuration={0}

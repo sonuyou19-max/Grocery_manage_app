@@ -199,13 +199,32 @@ if (!mesh) {
  */
 if (mesh) {
   const meshFails = [];
-  if (!/mesh-dither\.png/.test(mesh.src)) {
-    meshFails.push('the noise tile is gone (assets/images/mesh-dither.png)');
+  if (!/MESH_DITHER_URI/.test(mesh.src)) {
+    meshFails.push('the noise tile is gone (lib/mesh-dither)');
   } else if (!/resizeMode=["']repeat["']/.test(mesh.src)) {
     meshFails.push('the noise tile no longer repeats — scaled up it is blobs, not dither');
   }
-  if (!existsSync(join(SRC, '..', 'assets', 'images', 'mesh-dither.png'))) {
-    meshFails.push('assets/images/mesh-dither.png is missing (pnpm gen:mesh-dither)');
+  /*
+   * The tile must stay a data: URI, and this is the check that matters most,
+   * because reverting it looks like a tidy-up. A required .png is scale 1, so
+   * RN files it into res/drawable-mdpi and Android density-scales it ~2.75x
+   * with bilinear filtering before the view ever sees it. Bilinear-upscaling
+   * one-pixel noise is precisely the operation that destroys it: measured on
+   * this app's own ramp, the widest flat band is 14px with no dither and STILL
+   * 14px with the upscaled dither, against 7px at 1:1. It renders, it costs
+   * bundle size, and it does nothing — which is the hardest kind of broken to
+   * notice, since it looks identical to not having shipped the fix.
+   */
+  if (/require\([^)]*mesh-dither/.test(mesh.src)) {
+    meshFails.push('the tile is a bundled asset again — drawable-mdpi upscaling voids it');
+  }
+  if (!existsSync(join(SRC, 'lib', 'mesh-dither.ts'))) {
+    meshFails.push('src/lib/mesh-dither.ts is missing (pnpm gen:mesh-dither)');
+  } else {
+    const tile = readFileSync(join(SRC, 'lib', 'mesh-dither.ts'), 'utf8');
+    if (!/data:image\/png;base64,/.test(tile)) {
+      meshFails.push('lib/mesh-dither no longer holds an inline data: URI');
+    }
   }
   // A hand-written stop list is the shape of the bug: a gaussian is generated.
   const stops = (mesh.src.match(/<Stop\b/g) ?? []).length;
