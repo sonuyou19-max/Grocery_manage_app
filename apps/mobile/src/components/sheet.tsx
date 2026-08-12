@@ -186,10 +186,20 @@ export function Sheet({
       onPress={onClose}
     >
       {/* Stops a tap on the card itself from closing it. Wraps the card and
-          nothing else — anything with layout in here eats the backdrop's taps. */}
-      <Pressable onPress={() => {}}>
+          nothing else — anything that ADDS layout in here (padding, margin,
+          a minimum size) eats the backdrop's taps, which is what once left a
+          close button dead for a whole release.
+
+          What it does carry is the opposite of that: constraints that can only
+          ever make it smaller. Without them this Pressable is the break in the
+          chain — a flex item at RN's default `flexShrink: 0`, with no definite
+          height for a child's `maxHeight: '80%'` to resolve against. So a sheet
+          whose content outgrows the screen cannot shrink and its ScrollView
+          never becomes scrollable; it just runs off the edge. */}
+      <Pressable onPress={() => {}} style={styles.cardWrap}>
         <Animated.View
           style={[
+            styles.card,
             align === "center" ? styles.originCenter : styles.originEnd,
             cardStyle,
             cardAnim,
@@ -228,6 +238,17 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1 },
   scrim: { backgroundColor: "rgba(12,18,10,0.45)" },
   end: { justifyContent: "flex-end" },
+  /*
+   * `stretch` is what the wrapper already did implicitly (the backdrop's
+   * alignItems defaults to stretch), stated so the rest is obviously additive.
+   * `maxHeight: 100%` gives the chain a definite bound to resolve percentages
+   * against, and `flexShrink: 1` lets that bound actually squeeze the card
+   * rather than being ignored. Neither can enlarge the touch area.
+   */
+  cardWrap: { alignSelf: "stretch", maxHeight: "100%", flexShrink: 1 },
+  // Same reason, one level down: the constraint has to reach the card's own
+  // content or the ScrollView inside it never learns it has a ceiling.
+  card: { flexShrink: 1 },
   center: { justifyContent: "center" },
   // Scaling out of the bottom edge, which is where the sheet came from.
   originEnd: { transformOrigin: "center bottom" },

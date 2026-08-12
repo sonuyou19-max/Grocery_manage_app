@@ -279,5 +279,75 @@ if (!reviewSheet || !/onDismissed(Ref\.current)?\?\.\(\)/.test(code(reviewSheet)
   console.log('ok   recipe-review-sheet.tsx reports its own close');
 }
 
+/* ================== a sheet can always shrink to fit the screen ============ */
+
+/*
+ * The card's tap-blocking wrapper carries three constraints — alignSelf,
+ * maxHeight and flexShrink — and they are the only reason a tall sheet caps and
+ * scrolls instead of running off the bottom of the screen.
+ *
+ * They are unusually easy to delete, because the comment right above them warns
+ * the next reader NOT to put layout in that Pressable. That warning is about
+ * things which ENLARGE it (padding, margin, a minimum size) and would swallow
+ * backdrop taps; these three can only make it smaller. Nothing in the code says
+ * which is which, so this does.
+ *
+ * The symptom if they go is not a crash. It is the purchase history opening
+ * with its last row sliced in half by the screen edge, which reads as a
+ * rendering glitch rather than a missing style.
+ */
+const sheetSrc = readFileSync(join(SRC, 'components', 'sheet.tsx'), 'utf8');
+const sheetCode = sheetSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+const wrapperStyled = /<Pressable onPress=\{\(\) => \{\}\} style=\{styles\.(\w+)\}/.exec(sheetCode);
+if (!wrapperStyled) {
+  fail("the sheet's card wrapper has no style", [
+    'Without one it is a flex item at flexShrink: 0 with an indefinite height,',
+    'so a card taller than the screen cannot shrink and a percentage maxHeight',
+    'inside it resolves against nothing. Tall sheets then overflow the screen',
+    'instead of scrolling. See components/sheet.tsx.',
+  ]);
+} else {
+  const name = wrapperStyled[1];
+  const decl = new RegExp(`${name}:\\s*\\{([^}]*)\\}`).exec(sheetCode);
+  const body = decl?.[1] ?? '';
+  const missing = [];
+  if (!/maxHeight:\s*["']100%["']/.test(body)) missing.push('maxHeight: "100%"');
+  if (!/flexShrink:\s*1/.test(body)) missing.push('flexShrink: 1');
+  if (missing.length) {
+    fail(`the sheet's card wrapper lost ${missing.join(' and ')}`, [
+      'Both are load-bearing. maxHeight gives percentages inside the card a',
+      'definite bound; flexShrink lets that bound actually squeeze it. Removing',
+      'either makes a long sheet run off the bottom of the screen rather than',
+      'scroll — silently, and only for users with enough data to notice.',
+    ]);
+  } else {
+    console.log('ok   the sheet card can shrink and is bounded by the screen');
+  }
+}
+
+/*
+ * A sheet whose body is a scrolling list has to be able to shrink too, or the
+ * bound above stops at the card and the list inside keeps its full content
+ * height. Checked on the ledger specifically because it is the one with an
+ * unbounded number of rows.
+ */
+const ledger = readFileSync(join(SRC, 'components', 'purchase-ledger.tsx'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+if (!/sheet:\s*\{[^}]*flexShrink:\s*1/.test(ledger)) {
+  fail('the purchase ledger card can no longer shrink', [
+    'Its maxHeight caps the card, but without flexShrink the cap is ignored',
+    'when the rows exceed it and the list overflows the sheet.',
+  ]);
+} else if (/showsVerticalScrollIndicator=\{false\}/.test(ledger)) {
+  fail('the purchase ledger hides its scroll indicator', [
+    'It is the only thing on screen telling the user the history continues',
+    'below the fold. Hiding it is what made a clipped list look like a bug.',
+  ]);
+} else {
+  console.log('ok   the ledger shrinks and shows that it scrolls');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

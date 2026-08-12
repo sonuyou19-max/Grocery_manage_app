@@ -37,7 +37,7 @@ export function PurchaseLedger({
   purchases: Purchase[];
   onClose: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const { t, money } = useLocale();
   const insets = useSafeAreaInsets();
 
@@ -79,7 +79,12 @@ export function PurchaseLedger({
         </View>
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          /* Shown, not hidden. A year of shopping is a long list and this is
+             the only thing on screen that says it continues below the fold —
+             which is exactly what "something is hidden down there" looked
+             like when there was no indicator and no room to scroll either. */
+          showsVerticalScrollIndicator
+          indicatorStyle={scheme === "dark" ? "white" : "black"}
           contentContainerStyle={styles.list}
           // The sheet is only as tall as its rows (up to the cap), so a
           // short history must not leave the ScrollView stretched over
@@ -142,7 +147,10 @@ const styles = StyleSheet.create({
   // Capped so a long history scrolls instead of covering the whole screen;
   // shorter than the cap it shrinks to fit, because flexShrink on the scroll
   // view lets the sheet size to its content.
-  sheet: { maxHeight: "80%" },
+  // maxHeight now RESOLVES: components/sheet gives the wrapper a definite
+  // bound, which it did not have before, so this was silently doing nothing.
+  // flexShrink lets the cap actually bite instead of the card overflowing.
+  sheet: { maxHeight: "80%", flexShrink: 1 },
   scroll: { flexGrow: 0, flexShrink: 1 },
   head: {
     flexDirection: "row",
