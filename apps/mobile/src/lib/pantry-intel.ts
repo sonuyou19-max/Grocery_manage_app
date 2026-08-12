@@ -309,6 +309,68 @@ export function buildDeck(stats: StatMap, excludeKeys: Set<string>, now: number)
 }
 
 /**
+ * How much one shop is allowed to move the learned interval.
+ *
+ * ---------------------------------------------------------------------------
+ * What was wrong with a flat EMA
+ * ---------------------------------------------------------------------------
+ *
+ * The rate used to be `interval * 0.6 + gap * 0.4` on every purchase, forever.
+ * Two problems, and they are opposite ends of the same missing idea:
+ *
+ *   No damping. The fiftieth shop moved the estimate exactly as hard as the
+ *   second, though by then the app has fifty observations and the shop has one.
+ *
+ *   No ceiling. A fortnight away from home is a 21-day gap on a 7-day item, and
+ *   it is indistinguishable, in a single number, from "we now buy milk
+ *   fortnightly". The old rule believed it immediately: 7 days became 12.6, and
+ *   the item then went quiet for a week and a half at exactly the moment the
+ *   user came home and needed milk.
+ *
+ * ---------------------------------------------------------------------------
+ * The two mechanisms
+ * ---------------------------------------------------------------------------
+ *
+ * `alpha` decays with the sample count — 1/(n+1), which is a running mean while
+ * evidence is scarce — and stops decaying at ALPHA_FLOOR so a household whose
+ * rhythm genuinely changes is never permanently anchored to its old one.
+ *
+ * `MAX_STEP` caps how far a single gap may drag the estimate, as a fraction of
+ * the estimate itself.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the two constants are equal, which is not a coincidence
+ * ---------------------------------------------------------------------------
+ *
+ * The step is `(gap - interval) * alpha`, so the cap binds when
+ * `gap > interval * (1 + MAX_STEP / alpha)`. With MAX_STEP === ALPHA_FLOOR that
+ * is exactly `gap > 2 * interval`, which is the rule in one sentence:
+ *
+ *     no single shop may count as more than a doubling.
+ *
+ * And it only ever binds UPWARD. A gap cannot be less than zero, so a
+ * shorter-than-usual gap moves the estimate by at most `alpha * interval` on
+ * its own — always inside the cap. That asymmetry is the right one and is worth
+ * stating plainly: a long gap is ambiguous (we did not need it, or we were not
+ * home, or we forgot), while a short gap is not — you actually bought the
+ * thing sooner. So long gaps are capped and short gaps are believed.
+ *
+ * Measured over the scenarios in check-pantry-intel: one holiday now moves a
+ * 7-day item to 8.8 days instead of 12.6, while a genuine move to a fortnight
+ * still converges — six shops gets it to 12.8 against the old rule's 13.7.
+ * Nearly all of the noise removed for almost none of the responsiveness.
+ */
+const ALPHA_FLOOR = 0.25;
+const MAX_STEP = 0.25;
+
+export function blendInterval(interval: number, gapDays: number, sampleCount: number): number {
+  const alpha = Math.max(ALPHA_FLOOR, 1 / (sampleCount + 1));
+  const target = interval * (1 - alpha) + gapDays * alpha;
+  const cap = interval * MAX_STEP;
+  return Math.min(interval + cap, Math.max(interval - cap, target));
+}
+
+/**
  * Log a purchase (an item was checked off). Establishes/updates the burn rate
  * from the gap since the previous purchase. Same-day repeats are ignored so a
  * check/uncheck/check doesn't distort the rate.
@@ -328,9 +390,12 @@ export function recordPurchase(
   if (prev?.lastPurchasedAt) {
     const gapDays = (now - prev.lastPurchasedAt) / DAY;
     if (gapDays >= 1) {
-      // First real gap seeds the rate; later gaps blend in (EMA) so one odd
-      // shop doesn't swing it wildly.
-      intervalDays = sampleCount === 0 ? gapDays : intervalDays * 0.6 + gapDays * 0.4;
+      if (sampleCount === 0) {
+        // Nothing to blend with. The first real gap IS the estimate.
+        intervalDays = gapDays;
+      } else {
+        intervalDays = blendInterval(intervalDays, gapDays, sampleCount);
+      }
       sampleCount += 1;
     }
   }

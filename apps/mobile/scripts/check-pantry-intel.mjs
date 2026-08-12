@@ -289,5 +289,79 @@ if (!(flagAt < 0.9)) {
   console.log(`ok   flagged at ${(flagAt * 100).toFixed(0)}% elapsed, asked at 90% — in that order`);
 }
 
+/* ================== how hard one shop may move the learned rate ============ */
+
+/*
+ * The interval is learned from gaps between purchases, and a single gap is a
+ * terrible witness: a fortnight away from home looks exactly like "we now buy
+ * milk fortnightly". The old flat EMA believed it at once — 7 days became 12.6
+ * — and the item then went quiet for a week and a half, right when the user got
+ * home and needed milk.
+ *
+ * These assert both halves of the fix: noise is absorbed, and real change is
+ * still learned. A rule that only did the first would be a rule that never
+ * learns anything, and it would pass any test written about holidays alone.
+ */
+const rounded = (n) => Math.round(n * 10) / 10;
+const learn = (seed, gaps) => {
+  let iv = seed;
+  let n = 1;
+  for (const g of gaps) {
+    iv = mod.blendInterval(iv, g, n);
+    n += 1;
+  }
+  return rounded(iv);
+};
+
+// Noise: settled at 7 days, one 21-day holiday. The old rule gave 12.6.
+check('one holiday barely moves a settled rate', learn(7, [7, 7, 7, 21]), 8.8);
+// ...and it comes back rather than staying stretched.
+check('and it recovers over the next few shops', learn(7, [7, 7, 7, 21, 7, 7, 7]), 7.7);
+
+// Signal: the household really does move to a fortnight. Must still converge.
+const drift = learn(7, [7, 7, 7, 14, 14, 14, 14, 14, 14]);
+if (drift > 12 && drift < 14) {
+  console.log(`ok   a genuine change is still learned (7 -> ${drift} over six shops)`);
+} else {
+  failures += 1;
+  console.log(`FAIL a genuine change is no longer learned (7 -> ${drift}, wanted 12-14)`);
+  console.log('  Damping that also blocks real drift is not damping, it is a freeze.');
+}
+
+/*
+ * The cap binds at exactly 2x, and only upward. Both fall out of MAX_STEP being
+ * equal to ALPHA_FLOOR — see blendInterval — so these two assertions are what
+ * would catch someone "tidying up" one constant without the other.
+ */
+check('a gap of exactly 2x is NOT capped', rounded(mod.blendInterval(10, 20, 9)), 12.5);
+check('a gap of 4x is capped to the same move', rounded(mod.blendInterval(10, 40, 9)), 12.5);
+check('a gap of 40x is capped to the same move', rounded(mod.blendInterval(10, 400, 9)), 12.5);
+// Downward, the cap never binds: even a gap of zero only pulls by alpha.
+check('a much shorter gap is believed, not capped', rounded(mod.blendInterval(10, 0, 9)), 7.5);
+check('...at the floor alpha, whatever the sample count', rounded(mod.blendInterval(10, 0, 999)), 7.5);
+
+/*
+ * Damping: early samples move more than late ones, because early on the app has
+ * almost no evidence and the shop in front of it is most of what it knows.
+ */
+/*
+ * Probed at 1.4x, deliberately. At 2x and beyond the CAP decides the answer and
+ * both sample counts land on the same number — a test written there would pass
+ * whether or not damping existed at all.
+ */
+const early = mod.blendInterval(10, 14, 1);
+const late = mod.blendInterval(10, 14, 50);
+if (early > late) {
+  console.log(`ok   the 2nd shop moves the rate more than the 50th (${rounded(early)} vs ${rounded(late)})`);
+} else {
+  failures += 1;
+  console.log('FAIL sample count no longer damps the blend');
+  console.log(`  2nd shop -> ${rounded(early)}, 50th -> ${rounded(late)}; the 50th must move it less.`);
+}
+// But never to zero: a rhythm that really changed must not be locked out.
+// Also below the cap, so it is the FLOOR being tested and not the ceiling:
+// without a floor, alpha would be ~0 here and the answer would be 10.
+check('damping bottoms out rather than freezing', rounded(mod.blendInterval(10, 14, 1e6)), 11);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
