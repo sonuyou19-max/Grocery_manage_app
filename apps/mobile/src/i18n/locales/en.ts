@@ -481,7 +481,8 @@ const en = {
   },
   status: {
     learning: 'Learning your pace',
-    runningLow: 'Running low',
+    dueNow: 'Due now',
+    daysOver: { one: '%{count} day over', other: '%{count} days over' },
     daysLeft: { one: '~%{count} day left', other: '~%{count} days left' },
   },
   lastBought: {

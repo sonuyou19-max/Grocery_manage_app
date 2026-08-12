@@ -531,7 +531,13 @@ const pl = {
   },
   status: {
     learning: 'Poznaję Twoje tempo',
-    runningLow: 'Kończy się',
+    dueNow: 'Czas uzupełnić',
+    daysOver: {
+      one: '%{count} dzień po terminie',
+      few: '%{count} dni po terminie',
+      many: '%{count} dni po terminie',
+      other: '%{count} dni po terminie',
+    },
     daysLeft: {
       one: 'został ~%{count} dzień',
       few: 'zostały ~%{count} dni',

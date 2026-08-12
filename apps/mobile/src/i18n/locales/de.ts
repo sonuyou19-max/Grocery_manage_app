@@ -471,7 +471,8 @@ const de = {
   status: {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Lerne dein Tempo',
-    runningLow: 'Geht zur Neige',
+    dueNow: 'Jetzt fällig',
+    daysOver: { one: 'seit %{count} Tag fällig', other: 'seit %{count} Tagen fällig' },
     daysLeft: { one: 'noch ~%{count} Tag', other: 'noch ~%{count} Tage' },
   },
   lastBought: {

@@ -218,5 +218,76 @@ check('waking keeps the learned rate', woken.milk.intervalDays, asleep.intervalD
 check('waking keeps the sample count', woken.milk.sampleCount, asleep.sampleCount);
 check('resting an unknown key is a no-op', mod.applyResting({}, 'nope', true, now), {});
 
+/* ============ the two thresholds, and the line that used to conflate them === */
+
+/*
+ * LOW_THRESHOLD and DUE_FRACTION answer different questions and are BOTH right:
+ *
+ *   LOW_THRESHOLD (0.35 remaining)  "flag it"  — the Running low section, the
+ *       bar's colour, and the recipe importer's have-I-got-enough check.
+ *   DUE_FRACTION  (0.9 elapsed)     "ask about it" — the Vibe Check deck, the
+ *       list screen's suggestions, the recap's what's-coming-up.
+ *
+ * They are deliberately not equal, so a row can be in the section without being
+ * due — which is fine, and was only ever confusing because statusLabel printed
+ * the SECTION'S words. The obvious "fix" is to collapse them into one number;
+ * that floods the deck or delays the warning, so this asserts they stay apart
+ * and that the label keeps stating its own urgency.
+ */
+const T = (key, opts) => {
+  if (key === 'status.daysLeft') return `~${opts.count} days left`;
+  if (key === 'status.daysOver') return `${opts.count} days over`;
+  return key.split('.')[1];
+};
+
+// A 10-day rhythm: flagged from day 6.5, due from day 9.
+const paced = stat({ intervalDays: 10, sampleCount: 5, lastPurchasedAt: now - 0 });
+const at = (d) => ({ ...paced, lastPurchasedAt: now - d * DAY });
+
+check('just bought: not flagged', mod.lifeRemaining(at(0), now) < mod.LOW_THRESHOLD, false);
+check('day 7: flagged', mod.lifeRemaining(at(7), now) < mod.LOW_THRESHOLD, true);
+check('day 7: NOT yet due', mod.isDue(at(7), now), false);
+check('day 7 label states days left, not the section', mod.statusLabel(at(7), now, T), '~2 days left');
+check('day 9: due', mod.isDue(at(9), now), true);
+check('day 9 label', mod.statusLabel(at(9), now, T), 'dueNow');
+check('day 12 label counts the overshoot', mod.statusLabel(at(12), now, T), '3 days over');
+
+/*
+ * The label must never reach for the section's key again. Checked on the source
+ * because it is a wording decision, not a value one — no assertion about output
+ * would catch someone renaming the string back.
+ */
+const libSrc = readFileSync(join(here, '..', 'src', 'lib', 'pantry-intel.ts'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+if (/status\.runningLow/.test(libSrc)) {
+  failures += 1;
+  console.log('FAIL statusLabel prints the Running low section\'s own words again');
+  console.log('  Inside a section headed "Running low", a row reading "Running low"');
+  console.log('  says nothing and reads as a contradiction next to its neighbours');
+  console.log('  showing "~2 days left". State the row\'s own urgency instead.');
+} else {
+  console.log('ok   statusLabel does not reuse the section\'s wording');
+}
+
+if (mod.LOW_THRESHOLD >= 1 || mod.LOW_THRESHOLD <= 0) {
+  failures += 1;
+  console.log(`FAIL LOW_THRESHOLD is not a fraction of a lifespan (${mod.LOW_THRESHOLD})`);
+} else {
+  console.log(`ok   LOW_THRESHOLD is still a lifespan fraction (${mod.LOW_THRESHOLD})`);
+}
+
+// Flagging must stay STRICTLY earlier than asking, or the section becomes a
+// mirror of the deck, and the early warning it exists to give disappears.
+const flagAt = 1 - mod.LOW_THRESHOLD;
+if (!(flagAt < 0.9)) {
+  failures += 1;
+  console.log('FAIL "flag it" no longer precedes "ask about it"');
+  console.log(`  flagged at ${(flagAt * 100).toFixed(0)}% elapsed, asked at 90%`);
+  console.log('  The Running low section exists to warn BEFORE the deck asks.');
+} else {
+  console.log(`ok   flagged at ${(flagAt * 100).toFixed(0)}% elapsed, asked at 90% — in that order`);
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

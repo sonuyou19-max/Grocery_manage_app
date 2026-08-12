@@ -231,12 +231,41 @@ export function lifeRemaining(stat: ItemStat, now: number): number {
  * stays i18n-agnostic while still producing localized strings. */
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-/** Short status for a pantry row: learning / ~N days left / running low. */
+/**
+ * Short status for a pantry row: learning / ~N days left / due now / N over.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this no longer says "Running low"
+ * ---------------------------------------------------------------------------
+ *
+ * It used to, and inside a section already headed "Running low" that read as
+ * the app contradicting itself: the section is drawn from LOW_THRESHOLD (0.35
+ * of the lifespan remaining) and this line from DUE_FRACTION (0.9 elapsed), so
+ * between 65% and 90% a row sat under "Running low" saying "~2 days left",
+ * and past 90% it sat under "Running low" saying "Running low".
+ *
+ * The instinct is to make the two numbers one number. That would be wrong —
+ * they answer different questions and both answers are used elsewhere:
+ *
+ *   LOW_THRESHOLD  "should I flag this?"  — the section, the bar's colour, and
+ *                  the recipe importer deciding whether you have enough garlic.
+ *   DUE_FRACTION   "should I ASK about this?" — the Vibe Check deck, the list
+ *                  screen's suggestions, the recap's what's-coming-up.
+ *
+ * Collapsing them means either flooding the deck with things that are merely
+ * getting low, or waiting until 90% to colour the bar. The contradiction was
+ * never in the thresholds; it was in this function borrowing the section's
+ * words. A row now states its own urgency, which is information the header does
+ * not already carry.
+ */
 export function statusLabel(stat: ItemStat, now: number, t: Translate): string {
   if (!stat.lastPurchasedAt) return t('status.learning');
   const days = Math.ceil((dueAt(stat) - now) / DAY);
-  if (days <= 0) return t('status.runningLow');
-  return t('status.daysLeft', { count: days });
+  if (days > 0) return t('status.daysLeft', { count: days });
+  // `days` is 0 for anything from exactly due to 23 hours past — Math.ceil of a
+  // small negative is -0, and -0 === 0. "Due now" is right for all of it.
+  if (days === 0) return t('status.dueNow');
+  return t('status.daysOver', { count: -days });
 }
 
 /** Human "last bought" label for the card subtitle. */

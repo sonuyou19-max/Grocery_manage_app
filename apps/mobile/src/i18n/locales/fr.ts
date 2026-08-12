@@ -470,7 +470,8 @@ const fr = {
   },
   status: {
     learning: 'J’apprends ton rythme',
-    runningLow: 'Bientôt épuisé',
+    dueNow: 'À racheter',
+    daysOver: { one: 'en retard de %{count} jour', other: 'en retard de %{count} jours' },
     daysLeft: { one: '~%{count} jour restant', other: '~%{count} jours restants' },
   },
   lastBought: {

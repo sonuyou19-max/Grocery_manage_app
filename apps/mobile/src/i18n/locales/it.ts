@@ -470,7 +470,8 @@ const it = {
   status: {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Imparo il tuo ritmo',
-    runningLow: 'In esaurimento',
+    dueNow: 'Da ricomprare',
+    daysOver: { one: 'in ritardo di %{count} giorno', other: 'in ritardo di %{count} giorni' },
     daysLeft: { one: '~%{count} giorno rimasto', other: '~%{count} giorni rimasti' },
   },
   lastBought: {

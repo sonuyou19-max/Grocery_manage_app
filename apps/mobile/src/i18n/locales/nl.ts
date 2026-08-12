@@ -469,7 +469,8 @@ const nl = {
   },
   status: {
     learning: 'Ik leer je tempo',
-    runningLow: 'Bijna op',
+    dueNow: 'Nu aanvullen',
+    daysOver: { one: '%{count} dag te laat', other: '%{count} dagen te laat' },
     daysLeft: { one: 'nog ~%{count} dag', other: 'nog ~%{count} dagen' },
   },
   lastBought: {
