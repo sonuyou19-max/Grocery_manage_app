@@ -570,6 +570,8 @@ const de = {
   itemSheet: {
     addedTo: 'Hinzugefügt zu %{category}',
     editItem: 'Artikel bearbeiten',
+    renameDup: '„%{name}“ steht schon auf dieser Liste, dieser Artikel kann also nicht so heißen.',
+    renameDupCart: '„%{name}“ liegt schon in deinem Wagen, dieser Artikel kann also nicht so heißen.',
     itemLabel: 'Artikel',
     categoryLabel: 'Kategorie',
     quantityLabel: 'Menge · optional',

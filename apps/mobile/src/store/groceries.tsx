@@ -15,9 +15,9 @@ import type { ItemCategory, ParsedItem } from '@korb/shared';
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
 import { unitFor } from '@/lib/item-unit';
 import { forgetHomeList, rememberItemList } from '@/lib/item-home-list';
+import { findDuplicate } from '@/lib/item-dup';
 import { recallItemDetails } from '@/lib/item-memory';
 import { reportWriteFailure } from '@/lib/monitoring';
-import { normalizeKey } from '@/lib/pantry-intel';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { uuidv4 } from '@/lib/uuid';
@@ -76,9 +76,42 @@ export interface Item {
   claimedAt: number | null;
 }
 
+/**
+ * The fields `updateItem` may change — note that `name` is NOT one of them, and
+ * that omission is the fix rather than an oversight.
+ *
+ * Renaming is the one edit that can collide with migration 0018's unique index,
+ * so it cannot be a field on a bag of optional properties that any caller may
+ * set and no caller is obliged to think about. The item sheet did exactly that:
+ * `patch({ name })` on every keystroke, no duplicate check anywhere on the path,
+ * and renaming a typo onto an existing item produced a 409 and a silent revert.
+ *
+ * Leaving `name` out means the compiler refuses that write. The only way to
+ * change a name is `renameItem`, which cannot skip the check because the check
+ * is inside it.
+ */
 export type ItemPatch = Partial<
-  Pick<Item, 'name' | 'category' | 'quantity' | 'unit' | 'priceCents' | 'store' | 'bio'>
+  Pick<Item, 'category' | 'quantity' | 'unit' | 'priceCents' | 'store' | 'bio'>
 >;
+
+/**
+ * What `renameItem` did.
+ *
+ * `conflict` is the row already holding the name — returned rather than merely
+ * reported, because the message the user needs depends on whether that row is
+ * ticked ("already in your cart") or not ("already on the list"), and the caller
+ * should not have to re-run the search to find that out.
+ */
+export type RenameResult = { ok: true } | { ok: false; conflict: Item };
+
+/**
+ * What the store's own patch helpers accept — `ItemPatch` plus the name.
+ *
+ * Not exported, and that is the whole mechanism: the field exists exactly one
+ * layer below the context, so `renameItem` can set it after checking and
+ * nothing outside this file can set it at all.
+ */
+type InternalPatch = ItemPatch & { name?: string };
 
 export interface List {
   id: string;
@@ -115,6 +148,17 @@ interface GroceriesContext {
   addOrReviveItem: (listId: string, item: ParsedItem) => AddOutcome;
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
+  /**
+   * Rename an item, or refuse because the new name is already on the list.
+   *
+   * The refusal is the point. A second open row with the same normalised name
+   * is rejected by the database (0018), and because the write is optimistic the
+   * user's only evidence used to be the rename undoing itself a second later.
+   * Checked here, against the same swept list the screen is showing, so the
+   * answer is the one the user can see — and so the alert can name the item
+   * they collided with.
+   */
+  renameItem: (listId: string, itemId: string, name: string) => RenameResult;
   deleteItem: (listId: string, itemId: string) => void;
   /**
    * Claim an item ("I'm getting this") or release it. A no-op on local lists.
@@ -271,7 +315,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
     };
   }, [lists]);
 
-  const patchItem = useCallback((listId: string, itemId: string, patch: ItemPatch) => {
+  const patchItem = useCallback((listId: string, itemId: string, patch: InternalPatch) => {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
@@ -438,7 +482,6 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       },
       addParsedItem: (listId, p) => insertParsed(listId, p),
       addOrReviveItem: (listId, p) => {
-        const key = normalizeKey(p.name);
         /*
          * The SWEPT list, not the raw one. A settled row is one the sweep is
          * deleting or has already deleted, so reviving it would either update a
@@ -447,9 +490,10 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
          * fresh row, which is what "add it back to the list" means once
          * yesterday's shop has left.
          */
-        const existing = visibleLists
-          .find((l) => l.id === listId)
-          ?.items.find((it) => normalizeKey(it.name) === key);
+        const existing = findDuplicate(
+          visibleLists.find((l) => l.id === listId)?.items ?? [],
+          p.name,
+        );
         if (existing) {
           // Already waiting to be bought — adding again would just duplicate it.
           if (!existing.checked) {
@@ -485,6 +529,15 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
           const target = lists.find((l) => l.id === listId)?.items.find((it) => it.id === itemId);
           if (target) void learnCategory(target.name, patch.category);
         }
+      },
+      renameItem: (listId, itemId, name) => {
+        const clean = name.trim();
+        if (!clean) return { ok: true };
+        const items = visibleLists.find((l) => l.id === listId)?.items ?? [];
+        const conflict = findDuplicate(items, clean, itemId);
+        if (conflict) return { ok: false, conflict };
+        patchItem(listId, itemId, { name: clean });
+        return { ok: true };
       },
       deleteItem: (listId, itemId) =>
         setLists((prev) =>
@@ -839,7 +892,7 @@ function CloudGroceriesProvider({
     };
   }, [householdId, cacheKey, fetchLists, scheduleRefetch, appActive, user?.id]);
 
-  const patchLocalItem = useCallback((listId: string, itemId: string, patch: ItemPatch) => {
+  const patchLocalItem = useCallback((listId: string, itemId: string, patch: InternalPatch) => {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
@@ -953,7 +1006,7 @@ function CloudGroceriesProvider({
   }, [lists, day]);
 
   const value = useMemo<GroceriesContext>(() => {
-    const dbPatch = (patch: ItemPatch): Record<string, unknown> => {
+    const dbPatch = (patch: InternalPatch): Record<string, unknown> => {
       const db: Record<string, unknown> = {};
       if (patch.name !== undefined) db.name = patch.name;
       if (patch.category !== undefined) db.category = patch.category;
@@ -1087,7 +1140,6 @@ function CloudGroceriesProvider({
       },
       addParsedItem: (listId, p) => insertParsed(listId, p),
       addOrReviveItem: (listId, p) => {
-        const key = normalizeKey(p.name);
         /*
          * The SWEPT list, not the raw one. A settled row is one the sweep is
          * deleting or has already deleted, so reviving it would either update a
@@ -1096,9 +1148,10 @@ function CloudGroceriesProvider({
          * fresh row, which is what "add it back to the list" means once
          * yesterday's shop has left.
          */
-        const existing = visibleLists
-          .find((l) => l.id === listId)
-          ?.items.find((it) => normalizeKey(it.name) === key);
+        const existing = findDuplicate(
+          visibleLists.find((l) => l.id === listId)?.items ?? [],
+          p.name,
+        );
         if (existing) {
           // Already waiting to be bought — adding again would just duplicate it.
           if (!existing.checked) {
@@ -1151,6 +1204,28 @@ function CloudGroceriesProvider({
           const target = lists.find((l) => l.id === listId)?.items.find((it) => it.id === itemId);
           if (target) void learnCategory(target.name, patch.category);
         }
+      },
+      renameItem: (listId, itemId, name) => {
+        const clean = name.trim();
+        if (!clean) return { ok: true };
+        /*
+         * The swept list, for the same reason addOrReviveItem uses it: a row the
+         * sweep has removed is not on the list any more, so colliding with it
+         * would refuse a rename the unique index would have accepted (the index
+         * only covers unticked rows, and a swept row is deleted outright).
+         */
+        const items = visibleLists.find((l) => l.id === listId)?.items ?? [];
+        const conflict = findDuplicate(items, clean, itemId);
+        if (conflict) return { ok: false, conflict };
+        patchLocalItem(listId, itemId, { name: clean });
+        supabase
+          .from('list_items')
+          .update({ name: clean })
+          .eq('id', itemId)
+          .then(({ error }) => {
+            recoverFrom('list_items.rename', error);
+          });
+        return { ok: true };
       },
       deleteItem: (listId, itemId) => {
         setLists((prev) =>

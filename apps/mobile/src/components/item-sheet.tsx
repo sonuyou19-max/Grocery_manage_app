@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -65,7 +66,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { t, currency } = useLocale();
-  const { updateItem } = useGroceries();
+  const { updateItem, renameItem } = useGroceries();
   const liveItem = useItem(listId, itemId ?? undefined);
   const storePrefs = useStorePrefs();
 
@@ -100,6 +101,43 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     sheetY.value = withSpring(0, SPRING.sheet);
   }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Commit a rename — once, when the field is done, and only if it can succeed.
+   *
+   * This used to write on every keystroke (`onChangeText` → `patch({ name })`),
+   * which is wrong twice over. It sends one UPDATE per character, and worse, it
+   * has no moment at which the name is finished and can be checked: renaming
+   * "Oilve OLI" to "Olive Oil" on a list that already has an "Olive Oil" is a
+   * write the unique index (migration 0018) refuses, so it came back 409, the
+   * store resynced, and the rename simply undid itself with a Sentry issue as
+   * the only trace. The user's report was exactly that: no warning, no
+   * duplicate message, an error notification.
+   *
+   * So the name settles on blur and on close, and the store's `renameItem`
+   * decides — it holds the check, so no caller can forget it. A refusal puts
+   * the field back to the real name and says which item is in the way, because
+   * "nothing happened" is the failure mode this is here to end.
+   */
+  const commitName = () => {
+    if (!liveItem) return;
+    const next = name.trim();
+    // Blank is not a delete — restore rather than clearing the item's name.
+    if (!next) {
+      setName(liveItem.name);
+      return;
+    }
+    if (next === liveItem.name) return;
+    const result = renameItem(listId, liveItem.id, next);
+    if (result.ok) return;
+    setName(liveItem.name);
+    Alert.alert(
+      t('listDetail.dupTitle'),
+      result.conflict.checked
+        ? t('itemSheet.renameDupCart', { name: result.conflict.name })
+        : t('itemSheet.renameDup', { name: result.conflict.name }),
+    );
+  };
+
   // On close, snapshot the item's final quantity/unit/store into per-item
   // memory (#3) so the next add of the same item prefills them. One capture
   // point covers every close path — the X, the backdrop, and pull-to-dismiss.
@@ -121,6 +159,10 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
    * button, the backdrop tap).
    */
   const requestClose = (velocity = 0) => {
+    // Before rememberUsuals, so a rename that lands is the name remembered
+    // against — and so closing the sheet counts as finishing the field, for the
+    // user who types a new name and drags the sheet away without blurring it.
+    commitName();
     rememberUsuals();
     cancelAnimation(sheetY);
     sheetY.value = withSpring(
@@ -218,10 +260,15 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             <Field label={t('itemSheet.itemLabel')}>
               <TextInput
                 value={name}
-                onChangeText={(t) => {
-                  setName(t);
-                  if (t.trim()) patch({ name: t.trim() });
-                }}
+                onChangeText={setName}
+                // The name is committed when the field is finished, not per
+                // keystroke — see commitName. `submitBehavior` (which supersedes
+                // blurOnSubmit) so the Done key really ends editing rather than
+                // leaving the field focused with an uncommitted name in it.
+                onBlur={commitName}
+                onSubmitEditing={commitName}
+                returnKeyType="done"
+                submitBehavior="blurAndSubmit"
                 style={[styles.input, inputColors(colors)]}
               />
             </Field>

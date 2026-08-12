@@ -567,6 +567,8 @@ const nl = {
   itemSheet: {
     addedTo: 'Toegevoegd aan %{category}',
     editItem: 'Item bewerken',
+    renameDup: '“%{name}” staat al op deze lijst, dus dit item kan die naam niet krijgen.',
+    renameDupCart: '“%{name}” zit al in je mandje, dus dit item kan die naam niet krijgen.',
     itemLabel: 'Item',
     categoryLabel: 'Categorie',
     quantityLabel: 'Aantal · optioneel',

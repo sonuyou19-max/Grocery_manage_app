@@ -227,5 +227,171 @@ check('edges trim', normalizeKey('  Milk  '), 'milk');
 check('accents are preserved', normalizeKey('Crème'), 'crème');
 check('a plural stays its own item', normalizeKey('Tomaten'), 'tomaten');
 
+/* ---------------- 4. every write that can collide is checked ------------- */
+
+/*
+ * Agreeing on what a duplicate IS (sections 1–3) is only half of it. The other
+ * half is that every write which can create one actually asks — and the app
+ * shipped three paths, each with a different amount of care:
+ *
+ *   - the add bar, which asked (with its own normaliser — section 1);
+ *   - the item sheet's rename, which asked nothing at all and wrote on every
+ *     keystroke, so renaming "Oilve OLI" onto an existing "Olive Oil" returned
+ *     409, resynced, and undid itself with only a Sentry issue to show for it;
+ *   - AI quick-add, which LABELLED the duplicates it found and then inserted
+ *     them anyway the moment the user ticked one — the row appeared and
+ *     vanished about a second later.
+ *
+ * All three are the same defect: an optimistic write the unique index refuses,
+ * with nothing on screen to explain the disappearance. So the checks below are
+ * about WHERE the question gets asked, not how.
+ */
+
+const need = (rel) => {
+  const f = files.find((x) => x.rel === rel);
+  if (!f) fail(`${rel} is missing`, ['Nothing to check — this guard is now vacuous.']);
+  return f;
+};
+
+const dup = need('lib/item-dup.ts');
+const store = need('store/groceries.tsx');
+const sheet = need('components/item-sheet.tsx');
+const quick = need('components/quick-add-sheet.tsx');
+
+/* 4a. the shared answer exists and is the same answer as everything above. */
+if (dup) {
+  if (!/normalizeKey/.test(dup.src) || !/export function findDuplicate/.test(dup.src)) {
+    fail('lib/item-dup no longer exports a normalizeKey-based findDuplicate', [
+      'This is the one place that decides "is there already one of these on',
+      'this list". Deriving it from anything but normalizeKey re-opens the gap',
+      'between what the client believes and what the unique index enforces.',
+    ]);
+  } else {
+    console.log('ok   lib/item-dup answers with normalizeKey');
+  }
+}
+
+/*
+ * 4b. `updateItem` cannot rename. This is the load-bearing one, because it is
+ * enforced by the compiler rather than by anybody remembering: with `name` off
+ * ItemPatch, `patch({ name })` does not typecheck, and the only route left is
+ * renameItem — which cannot skip the check because the check is inside it.
+ */
+if (store) {
+  const pick = store.src.match(/export type ItemPatch = Partial<\s*Pick<Item,([^>]*)>/)?.[1];
+  if (pick == null) {
+    fail('could not find ItemPatch\'s field list in store/groceries', [
+      'This check reads it to prove `name` is not settable through updateItem.',
+    ]);
+  } else if (/'name'/.test(pick)) {
+    fail('ItemPatch can set `name` again', [
+      'Renaming is the one edit that collides with migration 0018, so it must',
+      'not be a field on an optional bag every caller may set and no caller is',
+      'obliged to think about — that is exactly how the item sheet came to',
+      'write names with no check on the path. Use renameItem.',
+    ]);
+  } else {
+    console.log('ok   ItemPatch cannot set a name — renaming has one entry point');
+  }
+
+  /* 4c. ...and that entry point checks, in BOTH backends. */
+  const renames = [...store.src.matchAll(/renameItem: \([^)]*\) => \{/g)];
+  if (renames.length !== 2) {
+    fail(`renameItem is implemented ${renames.length} time(s), expected 2`, [
+      'One per backend (LOCAL and CLOUD). A backend without it does not fail',
+      'to compile — it fails at runtime, on the device, for the users who are',
+      'signed in.',
+    ]);
+  } else {
+    const unchecked = renames.filter(
+      (m) => !store.src.slice(m.index, m.index + 900).includes('findDuplicate('),
+    );
+    if (unchecked.length) {
+      fail(`${unchecked.length} renameItem implementation(s) do not check first`, [
+        'A rename onto a name already open on the list is refused by the unique',
+        'index (0018). Unchecked, the write returns 409, the store resyncs, and',
+        'the rename silently undoes itself.',
+      ]);
+    } else {
+      console.log('ok   both backends check before renaming');
+    }
+  }
+}
+
+/*
+ * 4d. `addParsedItem` is only reached from a screen that just made the list.
+ *
+ * It inserts unconditionally, and that is right in exactly one situation: the
+ * list was created moments ago, so nothing can already be on it. Reaching for
+ * it from a screen adding to an EXISTING list is the bug two screens had —
+ * quick-add, and the dashboard's weekly builder, whose list is chosen by the
+ * user from the ones they already have. Both showed the same thing: the item
+ * appears, the unique index rejects the insert, the row vanishes a second later.
+ *
+ * "Also calls addList" is the structural stand-in for "made the list itself".
+ * It is coarse, and it is the property that actually matters.
+ */
+const rawInserters = files.filter(
+  (f) => f.rel !== 'store/groceries.tsx' && /\baddParsedItem\(/.test(f.src),
+);
+const unsafe = rawInserters.filter((f) => !/\baddList\(/.test(f.src));
+if (unsafe.length) {
+  fail(`${unsafe.length} screen(s) insert into a list they did not create`, [
+    ...unsafe.map((f) => `  ${f.rel}`),
+    'addParsedItem is an unconditional insert. On a list that already holds the',
+    'item, the unique index rejects it and the row the user just watched appear',
+    'disappears a second later. Use addOrReviveItem, which inserts, revives a',
+    'ticked row, or does nothing — every branch a write the database accepts.',
+  ]);
+} else if (rawInserters.length === 0) {
+  fail('nothing calls addParsedItem any more', [
+    'Then this check proves nothing. Either it was renamed — point this at the',
+    'new name — or the unconditional insert is gone and this can go with it.',
+  ]);
+} else {
+  console.log(`ok   addParsedItem is only called where the list was just created (${rawInserters.length})`);
+}
+
+/* ...and quick-add specifically still labels and adds by the shared rules. */
+if (quick) {
+  if (!/addOrReviveItem\(/.test(quick.src) || !/findDuplicate\(/.test(quick.src)) {
+    fail('quick-add no longer routes adds through the shared rules', [
+      'It needs addOrReviveItem to write and findDuplicate to label.',
+    ]);
+  } else if (!/dedupeByName\(/.test(quick.src)) {
+    fail('quick-add adds a batch without deduping it', [
+      'One parse can return "milk" and "Milk". Those collide with each other,',
+      'not with the list, and the loop runs inside a single render — so',
+      'addOrReviveItem cannot see the first when it judges the second.',
+    ]);
+  } else {
+    console.log('ok   quick-add adds through addOrReviveItem, deduped');
+  }
+}
+
+/*
+ * 4e. The item sheet renames once, when the field is finished — not per
+ * keystroke. The old handler fired an UPDATE per character, which is not just
+ * wasteful: it means there is no moment at which the name is complete and can
+ * be checked, so a duplicate check there could not have worked either.
+ */
+if (sheet) {
+  const calls = (sheet.src.match(/renameItem\(/g) ?? []).length;
+  if (calls !== 1) {
+    fail(`the item sheet calls renameItem ${calls} time(s), expected 1`, [
+      'One call, from commitName. More than one means a second, unreviewed',
+      'commit point; none means the name field writes nothing at all.',
+    ]);
+  } else if (!/onBlur=\{commitName\}/.test(sheet.src) || !/onChangeText=\{setName\}/.test(sheet.src)) {
+    fail('the item sheet name field no longer commits on blur', [
+      'onChangeText must hand the raw setter and onBlur must commit. Renaming',
+      'from onChangeText sends one UPDATE per character and leaves no point at',
+      'which the name is finished enough to check.',
+    ]);
+  } else {
+    console.log('ok   the item sheet commits a rename once, on blur');
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

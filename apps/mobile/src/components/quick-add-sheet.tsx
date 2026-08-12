@@ -30,7 +30,7 @@ import type { ParsedItem } from "@korb/shared";
 import { Frosted } from "@/components/frosted";
 import { categoryLabel } from "@/lib/categorize";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
-import { normalizeKey } from "@/lib/pantry-intel";
+import { dedupeByName, findDuplicate } from "@/lib/item-dup";
 import { parseQuickAdd } from "@/lib/quick-add";
 import { useGroceries, useList } from "@/store/groceries";
 import { useT } from "@/store/locale";
@@ -55,24 +55,21 @@ export function QuickAddSheet({
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
-  const { addParsedItem } = useGroceries();
+  const { addOrReviveItem } = useGroceries();
   const list = useList(listId);
   const { height: screenH } = useWindowDimensions();
 
   /*
-   * Names already on this list, so quick-add doesn't silently add a second
+   * What is already on this list, so quick-add doesn't silently add a second
    * "Milk".
    *
-   * normalizeKey, not a local trim-and-lowercase. Item identity is decided in
-   * exactly one place in this app, and the database enforces the same rule as a
-   * generated column — so a check that normalises differently here does not
-   * merely miss a duplicate, it lets through an insert Postgres will reject.
-   * See lib/pantry-intel.normalizeKey and migration 0018.
+   * Matched with findDuplicate, not a local trim-and-lowercase. Item identity is
+   * decided in exactly one place in this app, and the database enforces the same
+   * rule as a generated column — so a check that normalises differently here
+   * does not merely miss a duplicate, it lets through an insert Postgres will
+   * reject. See lib/item-dup and migration 0018.
    */
-  const existingKeys = useMemo(
-    () => new Set((list?.items ?? []).map((it) => normalizeKey(it.name))),
-    [list],
-  );
+  const listItems = useMemo(() => list?.items ?? [], [list]);
 
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<"input" | "loading" | "review">("input");
@@ -171,16 +168,37 @@ export function QuickAddSheet({
     setItems(parsed);
     // Pre-tick everything except items already on the list — those default to
     // skipped so you don't add duplicates without meaning to.
-    setSelected(
-      parsed.map((p) => !existingKeys.has(normalizeKey(p.name))),
-    );
+    setSelected(parsed.map((p) => findDuplicate(listItems, p.name) == null));
     setPhase("review");
   };
 
+  /**
+   * Add the ticked items — through `addOrReviveItem`, never a raw insert.
+   *
+   * The badge below already says which of these are on the list, but a badge is
+   * advice and the row stays tappable, because sometimes the right answer IS to
+   * tick it: a duplicate of an item you bought this morning should bring that
+   * ticked row back to "to buy". What must not happen is the old behaviour —
+   * `addParsedItem` inserting a second open row, migration 0018's unique index
+   * rejecting it, and the item the user just watched appear disappearing about a
+   * second later. That was the reported bug, and it was the same one the add bar
+   * and the rename field had: a check the UI performs and the write ignores.
+   *
+   * `addOrReviveItem` decides per item — insert, revive the ticked row, or do
+   * nothing because it is already waiting — and every branch is a write the
+   * database accepts.
+   *
+   * dedupeByName covers the case the list cannot: one PARSE returning "milk"
+   * and "Milk". Those collide with each other rather than with anything already
+   * on the list, and this loop runs inside a single render — so addOrReviveItem
+   * cannot see the first of them when it judges the second.
+   */
   const confirmAdd = () => {
-    items.forEach((item, i) => {
-      if (selected[i]) addParsedItem(listId, item);
-    });
+    const chosen = dedupeByName(
+      items.filter((_, i) => selected[i]),
+      (item) => item.name,
+    );
+    for (const item of chosen) addOrReviveItem(listId, item);
     requestClose();
   };
 
@@ -235,7 +253,7 @@ export function QuickAddSheet({
               </Text>
               {items.map((item, i) => {
                 const on = selected[i];
-                const dup = existingKeys.has(normalizeKey(item.name));
+                const dup = findDuplicate(listItems, item.name) != null;
                 return (
                   <Pressable
                     key={`${item.name}-${i}`}

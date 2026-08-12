@@ -19,6 +19,7 @@ import { RecipeReviewSheet } from "@/components/recipe-review-sheet";
 import { useToast } from "@/components/toast";
 import { categorizeSync } from "@/lib/categorize";
 import { haptics } from "@/lib/haptics";
+import { dedupeByName } from "@/lib/item-dup";
 import { importRecipe, type ImportOutcome } from "@/lib/recipe-import";
 import { useRecipeGate } from "@/lib/recipe-gate";
 import { looksLikeUrl, type ParsedRecipe, type ReviewRow } from "@/lib/recipe";
@@ -162,7 +163,14 @@ export default function RecipeImportScreen() {
    */
   const onConfirm = (name: string, rows: ReviewRow[]) => {
     const id = target?.id ?? addList(name);
-    for (const r of rows) {
+    /*
+     * Deduped first, because a recipe can list one ingredient twice — olive oil
+     * for the dressing and olive oil for the pan — and this loop runs inside a
+     * single render, so addOrReviveItem cannot see the first of them when it
+     * judges the second. Two inserts of one key is a 23505 on the second, whose
+     * optimistic row then disappears a second later.
+     */
+    for (const r of dedupeByName(rows, (row) => row.name)) {
       const parsed = {
         name: r.name,
         category: categorizeSync(r.name),

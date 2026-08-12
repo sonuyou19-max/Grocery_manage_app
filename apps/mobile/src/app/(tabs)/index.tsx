@@ -16,6 +16,7 @@ import { usePlusGate } from "@/lib/plus-gate";
 import { PlusBadge } from "@/components/plus-badge";
 import { TrialNudge } from "@/components/trial-nudge";
 import { WeeklyListSheet } from "@/components/weekly-list-sheet";
+import { dedupeByName } from "@/lib/item-dup";
 import { onboardingSeen } from "@/lib/onboarding";
 import { normalizeKey } from "@/lib/pantry-intel";
 import {
@@ -49,7 +50,7 @@ let tourRouted = false;
 export default function ListsScreen() {
   const { colors } = useTheme();
   const t = useT();
-  const { lists, addParsedItem, deleteList, reorderLists } = useGroceries();
+  const { lists, addOrReviveItem, deleteList, reorderLists } = useGroceries();
   const { household, members, myName } = useHousehold();
   const { user } = useAuth();
   // Shared with Insights and the Pantry — see lib/plus-gate.ts.
@@ -127,9 +128,19 @@ export default function ListsScreen() {
     const items = pendingItems;
     setPendingItems([]);
     if (items.length === 0) return;
-    // addParsedItem fills the usual store from per-item memory (#3) itself.
-    for (const s of items) {
-      addParsedItem(listId, {
+    /*
+     * addOrReviveItem, not a raw insert — the list picked here is an EXISTING
+     * list, so a suggestion the user already has on it is a second open row
+     * with the same key, which migration 0018's unique index refuses. The
+     * insert is optimistic, so that arrived as the item appearing and then
+     * vanishing about a second later. This inserts, revives a ticked row, or
+     * does nothing, and fills the usual store from per-item memory (#3) itself.
+     *
+     * Deduped for the same reason as the other batch adds: the loop runs inside
+     * one render, so it cannot see its own inserts.
+     */
+    for (const s of dedupeByName(items, (it) => it.display)) {
+      addOrReviveItem(listId, {
         name: s.display,
         category: s.category,
         quantity: s.quantity,

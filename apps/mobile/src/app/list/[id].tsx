@@ -42,10 +42,10 @@ import { MeshBackground } from "@/components/mesh-background";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
+import { findDuplicate } from "@/lib/item-dup";
 import { emojiFor } from "@/lib/item-emoji";
 import { haptics } from "@/lib/haptics";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
-import { normalizeKey } from "@/lib/pantry-intel";
 import { useAuth } from "@/store/auth";
 import { useGroceries, useList, type Item } from "@/store/groceries";
 import { useHousehold } from "@/store/household";
@@ -353,7 +353,7 @@ export default function ListDetailScreen() {
     if (!name) return;
 
     /*
-     * normalizeKey, not a local trim-and-lowercase.
+     * findDuplicate, not a local trim-and-lowercase.
      *
      * The database decides this too — `item_key` is a generated column and a
      * unique index over the unticked rows (migration 0018) — and it collapses
@@ -361,16 +361,22 @@ export default function ListDetailScreen() {
      * spaces therefore passed here, was rejected by Postgres, and the item
      * simply never appeared: the insert is optimistic, so the failure showed up
      * as the row quietly vanishing. One rule, one implementation, or the two
-     * disagree exactly where nobody is looking.
+     * disagree exactly where nobody is looking. See lib/item-dup.
      */
-    const key = normalizeKey(name);
-    const duplicate = list.items.find((it) => normalizeKey(it.name) === key);
-    if (duplicate) {
+    const duplicate = findDuplicate(list.items, name);
+    if (!duplicate) {
+      doAdd(name);
+      return;
+    }
+    /*
+     * A TICKED duplicate can be added again, and often should be: the index only
+     * covers open rows, so a second unticked "Milk" alongside this morning's
+     * bought one is a write Postgres accepts and a thing people really want.
+     */
+    if (duplicate.checked) {
       Alert.alert(
         t("listDetail.dupTitle"),
-        duplicate.checked
-          ? t("listDetail.dupHereCart", { name: duplicate.name })
-          : t("listDetail.dupHere", { name: duplicate.name }),
+        t("listDetail.dupHereCart", { name: duplicate.name }),
         [
           { text: t("common.cancel"), style: "cancel" },
           { text: t("listDetail.addAnyway"), onPress: () => doAdd(name) },
@@ -378,7 +384,13 @@ export default function ListDetailScreen() {
       );
       return;
     }
-    doAdd(name);
+    /*
+     * An UNTICKED one cannot, and offering "Add anyway" here was a promise the
+     * database breaks: the insert comes back 23505 and the optimistic row
+     * disappears a second later. There is no choice to offer, so this states
+     * the fact and stops.
+     */
+    Alert.alert(t("listDetail.dupTitle"), t("listDetail.dupHere", { name: duplicate.name }));
   };
 
   const openEdit = (item: Item) => {
