@@ -23,7 +23,7 @@
     "android": {
       "package": "app.korb.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#E4EFE4",
+        "backgroundColor": "#2E7442",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -41,11 +41,11 @@
         {
           "backgroundColor": "#2E7442",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76,
+          "imageWidth": 128,
           "dark": {
             "backgroundColor": "#0E120C",
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 128
           }
         }
       ],

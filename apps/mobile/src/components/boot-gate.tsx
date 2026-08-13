@@ -149,7 +149,9 @@ export function BootGate({ children }: PropsWithChildren) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   centre: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.xl },
-  // The splash renders this at 76dp (see app.json); matching it means the mark
-  // does not jump size at the handover.
-  mark: { width: 76, height: 76 },
+  // The splash renders this at 128dp (see app.json); matching it means the mark
+  // does not jump size at the handover. Change one and you must change the
+  // other — the jump is small enough to look like a rendering glitch rather
+  // than a mistake, which is what makes it easy to ship.
+  mark: { width: 128, height: 128 },
 });
