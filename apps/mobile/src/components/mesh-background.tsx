@@ -159,16 +159,28 @@ export function MeshBackground({ dim = false }: { dim?: boolean }) {
         style={[StyleSheet.absoluteFill, { backgroundColor: dim ? 'rgba(5,7,4,0.7)' : colors.meshScrim }]}
       />
       {/*
-        * Dither. Last, over everything, because it corrects the rounding that
-        * everything above it has already done.
+        * Noise. Last, over everything, because everything above it has already
+        * rounded to 8 bits and this is what makes that rounding hard to see.
         *
         * A smooth curve does not survive an 8-bit destination: dark mode's ramp
-        * spans ~29 values over a ~260dp radius, so there is a hard-edged arc
-        * every ~9dp no matter how continuous the maths was. One step of white
-        * noise breaks each arc into an interleaving of the two values either
-        * side of it, and the eye reads the mix as the ramp it was supposed to
-        * be. See lib/mesh-dither for the arithmetic — including why the same
-        * tile is, correctly, worth almost nothing in light mode.
+        * spans ~29 values over a ~267dp radius, which measures as 60 distinct
+        * bands with the widest — at the blob's flat centre — stretching 17.75dp.
+        * That flat span with a one-level step at its edge IS the ring.
+        *
+        * This cannot dither in the strict sense. Real dither perturbs a value
+        * BEFORE quantisation so the rounding carries the fraction; by the time
+        * this composites, react-native-svg has already rounded. It cannot move
+        * a mean, and a band edge is a difference of means. What it can do is
+        * mask — bury the one-level step in about one level of zero-mean
+        * variance, which is what video debanding does and what works.
+        *
+        * That makes it entirely a question of amplitude, and the first version
+        * lost on amplitude: white at alpha 1 and nothing else, measuring 0.42
+        * of a level, one-sided, against a step of 1.0. It rendered, it reached
+        * device pixels 1:1, and it was invisible — the hardest kind of broken,
+        * because it looks exactly like not having shipped the fix. It now
+        * measures ~1.04 with both white and black pixels, and check-blur
+        * decodes the tile and asserts that rather than trusting this comment.
         *
         * A data: URI, NOT a required .png. As a bundled asset this lands in
         * res/drawable-mdpi and Android density-scales it ~2.75x with bilinear

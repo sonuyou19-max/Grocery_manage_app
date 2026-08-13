@@ -43,6 +43,7 @@
  * Run with `pnpm --filter mobile check:blur`.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -222,8 +223,11 @@ if (mesh) {
     meshFails.push('src/lib/mesh-dither.ts is missing (pnpm gen:mesh-dither)');
   } else {
     const tile = readFileSync(join(SRC, 'lib', 'mesh-dither.ts'), 'utf8');
-    if (!/data:image\/png;base64,/.test(tile)) {
+    const b64 = tile.match(/data:image\/png;base64,([A-Za-z0-9+/=]+)/)?.[1];
+    if (!b64) {
       meshFails.push('lib/mesh-dither no longer holds an inline data: URI');
+    } else {
+      meshFails.push(...ditherAmplitudeFaults(b64));
     }
   }
   // A hand-written stop list is the shape of the bug: a gaussian is generated.
@@ -241,6 +245,121 @@ if (mesh) {
   } else {
     console.log('ok   ...and is still dithered, with a generated falloff');
   }
+}
+
+/**
+ * Decode the tile and MEASURE what it does, rather than checking it is there.
+ *
+ * This exists because of how the dither failed the first time. It was present,
+ * it was inlined correctly, it reached the screen at 1:1 device pixels, and it
+ * changed nothing anybody could see — because every pixel was white at alpha 1,
+ * which over the mesh is +0.83 of a level or nothing at all. Standard deviation
+ * 0.42, one-sided, against a band step of exactly 1.0.
+ *
+ * That is not a small miss. Compositing happens AFTER react-native-svg has
+ * rounded the gradient to 8 bits, so the tile cannot move a mean, and a band
+ * edge is a difference of means. Masking is the only mechanism available, and
+ * masking is entirely a question of amplitude — so amplitude is the thing worth
+ * asserting, and the only way to assert it is to read the pixels.
+ *
+ * The PNG is ours, always RGBA/8-bit with filter 0 on every row, so decoding is
+ * an inflate and a stride walk. Anything else means the generator changed shape
+ * and this should be looked at rather than quietly skipped.
+ */
+function ditherAmplitudeFaults(b64) {
+  /* The flat centre of a blob in dark mode, where one 8-bit step stretches
+   * ~18dp and the ring gets drawn. Masking has to work HERE. */
+  const C = 44;
+  /* One level of zero-mean noise is the established debanding figure. The
+   * shipped-and-invisible version measured 0.415, so this floor sits well
+   * above it and below the 1.035 the generator currently emits. */
+  const MIN_STD = 0.85;
+  const MAX_MEAN = 0.35;
+
+  const png = Buffer.from(b64, 'base64');
+  if (png.readUInt32BE(0) !== 0x89504e47) return ['the tile is not a PNG'];
+
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let depth = 0;
+  let colour = -1;
+  const idat = [];
+  while (pos + 8 <= png.length) {
+    const len = png.readUInt32BE(pos);
+    const type = png.toString('ascii', pos + 4, pos + 8);
+    const data = png.subarray(pos + 8, pos + 8 + len);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      depth = data[8];
+      colour = data[9];
+    } else if (type === 'IDAT') idat.push(data);
+    else if (type === 'IEND') break;
+    pos += 12 + len;
+  }
+  if (depth !== 8 || colour !== 6) {
+    return [`the tile is not 8-bit RGBA (depth ${depth}, colour type ${colour})`];
+  }
+
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = 1 + width * 4;
+  if (raw.length !== stride * height) {
+    return [`the tile decodes to ${raw.length} bytes, expected ${stride * height}`];
+  }
+
+  let n = 0;
+  let sum = 0;
+  let sumSq = 0;
+  let lighten = 0;
+  let darken = 0;
+  for (let y = 0; y < height; y += 1) {
+    const base = y * stride;
+    // Filter 0 (None) only — the generator writes nothing else, and undoing
+    // the others here would be modelling a file we do not produce.
+    if (raw[base] !== 0) return [`the tile uses PNG filter ${raw[base]}; this reads filter 0 only`];
+    for (let x = 0; x < width; x += 1) {
+      const o = base + 1 + x * 4;
+      const grey = raw[o];
+      const alpha = raw[o + 3];
+      // Source-over of (grey, alpha) onto level C, expressed as a signed
+      // change in levels. Exactly what the generator solves for.
+      const d = ((grey - C) * alpha) / 255;
+      if (d > 0.05) lighten += 1;
+      else if (d < -0.05) darken += 1;
+      sum += d;
+      sumSq += d * d;
+      n += 1;
+    }
+  }
+  const mean = sum / n;
+  const std = Math.sqrt(sumSq / n - mean * mean);
+
+  const faults = [];
+  if (std < MIN_STD) {
+    faults.push(
+      `the tile perturbs by only ${std.toFixed(3)} levels (need >= ${MIN_STD}) — ` +
+        'too weak to mask a 1-level band edge, which is how this shipped invisible',
+    );
+  }
+  if (Math.abs(mean) > MAX_MEAN) {
+    faults.push(
+      `the tile shifts the background by ${mean.toFixed(3)} levels (max ${MAX_MEAN}) — ` +
+        'that is a brightness change, not masking',
+    );
+  }
+  if (lighten === 0 || darken === 0) {
+    faults.push(
+      `the tile only ${darken === 0 ? 'lightens' : 'darkens'} — one-sided noise ` +
+        'cannot straddle an edge; it needs both white and black pixels',
+    );
+  }
+  if (faults.length === 0) {
+    console.log(
+      `ok   the dither measures std ${std.toFixed(3)}, mean ${mean.toFixed(3)} levels over ${C}`,
+    );
+  }
+  return faults;
 }
 
 /* ---------------- 6. the first frame is never empty ---------------------- */
