@@ -40,7 +40,7 @@ import {
   LOW_THRESHOLD,
   lastBoughtLabel,
   lifeRemaining,
-  normalizeKey,
+  queuedKeys,
   statusLabel,
   type ItemStat,
 } from '@/lib/pantry-intel';
@@ -123,17 +123,10 @@ function SignedInPantry() {
   const searching = q.length > 0;
 
   // Anything sitting unticked on a shopping list is, by the user's own hand,
-  // running low — that's what putting it on the list *means*. Deriving it from
-  // the lists rather than storing a flag means every add path agrees for free
-  // (pantry swipe, Vibe Check, typing it straight onto a list), and it clears
-  // itself the moment the item is ticked off.
-  const queued = useMemo(() => {
-    const keys = new Set<string>();
-    for (const l of lists) {
-      for (const it of l.items) if (!it.checked) keys.add(normalizeKey(it.name));
-    }
-    return keys;
-  }, [lists]);
+  // running low — that's what putting it on the list *means*. A tick anywhere
+  // cancels it again, including on a different list: see queuedKeys, which owns
+  // the rule so it can be tested against the case that broke it.
+  const queued = useMemo(() => queuedKeys(lists), [lists]);
 
   const isLow = useCallback(
     (s: ItemStat) => queued.has(s.key) || lifeRemaining(s, now) < LOW_THRESHOLD,

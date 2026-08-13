@@ -227,6 +227,58 @@ export function lifeRemaining(stat: ItemStat, now: number): number {
   return Math.max(0, Math.min(1, 1 - (now - stat.lastPurchasedAt) / span));
 }
 
+/** The two fields the queue rule below reads. Structural, so both the store's
+ *  Item and any list-shaped row can be passed without adapting either. */
+export interface QueueableItem {
+  name: string;
+  checked: boolean;
+}
+
+/**
+ * Items the user has said they need — the keys the Pantry treats as running low
+ * regardless of what the model predicts.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a tick beats an untick, across all lists
+ * ---------------------------------------------------------------------------
+ *
+ * Putting something on a list IS the user saying they are low on it, so an
+ * unticked row is a statement of need and the model should not argue with it.
+ * Deriving that from the lists rather than storing a flag means every add path
+ * agrees for free — pantry swipe, Vibe Check, typing it straight in.
+ *
+ * But the first version only looked at unticked rows, and one item can sit on
+ * two lists. Ticking gnocchi off the weekly shop while the same gnocchi is
+ * still unticked on a recipe list left the Pantry insisting it was running low
+ * on something bought ten minutes earlier — the row read "On a list · Last
+ * bought today · ~7 days left" with a full green bar, three statements that
+ * cannot all be advice.
+ *
+ * A tick is the later statement and the more concrete one: the unticked row is
+ * a plan, the ticked row is a purchase. So a tick ANYWHERE cancels the queue
+ * signal for that item, and the model — which now knows about the purchase —
+ * takes over.
+ *
+ * This is only sound because the lists passed in are the SWEPT ones (see
+ * lib/list-sweep): a ticked row that survives the sweep was ticked today, so
+ * "ticked somewhere" really does mean "bought today". Yesterday's ticks are
+ * already gone, and an item genuinely needed again gets unticked or re-added,
+ * which puts it straight back here.
+ */
+export function queuedKeys(
+  lists: readonly { items: readonly QueueableItem[] }[],
+): Set<string> {
+  const wanted = new Set<string>();
+  const bought = new Set<string>();
+  for (const list of lists) {
+    for (const item of list.items) {
+      (item.checked ? bought : wanted).add(normalizeKey(item.name));
+    }
+  }
+  for (const key of bought) wanted.delete(key);
+  return wanted;
+}
+
 /** A translate function (from the locale store), passed in so this pure lib
  * stays i18n-agnostic while still producing localized strings. */
 export type Translate = (key: string, options?: Record<string, unknown>) => string;

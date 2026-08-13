@@ -302,6 +302,18 @@ if (!(flagAt < 0.9)) {
  * still learned. A rule that only did the first would be a rule that never
  * learns anything, and it would pass any test written about holidays alone.
  */
+const checkDeep = (title, actual, expected) => {
+  const a = JSON.stringify(actual);
+  const e = JSON.stringify(expected);
+  if (a === e) console.log(`ok   ${title}`);
+  else {
+    failures += 1;
+    console.log(`FAIL ${title}`);
+    console.log(`  expected ${e}`);
+    console.log(`  actual   ${a}`);
+  }
+};
+
 const rounded = (n) => Math.round(n * 10) / 10;
 const learn = (seed, gaps) => {
   let iv = seed;
@@ -362,6 +374,55 @@ if (early > late) {
 // Also below the cap, so it is the FLOOR being tested and not the ceiling:
 // without a floor, alpha would be ~0 here and the answer would be 10.
 check('damping bottoms out rather than freezing', rounded(mod.blendInterval(10, 14, 1e6)), 11);
+
+
+/* ------------------- the queue rule: a tick beats an untick ---------------- */
+
+/*
+ * The bug this is written for, exactly as reported.
+ *
+ * "Check 1" and a recipe list both carry gnocchi. Ticking it off the shop left
+ * it unticked on the recipe list, so the Pantry still counted it as queued and
+ * filed it under Running low — a row reading "On a list · Last bought today ·
+ * ~7 days left" next to a full green bar. Three statements that cannot all be
+ * advice about the same jar.
+ *
+ * Only sound because the lists handed in are SWEPT (lib/list-sweep): a ticked
+ * row that survives was ticked today, so "ticked somewhere" means "bought
+ * today". These cases pin the rule, not the wording of it.
+ */
+const keys = (lists) => [...mod.queuedKeys(lists)].sort();
+const L = (...items) => ({ items });
+const I = (name, checked = false) => ({ name, checked });
+
+checkDeep('an unticked row queues the item', keys([L(I('Milk'))]), ['milk']);
+checkDeep('a ticked row does not', keys([L(I('Milk', true))]), []);
+// The reported case: ticked on one list, still unticked on another.
+checkDeep(
+  'a tick on ANY list cancels an untick on another',
+  keys([L(I('Gnocchi di Patate', true)), L(I('Gnocchi di Patate'))]),
+  [],
+);
+// Order must not matter — a Set built the other way round would pass the case
+// above by luck and fail this one.
+checkDeep(
+  '...whichever list is seen first',
+  keys([L(I('Gnocchi di Patate')), L(I('Gnocchi di Patate', true))]),
+  [],
+);
+// Identity is normalizeKey's, not the raw string: two spellings are one item,
+// so a tick on one really does cancel the other.
+checkDeep(
+  'the tick and the untick are matched by item key',
+  keys([L(I('  OLIVE   OIL '), I('Olive oil', true))]),
+  [],
+);
+checkDeep(
+  'unrelated items are untouched',
+  keys([L(I('Milk', true), I('Bread'))]),
+  ['bread'],
+);
+checkDeep('no lists, nothing queued', keys([]), []);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
