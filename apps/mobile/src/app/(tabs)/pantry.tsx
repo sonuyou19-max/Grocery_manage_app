@@ -40,6 +40,7 @@ import {
   LOW_THRESHOLD,
   lastBoughtLabel,
   lifeRemaining,
+  listsHolding,
   queuedKeys,
   statusLabel,
   type ItemStat,
@@ -127,6 +128,16 @@ function SignedInPantry() {
   // cancels it again, including on a different list: see queuedKeys, which owns
   // the rule so it can be tested against the case that broke it.
   const queued = useMemo(() => queuedKeys(lists), [lists]);
+
+  // The lists holding whichever item's sheet is open — tagged under its name so
+  // "have I already put this on a list?" is answerable without leaving here.
+  const stapleLists = useMemo(
+    () =>
+      stapleKey
+        ? listsHolding(lists, stapleKey).map((l) => ({ id: l.id, name: l.name }))
+        : [],
+    [lists, stapleKey],
+  );
 
   const isLow = useCallback(
     (s: ItemStat) => queued.has(s.key) || lifeRemaining(s, now) < LOW_THRESHOLD,
@@ -401,6 +412,10 @@ function SignedInPantry() {
       />
       <StapleSheet
         item={stapleKey ? stats[stapleKey] ?? null : null}
+        /* Computed here rather than inside the sheet: this screen already holds
+           the lists, and the sheet stays a presentational component that can be
+           rendered from anywhere with whatever the caller knows. */
+        lists={stapleLists}
         onClose={() => setStapleKey(null)}
         onChange={(patch) => {
           if (stapleKey) setStaple(stapleKey, patch);

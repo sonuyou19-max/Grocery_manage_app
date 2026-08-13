@@ -17,6 +17,7 @@ import {
   hasUserCadence,
   type ItemStat,
 } from "@/lib/pantry-intel";
+import { listTint } from "@/lib/list-tint";
 import { historyFor, type Purchase } from "@/lib/purchase-log";
 import { useT } from "@/store/locale";
 import { radii, spacing, type, useTheme } from "@/theme";
@@ -51,6 +52,15 @@ interface StapleSheetProps {
   /** Every logged purchase, so the sheet can offer this item's history. */
   purchases: Purchase[];
   onOpenHistory: () => void;
+  /**
+   * The lists this item is currently on, tagged under its name.
+   *
+   * Answering "where did I put this?" without leaving the Pantry — the moment
+   * you want it is the moment you are looking at the item and wondering whether
+   * it is already handled. Empty is the normal case for something tracked but
+   * not currently needed, and renders nothing.
+   */
+  lists: { id: string; name: string }[];
 }
 
 export function StapleSheet({
@@ -60,8 +70,9 @@ export function StapleSheet({
   onRest,
   purchases,
   onOpenHistory,
+  lists,
 }: StapleSheetProps) {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const t = useT();
 
   if (!item) return null;
@@ -85,6 +96,31 @@ export function StapleSheet({
             <Text style={[type.sub, { color: colors.muted }]}>
               {categoryLabel(item.category, t)}
             </Text>
+            {/* One tag per list, each in the list's own colour — see
+                lib/list-tint for why the colour is hashed from the id rather
+                than cycled by position. Wraps rather than truncating: a
+                household with four lists and a long name for each is ordinary,
+                and a clipped tag names the wrong list. */}
+            {lists.length > 0 && (
+              <View style={styles.tags}>
+                {lists.map((l) => {
+                  const tint = listTint(l.id, scheme);
+                  return (
+                    <View
+                      key={l.id}
+                      style={[styles.tag, { backgroundColor: tint.bg }]}
+                    >
+                      <Text
+                        style={[styles.tagText, { color: tint.fg }]}
+                        numberOfLines={1}
+                      >
+                        {l.name}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* Staple toggle */}
@@ -229,6 +265,21 @@ function CadenceChip({
 }
 
 const styles = StyleSheet.create({
+  tags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  tag: {
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    // Keeps one very long list name from pushing the sheet wide; the name
+    // itself truncates inside the chip rather than the row overflowing.
+    maxWidth: "100%",
+  },
+  tagText: { fontSize: 12, fontWeight: "700" },
   // Capped so a long item name plus the presets can't push the Done row off a
   // short screen — the content scrolls instead.
   sheet: { maxHeight: "85%" },

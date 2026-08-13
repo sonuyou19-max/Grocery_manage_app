@@ -424,5 +424,42 @@ checkDeep(
 );
 checkDeep('no lists, nothing queued', keys([]), []);
 
+
+/* ----------------- which lists an item is tagged with --------------------- */
+
+/*
+ * The Pantry tags an open item with the lists holding it. Ticked rows count:
+ * a bought item has not left the list, it is in the "added to pantry" section
+ * at its foot, and this answers "where does this live" rather than "do I still
+ * need it" — which is the opposite of what queuedKeys above answers, and the
+ * reason they are two functions instead of one flag.
+ */
+const named = (lists, key) => mod.listsHolding(lists, key).map((l) => l.name);
+
+checkDeep(
+  'an item is tagged with every list holding it',
+  named(
+    [
+      { name: 'Check 1', items: [I('Citroen', true), I('Zout')] },
+      { name: 'Gnocchi', items: [I('Citroen')] },
+      { name: 'Weekly', items: [I('Melk')] },
+    ],
+    'citroen',
+  ),
+  ['Check 1', 'Gnocchi'],
+);
+// A ticked row still counts — the opposite of the queue rule, deliberately.
+checkDeep(
+  'a ticked row still tags its list',
+  named([{ name: 'Check 1', items: [I('Citroen', true)] }], 'citroen'),
+  ['Check 1'],
+);
+checkDeep(
+  'matching is by item key, not raw name',
+  named([{ name: 'Check 1', items: [I('  OLIVE   OIL ')] }], 'olive oil'),
+  ['Check 1'],
+);
+checkDeep('an untracked item has no tags', named([{ name: 'Check 1', items: [I('Zout')] }], 'melk'), []);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

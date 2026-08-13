@@ -265,6 +265,24 @@ export interface QueueableItem {
  * already gone, and an item genuinely needed again gets unticked or re-added,
  * which puts it straight back here.
  */
+/**
+ * The lists that currently hold an item, in the order the lists are given.
+ *
+ * Ticked rows count. A bought item has not left the list — it sits in the
+ * "added to pantry" section at its foot until the day ends — and the question
+ * this answers is "where does this live", not "do I still need it". The Pantry
+ * uses it to tag an item with its lists, which is a navigation aid, not advice.
+ *
+ * Matched with normalizeKey for the usual reason: the pantry is keyed by it, so
+ * anything comparing raw names would miss "Olive  oil" against "olive oil" and
+ * quietly show no tag on exactly the items whose duplicates are most confusing.
+ */
+export function listsHolding<
+  L extends { items: readonly { name: string }[] },
+>(lists: readonly L[], key: string): L[] {
+  return lists.filter((l) => l.items.some((it) => normalizeKey(it.name) === key));
+}
+
 export function queuedKeys(
   lists: readonly { items: readonly QueueableItem[] }[],
 ): Set<string> {
