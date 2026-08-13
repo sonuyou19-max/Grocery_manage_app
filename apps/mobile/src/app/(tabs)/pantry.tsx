@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ItemCategory } from '@korb/shared';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   LayoutAnimation,
   Pressable,
@@ -23,12 +23,14 @@ import { Fab } from '@/components/fab';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { PantryTeaser } from '@/components/pantry-teaser';
+import { CoachMark } from '@/components/coach-mark';
 import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
 import { StapleSheet } from '@/components/staple-sheet';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
+import { coachMarkDue, useCoachMark } from '@/lib/coach-marks';
 import { haptics } from '@/lib/haptics';
 import { rubberBand, springTo } from '@/lib/motion';
 import { useDeferUntilClosed } from '@/lib/modal-nav';
@@ -217,11 +219,36 @@ function SignedInPantry() {
     haptics.success();
   };
 
+  /*
+   * Two tips on one screen, and only ever one of them at a time.
+   *
+   * The swipe is the thing the whole tab is built around and the least
+   * discoverable, so it goes first; the details tap waits until the swipe tip
+   * has been dealt with, which in practice means a later visit. Stacking both
+   * would put a second dimmed overlay on screen the instant the first is
+   * dismissed, which reads as the app nagging.
+   *
+   * `low.length > 0` is the readiness gate: a tip pointing at the first row is
+   * only sensible once there IS a first row, which on a new install is several
+   * shops away.
+   */
+  const coachRef = useRef<View>(null);
+  const swipeCoach = useCoachMark('pantrySwipe', low.length > 0, coachRef);
+  const detailsCoach = useCoachMark(
+    'pantryDetails',
+    low.length > 0 && !swipeCoach.visible && coachMarkDue('pantrySwipe') === false,
+    coachRef,
+  );
+
   const renderRows = (rows: ItemStat[]) => (
     <View style={styles.rowStack}>
-      {rows.map((item) => (
+      {rows.map((item, i) => (
         <PantrySwipeRow
           key={item.key}
+          /* Only the first row of the FIRST section carries a coach ref, and
+             collapsable={false} inside the row keeps Android from flattening
+             the view away — a flattened view measures nothing. */
+          coachRef={i === 0 && rows === low ? coachRef : undefined}
           item={item}
           now={now}
           queued={queued.has(item.key)}
@@ -410,6 +437,22 @@ function SignedInPantry() {
           setAdding(false);
         }}
       />
+      <CoachMark
+        visible={swipeCoach.visible}
+        rect={swipeCoach.rect}
+        textKey="coach.pantrySwipe"
+        gesture="swipeBoth"
+        onDismiss={swipeCoach.dismiss}
+        onSkipAll={swipeCoach.skipAll}
+      />
+      <CoachMark
+        visible={detailsCoach.visible}
+        rect={detailsCoach.rect}
+        textKey="coach.pantryDetails"
+        gesture="tap"
+        onDismiss={detailsCoach.dismiss}
+        onSkipAll={detailsCoach.skipAll}
+      />
       <StapleSheet
         item={stapleKey ? stats[stapleKey] ?? null : null}
         /* Computed here rather than inside the sheet: this screen already holds
@@ -568,6 +611,7 @@ function PantrySwipeRow({
   onStillGood,
   onAddToList,
   onOpen,
+  coachRef,
 }: {
   item: ItemStat;
   now: number;
@@ -577,6 +621,8 @@ function PantrySwipeRow({
   onStillGood: () => void;
   onAddToList: () => void;
   onOpen: () => void;
+  /** Set on the first row only, so a coach mark can measure where it sits. */
+  coachRef?: RefObject<View | null>;
 }) {
   const t = useT();
   const tx = useSharedValue(0);
@@ -618,7 +664,10 @@ function PantrySwipeRow({
     left < 0.15 ? colors.crit : left < LOW_THRESHOLD ? colors.warn : colors.accent;
 
   return (
-    <View style={styles.swipeWrap}>
+    /* collapsable={false} so Android keeps this view in the hierarchy — a
+       flattened view has nothing to measure, and the coach mark would spotlight
+       a rect of zeroes. Harmless on the rows that carry no ref. */
+    <View ref={coachRef} collapsable={false} style={styles.swipeWrap}>
       {/* Revealed behind the row; only the swiped side fades in. */}
       <Animated.View style={[styles.actionPanel, styles.actionLeft, { backgroundColor: colors.warn }, leftStyle]}>
         <Ionicons name="time-outline" size={20} color="#FFFFFF" />

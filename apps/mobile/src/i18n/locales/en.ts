@@ -27,6 +27,16 @@ const en = {
     addedToPantry: { one: '%{count} added to pantry', other: '%{count} added to pantry' },
     boughtCount: { one: '%{count} bought', other: '%{count} bought' },
   },
+  coach: {
+    gotIt: 'Got it',
+    skipAll: 'Skip tips',
+    listDeleteTitle: 'Swipe to delete',
+    listDeleteBody: 'Drag a row to the left to reveal Delete. Handy for anything you added by mistake.',
+    pantrySwipeTitle: 'Swipe either way',
+    pantrySwipeBody: 'Left adds it to your list. Right says you’ve still got plenty, and Korb waits longer before asking again.',
+    pantryDetailsTitle: 'Tap for the details',
+    pantryDetailsBody: 'Open any item to see what you’ve paid over time, pin how often you restock it, or let it rest if you’ve stopped buying it.',
+  },
   greeting: {
     morning: 'Good morning',
     afternoon: 'Good afternoon',

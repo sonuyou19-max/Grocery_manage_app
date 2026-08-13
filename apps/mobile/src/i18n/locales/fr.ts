@@ -18,6 +18,16 @@ const fr = {
     addedToPantry: { one: '%{count} ajouté au garde-manger', other: '%{count} ajoutés au garde-manger' },
     boughtCount: { one: '%{count} acheté', other: '%{count} achetés' },
   },
+  coach: {
+    gotIt: 'Compris',
+    skipAll: 'Passer les astuces',
+    listDeleteTitle: 'Glisse pour supprimer',
+    listDeleteBody: 'Fais glisser une ligne vers la gauche pour afficher Supprimer. Pratique pour tout ce que tu as ajouté par erreur.',
+    pantrySwipeTitle: 'Glisse dans les deux sens',
+    pantrySwipeBody: 'Vers la gauche, l’article rejoint ta liste. Vers la droite, tu en as encore — Korb attendra plus longtemps avant de redemander.',
+    pantryDetailsTitle: 'Touche pour les détails',
+    pantryDetailsBody: 'Ouvre un article pour voir ce que tu as payé, fixer la fréquence de réachat, ou le mettre en pause si tu n’en achètes plus.',
+  },
   greeting: {
     morning: 'Bonjour',
     afternoon: 'Bon après-midi',

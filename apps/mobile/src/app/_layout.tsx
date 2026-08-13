@@ -21,6 +21,7 @@ import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
 import { setUnitLexicon } from '@/lib/item-unit';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring, trackRoute } from '@/lib/monitoring';
+import { hydrateCoachMarks } from '@/lib/coach-marks';
 import { hydrateGetStarted, hydrateOnboarding } from '@/lib/onboarding';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
 import { AuthProvider } from '@/store/auth';
@@ -79,6 +80,10 @@ export default function RootLayout() {
     // render instead of sliding in a beat later.
     void hydrateOnboarding();
     void hydrateGetStarted();
+    // Same reason, for the in-place gesture tips: a screen decides on its first
+    // render whether a tip is owed, and reading storage after mount would let
+    // one appear over a screen that has already settled.
+    void hydrateCoachMarks();
 
     // The shared item lexicon: read the device copy first so the very first
     // render already has it, then pull whatever has been published since. The

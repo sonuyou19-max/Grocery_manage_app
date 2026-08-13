@@ -18,6 +18,16 @@ const nl = {
     addedToPantry: { one: '%{count} in de voorraadkast', other: '%{count} in de voorraadkast' },
     boughtCount: { one: '%{count} gekocht', other: '%{count} gekocht' },
   },
+  coach: {
+    gotIt: 'Duidelijk',
+    skipAll: 'Tips overslaan',
+    listDeleteTitle: 'Veeg om te verwijderen',
+    listDeleteBody: 'Sleep een rij naar links om Verwijderen te tonen. Handig voor alles wat je per ongeluk hebt toegevoegd.',
+    pantrySwipeTitle: 'Veeg beide kanten op',
+    pantrySwipeBody: 'Naar links zet het op je lijst. Naar rechts betekent dat je nog genoeg hebt — Korb wacht dan langer voor het opnieuw vraagt.',
+    pantryDetailsTitle: 'Tik voor de details',
+    pantryDetailsBody: 'Open een item om te zien wat je betaald hebt, vast te zetten hoe vaak je het koopt, of het te laten rusten als je het niet meer koopt.',
+  },
   greeting: {
     morning: 'Goedemorgen',
     afternoon: 'Goedemiddag',

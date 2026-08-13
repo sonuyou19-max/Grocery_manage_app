@@ -28,6 +28,16 @@ const pl = {
     addedToPantry: { one: '%{count} dodany do spiżarni', few: '%{count} dodane do spiżarni', many: '%{count} dodanych do spiżarni', other: '%{count} dodanych do spiżarni' },
     boughtCount: { one: '%{count} kupiony', few: '%{count} kupione', many: '%{count} kupionych', other: '%{count} kupionych' },
   },
+  coach: {
+    gotIt: 'Jasne',
+    skipAll: 'Pomiń wskazówki',
+    listDeleteTitle: 'Przesuń, aby usunąć',
+    listDeleteBody: 'Przeciągnij wiersz w lewo, aby pokazać Usuń. Przydatne przy wszystkim, co dodasz przez pomyłkę.',
+    pantrySwipeTitle: 'Przesuwaj w obie strony',
+    pantrySwipeBody: 'W lewo trafia na Twoją listę. W prawo znaczy, że masz jeszcze zapas — Korb zapyta później.',
+    pantryDetailsTitle: 'Dotknij, aby zobaczyć szczegóły',
+    pantryDetailsBody: 'Otwórz produkt, aby zobaczyć, ile płacisz, ustalić jak często go kupujesz, albo go uśpić, jeśli przestałeś go kupować.',
+  },
   greeting: {
     morning: 'Dzień dobry',
     afternoon: 'Dzień dobry',

@@ -30,6 +30,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AnimatedMoney } from "@/components/animated-money";
 import { Frosted } from "@/components/frosted";
 import { ClaimChip, ShoppersBadge } from "@/components/claim-chip";
+import { CoachMark } from "@/components/coach-mark";
 import { FlyToCart, type FlyToCartHandle } from "@/components/fly-to-cart";
 import { GlassView } from "@/components/glass";
 import { EcoBar } from "@/components/eco-bar";
@@ -42,6 +43,7 @@ import { MeshBackground } from "@/components/mesh-background";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
+import { useCoachMark } from "@/lib/coach-marks";
 import { findDuplicate } from "@/lib/item-dup";
 import { emojiFor } from "@/lib/item-emoji";
 import { haptics } from "@/lib/haptics";
@@ -204,6 +206,23 @@ export default function ListDetailScreen() {
       inCart,
     };
   }, [list]);
+
+  /*
+   * Swipe-left-to-delete, taught on the first row that is actually there.
+   *
+   * Held back until the list has something on it — which on a new install is
+   * moments away, not sessions, but the gate still matters: the row this points
+   * at has to exist before it can be measured, and an empty list has none.
+   *
+   * Declared up here with the other hooks, ABOVE this screen's `if (!list)`
+   * return — see the note on bagStyle. Below that guard is a region where no
+   * hook may be called, because the screen renders once with the list still
+   * undefined whenever it is opened before the household's lists arrive.
+   * `grouped` is empty on that render, so the readiness gate is simply false.
+   */
+  const firstOpenId = grouped.find((g) => g.items.length > 0)?.items[0]?.id ?? null;
+  const coachRef = useRef<View | null>(null);
+  const deleteCoach = useCoachMark("listSwipeDelete", firstOpenId != null, coachRef);
 
   if (!list) {
     return (
@@ -567,6 +586,9 @@ export default function ListDetailScreen() {
                     rowRef={(v) => {
                       if (v) rowRefs.current.set(it.id, v);
                       else rowRefs.current.delete(it.id);
+                      // The same view the fly-to-cart animation measures also
+                      // serves as the coach mark's target, for the first row.
+                      if (it.id === firstOpenId) coachRef.current = v;
                     }}
                     onToggle={() => handleToggle(it)}
                     onEdit={() => openEdit(it)}
@@ -730,6 +752,14 @@ export default function ListDetailScreen() {
         </SafeAreaView>
       </KeyboardAvoidingView>
 
+      <CoachMark
+        visible={deleteCoach.visible}
+        rect={deleteCoach.rect}
+        textKey="coach.listDelete"
+        gesture="swipeLeft"
+        onDismiss={deleteCoach.dismiss}
+        onSkipAll={deleteCoach.skipAll}
+      />
       <ItemSheet
         listId={list.id}
         itemId={sheetItemId}

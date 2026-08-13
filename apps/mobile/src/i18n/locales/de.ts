@@ -18,6 +18,16 @@ const de = {
     addedToPantry: { one: '%{count} in der Vorratskammer', other: '%{count} in der Vorratskammer' },
     boughtCount: { one: '%{count} gekauft', other: '%{count} gekauft' },
   },
+  coach: {
+    gotIt: 'Alles klar',
+    skipAll: 'Tipps überspringen',
+    listDeleteTitle: 'Wischen zum Löschen',
+    listDeleteBody: 'Zieh eine Zeile nach links, um „Löschen“ zu zeigen. Praktisch für alles, was du versehentlich hinzugefügt hast.',
+    pantrySwipeTitle: 'In beide Richtungen wischen',
+    pantrySwipeBody: 'Nach links landet es auf deiner Liste. Nach rechts heißt: noch genug da — Korb fragt später wieder.',
+    pantryDetailsTitle: 'Tippen für Details',
+    pantryDetailsBody: 'Öffne einen Artikel, um zu sehen, was du bezahlt hast, wie oft du nachkaufst — oder lass ihn pausieren, wenn du ihn nicht mehr kaufst.',
+  },
   greeting: {
     morning: 'Guten Morgen',
     afternoon: 'Guten Tag',
