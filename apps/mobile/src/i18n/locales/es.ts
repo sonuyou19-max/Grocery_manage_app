@@ -15,6 +15,8 @@ const es = {
     continue: 'Continuar',
     notNow: 'Ahora no',
     addCount: { one: 'Añadir %{count} artículo', other: 'Añadir %{count} artículos' },
+    addedToPantry: { one: '%{count} añadido a la despensa', other: '%{count} añadidos a la despensa' },
+    boughtCount: { one: '%{count} comprado', other: '%{count} comprados' },
   },
   greeting: {
     morning: 'Buenos días',
@@ -124,7 +126,6 @@ const es = {
     create: 'Crear',
     addTheseTo: 'Añadir estos artículos a',
     itemsCount: { one: '%{count} artículo', other: '%{count} artículos' },
-    inCart: '%{count} en el carrito',
   },
   cards: {
     title: 'Tarjetas de fidelidad',
@@ -533,8 +534,6 @@ const es = {
     gone: 'Esta lista ya no existe.',
     anyStore: 'Cualquier tienda',
     inCartCount: '%{checked}/%{total} comprados',
-    inCartSection: { one: '%{count} añadido a la despensa', other: '%{count} añadidos a la despensa' },
-    inCartSectionGuest: { one: '%{count} comprado', other: '%{count} comprados' },
     toBuy: 'Por comprar',
     inCartLabel: 'En el carrito',
     priced: 'Con precio',

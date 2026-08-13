@@ -15,6 +15,8 @@ const it = {
     continue: 'Continua',
     notNow: 'Non ora',
     addCount: { one: 'Aggiungi %{count} articolo', other: 'Aggiungi %{count} articoli' },
+    addedToPantry: { one: '%{count} aggiunto alla dispensa', other: '%{count} aggiunti alla dispensa' },
+    boughtCount: { one: '%{count} acquistato', other: '%{count} acquistati' },
   },
   greeting: {
     morning: 'Buongiorno',
@@ -124,7 +126,6 @@ const it = {
     create: 'Crea',
     addTheseTo: 'Aggiungi questi articoli a',
     itemsCount: { one: '%{count} articolo', other: '%{count} articoli' },
-    inCart: '%{count} nel carrello',
   },
   cards: {
     title: 'Carte fedeltà',
@@ -533,8 +534,6 @@ const it = {
     gone: 'Questa lista non esiste più.',
     anyStore: 'Qualsiasi negozio',
     inCartCount: '%{checked}/%{total} acquistati',
-    inCartSection: { one: '%{count} aggiunto alla dispensa', other: '%{count} aggiunti alla dispensa' },
-    inCartSectionGuest: { one: '%{count} acquistato', other: '%{count} acquistati' },
     toBuy: 'Da comprare',
     inCartLabel: 'Nel carrello',
     priced: 'Con prezzo',

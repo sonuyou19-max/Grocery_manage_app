@@ -15,6 +15,8 @@ const de = {
     continue: 'Weiter',
     notNow: 'Nicht jetzt',
     addCount: { one: '%{count} Artikel hinzufügen', other: '%{count} Artikel hinzufügen' },
+    addedToPantry: { one: '%{count} in der Vorratskammer', other: '%{count} in der Vorratskammer' },
+    boughtCount: { one: '%{count} gekauft', other: '%{count} gekauft' },
   },
   greeting: {
     morning: 'Guten Morgen',
@@ -125,7 +127,6 @@ const de = {
     create: 'Erstellen',
     addTheseTo: 'Diese Artikel hinzufügen zu',
     itemsCount: { one: '%{count} Artikel', other: '%{count} Artikel' },
-    inCart: '%{count} im Wagen',
   },
   cards: {
     title: 'Kundenkarten',
@@ -534,8 +535,6 @@ const de = {
     gone: 'Diese Liste gibt es nicht mehr.',
     anyStore: 'Beliebiges Geschäft',
     inCartCount: '%{checked}/%{total} gekauft',
-    inCartSection: { one: '%{count} in der Vorratskammer', other: '%{count} in der Vorratskammer' },
-    inCartSectionGuest: { one: '%{count} gekauft', other: '%{count} gekauft' },
     toBuy: 'Zu kaufen',
     inCartLabel: 'Im Wagen',
     priced: 'Mit Preis',

@@ -25,6 +25,8 @@ const pl = {
       many: 'Dodaj %{count} produktów',
       other: 'Dodaj %{count} produktów',
     },
+    addedToPantry: { one: '%{count} dodany do spiżarni', few: '%{count} dodane do spiżarni', many: '%{count} dodanych do spiżarni', other: '%{count} dodanych do spiżarni' },
+    boughtCount: { one: '%{count} kupiony', few: '%{count} kupione', many: '%{count} kupionych', other: '%{count} kupionych' },
   },
   greeting: {
     morning: 'Dzień dobry',
@@ -149,7 +151,6 @@ const pl = {
       many: '%{count} produktów',
       other: '%{count} produktów',
     },
-    inCart: '%{count} w koszyku',
   },
   cards: {
     title: 'Karty sklepowe',
@@ -629,8 +630,6 @@ const pl = {
     gone: 'Ta lista już nie istnieje.',
     anyStore: 'Dowolny sklep',
     inCartCount: '%{checked}/%{total} kupionych',
-    inCartSection: { one: '%{count} dodany do spiżarni', few: '%{count} dodane do spiżarni', many: '%{count} dodanych do spiżarni', other: '%{count} dodanych do spiżarni' },
-    inCartSectionGuest: { one: '%{count} kupiony', few: '%{count} kupione', many: '%{count} kupionych', other: '%{count} kupionych' },
     toBuy: 'Do kupienia',
     inCartLabel: 'W koszyku',
     priced: 'Z ceną',

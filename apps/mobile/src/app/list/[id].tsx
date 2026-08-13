@@ -636,12 +636,13 @@ export default function ListDetailScreen() {
                     color={colors.muted}
                   />
                   <Text style={[type.label, { color: colors.muted }]}>
-                    {t(
-                      user
-                        ? "listDetail.inCartSection"
-                        : "listDetail.inCartSectionGuest",
-                      { count: inCartItems.length },
-                    )}
+                    {/* common.*, not a string of this screen's own: the
+                        list card on the home tab says the same sentence, and
+                        when only one of them was renamed the two screens
+                        disagreed about what ticking an item had just done. */}
+                    {t(user ? "common.addedToPantry" : "common.boughtCount", {
+                      count: inCartItems.length,
+                    })}
                   </Text>
                   <View
                     style={[styles.catLine, { backgroundColor: colors.line }]}

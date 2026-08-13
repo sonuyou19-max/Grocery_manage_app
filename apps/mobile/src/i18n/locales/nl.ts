@@ -15,6 +15,8 @@ const nl = {
     continue: 'Doorgaan',
     notNow: 'Niet nu',
     addCount: { one: '%{count} item toevoegen', other: '%{count} items toevoegen' },
+    addedToPantry: { one: '%{count} in de voorraadkast', other: '%{count} in de voorraadkast' },
+    boughtCount: { one: '%{count} gekocht', other: '%{count} gekocht' },
   },
   greeting: {
     morning: 'Goedemorgen',
@@ -124,7 +126,6 @@ const nl = {
     create: 'Aanmaken',
     addTheseTo: 'Voeg deze items toe aan',
     itemsCount: { one: '%{count} item', other: '%{count} items' },
-    inCart: '%{count} in mandje',
   },
   cards: {
     title: 'Klantenkaarten',
@@ -532,8 +533,6 @@ const nl = {
     gone: 'Deze lijst bestaat niet meer.',
     anyStore: 'Elke winkel',
     inCartCount: '%{checked}/%{total} gekocht',
-    inCartSection: { one: '%{count} in de voorraadkast', other: '%{count} in de voorraadkast' },
-    inCartSectionGuest: { one: '%{count} gekocht', other: '%{count} gekocht' },
     toBuy: 'Te kopen',
     inCartLabel: 'In mandje',
     priced: 'Met prijs',

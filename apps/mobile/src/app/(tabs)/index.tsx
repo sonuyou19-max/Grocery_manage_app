@@ -391,6 +391,9 @@ function ListCard({
 }) {
   const { colors } = useTheme();
   const { t, money } = useLocale();
+  // Signed out there is no pantry to add to, so the subtitle says "bought"
+  // instead — the same distinction the list screen's footer makes.
+  const { user } = useAuth();
   const checked = list.items.filter((it) => it.checked).length;
   const priced = list.items.filter((it) => it.priceCents != null);
   const total = priced.reduce((sum, it) => sum + (it.priceCents ?? 0), 0);
@@ -411,7 +414,10 @@ function ListCard({
             <Text style={[type.sub, { color: colors.muted }]}>
               {list.store ? `${list.store} · ` : ""}
               {t("lists.itemsCount", { count: list.items.length })} ·{" "}
-              {t("lists.inCart", { count: checked })}
+              {/* The same key the list screen's own footer uses — see there. */}
+              {t(user ? "common.addedToPantry" : "common.boughtCount", {
+                count: checked,
+              })}
             </Text>
           </View>
           {priced.length > 0 ? (

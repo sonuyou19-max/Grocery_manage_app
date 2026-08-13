@@ -24,6 +24,8 @@ const en = {
     continue: 'Continue',
     notNow: 'Not now',
     addCount: { one: 'Add %{count} item', other: 'Add %{count} items' },
+    addedToPantry: { one: '%{count} added to pantry', other: '%{count} added to pantry' },
+    boughtCount: { one: '%{count} bought', other: '%{count} bought' },
   },
   greeting: {
     morning: 'Good morning',
@@ -133,7 +135,6 @@ const en = {
     create: 'Create',
     addTheseTo: 'Add these items to',
     itemsCount: { one: '%{count} item', other: '%{count} items' },
-    inCart: '%{count} in cart',
   },
   cards: {
     // The wallet
@@ -544,8 +545,6 @@ const en = {
     gone: 'This list no longer exists.',
     anyStore: 'Any store',
     inCartCount: '%{checked}/%{total} bought',
-    inCartSection: { one: '%{count} added to pantry', other: '%{count} added to pantry' },
-    inCartSectionGuest: { one: '%{count} bought', other: '%{count} bought' },
     toBuy: 'To buy',
     inCartLabel: 'In cart',
     priced: 'Priced',
