@@ -63,6 +63,25 @@ export interface LoyaltyCard {
    * always preserved — see normalizeCardValue in lib/barcode.ts for why.
    */
   value: string;
+  /**
+   * True when this value came off a scanner (camera or photo import), false
+   * when it was typed in.
+   *
+   * Load-bearing for QR, and the reason it exists. A linear barcode on a
+   * loyalty card almost always encodes exactly the digits printed under it, so
+   * typing them reproduces the card. A QR usually does not — it is chosen
+   * precisely because it can carry a longer internal id or a web address, and
+   * the printed number is only a human-readable convenience. Build a QR from
+   * that number and you get a valid QR containing the wrong payload: it draws
+   * perfectly, looks plausible, and the till rejects it.
+   *
+   * Nothing on the client can detect the difference, so the app stops claiming
+   * to know and says where the value came from instead.
+   *
+   * Optional because cards saved before this existed have no answer; treat a
+   * missing value as "not scanned", which errs toward warning.
+   */
+  scanned?: boolean;
   createdAt: number;
 }
 
@@ -162,6 +181,8 @@ export interface NewCard {
   value: string;
   /** Omit to infer from the value's shape and check digit. */
   symbology?: Symbology;
+  /** True only when a scanner produced this value — see LoyaltyCard.scanned. */
+  scanned?: boolean;
 }
 
 export interface LoyaltyCardsApi {
@@ -229,6 +250,7 @@ export function useLoyaltyCards(userId: string | null | undefined): LoyaltyCards
         store,
         symbology,
         value,
+        scanned: input.scanned === true,
         createdAt: Date.now(),
       };
       // Newest first: the card you just added is the one you're about to use.

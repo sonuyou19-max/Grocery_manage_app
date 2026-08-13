@@ -181,6 +181,9 @@ const fr = {
     editNumber: 'Modifier le numéro',
     savedToast: 'Carte %{store} enregistrée',
     scanHint: 'Aligne le code-barres de ta carte',
+    typedQrWarning:
+      'Tu as saisi ce numéro, donc ce QR code en est issu. Il ne correspond à ta carte que si le QR code de la carte contient exactement ce numéro — beaucoup contiennent plutôt un code plus long ou une adresse web. Scanne la carte si tu peux.',
+    typedQrBadge: 'Créé à partir d’un numéro saisi — peut ne pas correspondre au QR code de la carte.',
     cameraNeededTitle: 'Accès à l’appareil photo nécessaire',
     cameraNeededBody:
       'Korb a besoin de l’appareil photo pour lire le code-barres de ta carte. L’image n’est jamais enregistrée ni envoyée.',

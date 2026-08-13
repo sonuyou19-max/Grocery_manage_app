@@ -208,6 +208,9 @@ const pl = {
     editNumber: 'Edytuj numer',
     savedToast: 'Karta %{store} zapisana',
     scanHint: 'Wyrównaj kod kreskowy na karcie',
+    typedQrWarning:
+      'Ten numer został wpisany ręcznie, więc kod QR powstał na jego podstawie. Zadziała tylko wtedy, gdy kod QR na karcie zawiera dokładnie ten numer — wiele kart zawiera dłuższy kod albo adres internetowy. Jeśli możesz, zeskanuj kartę.',
+    typedQrBadge: 'Utworzony z wpisanego numeru — może nie odpowiadać kodowi QR na karcie.',
     cameraNeededTitle: 'Potrzebny dostęp do kamery',
     cameraNeededBody:
       'Korb potrzebuje kamery, aby odczytać kod kreskowy z karty. Zdjęcie nigdy nie jest zapisywane ani wysyłane.',

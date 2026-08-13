@@ -180,6 +180,9 @@ const it = {
     editNumber: 'Modifica il numero',
     savedToast: 'Carta %{store} salvata',
     scanHint: 'Allinea il codice a barre della carta',
+    typedQrWarning:
+      'Hai digitato questo numero, quindi il QR è costruito da lì. Coincide con la tua carta solo se il QR della carta contiene esattamente quel numero — molti contengono invece un codice più lungo o un indirizzo web. Scansiona la carta se puoi.',
+    typedQrBadge: 'Creato da un numero digitato — potrebbe non coincidere con il QR della carta.',
     cameraNeededTitle: 'Serve l’accesso alla fotocamera',
     cameraNeededBody:
       'Korb ha bisogno della fotocamera per leggere il codice a barre della carta. L’immagine non viene mai salvata né caricata.',

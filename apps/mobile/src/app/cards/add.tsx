@@ -156,6 +156,15 @@ export default function AddCardScreen() {
   // Explains why we've landed on manual entry, when we got there by failure
   // rather than by choice.
   const [manualReason, setManualReason] = useState<string | null>(null);
+  /**
+   * Did a scanner produce the current value, or did someone type it?
+   *
+   * Only a scanner sees a code's real payload. A typed number is the printed
+   * one, which for a linear barcode is normally the same thing and for a QR
+   * frequently is not — see LoyaltyCard.scanned. Tracked here so the confirm
+   * step can say so before the card is saved rather than at the checkout.
+   */
+  const [scanned, setScanned] = useState(false);
   const [importing, setImporting] = useState(false);
 
   // Recomputed as the user types, so the warnings are live.
@@ -189,6 +198,7 @@ export default function AddCardScreen() {
     if (!clean) return;
     setSymbology(sym);
     setValue(clean);
+    setScanned(true);
     haptics.success();
     setStep('confirm');
   }, []);
@@ -273,6 +283,7 @@ export default function AddCardScreen() {
 
   const startManual = () => {
     setManualReason(null);
+    setScanned(false);
     setStep('manual');
   };
 
@@ -282,12 +293,13 @@ export default function AddCardScreen() {
     // Take the diagnosis' pick, which agrees with guessSymbology but also
     // surfaces the options list the confirm step offers.
     setSymbology(diagnoseValue(clean).recommended);
+    setScanned(false);
     setStep('confirm');
   };
 
   const save = () => {
     if (!store) return;
-    const card = addCard({ store, value, symbology });
+    const card = addCard({ store, value, symbology, scanned });
     if (!card) return;
     // Feed the store picker's recency ordering, same as item store choices do.
     recordStoreUse(store);
@@ -480,6 +492,29 @@ export default function AddCardScreen() {
                 <Text style={[type.sub, { color: colors.muted }]}>{storeExpectation}</Text>
               )}
             </View>
+            {/*
+              A QR the user did not scan.
+
+              This is the one combination the app cannot get right on its own,
+              and it fails in the most convincing way possible. A linear barcode
+              on a loyalty card normally encodes exactly the digits printed
+              under it, so typing them reproduces the card. A QR is chosen
+              precisely because it can hold more — an internal id, a URL — and
+              the printed number is then just a label for humans. Drawn from
+              that number the QR is well-formed, scans fine, and carries a
+              payload the till has never seen.
+
+              Nothing here can tell which kind a given retailer uses, so this
+              says what it does know: where the value came from.
+            */}
+            {symbology === 'qr' && !scanned && (
+              <View style={styles.noticeRow}>
+                <Ionicons name="warning-outline" size={20} color={colors.warn} />
+                <Text style={[type.sub, { color: colors.ink, flex: 1 }]}>
+                  {t('cards.typedQrWarning')}
+                </Text>
+              </View>
+            )}
           </Card>
           {/* Held until the wallet knows whose it is, so saving can't quietly
               no-op during the launch-time auth race. */}

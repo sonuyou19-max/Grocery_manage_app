@@ -193,6 +193,9 @@ const en = {
     savedToast: '%{store} card saved',
     // Camera + import problems
     scanHint: 'Line up the barcode on your card',
+    typedQrWarning:
+      "You typed this number, so this QR is built from it. That only matches your card if the card's own QR holds exactly that number — many hold a longer code or a web address instead. Scan the card if you can.",
+    typedQrBadge: 'Built from a typed number — may not match the card’s own QR.',
     cameraNeededTitle: 'Camera access needed',
     cameraNeededBody:
       'Korb needs the camera to read the barcode on your card. The photo is never saved or uploaded.',

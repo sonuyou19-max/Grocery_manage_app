@@ -181,6 +181,9 @@ const de = {
     editNumber: 'Nummer bearbeiten',
     savedToast: '%{store}-Karte gespeichert',
     scanHint: 'Richte den Barcode deiner Karte aus',
+    typedQrWarning:
+      'Du hast diese Nummer eingegeben, also ist dieser QR-Code daraus gebaut. Er passt nur, wenn der QR-Code auf der Karte genau diese Nummer enthält — viele enthalten stattdessen einen längeren Code oder eine Web-Adresse. Scanne die Karte, wenn du kannst.',
+    typedQrBadge: 'Aus einer eingegebenen Nummer erzeugt — passt evtl. nicht zum QR-Code der Karte.',
     cameraNeededTitle: 'Kamerazugriff nötig',
     cameraNeededBody:
       'Korb braucht die Kamera, um den Barcode auf deiner Karte zu lesen. Das Bild wird nie gespeichert oder hochgeladen.',

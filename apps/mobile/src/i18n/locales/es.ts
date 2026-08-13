@@ -180,6 +180,9 @@ const es = {
     editNumber: 'Editar el número',
     savedToast: 'Tarjeta de %{store} guardada',
     scanHint: 'Alinea el código de barras de tu tarjeta',
+    typedQrWarning:
+      'Has escrito este número, así que el QR se ha creado a partir de él. Solo coincidirá con tu tarjeta si el QR de la tarjeta contiene exactamente ese número — muchos contienen un código más largo o una dirección web. Escanea la tarjeta si puedes.',
+    typedQrBadge: 'Creado a partir de un número escrito — puede no coincidir con el QR de la tarjeta.',
     cameraNeededTitle: 'Se necesita acceso a la cámara',
     cameraNeededBody:
       'Korb necesita la cámara para leer el código de barras de tu tarjeta. La imagen nunca se guarda ni se sube.',

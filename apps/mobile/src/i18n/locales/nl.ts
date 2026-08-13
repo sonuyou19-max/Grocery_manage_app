@@ -180,6 +180,9 @@ const nl = {
     editNumber: 'Nummer aanpassen',
     savedToast: '%{store}-kaart opgeslagen',
     scanHint: 'Lijn de barcode van je kaart uit',
+    typedQrWarning:
+      'Je hebt dit nummer ingetypt, dus deze QR-code is daaruit opgebouwd. Hij klopt alleen als de QR-code op je kaart precies dat nummer bevat — veel kaarten bevatten juist een langere code of een webadres. Scan de kaart als het kan.',
+    typedQrBadge: 'Gemaakt van een ingetypt nummer — komt mogelijk niet overeen met de QR-code op de kaart.',
     cameraNeededTitle: 'Cameratoegang nodig',
     cameraNeededBody:
       'Korb heeft de camera nodig om de barcode op je kaart te lezen. De foto wordt nooit opgeslagen of geüpload.',

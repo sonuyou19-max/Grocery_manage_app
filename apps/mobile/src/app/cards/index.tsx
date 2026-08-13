@@ -245,6 +245,22 @@ export default function CardsScreen() {
               {t("cards.showAtTill")}
             </Text>
 
+            {/* A QR built from a number somebody typed rather than scanned.
+                It is well-formed and it may still hold the wrong payload —
+                see LoyaltyCard.scanned. Said here as well as at setup because
+                this is the screen held up to the scanner, and the moment it is
+                refused is the moment the reason matters. */}
+            {open.symbology === "qr" && open.scanned !== true && (
+              <Text
+                style={[
+                  type.sub,
+                  { color: colors.warn, textAlign: "center" },
+                ]}
+              >
+                {t("cards.typedQrBadge")}
+              </Text>
+            )}
+
             {/* Fixable at the till, which is the point. Whether a chain reads
                     1D or 2D isn't in the number, so the first sign of a wrong
                     guess is usually a scanner refusing the card — and standing at
