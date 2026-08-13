@@ -18,7 +18,7 @@ import {
 import { haptics } from '@/lib/haptics';
 import { useEntitlement } from '@/store/entitlement';
 import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 type Phase = 'loading' | 'ready' | 'unavailable' | 'working';
 
@@ -57,6 +57,7 @@ type Phase = 'loading' | 'ready' | 'unavailable' | 'working';
  */
 export default function PaywallScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
   const { showToast } = useToast();
   const { entitled, trialEndsAt, refresh } = useEntitlement();
@@ -158,7 +159,7 @@ export default function PaywallScreen() {
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.body} {...scrollIndicator}>
           <Text style={[type.h1, styles.centred, { color: colors.ink }]}>{t('paywall.title')}</Text>
           <Text style={[type.sub, styles.centred, { color: colors.muted }]}>
             {t('paywall.subtitle')}

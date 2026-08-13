@@ -12,7 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FAB_GAP, FAB_HEIGHT } from '@/components/fab';
 import { TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/floating-tab-bar';
 import { MeshBackground } from '@/components/mesh-background';
-import { spacing, type, useTheme } from '@/theme';
+import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 interface ScreenProps extends PropsWithChildren {
   title: string;
@@ -59,6 +59,7 @@ const COLLAPSE_DISTANCE = 72;
  */
 export function Screen({ title, eyebrow, subtitle, hasFab, headerAction, children }: ScreenProps) {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
 
   const scrollY = useSharedValue(0);
@@ -116,7 +117,11 @@ export function Screen({ title, eyebrow, subtitle, hasFab, headerAction, childre
           onScroll={onScroll}
           scrollEventThrottle={16}
           contentContainerStyle={[styles.content, { paddingBottom: bottomClearance }]}
-          showsVerticalScrollIndicator={false}
+          {...scrollIndicator}
+          // Stop the indicator above the floating tab bar rather than letting
+          // it run underneath it. iOS-only, like indicatorStyle; Android insets
+          // its own scrollbar from the padding already.
+          scrollIndicatorInsets={{ bottom: bottomClearance }}
         >
           <View style={styles.header}>
             {/* The action sits beside the title block rather than above it, so

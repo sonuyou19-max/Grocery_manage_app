@@ -36,7 +36,7 @@ import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-
 import { getSupermarket, supermarketLabel } from '@/lib/supermarkets';
 import { useAuth } from '@/store/auth';
 import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * Add a loyalty card.
@@ -607,6 +607,7 @@ function ScanStep({
 }) {
   const t = useT();
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const [permission, requestPermission] = useCameraPermissions();
   // The camera fires repeatedly while a code is in frame; latch so we navigate
   // once instead of pushing the confirm step over and over.
@@ -623,7 +624,7 @@ function ScanStep({
   if (!permission.granted) {
     return (
       <SafeAreaView style={[styles.camFallback, { backgroundColor: colors.bg }]}>
-        <ScrollView contentContainerStyle={styles.permWrap}>
+        <ScrollView {...scrollIndicator} contentContainerStyle={styles.permWrap}>
           <Ionicons name="camera-outline" size={44} color={colors.muted} />
           <Text style={[type.h2, { color: colors.ink, textAlign: 'center' }]}>
             {t('cards.cameraNeededTitle')}

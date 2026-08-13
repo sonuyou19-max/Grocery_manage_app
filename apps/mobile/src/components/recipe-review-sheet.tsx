@@ -25,7 +25,7 @@ import {
 import { categorizeSync } from '@/lib/categorize';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * What Korb found, before anything is written.
@@ -79,6 +79,7 @@ export function RecipeReviewSheet({
   onDismissed?: () => void;
 }) {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
   const { stats } = usePantryIntel();
 
@@ -247,7 +248,7 @@ export function RecipeReviewSheet({
               </Text>
             )}
 
-            <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.scroll} {...scrollIndicator}>
               {rows.map((r) => (
                 <Pressable key={r.key} style={styles.row} onPress={() => toggle(r.key)}>
                   <View

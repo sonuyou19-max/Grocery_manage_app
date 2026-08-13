@@ -11,7 +11,7 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { useAuth } from '@/store/auth';
 import { useHousehold, type Member } from '@/store/household';
 import { useT } from '@/store/locale';
-import { spacing, type, useTheme } from '@/theme';
+import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
 
@@ -23,6 +23,7 @@ const AVATAR_COLORS = ['#4C8A5C', '#B97F14', '#8A5A44', '#3B6EA5', '#8455A0'];
  */
 export default function HouseholdScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { user } = useAuth();
@@ -131,7 +132,7 @@ export default function HouseholdScreen() {
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.body} {...scrollIndicator}>
           <View style={styles.titleRow}>
             <View style={styles.grow}>
               <Text style={[type.display, { color: colors.ink }]}>{household.name}</Text>

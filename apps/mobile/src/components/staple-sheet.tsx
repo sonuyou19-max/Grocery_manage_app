@@ -20,7 +20,7 @@ import {
 import { listTint } from "@/lib/list-tint";
 import { historyFor, type Purchase } from "@/lib/purchase-log";
 import { useT } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * Per-item restock settings: mark it a staple, and pin how often you restock it.
@@ -73,6 +73,7 @@ export function StapleSheet({
   lists,
 }: StapleSheetProps) {
   const { colors, scheme } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
 
   if (!item) return null;
@@ -86,7 +87,7 @@ export function StapleSheet({
     <Sheet visible onClose={onClose} scrim gutter={spacing.md}>
       <GlassView over="content" radius={radii.lg} style={styles.sheet}>
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          {...scrollIndicator}
           contentContainerStyle={styles.content}
         >
           <View>

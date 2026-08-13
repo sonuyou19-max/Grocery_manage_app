@@ -25,7 +25,7 @@ import { useRecipeGate } from "@/lib/recipe-gate";
 import { looksLikeUrl, type ParsedRecipe, type ReviewRow } from "@/lib/recipe";
 import { useGroceries } from "@/store/groceries";
 import { useT } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
 type Phase = "idle" | "fetching" | "reading";
 
@@ -51,6 +51,7 @@ type Phase = "idle" | "fetching" | "reading";
  */
 export default function RecipeImportScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
   const { addList, addParsedItem, addOrReviveItem, lists } = useGroceries();
   /** Set when opened from inside a list: append there rather than create. */
@@ -232,6 +233,7 @@ export default function RecipeImportScreen() {
           </View>
 
           <ScrollView
+            {...scrollIndicator}
             style={styles.fill}
             contentContainerStyle={styles.body}
             keyboardShouldPersistTaps="handled"

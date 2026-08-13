@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
 import { flagFor, i18n, LANGUAGES, REGIONS, regionByCode } from '@/i18n';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 interface LocaleSetupProps {
   /** Called with the confirmed region + language codes. */
@@ -46,6 +46,7 @@ export function LocaleSetup({
   initialLanguage = 'en',
 }: LocaleSetupProps) {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const [region, setRegion] = useState<string | null>(initialRegion);
   const [language, setLanguage] = useState(initialLanguage);
 
@@ -85,7 +86,7 @@ export function LocaleSetup({
           <Text style={[type.bodyRegular, { color: colors.muted }]}>{t('setup.regionSubtitle')}</Text>
         </View>
 
-        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.list} {...scrollIndicator}>
           <View style={styles.section}>
             <Text style={[type.label, { color: colors.muted }]}>{t('setup.countryLabel')}</Text>
             <View style={styles.chips}>

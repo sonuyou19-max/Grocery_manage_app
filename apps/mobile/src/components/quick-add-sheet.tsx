@@ -34,7 +34,7 @@ import { dedupeByName, findDuplicate } from "@/lib/item-dup";
 import { parseQuickAdd } from "@/lib/quick-add";
 import { useGroceries, useList } from "@/store/groceries";
 import { useT } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
 interface QuickAddSheetProps {
   visible: boolean;
@@ -53,6 +53,7 @@ export function QuickAddSheet({
   onClose,
 }: QuickAddSheetProps) {
   const { colors, scheme } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
   const t = useT();
   const { addOrReviveItem } = useGroceries();
@@ -244,6 +245,7 @@ export function QuickAddSheet({
 
           {phase === "review" ? (
             <ScrollView
+              {...scrollIndicator}
               style={styles.scrollArea}
               contentContainerStyle={styles.body}
               keyboardShouldPersistTaps="handled"
@@ -307,6 +309,7 @@ export function QuickAddSheet({
                minus the keyboard leaves less room than the content needs — the
                button and mic hint can still be scrolled into view. */
             <ScrollView
+              {...scrollIndicator}
               style={styles.scrollArea}
               contentContainerStyle={styles.body}
               keyboardShouldPersistTaps="handled"

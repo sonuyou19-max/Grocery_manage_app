@@ -13,7 +13,7 @@ import { useAuth } from '@/store/auth';
 import { captureException } from '@/lib/monitoring';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
-import { spacing, type, useTheme } from '@/theme';
+import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * Passwordless sign-in: enter an email, receive a 6-digit code, verify it,
@@ -29,6 +29,7 @@ import { spacing, type, useTheme } from '@/theme';
  */
 export default function SignInScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const { sendCode, verifyCode } = useAuth();
   const { households, createHousehold, setDisplayName } = useHousehold();
   const { remember } = useProfileName();
@@ -165,7 +166,7 @@ export default function SignInScreen() {
 
           {/* Scrollable so the button stays reachable on small screens with
               the keyboard up. */}
-          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <ScrollView {...scrollIndicator} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={[type.h1, { color: colors.ink }]}>
               {phase === 'email'
                 ? t('auth.signInTitle')

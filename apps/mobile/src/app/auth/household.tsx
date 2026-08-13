@@ -11,7 +11,7 @@ import { useToast } from '@/components/toast';
 import { useProfileName } from '@/lib/profile-name';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * Create a new household or join an existing one with an invite code.
@@ -23,6 +23,7 @@ import { radii, spacing, type, useTheme } from '@/theme';
  */
 export default function HouseholdSetupScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const { createHousehold, joinHousehold, myName } = useHousehold();
   const { name: savedName, ready: nameReady, remember } = useProfileName();
   const { showToast } = useToast();
@@ -103,7 +104,7 @@ export default function HouseholdSetupScreen() {
 
         {/* Scrollable so the submit button stays reachable on small screens
             once the keyboard has taken its share of the height. */}
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView {...scrollIndicator} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Text style={[type.h1, { color: colors.ink }]}>{t('auth.householdTitle')}</Text>
           <Text style={[type.bodyRegular, { color: colors.muted }]}>
             {t('auth.householdIntro')}

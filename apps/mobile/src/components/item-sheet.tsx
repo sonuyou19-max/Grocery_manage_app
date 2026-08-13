@@ -38,7 +38,7 @@ import { parsePriceToCents } from '@/lib/money';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 // Every unit stays one tap away, including "none". A unit suggested on add
 // (lib/item-unit.ts) is only ever a prefill — this picker is the override, and
@@ -64,6 +64,7 @@ const parseQuantity = (text: string): number | null => {
  */
 export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const { colors, scheme } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
   const { t, currency } = useLocale();
   const { updateItem, renameItem } = useGroceries();
@@ -252,6 +253,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             </View>
           </GestureDetector>
           <ScrollView
+            {...scrollIndicator}
             style={styles.scrollArea}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scroll}

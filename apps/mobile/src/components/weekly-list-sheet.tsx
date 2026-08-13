@@ -10,7 +10,7 @@ import { categoryLabel } from "@/lib/categorize";
 import { haptics } from "@/lib/haptics";
 import type { WeeklySuggestion } from "@/lib/weekly-list";
 import { useT } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
 interface WeeklyListSheetProps {
   visible: boolean;
@@ -32,6 +32,7 @@ export function WeeklyListSheet({
   onBuild,
 }: WeeklyListSheetProps) {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
   const t = useT();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -77,6 +78,7 @@ export function WeeklyListSheet({
         </Text>
 
         <ScrollView
+          {...scrollIndicator}
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
         >

@@ -53,7 +53,7 @@ import { useGroceries, useList, type Item } from "@/store/groceries";
 import { useHousehold } from "@/store/household";
 import { useLocale } from "@/store/locale";
 import { usePantryIntel, type PurchaseDetail } from "@/store/pantry-intel";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
 /*
  * No setLayoutAnimationEnabledExperimental call here, deliberately.
@@ -92,6 +92,7 @@ const dismissKeyboardAndWait = async () => {
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, scheme } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const { t, money } = useLocale();
   const { openOrRedirect } = useRecipeGate();
   const list = useList(id);
@@ -568,7 +569,7 @@ export default function ListDetailScreen() {
           <ListPantryStrip list={list} />
 
           {/* Items */}
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.list}>
+          <ScrollView {...scrollIndicator} style={styles.scroll} contentContainerStyle={styles.list}>
             {grouped.map((group) => (
               <View key={group.category}>
                 <View style={styles.catRow}>

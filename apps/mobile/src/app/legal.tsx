@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MeshBackground } from '@/components/mesh-background';
 import { legalDoc } from '@/lib/legal';
 import { useLocale } from '@/store/locale';
-import { spacing, type, useTheme } from '@/theme';
+import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /** Render a line's inline **bold** spans. */
 function Inline({ text, color }: { text: string; color: string }) {
@@ -29,6 +29,7 @@ function Inline({ text, color }: { text: string; color: string }) {
  */
 export default function LegalScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const { language } = useLocale();
   const { doc } = useLocalSearchParams<{ doc?: string }>();
   const md = legalDoc(doc === 'terms' ? 'terms' : 'privacy', language);
@@ -45,7 +46,7 @@ export default function LegalScreen() {
         </View>
         <ScrollView
           contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
+          {...scrollIndicator}
         >
           {lines.map((line, i) => {
             if (line.startsWith('# ')) {

@@ -16,7 +16,7 @@ import { useGroceries, useList, type Item } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
-import { spacing, type, useTheme } from '@/theme';
+import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * Shopping Mode: a focused, in-store view of one list. Big tap targets, items
@@ -28,6 +28,7 @@ export default function ShoppingModeScreen() {
   useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
   const list = useList(id);
   const { toggleItem, setClaim, shoppersOnline } = useGroceries();
@@ -126,7 +127,7 @@ export default function ShoppingModeScreen() {
           <View style={[styles.fillBar, { width: `${progress * 100}%`, backgroundColor: colors.accent }]} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.list} {...scrollIndicator}>
           {grouped.map((group) => (
             <View key={group.category} style={styles.section}>
               <Text style={[type.label, { color: colors.accent }]}>

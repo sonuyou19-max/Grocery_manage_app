@@ -38,7 +38,7 @@ import {
 } from "@/lib/supermarkets";
 import { useAuth } from "@/store/auth";
 import { useT } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * The card wallet — every loyalty card, stacked.
@@ -93,6 +93,7 @@ function shade(hex: string, amount: number): string {
 
 export default function CardsScreen() {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
   const { user, initializing } = useAuth();
   // undefined while the session is still being restored, so someone who *is*
@@ -159,7 +160,7 @@ export default function CardsScreen() {
         <Animated.ScrollView
           onScroll={onScroll}
           scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}
+          {...scrollIndicator}
           contentContainerStyle={[
             styles.scrollContent,
             // The stack is absolutely positioned, so the scroll view needs an

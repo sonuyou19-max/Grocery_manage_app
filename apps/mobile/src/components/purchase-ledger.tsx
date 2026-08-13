@@ -17,7 +17,7 @@ import { ItemEmoji } from "@/components/item-emoji";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { historyFor, type Purchase } from "@/lib/purchase-log";
 import { useLocale } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
 import type { ItemCategory } from "@korb/shared";
 
@@ -47,6 +47,7 @@ export function PurchaseLedger({
   onClose: () => void;
 }) {
   const { colors, scheme } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const { t, money } = useLocale();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -145,7 +146,7 @@ export function PurchaseLedger({
              the only thing on screen that says it continues below the fold —
              which is exactly what "something is hidden down there" looked
              like when there was no indicator and no room to scroll either. */
-          showsVerticalScrollIndicator
+          {...scrollIndicator}
           indicatorStyle={scheme === "dark" ? "white" : "black"}
           contentContainerStyle={styles.list}
           // A measured number, not a percentage inherited through Sheet's

@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Sheet } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { useT } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 export interface StapleRow {
   key: string;
@@ -31,6 +31,7 @@ export function StaplesSheet({
   onClose: () => void;
 }) {
   const { colors } = useTheme();
+  const scrollIndicator = useScrollIndicator();
   const t = useT();
 
   return (
@@ -43,7 +44,7 @@ export function StaplesSheet({
         {/* Bounded height, not flex: the sheet must not grow past the
                 screen on a household with a hundred tracked items, and the
                 scroll has to live inside the card rather than under it. */}
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} {...scrollIndicator}>
           {staples.map((s, i) => (
             <View key={s.key} style={styles.row}>
               <Text style={[type.sub, styles.rank, { color: colors.muted }]}>
