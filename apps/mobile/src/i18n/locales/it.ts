@@ -659,6 +659,14 @@ const it = {
       'Guarda l’equilibrio del carrello, i tuoi immancabili e un riepilogo settimanale di come fai davvero la spesa.',
   },
   toast: {
+    addedCountTo: {
+      one: '%{count} prodotto aggiunto a %{list}',
+      other: '%{count} prodotti aggiunti a %{list}',
+    },
+    sortedIntoLists: {
+      one: '%{count} prodotto aggiunto alle tue liste',
+      other: '%{count} prodotti smistati nelle tue liste',
+    },
     addedTo: '%{item} aggiunto a %{list}',
   },
   vibeCheck: {

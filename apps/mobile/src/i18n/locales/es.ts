@@ -658,6 +658,14 @@ const es = {
       'Mira el equilibrio de tu cesta, tus básicos y un resumen semanal cercano de cómo compras de verdad.',
   },
   toast: {
+    addedCountTo: {
+      one: '%{count} producto añadido a %{list}',
+      other: '%{count} productos añadidos a %{list}',
+    },
+    sortedIntoLists: {
+      one: '%{count} producto añadido a tus listas',
+      other: '%{count} productos repartidos en tus listas',
+    },
     addedTo: '%{item} añadido a %{list}',
   },
   vibeCheck: {

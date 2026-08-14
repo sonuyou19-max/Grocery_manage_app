@@ -657,6 +657,14 @@ const nl = {
       'Zie je mandjebalans, je vaste producten en een warm weekoverzicht van hoe je echt winkelt.',
   },
   toast: {
+    addedCountTo: {
+      one: '%{count} item toegevoegd aan %{list}',
+      other: '%{count} items toegevoegd aan %{list}',
+    },
+    sortedIntoLists: {
+      one: '%{count} item aan je lijsten toegevoegd',
+      other: '%{count} items over je lijsten verdeeld',
+    },
     addedTo: '%{item} toegevoegd aan %{list}',
   },
   vibeCheck: {

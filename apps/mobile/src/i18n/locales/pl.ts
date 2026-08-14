@@ -756,6 +756,18 @@ const pl = {
       'Zobacz równowagę koszyka, swoje podstawy i ciepłe tygodniowe podsumowanie tego, jak naprawdę robisz zakupy.',
   },
   toast: {
+    addedCountTo: {
+      one: 'Dodano %{count} produkt do %{list}',
+      few: 'Dodano %{count} produkty do %{list}',
+      many: 'Dodano %{count} produktów do %{list}',
+      other: 'Dodano %{count} produktów do %{list}',
+    },
+    sortedIntoLists: {
+      one: 'Dodano %{count} produkt do twoich list',
+      few: 'Rozdzielono %{count} produkty na twoje listy',
+      many: 'Rozdzielono %{count} produktów na twoje listy',
+      other: 'Rozdzielono %{count} produktów na twoje listy',
+    },
     // Framed so the declined words stay correct around the interpolated names.
     addedTo: 'Dodano %{item} do listy %{list}',
   },

@@ -659,6 +659,14 @@ const fr = {
       'Vois l’équilibre de ton panier, tes incontournables et un récap hebdo chaleureux de ta façon de faire les courses.',
   },
   toast: {
+    addedCountTo: {
+      one: '%{count} article ajouté à %{list}',
+      other: '%{count} articles ajoutés à %{list}',
+    },
+    sortedIntoLists: {
+      one: '%{count} article ajouté à tes listes',
+      other: '%{count} articles répartis dans tes listes',
+    },
     addedTo: '%{item} ajouté à %{list}',
   },
   vibeCheck: {

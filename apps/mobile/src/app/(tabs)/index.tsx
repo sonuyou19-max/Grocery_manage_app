@@ -10,6 +10,7 @@ import { EditList } from "@/components/edit-list";
 import { EmptyState } from "@/components/empty-state";
 import { ListPickerSheet } from "@/components/list-picker-sheet";
 import { Screen } from "@/components/screen";
+import { useToast } from "@/components/toast";
 import { TextPromptModal } from "@/components/text-prompt-modal";
 import { HouseholdSwitcher } from "@/components/household-switcher";
 import { MemberAvatars, type AvatarMember } from "@/components/member-avatars";
@@ -18,6 +19,7 @@ import { PlusBadge } from "@/components/plus-badge";
 import { TrialNudge } from "@/components/trial-nudge";
 import { WeeklyListSheet } from "@/components/weekly-list-sheet";
 import { dedupeByName } from "@/lib/item-dup";
+import { recallItemList } from "@/lib/item-home-list";
 import { onboardingSeen } from "@/lib/onboarding";
 import { normalizeKey } from "@/lib/pantry-intel";
 import {
@@ -58,6 +60,7 @@ export default function ListsScreen() {
   const { lists, addOrReviveItem, deleteList, renameList, reorderLists } =
     useGroceries();
   const { household, members, myName } = useHousehold();
+  const { showToast } = useToast();
   const { user } = useAuth();
   // Shared with Insights and the Pantry — see lib/plus-gate.ts.
   const { locked } = usePlusGate();
@@ -142,11 +145,67 @@ export default function ListsScreen() {
   const firstName = myName ? myName.split(/\s+/)[0] : null;
   const base = t(`greeting.${greetingKey()}`);
 
-  // Builder handed off the ticked items → ask which list to add them to.
-  // No setBuilderOpen(false) here: the sheet closes itself and only calls this
-  // once its native window is really gone, which is what stops the picker
-  // mounting behind it. See BuildFooter in weekly-list-sheet.tsx.
-  const onBuild = (selected: WeeklySuggestion[]) => setPendingItems(selected);
+  /*
+   * Builder handed off the ticked items. Most of them do not need a question.
+   *
+   * item-home-list already remembers where each item was last added, and the
+   * pantry swipe and Vibe Check both use it — the weekly builder was the only
+   * add-path that ignored it and asked from scratch every time, which is what
+   * made a routine weekly shop end in a modal about lists.
+   *
+   * So each item goes to its own remembered list, and only items never seen
+   * before reach the picker. On an established account that is usually nothing
+   * at all, and the picker never opens.
+   *
+   * No setBuilderOpen(false) here: the sheet closes itself and only calls this
+   * once its native window is really gone, which is what stops the picker
+   * mounting behind it. See BuildFooter in weekly-list-sheet.tsx.
+   */
+  const onBuild = (selected: WeeklySuggestion[]) => {
+    // Deduped for the same reason as the other batch adds: the loop runs inside
+    // one render, so it cannot see its own inserts.
+    const items = dedupeByName(selected, (it) => it.display);
+    const homed = new Map<string, WeeklySuggestion[]>();
+    const unknown: WeeklySuggestion[] = [];
+
+    for (const s of items) {
+      const homeId = recallItemList(s.display);
+      // Verify against the live lists: a remembered id can outlive its list.
+      const home = homeId ? lists.find((l) => l.id === homeId) : undefined;
+      if (!home) {
+        unknown.push(s);
+        continue;
+      }
+      const bucket = homed.get(home.id);
+      if (bucket) bucket.push(s);
+      else homed.set(home.id, [s]);
+    }
+
+    let placed = 0;
+    for (const [listId, group] of homed) {
+      for (const s of group) {
+        addOrReviveItem(listId, {
+          name: s.display,
+          category: s.category,
+          quantity: s.quantity,
+          unit: s.unit,
+        });
+      }
+      placed += group.length;
+    }
+
+    if (placed > 0) {
+      const only = homed.size === 1 ? lists.find((l) => l.id === [...homed.keys()][0]) : null;
+      showToast(
+        only
+          ? t("toast.addedCountTo", { count: placed, list: only.name })
+          : t("toast.sortedIntoLists", { count: placed }),
+      );
+    }
+
+    // Only the ones Korb has never placed before get a question.
+    setPendingItems(unknown);
+  };
 
   const addWeeklyToList = (listId: string) => {
     const items = pendingItems;

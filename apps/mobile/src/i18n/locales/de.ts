@@ -661,6 +661,14 @@ const de = {
       'Sieh die Balance deines Korbs, deine Basics und einen warmen Wochenrückblick, wie du wirklich einkaufst.',
   },
   toast: {
+    addedCountTo: {
+      one: '%{count} Produkt zu %{list} hinzugefügt',
+      other: '%{count} Produkte zu %{list} hinzugefügt',
+    },
+    sortedIntoLists: {
+      one: '%{count} Produkt zu deinen Listen hinzugefügt',
+      other: '%{count} Produkte auf deine Listen verteilt',
+    },
     addedTo: '%{item} zu %{list} hinzugefügt',
   },
   vibeCheck: {

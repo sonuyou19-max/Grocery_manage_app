@@ -667,6 +667,14 @@ const en = {
       'See your basket balance, your staples, and a warm weekly recap of how you actually shop.',
   },
   toast: {
+    addedCountTo: {
+      one: '%{count} item added to %{list}',
+      other: '%{count} items added to %{list}',
+    },
+    sortedIntoLists: {
+      one: '%{count} item added to your lists',
+      other: '%{count} items sorted into your lists',
+    },
     addedTo: '%{item} added to %{list}',
   },
   vibeCheck: {
