@@ -1,6 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Sheet } from "@/components/sheet";
@@ -34,6 +41,7 @@ export function WeeklyListSheet({
   const { colors } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
   const t = useT();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -79,7 +87,7 @@ export function WeeklyListSheet({
 
         <ScrollView
           {...scrollIndicator}
-          style={styles.scrollArea}
+          style={[styles.scrollArea, { maxHeight: winH * 0.55 }]}
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
         >
@@ -161,10 +169,18 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: spacing.sm,
-    maxHeight: "85%",
-    // Clips to the sheet's own bounds. Without it the footer, laid out past the
-    // bottom edge, simply painted over the list instead of being cut off — the
-    // overflow was invisible as overflow and looked like a button on top of a row.
+    /*
+     * No maxHeight percentage here, deliberately. '85%' has to resolve against
+     * a parent height, and this sheet's parent chain is sized by its content,
+     * so the percentage came out far smaller than the screen and squeezed the
+     * sheet even with a single row in it. Which child absorbed the squeeze just
+     * depended on who could shrink: at first the footer overflowed and painted
+     * over the list, and once the list was given flexShrink it collapsed to a
+     * sliver instead. Same cause, two different-looking bugs.
+     *
+     * The list is capped in real pixels instead (see winH below), so the sheet
+     * is only ever as tall as its content and nothing has to be squeezed.
+     */
     overflow: "hidden",
   },
   grab: {
@@ -189,6 +205,9 @@ const styles = StyleSheet.create({
    * item-sheet and quick-add-sheet, the other two sheets with a pinned footer,
    * both carry this; this one was written without it.
    */
+  // Bounded by a pixel maxHeight applied at the call site, the way
+  // recipe-review-sheet does it. flexShrink stays as a safety net for very
+  // small screens, but with the cap in place it should never have to act.
   scrollArea: { flexShrink: 1 },
   body: { padding: spacing.lg, gap: spacing.sm },
   grow: { flex: 1, minWidth: 0 },
