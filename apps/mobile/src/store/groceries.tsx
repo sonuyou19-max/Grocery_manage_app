@@ -132,6 +132,9 @@ export type AddOutcome = 'added' | 'revived' | 'already';
 interface GroceriesContext {
   lists: List[];
   addList: (name: string) => string;
+  /** Rename in place. A blank or unchanged name is a no-op, so the caller
+   *  can hand the prompt's raw value straight over. */
+  renameList: (listId: string, name: string) => void;
   deleteList: (listId: string) => void;
   reorderLists: (orderedIds: string[]) => void;
   addItem: (listId: string, name: string) => string;
@@ -447,6 +450,13 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         const id = uuidv4();
         setLists((prev) => [...prev, { id, name, store: null, items: [] }]);
         return id;
+      },
+      renameList: (listId, name) => {
+        const clean = name.trim();
+        if (!clean) return;
+        setLists((prev) =>
+          prev.map((l) => (l.id === listId ? { ...l, name: clean } : l)),
+        );
       },
       deleteList: (listId) => {
         setLists((prev) => prev.filter((l) => l.id !== listId));
@@ -1075,6 +1085,21 @@ function CloudGroceriesProvider({
             if (error) scheduleRefetch();
           });
         return id;
+      },
+      renameList: (listId, name) => {
+        const clean = name.trim();
+        if (!clean) return;
+        setLists((prev) =>
+          prev.map((l) => (l.id === listId ? { ...l, name: clean } : l)),
+        );
+        supabase
+          .from('shopping_lists')
+          .update({ name: clean })
+          .eq('id', listId)
+          .then(({ error }) => {
+            reportWriteFailure('shopping_lists.rename', error);
+            if (error) scheduleRefetch();
+          });
       },
       deleteList: (listId) => {
         setLists((prev) => prev.filter((l) => l.id !== listId));

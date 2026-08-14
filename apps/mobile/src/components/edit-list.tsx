@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { haptics } from '@/lib/haptics';
+import { useT } from '@/store/locale';
 import type { List } from '@/store/groceries';
 import { radii, spacing, type, useTheme } from '@/theme';
 
@@ -28,6 +29,7 @@ interface EditListProps {
   lists: List[];
   onDelete: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
+  onRename: (list: List) => void;
 }
 
 const toPositions = (lists: List[]): Positions =>
@@ -39,7 +41,7 @@ const toPositions = (lists: List[]): Positions =>
  * passes over slides into the vacated slot immediately (live swap), so the
  * exchange is always visible — nothing waits for the drop.
  */
-export function EditList({ lists, onDelete, onReorder }: EditListProps) {
+export function EditList({ lists, onDelete, onReorder, onRename }: EditListProps) {
   const positions = useSharedValue<Positions>(toPositions(lists));
 
   // Keep the animated position map in sync when lists change (add/delete/commit).
@@ -63,6 +65,7 @@ export function EditList({ lists, onDelete, onReorder }: EditListProps) {
           count={lists.length}
           onCommit={commit}
           onDelete={onDelete}
+          onRename={onRename}
         />
       ))}
     </View>
@@ -75,10 +78,12 @@ interface RowProps {
   count: number;
   onCommit: (positions: Positions) => void;
   onDelete: (id: string) => void;
+  onRename: (list: List) => void;
 }
 
-function Row({ list, positions, count, onCommit, onDelete }: RowProps) {
+function Row({ list, positions, count, onCommit, onDelete, onRename }: RowProps) {
   const { colors } = useTheme();
+  const t = useT();
   const id = list.id;
 
   const dragging = useSharedValue(false);
@@ -168,14 +173,30 @@ function Row({ list, positions, count, onCommit, onDelete }: RowProps) {
           <Ionicons name="remove" size={15} color="#FFFFFF" />
         </Pressable>
 
-        <View style={styles.body}>
-          <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-            {list.name}
-          </Text>
+        {/* Tapping the name renames it. Only reachable in edit mode, where the
+            row no longer navigates into the list — so the tap has nothing to
+            compete with, and the two existing controls (delete, drag) keep
+            their own hit areas on either side. The pencil is there because a
+            tappable line of text with no affordance is one nobody taps. */}
+        <Pressable
+          onPress={() => onRename(list)}
+          style={styles.body}
+          accessibilityRole="button"
+          accessibilityLabel={t('lists.renameA11y', { name: list.name })}
+        >
+          <View style={styles.nameRow}>
+            <Text
+              style={[type.body, { color: colors.ink }, styles.name]}
+              numberOfLines={1}
+            >
+              {list.name}
+            </Text>
+            <Ionicons name="pencil" size={13} color={colors.muted} />
+          </View>
           <Text style={[type.sub, { color: colors.muted }]}>
             {list.items.length} item{list.items.length === 1 ? '' : 's'}
           </Text>
-        </View>
+        </Pressable>
 
         <GestureDetector gesture={pan}>
           <View style={styles.handle} collapsable={false}>
@@ -211,6 +232,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  // Shrinks so a long list name truncates rather than pushing the pencil out.
+  name: { flexShrink: 1 },
   body: { flex: 1, minWidth: 0, gap: 1 },
   handle: {
     width: 44,

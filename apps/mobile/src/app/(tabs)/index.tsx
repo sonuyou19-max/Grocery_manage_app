@@ -10,6 +10,7 @@ import { EditList } from "@/components/edit-list";
 import { EmptyState } from "@/components/empty-state";
 import { ListPickerSheet } from "@/components/list-picker-sheet";
 import { Screen } from "@/components/screen";
+import { TextPromptModal } from "@/components/text-prompt-modal";
 import { HouseholdSwitcher } from "@/components/household-switcher";
 import { MemberAvatars, type AvatarMember } from "@/components/member-avatars";
 import { usePlusGate } from "@/lib/plus-gate";
@@ -54,7 +55,8 @@ let tourRouted = false;
 export default function ListsScreen() {
   const { colors } = useTheme();
   const t = useT();
-  const { lists, addOrReviveItem, deleteList, reorderLists } = useGroceries();
+  const { lists, addOrReviveItem, deleteList, renameList, reorderLists } =
+    useGroceries();
   const { household, members, myName } = useHousehold();
   const { user } = useAuth();
   // Shared with Insights and the Pantry — see lib/plus-gate.ts.
@@ -78,6 +80,9 @@ export default function ListsScreen() {
   const { tracked, low: lowCount } = usePantryStatus();
   const emptyState = tracked === 0 ? 'learning' : lowCount > 0 ? 'listed' : 'idle';
   const [editing, setEditing] = useState(false);
+  /** The list whose name is being edited, or null. Holds the list rather than
+   *  the id so the prompt can pre-fill without a second lookup. */
+  const [renaming, setRenaming] = useState<List | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
   // Items the builder handed off, awaiting a destination-list choice.
   const [pendingItems, setPendingItems] = useState<WeeklySuggestion[]>([]);
@@ -347,6 +352,7 @@ export default function ListsScreen() {
                 lists={lists}
                 onDelete={deleteList}
                 onReorder={reorderLists}
+                onRename={setRenaming}
               />
             ) : (
               lists.map((l) => (
@@ -371,6 +377,22 @@ export default function ListsScreen() {
         suggestions={suggestions}
         onClose={() => setBuilderOpen(false)}
         onBuild={onBuild}
+      />
+      {/* Rename, opened by tapping a list's name in edit mode. Kept out here
+          with the other sheets rather than inside EditList so the row stays a
+          row: a Modal mounted inside an absolutely-positioned, animating,
+          drag-reordering item is a fight nobody needs to have. */}
+      <TextPromptModal
+        visible={renaming !== null}
+        title={t("lists.renameTitle")}
+        placeholder={t("lists.renamePlaceholder")}
+        confirmLabel={t("common.save")}
+        initialValue={renaming?.name ?? ""}
+        onCancel={() => setRenaming(null)}
+        onSubmit={(name) => {
+          if (renaming) renameList(renaming.id, name);
+          setRenaming(null);
+        }}
       />
       <ListPickerSheet
         visible={pendingItems.length > 0}

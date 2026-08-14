@@ -10,6 +10,9 @@ interface TextPromptModalProps {
   title: string;
   placeholder: string;
   confirmLabel?: string;
+  /** Pre-fills the field — a rename starts from the current name rather than
+   *  making you retype it. Omitted, the prompt opens empty as before. */
+  initialValue?: string;
   onCancel: () => void;
   onSubmit: (value: string) => void;
 }
@@ -20,6 +23,7 @@ export function TextPromptModal({
   title,
   placeholder,
   confirmLabel,
+  initialValue,
   onCancel,
   onSubmit,
 }: TextPromptModalProps) {
@@ -27,9 +31,11 @@ export function TextPromptModal({
   const t = useT();
   const [value, setValue] = useState("");
 
+  // Reset on each open, not on mount: the modal stays mounted between uses, so
+  // without this a rename would show whatever was typed the time before.
   useEffect(() => {
-    if (visible) setValue("");
-  }, [visible]);
+    if (visible) setValue(initialValue ?? "");
+  }, [visible, initialValue]);
 
   return (
     <Sheet
