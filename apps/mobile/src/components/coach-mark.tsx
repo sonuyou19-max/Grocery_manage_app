@@ -13,97 +13,72 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
-import { GlassView } from '@/components/glass';
+import { useCoachMarkPortal } from '@/components/coach-mark-host';
 import type { TargetRect } from '@/lib/coach-marks';
 import { useT } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
- * A coach mark: dim the screen, cut a hole around one real control, and show a
- * looping animation of the gesture that control answers to.
+ * A coach mark: dim everything, punch a hole around one real control, and point
+ * a caption at it.
  *
  * ---------------------------------------------------------------------------
- * Why this is NOT a <Modal>, which is what it used to be
+ * Where it renders, and why not in a <Modal>
  * ---------------------------------------------------------------------------
  *
- * It shipped as a transparent Modal and the spotlight landed in the wrong
- * place — a hole over the section header instead of the row under it.
+ * The overlay is drawn by CoachMarkHost at the root of the tree, so it covers
+ * the tab bar and the safe areas as well as the page. It is NOT a Modal: on
+ * Android a Modal is its own native window, and this overlay positions itself
+ * from a rect measured with measureInWindow in the SCREEN's window. Those two
+ * origins need not agree — status bar, cutout, edge-to-edge insets — and the
+ * mismatch is what once put the spotlight a whole row out of place.
  *
- * On Android a react-native <Modal> is its own native window. The target is
- * measured with measureInWindow, which answers in the coordinates of the window
- * the TARGET lives in; the overlay then drew at those numbers inside a
- * different window, whose origin does not have to match. The gap is whatever
- * the two windows disagree about — status bar, display cutout, edge-to-edge
- * insets — so the error is invisible on one device and obvious on the next.
- * There is no offset to add here, because there is no fixed offset: the right
- * fix is to stop crossing windows.
- *
- * So the overlay renders inline, absolutely positioned, in the same tree as the
- * screen. It then measures ITS OWN root and subtracts, converting the target's
- * window rect into its own local space. That subtraction is what makes it
- * correct regardless of insets, safe areas or which Android version decided to
- * change the rules — it never assumes the two origins agree, it measures the
- * difference.
- *
- * The cost is that the dim stops at the screen's bounds, so the tab bar stays
- * bright. That is a fair trade for a spotlight that is actually on the thing it
- * is describing.
+ * Staying in one window means the difference can simply be measured: the
+ * overlay measures its own root and subtracts, converting the target's window
+ * rect into its own local space. It never assumes the origins agree.
  *
  * ---------------------------------------------------------------------------
  * Why the hole is rectangles plus a frame, inside one opacity group
  * ---------------------------------------------------------------------------
  *
- * The obvious way to spotlight something is an SVG mask, or a full-screen view
- * with `mixBlendMode`. Neither is a good idea here. react-native-svg's mask
- * support on Android renders through an offscreen layer, which is the same
- * class of cost as the BlurView this app spent a release removing; blend modes
- * are not reliably supported on the New Architecture.
+ * A real mask is the obvious tool and the wrong one here: react-native-svg's
+ * mask support on Android renders through an offscreen layer, the same class of
+ * cost as the BlurView this app spent a release removing, and blend modes are
+ * not reliable on the New Architecture.
  *
- * The pieces are four rectangles around the target plus a bordered frame whose
- * inner radius rounds the hole. What makes that combination work is where the
- * translucency lives: the pieces are OPAQUE and their parent carries the
- * opacity, so the subtree is composited once and the pieces may overlap freely.
+ * Instead: four rectangles around the target, plus a bordered frame whose inner
+ * radius rounds the hole. What makes the combination work is where the
+ * translucency lives. The pieces are OPAQUE and their PARENT carries the
+ * opacity, so the subtree composites once and the pieces may overlap freely.
  *
- * That single detail is the whole trick, and getting it wrong produced two
- * shipped defects. With translucent pieces they have to tile exactly, because
- * two overlapping layers read as a darker patch — and tiling rectangles leave a
- * SQUARE hole, so a rounded ring over it showed a dark wedge in every corner.
- * Squaring the ring fixed the wedges and left the hole square against rounded
- * rows. Adding a frame to round the hole moved the artifact to the frame's own
- * rounded OUTER corners, which the rectangles then failed to meet.
- *
- * With the opacity on the parent, the rectangles simply overlap the frame and
- * cover those corners, and the only region left uncovered is the rounded
- * rectangle we actually wanted. The cost is one static offscreen layer for the
- * few seconds a tip is up, which is not the always-on cost check-blur guards.
+ * That one detail is the whole trick, and getting it wrong shipped twice. With
+ * translucent pieces they must tile exactly, and tiling rectangles leave a
+ * square hole — so a rounded ring over it showed a dark wedge in every corner.
+ * Squaring the ring removed the wedges and left a square hole framing rounded
+ * rows. Adding the frame moved the artifact to the frame's own rounded OUTER
+ * corners. With the alpha on the group, the rectangles simply overlap those
+ * corners and the only uncovered region is the rounded rectangle wanted all
+ * along.
  *
  * ---------------------------------------------------------------------------
  * Why the target is not interactive
  * ---------------------------------------------------------------------------
  *
- * A tour that makes you perform the gesture before it will move on sounds more
- * engaging and is worse: it would mean reimplementing each gesture inside the
- * overlay — a second copy of the swipe logic, drifting from the real one,
- * teaching an interaction that does not exist.
- *
- * So the tip DEMONSTRATES and gets out of the way. The animation runs on the
- * spotlit control, the caption says what it does, and one tap dismisses it and
- * hands the real gesture back. The user's first swipe is on the real row.
+ * Requiring the gesture before the tip moves on would mean a second copy of the
+ * swipe logic living inside the overlay, drifting from the real one. The tip
+ * describes and gets out of the way: one tap dismisses it and hands the real
+ * gesture back, so the user's first swipe is on the real row.
  */
 
-/** Which gesture to draw. */
+/** Which gesture the caption describes. */
 export type CoachGesture = 'swipeLeft' | 'swipeBoth' | 'tap';
 
-interface CoachMarkProps {
-  visible: boolean;
+export interface CoachMarkContent {
   /** Where the target sits, in WINDOW coordinates — see useCoachMark. */
-  rect: TargetRect | null;
+  rect: TargetRect;
   /** i18n key prefix: `<prefix>Title` and `<prefix>Body`. */
   textKey: string;
   gesture: CoachGesture;
@@ -111,156 +86,94 @@ interface CoachMarkProps {
   onSkipAll: () => void;
 }
 
-/** How far the finger travels, and how long one loop takes. */
-const TRAVEL = 64;
-const LEG_MS = 620;
-const HOLD_MS = 420;
+interface CoachMarkProps extends Omit<CoachMarkContent, 'rect'> {
+  visible: boolean;
+  rect: TargetRect | null;
+}
 
-/** Breathing room between the cutout and the target itself. */
-const PAD = 8;
-/** How much vertical room the caption needs below the target. */
-const CAPTION_SPACE = 210;
+/**
+ * The hole hugs the card exactly — same bounds, same radius — so it reads as
+ * the card punching through the dim rather than a box drawn around it.
+ */
+const PAD = 0;
+const HOLE_R = radii.md;
 /** Frame thickness. Any value works; it only has to reach past the corners. */
 const FRAME = 28;
-/** Roughly a row's own radius, so the hole looks cut to fit. */
-const HOLE_R = radii.md;
+/** How much vertical room the caption needs below the target. */
+const CAPTION_SPACE = 210;
+/** Half-width of the caret that points at the card. */
+const CARET = 9;
 
-export function CoachMark({
-  visible,
-  rect,
-  textKey,
-  gesture,
-  onDismiss,
-  onSkipAll,
-}: CoachMarkProps) {
+/** Screens mount this; it renders nothing itself and publishes to the host. */
+export function CoachMark({ visible, rect, ...rest }: CoachMarkProps) {
+  useCoachMarkPortal(visible && rect ? { rect, ...rest } : null);
+  return null;
+}
+
+export function CoachMarkOverlay({ content }: { content: CoachMarkContent }) {
+  const { rect, textKey, onDismiss, onSkipAll } = content;
   const { colors } = useTheme();
   const t = useT();
-  const { height: screenH } = useWindowDimensions();
+  const { height: screenH, width: screenW } = useWindowDimensions();
 
-  const travel = useSharedValue(0);
-  const press = useSharedValue(0);
   const enter = useSharedValue(0);
 
-  /**
-   * This overlay's own position in window coordinates.
-   *
-   * Null until measured, and nothing is drawn before then — see the header.
-   * Painting at the raw window rect and correcting a frame later would put the
-   * spotlight in the wrong place first, which is precisely the bug being fixed.
-   */
+  /** This overlay's own origin in window coordinates — see the header. */
   const rootRef = useRef<View>(null);
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (!visible) setOrigin(null);
-  }, [visible]);
-
-  // Android's back button should dismiss the tip, not leave the screen under it.
-  useEffect(() => {
-    if (!visible) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       onDismiss();
       return true;
     });
     return () => sub.remove();
-  }, [visible, onDismiss]);
-
-  const ready = visible && rect !== null && origin !== null;
+  }, [onDismiss]);
 
   useEffect(() => {
-    if (!ready) {
-      cancelAnimation(travel);
-      cancelAnimation(press);
-      cancelAnimation(enter);
-      enter.value = 0;
-      return;
-    }
+    if (origin === null) return;
     enter.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) });
-    /*
-     * An infinite loop, which this app otherwise bans (see check-blur). The ban
-     * is about the ALWAYS-ON background: an animation that never stops on a
-     * view present on every screen means the UI thread never sees an idle
-     * frame. This one lives on an overlay the user dismisses in a few seconds,
-     * and a gesture hint that plays once is missed by anyone who blinked.
-     */
-    if (gesture === 'tap') {
-      press.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 260, easing: Easing.out(Easing.quad) }),
-          withTiming(0, { duration: 320, easing: Easing.in(Easing.quad) }),
-          withDelay(HOLD_MS, withTiming(0, { duration: 0 })),
-        ),
-        -1,
-      );
-      return;
-    }
-    const ease = { duration: LEG_MS, easing: Easing.inOut(Easing.cubic) };
-    travel.value = withRepeat(
-      gesture === 'swipeBoth'
-        ? withSequence(
-            withTiming(-1, ease),
-            withTiming(0, ease),
-            withTiming(1, ease),
-            withTiming(0, ease),
-            withDelay(HOLD_MS, withTiming(0, { duration: 0 })),
-          )
-        : withSequence(
-            withTiming(-1, ease),
-            withDelay(HOLD_MS, withTiming(0, ease)),
-          ),
-      -1,
-    );
-  }, [ready, gesture]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => cancelAnimation(enter);
+  }, [origin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enterStyle = useAnimatedStyle(() => ({ opacity: enter.value }));
 
-  const fingerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: travel.value * TRAVEL },
-      { scale: 1 - press.value * 0.18 },
-    ],
-    opacity: 0.55 + press.value * 0.45,
-  }));
-
-  if (!visible || !rect) return null;
-
-  // The hole, in this overlay's own coordinates. `origin` is null on the first
-  // pass — the root still renders so it can be measured, but nothing is painted.
   const hx = rect.x - (origin?.x ?? 0) - PAD;
   const hy = rect.y - (origin?.y ?? 0) - PAD;
   const hw = rect.width + PAD * 2;
   const hh = rect.height + PAD * 2;
 
   // The caption goes below the target when there is room, above when there
-  // isn't — a card that runs off the bottom of the screen is a tip nobody can
-  // dismiss, and the bottom is exactly where list rows tend to be.
+  // isn't — a card that runs off the bottom is a tip nobody can dismiss, and
+  // the bottom is exactly where list rows tend to be.
   const below = hy + hh + CAPTION_SPACE < screenH;
+
+  // The caret points at the target's centre, but stays inside the caption's
+  // rounded corners so it never floats off the edge of the card.
+  const caretMin = spacing.lg + HOLE_R;
+  const caretMax = screenW - spacing.lg - HOLE_R - CARET * 2;
+  const caretLeft = Math.min(
+    Math.max(hx + hw / 2 - CARET, caretMin),
+    Math.max(caretMax, caretMin),
+  );
 
   return (
     <View
       ref={rootRef}
       collapsable={false}
       style={styles.root}
-      onLayout={() =>
-        rootRef.current?.measureInWindow((x, y) => setOrigin({ x, y }))
-      }
+      onLayout={() => rootRef.current?.measureInWindow((x, y) => setOrigin({ x, y }))}
     >
       {origin === null ? null : (
         <Animated.View style={[StyleSheet.absoluteFill, enterStyle]}>
-          {/* Tapping anywhere dismisses, including the hole: the target is inert
-              here anyway (see the header), so an unexplained dead zone would
-              just read as the app having frozen. */}
+          {/* Tapping anywhere dismisses, including the hole: the target is
+              inert here anyway, so a dead zone would just read as a freeze. */}
           <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
-            {/* The scrim, tiled so no two pieces overlap — the colour is
-                translucent, so an overlap would show as a darker band. */}
             <View style={styles.scrimGroup} pointerEvents="none">
               <View style={[styles.op, { top: 0, height: Math.max(hy, 0), left: 0, right: 0 }]} />
               <View style={[styles.op, { top: hy + hh, bottom: 0, left: 0, right: 0 }]} />
               <View style={[styles.op, { top: hy, height: hh, left: 0, width: Math.max(hx, 0) }]} />
               <View style={[styles.op, { top: hy, height: hh, left: hx + hw, right: 0 }]} />
-              {/* The frame's inner edge (outer radius minus border width) is
-                  what rounds the hole; the rectangles above overlap its rounded
-                  outer corners, which is free inside this group. */}
               <View
                 style={{
                   position: 'absolute',
@@ -275,44 +188,47 @@ export function CoachMark({
               />
             </View>
 
-            {/* A ring around the hole, so the spotlight reads as deliberate
-                rather than as a rendering glitch where the dimming failed. */}
+            {/* A hairline on the cut edge, not a highlight around it. Heavy
+                enough to define the shape against the dim, light enough that
+                the card still reads as the card. */}
             <View
               pointerEvents="none"
               style={[
                 styles.ring,
-                { top: hy, left: hx, width: hw, height: hh, borderColor: colors.accent },
+                { top: hy, left: hx, width: hw, height: hh, borderColor: colors.line },
               ]}
             />
-
-            {/* The finger, riding the target's centre. */}
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.finger,
-                { top: hy + hh / 2 - 18, left: hx + hw / 2 - 18 },
-                fingerStyle,
-              ]}
-            >
-              <View style={[styles.fingerDot, { backgroundColor: colors.accent }]} />
-            </Animated.View>
 
             <View
               style={[
                 styles.captionWrap,
                 below
-                  ? { top: hy + hh + spacing.lg }
-                  : { bottom: screenH - hy + spacing.lg },
+                  ? { top: hy + hh + spacing.md }
+                  : { bottom: screenH - hy + spacing.md },
               ]}
             >
-              <GlassView over="content" radius={radii.lg} style={styles.caption}>
+              {below && (
+                <View
+                  style={[
+                    styles.caret,
+                    styles.caretUp,
+                    { left: caretLeft, borderBottomColor: colors.surface },
+                  ]}
+                />
+              )}
+              <View
+                style={[
+                  styles.caption,
+                  { backgroundColor: colors.surface, borderColor: colors.line },
+                ]}
+              >
                 <View style={styles.captionHead}>
                   <Ionicons name="bulb-outline" size={20} color={colors.accent} />
                   <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
                     {t(`${textKey}Title`)}
                   </Text>
                 </View>
-                <Text style={[type.body, { color: colors.muted }]}>
+                <Text style={[type.body, styles.body, { color: colors.muted }]}>
                   {t(`${textKey}Body`)}
                 </Text>
                 <View style={styles.actions}>
@@ -330,7 +246,16 @@ export function CoachMark({
                     </Text>
                   </Pressable>
                 </View>
-              </GlassView>
+              </View>
+              {!below && (
+                <View
+                  style={[
+                    styles.caret,
+                    styles.caretDown,
+                    { left: caretLeft, borderTopColor: colors.surface },
+                  ]}
+                />
+              )}
             </View>
           </Pressable>
         </Animated.View>
@@ -345,22 +270,37 @@ const SCRIM_ALPHA = 0.72;
 
 const styles = StyleSheet.create({
   // elevation as well as zIndex: on Android the two orderings are separate, and
-  // without elevation the overlay can paint under an elevated card below it.
+  // without elevation the overlay can paint under an elevated sibling.
   root: { ...StyleSheet.absoluteFillObject, zIndex: 50, elevation: 50 },
   scrimGroup: { ...StyleSheet.absoluteFillObject, opacity: SCRIM_ALPHA },
   op: { position: 'absolute', backgroundColor: SCRIM_SOLID },
-  ring: { position: 'absolute', borderWidth: 2, borderRadius: HOLE_R },
-  finger: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fingerDot: { width: 28, height: 28, borderRadius: 14 },
+  ring: { position: 'absolute', borderWidth: 1, borderRadius: HOLE_R },
   captionWrap: { position: 'absolute', left: spacing.lg, right: spacing.lg },
-  caption: { padding: spacing.lg, gap: spacing.md },
+  // Matches a card's radius, so the tip reads as one of them rather than a
+  // different kind of surface floating over the page.
+  caption: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   captionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Roomier than the default: this is the one paragraph in the app somebody
+  // actually stops to read.
+  body: { lineHeight: 22 },
+  // The classic zero-size-box triangle: two transparent side borders and one
+  // coloured border make the point.
+  caret: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
+    borderLeftWidth: CARET,
+    borderRightWidth: CARET,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  caretUp: { top: -CARET, borderBottomWidth: CARET },
+  caretDown: { bottom: -CARET, borderTopWidth: CARET },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   skip: { flex: 1, paddingVertical: spacing.sm },
   got: {

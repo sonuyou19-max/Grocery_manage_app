@@ -21,6 +21,7 @@ import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
 import { setUnitLexicon } from '@/lib/item-unit';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring, trackRoute } from '@/lib/monitoring';
+import { CoachMarkHost } from '@/components/coach-mark-host';
 import { hydrateCoachMarks } from '@/lib/coach-marks';
 import { hydrateGetStarted, hydrateOnboarding } from '@/lib/onboarding';
 import { hydrateStorePrefs } from '@/lib/store-prefs';
@@ -123,6 +124,11 @@ export default function RootLayout() {
                     GroceriesProvider is settled behind the loading screen
                     rather than in front of the user. */}
                 <BootGate>
+                {/* Coach marks draw here, above the tab bar and the safe
+                    areas — a tip rendered inside a screen can only dim
+                    that screen. Still one native window, so the
+                    overlay's measure-and-subtract stays correct. */}
+                <CoachMarkHost>
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="list/[id]" />
@@ -151,6 +157,7 @@ export default function RootLayout() {
                     options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }}
                   />
                 </Stack>
+                </CoachMarkHost>
                 </BootGate>
                 <StatusBar style="auto" />
               </PantryIntelProvider>
