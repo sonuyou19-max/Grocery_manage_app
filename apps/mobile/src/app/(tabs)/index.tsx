@@ -27,7 +27,11 @@ import { useAuth } from "@/store/auth";
 import { useGroceries, type List } from "@/store/groceries";
 import { useHousehold } from "@/store/household";
 import { useLocale, useT } from "@/store/locale";
-import { usePantryIntel, useVibeDeck } from "@/store/pantry-intel";
+import {
+  usePantryIntel,
+  usePantryStatus,
+  useVibeDeck,
+} from "@/store/pantry-intel";
 import { radii, spacing, type, useTheme } from "@/theme";
 
 /** Time-of-day greeting key based on the device's local clock. */
@@ -58,6 +62,21 @@ export default function ListsScreen() {
   const { stats } = usePantryIntel();
   const { count: vibeCount } = useVibeDeck();
   const vibeVariant = vibeEmptyVariant();
+  /*
+   * An empty deck has three different meanings and they must not share a
+   * sentence. The card used to say "nothing running low yet" for all of them,
+   * which was flatly false in the middle case: 15 items running low, every one
+   * already on a list, and the Pantry tab one tap away saying exactly that.
+   *
+   *   learning   nothing tracked at all - no history to predict from yet
+   *   listed     things ARE low, but all of them are already on a list
+   *   idle       genuinely nothing low
+   *
+   * The counts come from usePantryStatus, which is the Pantry's own rule, so
+   * the number quoted here is the number that screen shows.
+   */
+  const { tracked, low: lowCount } = usePantryStatus();
+  const emptyState = tracked === 0 ? 'learning' : lowCount > 0 ? 'listed' : 'idle';
   const [editing, setEditing] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   // Items the builder handed off, awaiting a destination-list choice.
@@ -243,12 +262,18 @@ export default function ListsScreen() {
                     {t("lists.vibeTitle")}
                   </Text>
                   <Text style={[type.body, { color: colors.ink }]}>
-                    {t(`lists.vibeEmpty${vibeVariant}Title`)}
+                    {emptyState === "idle"
+                      ? t(`lists.vibeEmpty${vibeVariant}Title`)
+                      : t(`lists.vibe${emptyState === "listed" ? "Listed" : "Learning"}Title`)}
                   </Text>
                   <Text
                     style={[type.sub, { color: colors.muted, marginTop: 2 }]}
                   >
-                    {t(`lists.vibeEmpty${vibeVariant}Body`)}
+                    {emptyState === "idle"
+                      ? t(`lists.vibeEmpty${vibeVariant}Body`)
+                      : emptyState === "listed"
+                        ? t("lists.vibeListedBody", { count: lowCount })
+                        : t("lists.vibeLearningBody")}
                   </Text>
                 </View>
               </View>

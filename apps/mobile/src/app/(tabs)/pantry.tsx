@@ -36,10 +36,11 @@ import { rubberBand, springTo } from '@/lib/motion';
 import { useDeferUntilClosed } from '@/lib/modal-nav';
 import { usePlusGate } from '@/lib/plus-gate';
 import {
+  LOW_THRESHOLD,
   dueAt,
   hasUserCadence,
+  isLowStat,
   isResting,
-  LOW_THRESHOLD,
   lastBoughtLabel,
   lifeRemaining,
   listsHolding,
@@ -141,10 +142,10 @@ function SignedInPantry() {
     [lists, stapleKey],
   );
 
-  const isLow = useCallback(
-    (s: ItemStat) => queued.has(s.key) || lifeRemaining(s, now) < LOW_THRESHOLD,
-    [queued, now],
-  );
+  // The rule itself lives in lib/pantry-intel so the dashboard can describe the
+  // same state without restating it — restating it is how the two screens came
+  // to disagree in the first place.
+  const isLow = useCallback((s: ItemStat) => isLowStat(s, queued, now), [queued, now]);
 
   const { low, stocked } = useMemo(() => {
     const matches = (s: ItemStat) => !q || s.display.toLowerCase().includes(q);

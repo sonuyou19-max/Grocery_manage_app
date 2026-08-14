@@ -115,15 +115,19 @@ const it = {
       one: '%{count} articolo da controllare · 10 secondi',
       other: '%{count} articoli da controllare · 10 secondi',
     },
+    vibeListedTitle: 'Già sistemato 🧺',
+    vibeListedBody: {
+      one: "L'unico prodotto in esaurimento è già in una lista — niente da controllare. Ti avviso quando qualcos'altro inizia a scarseggiare.",
+      other: "I %{count} prodotti in esaurimento sono già tutti in una lista — niente da controllare. Ti avviso quando qualcos'altro inizia a scarseggiare.",
+    },
+    vibeLearningTitle: 'Sto ancora imparando il tuo ritmo',
+    vibeLearningBody: 'Fai la spesa come al solito. Dopo qualche giro ti avviserò prima che le cose finiscano.',
     vibeEmpty1Title: 'Tutto a posto in dispensa 🧺',
-    vibeEmpty1Body:
-      'Non sta finendo ancora nulla. Fai la spesa come al solito — imparo il tuo ritmo e ti avviso prima che qualcosa finisca.',
+    vibeEmpty1Body: 'Non sta finendo niente. Te lo segnalo qui appena inizia a scarseggiare.',
     vibeEmpty2Title: 'Sei ben rifornito',
-    vibeEmpty2Body:
-      'Non c’è nulla da controllare ora. Mentre fai la spesa capisco quanto in fretta finiscono le cose e te le mostro qui prima che ti manchino.',
-    vibeEmpty3Title: 'Bene — non manca nulla',
-    vibeEmpty3Body:
-      'Fai la tua spesa tranquillamente. Imparo il tuo ritmo e ti avviso qui poco prima che finisca qualcosa.',
+    vibeEmpty2Body: "Al momento non c'è niente da controllare. Metto qui le cose appena scarseggiano.",
+    vibeEmpty3Title: 'Bene — non manca niente',
+    vibeEmpty3Body: 'È tutto in ordine. Ti avviso qui prima che finisca qualcosa.',
     yourLists: 'Le tue liste',
     holdToEdit: 'tieni premuto per modificare',
     buildWeekly: 'Crea la lista della settimana',

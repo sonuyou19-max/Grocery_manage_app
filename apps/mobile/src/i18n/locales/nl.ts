@@ -115,15 +115,19 @@ const nl = {
       one: '%{count} item om te bekijken · 10 seconden',
       other: '%{count} items om te bekijken · 10 seconden',
     },
-    vibeEmpty1Title: 'Alles op peil 🧺',
-    vibeEmpty1Body:
-      'Nog niets bijna op. Doe je boodschappen zoals altijd — ik leer je ritme en waarschuw je voordat iets opraakt.',
-    vibeEmpty2Title: 'Je zit goed',
-    vibeEmpty2Body:
-      'Niets om nu te bekijken. Terwijl je winkelt, leer ik hoe snel dingen opraken en zet ik ze hier voordat je misgrijpt.',
-    vibeEmpty3Title: 'Mooi — niets bijna op',
-    vibeEmpty3Body:
-      'Doe je ding in de winkel. Ik leer je tempo en geef hier een seintje net voordat iets opraakt.',
+    vibeListedTitle: 'Al geregeld 🧺',
+    vibeListedBody: {
+      one: 'Het enige product dat opraakt staat al op een lijst — niets te bekijken. Ik geef een seintje zodra er iets nieuws opraakt.',
+      other: 'De %{count} producten die opraken staan allemaal al op een lijst — niets te bekijken. Ik geef een seintje zodra er iets nieuws opraakt.',
+    },
+    vibeLearningTitle: 'Ik leer je ritme nog',
+    vibeLearningBody: 'Doe gewoon boodschappen zoals je gewend bent. Na een paar keer waarschuw ik je voordat iets opraakt.',
+    vibeEmpty1Title: 'Alles goed in de voorraadkast 🧺',
+    vibeEmpty1Body: 'Er raakt niets op. Ik laat het hier zien zodra iets begint op te raken.',
+    vibeEmpty2Title: 'Je zit goed in de voorraad',
+    vibeEmpty2Body: 'Er is nu niets te bekijken. Ik zet dingen hier zodra ze opraken.',
+    vibeEmpty3Title: 'Mooi — niets is op',
+    vibeEmpty3Body: 'Alles is in orde. Ik geef hier een seintje voordat iets opraakt.',
     yourLists: 'Je lijsten',
     holdToEdit: 'houd vast om te bewerken',
     buildWeekly: 'Stel je weeklijst samen',

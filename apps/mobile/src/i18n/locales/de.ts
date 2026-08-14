@@ -116,15 +116,19 @@ const de = {
       one: '%{count} Artikel prüfen · 10 Sekunden',
       other: '%{count} Artikel prüfen · 10 Sekunden',
     },
-    vibeEmpty1Title: 'Alles gut im Vorrat 🧺',
-    vibeEmpty1Body:
-      'Noch geht nichts zur Neige. Kauf ein wie immer — ich bekomme ein Gefühl für deinen Rhythmus und sage rechtzeitig Bescheid, bevor etwas ausgeht.',
+    vibeListedTitle: 'Schon erledigt 🧺',
+    vibeListedBody: {
+      one: 'Das eine Produkt, das zur Neige geht, steht schon auf einer Liste — nichts zu prüfen. Ich melde mich, wenn etwas Neues knapp wird.',
+      other: 'Die %{count} Produkte, die zur Neige gehen, stehen alle schon auf einer Liste — nichts zu prüfen. Ich melde mich, wenn etwas Neues knapp wird.',
+    },
+    vibeLearningTitle: 'Ich lerne noch deinen Rhythmus',
+    vibeLearningBody: 'Kauf einfach wie gewohnt ein. Nach ein paar Einkäufen sage ich dir Bescheid, bevor etwas ausgeht.',
+    vibeEmpty1Title: 'In der Speisekammer ist alles gut 🧺',
+    vibeEmpty1Body: 'Nichts geht zur Neige. Ich zeige es hier an, sobald etwas knapp wird.',
     vibeEmpty2Title: 'Du bist gut versorgt',
-    vibeEmpty2Body:
-      'Gerade gibt es nichts zu prüfen. Beim Einkaufen lerne ich, wie schnell Dinge verschwinden, und zeige sie hier, bevor du überrascht wirst.',
-    vibeEmpty3Title: 'Schön — nichts geht zur Neige',
-    vibeEmpty3Body:
-      'Mach dein Ding beim Einkaufen. Ich lerne dein Tempo und erinnere dich hier, kurz bevor etwas ausgeht.',
+    vibeEmpty2Body: 'Gerade gibt es nichts zu prüfen. Ich lege es hier ab, sobald etwas knapp wird.',
+    vibeEmpty3Title: 'Schön — nichts ist knapp',
+    vibeEmpty3Body: 'Alles bestens. Ich erinnere dich hier, bevor dir etwas ausgeht.',
     yourLists: 'Deine Listen',
     holdToEdit: 'gedrückt halten zum Bearbeiten',
     buildWeekly: 'Wochenliste zusammenstellen',

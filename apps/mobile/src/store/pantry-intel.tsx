@@ -24,6 +24,8 @@ import {
   applyStillGood,
   buildDeck,
   normalizeKey,
+  pantryCounts,
+  queuedKeys,
   recordPurchase,
   revertPurchase,
   statsFromPurchases,
@@ -953,6 +955,24 @@ export function useVibeDeck(): { deck: DeckCard[]; count: number } {
     const deck = buildDeck(stats, excludeKeys, Date.now());
     return { deck, count: deck.length };
   }, [stats, lists]);
+}
+
+/**
+ * The Pantry's own headline numbers, for callers that are not the Pantry.
+ *
+ * The dashboard needs these to say something true when the Vibe Check deck is
+ * empty: an empty deck means "nothing left to decide", which is NOT the same as
+ * "nothing is running low" — everything low may simply be on a list already.
+ * Reading the counts from here rather than re-deriving them is what keeps the
+ * two screens telling the same story.
+ */
+export function usePantryStatus(): { tracked: number; low: number } {
+  const { stats } = usePantryIntel();
+  const { lists } = useGroceries();
+  return useMemo(
+    () => pantryCounts(stats, queuedKeys(lists), Date.now()),
+    [stats, lists],
+  );
 }
 
 export type { DeckCard, ItemStat };

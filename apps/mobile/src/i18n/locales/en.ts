@@ -124,15 +124,19 @@ const en = {
       one: '%{count} item to review · 10 seconds',
       other: '%{count} items to review · 10 seconds',
     },
+    vibeListedTitle: 'Already sorted 🧺',
+    vibeListedBody: {
+      one: "The one thing running low is already on a list — nothing for you to review. I'll nudge you when something new starts running down.",
+      other: "The %{count} things running low are all on a list — nothing for you to review. I'll nudge you when something new starts running down.",
+    },
+    vibeLearningTitle: 'Still learning your rhythm',
+    vibeLearningBody: "Shop like you normally would. After a few trips I'll give you a heads-up before things run out.",
     vibeEmpty1Title: 'All good in the pantry 🧺',
-    vibeEmpty1Body:
-      "Nothing running low yet. Shop like you normally would — I'll get a feel for your rhythm and give you a heads-up before stuff runs out.",
-    vibeEmpty2Title: 'You’re all stocked up',
-    vibeEmpty2Body:
-      'Nothing to review right now. As you shop, I get a feel for how fast things disappear and pop them here before you’re caught short.',
-    vibeEmpty3Title: 'Nice — nothing’s low',
-    vibeEmpty3Body:
-      "Do your thing at the shops. I'll learn your pace and drop a reminder here right before you run out.",
+    vibeEmpty1Body: "Nothing's running low. I'll flag things here as they start to run down.",
+    vibeEmpty2Title: "You're all stocked up",
+    vibeEmpty2Body: "Nothing needs a look right now. I'll pop things here as they start running down.",
+    vibeEmpty3Title: "Nice — nothing's low",
+    vibeEmpty3Body: "Everything's in good shape. I'll drop a reminder here before you run out.",
     yourLists: 'Your lists',
     holdToEdit: 'hold to edit',
     buildWeekly: "Build this week's list",

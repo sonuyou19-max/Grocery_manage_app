@@ -227,6 +227,45 @@ export function lifeRemaining(stat: ItemStat, now: number): number {
   return Math.max(0, Math.min(1, 1 - (now - stat.lastPurchasedAt) / span));
 }
 
+/**
+ * Is this item running low?
+ *
+ * Being on a shopping list counts, and that is the whole subtlety. Putting
+ * something on a list IS the user saying they are running out, so the Pantry
+ * counts it as low even when the burn-rate maths has not caught up yet.
+ *
+ * The Vibe Check deck does the opposite and EXCLUDES queued items, because
+ * there is nothing left to decide about something already on a list. Both
+ * rules are right for their screen, and the two numbers legitimately differ.
+ *
+ * They live here together so that difference stays deliberate. It has already
+ * caused one bug: the dashboard said "nothing running low yet" while the Pantry
+ * said "15 running low", because the dashboard was reading the deck's count and
+ * describing it in the Pantry's words.
+ */
+export function isLowStat(stat: ItemStat, queued: Set<string>, now: number): boolean {
+  return queued.has(stat.key) || lifeRemaining(stat, now) < LOW_THRESHOLD;
+}
+
+/**
+ * The two numbers the Pantry header shows, computed the way the Pantry shows
+ * them: resting items excluded, queued items counted as low.
+ *
+ * Exported so the dashboard can describe the same state without re-deriving it
+ * — see the bug in isLowStat above.
+ */
+export function pantryCounts(
+  stats: StatMap,
+  queued: Set<string>,
+  now: number,
+): { tracked: number; low: number } {
+  const active = Object.values(stats).filter((s) => !isResting(s));
+  return {
+    tracked: active.length,
+    low: active.filter((s) => isLowStat(s, queued, now)).length,
+  };
+}
+
 /** The two fields the queue rule below reads. Structural, so both the store's
  *  Item and any list-shaped row can be passed without adapting either. */
 export interface QueueableItem {

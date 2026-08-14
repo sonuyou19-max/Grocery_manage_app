@@ -116,15 +116,19 @@ const fr = {
       one: '%{count} article à vérifier · 10 secondes',
       other: '%{count} articles à vérifier · 10 secondes',
     },
-    vibeEmpty1Title: 'Tout va bien au garde-manger 🧺',
-    vibeEmpty1Body:
-      'Rien à réapprovisionner pour l’instant. Fais tes courses comme d’habitude — j’apprends ton rythme et je te préviens avant que ça manque.',
+    vibeListedTitle: 'Déjà réglé 🧺',
+    vibeListedBody: {
+      one: 'Le seul article bientôt épuisé est déjà sur une liste — rien à vérifier. Je te préviens quand autre chose commence à manquer.',
+      other: 'Les %{count} articles bientôt épuisés sont tous déjà sur une liste — rien à vérifier. Je te préviens quand autre chose commence à manquer.',
+    },
+    vibeLearningTitle: "J'apprends encore ton rythme",
+    vibeLearningBody: "Fais tes courses comme d'habitude. Après quelques passages, je te préviendrai avant que tu sois à court.",
+    vibeEmpty1Title: 'Tout va bien côté placards 🧺',
+    vibeEmpty1Body: 'Rien ne manque. Je te le signalerai ici dès que ça commence à baisser.',
     vibeEmpty2Title: 'Tu es bien approvisionné',
-    vibeEmpty2Body:
-      'Rien à vérifier pour le moment. Au fil de tes courses, je repère la vitesse à laquelle les choses s’épuisent et je les affiche ici avant que tu sois à court.',
+    vibeEmpty2Body: "Rien à vérifier pour l'instant. J'afficherai les articles ici dès qu'ils baissent.",
     vibeEmpty3Title: 'Parfait — rien ne manque',
-    vibeEmpty3Body:
-      'Fais tes courses tranquillement. J’apprends ton rythme et je te fais signe ici juste avant la rupture.',
+    vibeEmpty3Body: 'Tout est en bon état. Je te ferai signe ici avant que tu sois à court.',
     yourLists: 'Vos listes',
     holdToEdit: 'maintenir pour modifier',
     buildWeekly: 'Composer ma liste de la semaine',

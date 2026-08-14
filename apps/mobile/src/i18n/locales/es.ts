@@ -115,15 +115,19 @@ const es = {
       one: '%{count} artículo por revisar · 10 segundos',
       other: '%{count} artículos por revisar · 10 segundos',
     },
+    vibeListedTitle: 'Ya está resuelto 🧺',
+    vibeListedBody: {
+      one: 'El único producto que se está acabando ya está en una lista — nada que revisar. Te aviso cuando algo nuevo empiece a escasear.',
+      other: 'Los %{count} productos que se están acabando ya están en una lista — nada que revisar. Te aviso cuando algo nuevo empiece a escasear.',
+    },
+    vibeLearningTitle: 'Todavía estoy aprendiendo tu ritmo',
+    vibeLearningBody: 'Compra como lo harías normalmente. Después de unas cuantas compras te avisaré antes de que se acaben las cosas.',
     vibeEmpty1Title: 'Todo bien en la despensa 🧺',
-    vibeEmpty1Body:
-      'Todavía no se está acabando nada. Compra como siempre — voy cogiendo el ritmo y te aviso antes de que se acabe algo.',
-    vibeEmpty2Title: 'Vas bien de existencias',
-    vibeEmpty2Body:
-      'Ahora mismo no hay nada que revisar. Mientras compras, aprendo lo rápido que se acaban las cosas y te las muestro aquí antes de que te pillen sin nada.',
-    vibeEmpty3Title: 'Genial — no falta nada',
-    vibeEmpty3Body:
-      'Haz tu compra tranquilo. Aprendo tu ritmo y te aviso aquí justo antes de que se te acabe algo.',
+    vibeEmpty1Body: 'No se está acabando nada. Te lo señalaré aquí en cuanto empiece a bajar.',
+    vibeEmpty2Title: 'Estás bien abastecido',
+    vibeEmpty2Body: 'Ahora mismo no hay nada que revisar. Pondré las cosas aquí en cuanto escaseen.',
+    vibeEmpty3Title: 'Bien — no falta nada',
+    vibeEmpty3Body: 'Todo está en buena forma. Te avisaré aquí antes de que te quedes sin nada.',
     yourLists: 'Tus listas',
     holdToEdit: 'mantén pulsado para editar',
     buildWeekly: 'Crear la lista de esta semana',
