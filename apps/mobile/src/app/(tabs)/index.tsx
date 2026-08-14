@@ -143,10 +143,10 @@ export default function ListsScreen() {
   const base = t(`greeting.${greetingKey()}`);
 
   // Builder handed off the ticked items → ask which list to add them to.
-  const onBuild = (selected: WeeklySuggestion[]) => {
-    setBuilderOpen(false);
-    setPendingItems(selected);
-  };
+  // No setBuilderOpen(false) here: the sheet closes itself and only calls this
+  // once its native window is really gone, which is what stops the picker
+  // mounting behind it. See BuildFooter in weekly-list-sheet.tsx.
+  const onBuild = (selected: WeeklySuggestion[]) => setPendingItems(selected);
 
   const addWeeklyToList = (listId: string) => {
     const items = pendingItems;

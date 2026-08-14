@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Sheet } from "@/components/sheet";
+import { Sheet, useSheetDismiss } from "@/components/sheet";
 import { ItemEmoji } from "@/components/item-emoji";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { categoryLabel } from "@/lib/categorize";
@@ -138,29 +138,58 @@ export function WeeklyListSheet({
           })}
         </ScrollView>
 
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: Math.max(insets.bottom, spacing.md) },
-          ]}
-        >
-          <Pressable
-            onPress={() =>
-              onBuild(suggestions.filter((s) => selected.has(s.key)))
-            }
-            disabled={count === 0}
-            style={[
-              styles.build,
-              { backgroundColor: colors.accent, opacity: count ? 1 : 0.45 },
-            ]}
-          >
-            <Text style={[type.body, { color: colors.accentInk }]}>
-              {t("common.addCount", { count })}
-            </Text>
-          </Pressable>
-        </View>
+        <BuildFooter
+          count={count}
+          bottom={Math.max(insets.bottom, spacing.md)}
+          onBuild={() => onBuild(suggestions.filter((s) => selected.has(s.key)))}
+        />
       </View>
     </Sheet>
+  );
+}
+
+/**
+ * The confirm row, as its own component so it sits INSIDE the <Sheet> and can
+ * call useSheetDismiss().
+ *
+ * That deferral is the whole point. onBuild hands off to a second sheet, and a
+ * Sheet is a native <Modal> that deliberately outlives its `visible` prop so
+ * the close animation has something to play on. Opening the picker straight
+ * from onPress therefore put two native windows up at once, and on Android the
+ * new one lands UNDERNEATH the outgoing one: the picker was there, invisible,
+ * behind a window on its way out, and the app looked frozen.
+ *
+ * dismiss(action) closes this sheet and runs the action a frame after the
+ * window has genuinely gone, which is the same rule recipe.tsx follows for
+ * navigation and text-prompt-modal follows for its submit.
+ */
+function BuildFooter({
+  count,
+  bottom,
+  onBuild,
+}: {
+  count: number;
+  bottom: number;
+  onBuild: () => void;
+}) {
+  const { colors } = useTheme();
+  const t = useT();
+  const dismiss = useSheetDismiss();
+  return (
+    <View style={[styles.footer, { paddingBottom: bottom }]}>
+      <Pressable
+        onPress={() => dismiss(onBuild)}
+        disabled={count === 0}
+        style={[
+          styles.build,
+          { backgroundColor: colors.accent, opacity: count ? 1 : 0.45 },
+        ]}
+      >
+        <Text style={[type.body, { color: colors.accentInk }]}>
+          {t("common.addCount", { count })}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
