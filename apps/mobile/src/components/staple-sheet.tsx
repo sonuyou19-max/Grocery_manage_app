@@ -91,37 +91,44 @@ export function StapleSheet({
           contentContainerStyle={styles.content}
         >
           <View>
-            <Text style={[type.h2, { color: colors.ink }]} numberOfLines={2}>
-              {item.display}
-            </Text>
+            {/* Name and list tags share one row, the tags reading as a suffix
+                to the name rather than as a separate fact below it — "Pizza,
+                which is on Weekly" instead of "Pizza" then "Weekly".
+
+                One tag per list, each in the list's own colour — see
+                lib/list-tint for why the colour is hashed from the id rather
+                than cycled by position. The row wraps rather than truncating:
+                a household with four lists and a long name for each is
+                ordinary, and a clipped tag names the wrong list. A long item
+                name simply takes the width it needs and pushes the tags onto
+                the next line, which is the same layout as before. */}
+            <View style={styles.titleRow}>
+              <Text
+                style={[type.h2, { color: colors.ink }, styles.title]}
+                numberOfLines={2}
+              >
+                {item.display}
+              </Text>
+              {lists.map((l) => {
+                const tint = listTint(l.id, scheme);
+                return (
+                  <View
+                    key={l.id}
+                    style={[styles.tag, { backgroundColor: tint.bg }]}
+                  >
+                    <Text
+                      style={[styles.tagText, { color: tint.fg }]}
+                      numberOfLines={1}
+                    >
+                      {l.name}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
             <Text style={[type.sub, { color: colors.muted }]}>
               {categoryLabel(item.category, t)}
             </Text>
-            {/* One tag per list, each in the list's own colour — see
-                lib/list-tint for why the colour is hashed from the id rather
-                than cycled by position. Wraps rather than truncating: a
-                household with four lists and a long name for each is ordinary,
-                and a clipped tag names the wrong list. */}
-            {lists.length > 0 && (
-              <View style={styles.tags}>
-                {lists.map((l) => {
-                  const tint = listTint(l.id, scheme);
-                  return (
-                    <View
-                      key={l.id}
-                      style={[styles.tag, { backgroundColor: tint.bg }]}
-                    >
-                      <Text
-                        style={[styles.tagText, { color: tint.fg }]}
-                        numberOfLines={1}
-                      >
-                        {l.name}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
           </View>
 
           {/* Staple toggle */}
@@ -266,12 +273,18 @@ function CadenceChip({
 }
 
 const styles = StyleSheet.create({
-  tags: {
+  titleRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.xs,
-    paddingTop: spacing.sm,
+    // Centre, not baseline: RN resolves baseline against a multi-line Text's
+    // last line, which would hang the tag off the bottom of a two-line name.
+    alignItems: "center",
+    columnGap: spacing.sm,
+    rowGap: spacing.xs,
   },
+  // Shrinkable so the name yields before the row overflows; it still gets a
+  // full line to itself when it is long, because the row wraps.
+  title: { flexShrink: 1 },
   tag: {
     borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
