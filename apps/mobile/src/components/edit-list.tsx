@@ -156,9 +156,13 @@ function Row({ list, positions, count, onCommit, onDelete, onRename }: RowProps)
   });
 
   const confirmDelete = () => {
-    Alert.alert('Delete list', `Delete “${list.name}” and its items?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => onDelete(list.id) },
+    Alert.alert(t('lists.deleteTitle'), t('lists.deleteBody', { name: list.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('lists.deleteConfirm'),
+        style: 'destructive',
+        onPress: () => onDelete(list.id),
+      },
     ]);
   };
 
@@ -194,7 +198,7 @@ function Row({ list, positions, count, onCommit, onDelete, onRename }: RowProps)
             <Ionicons name="pencil" size={13} color={colors.muted} />
           </View>
           <Text style={[type.sub, { color: colors.muted }]}>
-            {list.items.length} item{list.items.length === 1 ? '' : 's'}
+            {t('lists.itemsCount', { count: list.items.length })}
           </Text>
         </Pressable>
 
