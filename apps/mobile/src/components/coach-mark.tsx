@@ -56,7 +56,7 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * is describing.
  *
  * ---------------------------------------------------------------------------
- * Why the hole is four rectangles, and why it is square
+ * Why the hole is rectangles plus a frame, inside one opacity group
  * ---------------------------------------------------------------------------
  *
  * The obvious way to spotlight something is an SVG mask, or a full-screen view
@@ -65,21 +65,23 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * class of cost as the BlurView this app spent a release removing; blend modes
  * are not reliably supported on the New Architecture.
  *
- * Four opaque rectangles around the target leave the target untouched with no
- * compositing at all, and they tile — they must not stack, because the scrim is
- * translucent and two layers of it read as a darker patch.
+ * The pieces are four rectangles around the target plus a bordered frame whose
+ * inner radius rounds the hole. What makes that combination work is where the
+ * translucency lives: the pieces are OPAQUE and their parent carries the
+ * opacity, so the subtree is composited once and the pieces may overlap freely.
  *
- * Four rectangles leave a SQUARE hole, so the hole and the ring around it are
- * both square. The first version rounded the ring, which left a dark wedge in
- * every corner where the round ring did not meet the square hole.
+ * That single detail is the whole trick, and getting it wrong produced two
+ * shipped defects. With translucent pieces they have to tile exactly, because
+ * two overlapping layers read as a darker patch — and tiling rectangles leave a
+ * SQUARE hole, so a rounded ring over it showed a dark wedge in every corner.
+ * Squaring the ring fixed the wedges and left the hole square against rounded
+ * rows. Adding a frame to round the hole moved the artifact to the frame's own
+ * rounded OUTER corners, which the rectangles then failed to meet.
  *
- * Rounding the hole itself is not available at this cost. The region that needs
- * filling — a corner square minus a quarter disc — is concave, and a View with
- * a border radius can only ever paint a convex shape; the near-miss version of
- * this file used a bordered frame to round the inner edge and simply moved the
- * artifact to the frame's own rounded OUTER corners. Anything better needs a
- * real mask, which is the offscreen-layer cost ruled out above. A rectangle
- * that is exactly right beats a rounded rectangle that is nearly right.
+ * With the opacity on the parent, the rectangles simply overlap the frame and
+ * cover those corners, and the only region left uncovered is the rounded
+ * rectangle we actually wanted. The cost is one static offscreen layer for the
+ * few seconds a tip is up, which is not the always-on cost check-blur guards.
  *
  * ---------------------------------------------------------------------------
  * Why the target is not interactive
@@ -118,6 +120,10 @@ const HOLD_MS = 420;
 const PAD = 8;
 /** How much vertical room the caption needs below the target. */
 const CAPTION_SPACE = 210;
+/** Frame thickness. Any value works; it only has to reach past the corners. */
+const FRAME = 28;
+/** Roughly a row's own radius, so the hole looks cut to fit. */
+const HOLE_R = radii.md;
 
 export function CoachMark({
   visible,
@@ -247,14 +253,27 @@ export function CoachMark({
           <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
             {/* The scrim, tiled so no two pieces overlap — the colour is
                 translucent, so an overlap would show as a darker band. */}
-            <View style={[styles.dim, { top: 0, height: Math.max(hy, 0) }]} />
-            <View style={[styles.dim, { top: hy + hh, bottom: 0 }]} />
-            <View
-              style={[styles.dim, { top: hy, height: hh, left: 0, width: Math.max(hx, 0) }]}
-            />
-            <View
-              style={[styles.dim, { top: hy, height: hh, left: hx + hw, right: 0 }]}
-            />
+            <View style={styles.scrimGroup} pointerEvents="none">
+              <View style={[styles.op, { top: 0, height: Math.max(hy, 0), left: 0, right: 0 }]} />
+              <View style={[styles.op, { top: hy + hh, bottom: 0, left: 0, right: 0 }]} />
+              <View style={[styles.op, { top: hy, height: hh, left: 0, width: Math.max(hx, 0) }]} />
+              <View style={[styles.op, { top: hy, height: hh, left: hx + hw, right: 0 }]} />
+              {/* The frame's inner edge (outer radius minus border width) is
+                  what rounds the hole; the rectangles above overlap its rounded
+                  outer corners, which is free inside this group. */}
+              <View
+                style={{
+                  position: 'absolute',
+                  top: hy - FRAME,
+                  left: hx - FRAME,
+                  width: hw + FRAME * 2,
+                  height: hh + FRAME * 2,
+                  borderWidth: FRAME,
+                  borderColor: SCRIM_SOLID,
+                  borderRadius: HOLE_R + FRAME,
+                }}
+              />
+            </View>
 
             {/* A ring around the hole, so the spotlight reads as deliberate
                 rather than as a rendering glitch where the dimming failed. */}
@@ -320,15 +339,17 @@ export function CoachMark({
   );
 }
 
-const SCRIM = 'rgba(8,12,7,0.72)';
+/** Opaque: the alpha lives on the group, not the pieces — see the header. */
+const SCRIM_SOLID = 'rgb(8,12,7)';
+const SCRIM_ALPHA = 0.72;
 
 const styles = StyleSheet.create({
   // elevation as well as zIndex: on Android the two orderings are separate, and
   // without elevation the overlay can paint under an elevated card below it.
   root: { ...StyleSheet.absoluteFillObject, zIndex: 50, elevation: 50 },
-  dim: { position: 'absolute', left: 0, right: 0, backgroundColor: SCRIM },
-  // Square, to match the square hole the four rectangles leave.
-  ring: { position: 'absolute', borderWidth: 2 },
+  scrimGroup: { ...StyleSheet.absoluteFillObject, opacity: SCRIM_ALPHA },
+  op: { position: 'absolute', backgroundColor: SCRIM_SOLID },
+  ring: { position: 'absolute', borderWidth: 2, borderRadius: HOLE_R },
   finger: {
     position: 'absolute',
     width: 36,

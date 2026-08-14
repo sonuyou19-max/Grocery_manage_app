@@ -896,7 +896,12 @@ function SwipeableItemRow({
   }));
 
   return (
-    <View ref={rowRef} style={styles.swipeWrap}>
+    /* collapsable={false} is load-bearing: swipeWrap carries only
+       overflow:hidden, so Android flattens it away and rowRef then resolves to
+       an ancestor. The coach mark measured that ancestor and spotlit the whole
+       category group, starting at its header. The pantry row already had this;
+       this one did not, which is exactly why only this screen stayed wrong. */
+    <View ref={rowRef} collapsable={false} style={styles.swipeWrap}>
       <GestureDetector gesture={pan}>
         <Animated.View
           style={[
