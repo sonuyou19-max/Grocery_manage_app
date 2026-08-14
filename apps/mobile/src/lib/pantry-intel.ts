@@ -143,9 +143,28 @@ export function effectiveInterval(stat: ItemStat): number {
   return DEFAULT_INTERVALS[stat.category] ?? DEFAULT_INTERVALS.other;
 }
 
+/**
+ * Cadence sentinel meaning "never predict this".
+ *
+ * Distinct from resting, and the difference is the point. Resting archives the
+ * item: it leaves the Pantry's active list entirely. This keeps it tracked and
+ * visible, with its purchase history and prices intact — Korb simply never
+ * decides it is due. It is the setting for things bought irregularly, where a
+ * prediction is always wrong and only ever noise.
+ *
+ * Negative, so every existing `cadenceDays > 0` guard already treats it as "no
+ * pinned interval" and falls back to the learned one. Nothing downstream had to
+ * learn about it; due-ness is short-circuited in isDue and lifeRemaining below.
+ */
+export const CADENCE_NEVER = -1;
+
+export function isNeverPredicted(stat: ItemStat): boolean {
+  return stat.cadenceDays === CADENCE_NEVER;
+}
+
 /** Whether the interval came from the user rather than from learning. */
 export function hasUserCadence(stat: ItemStat): boolean {
-  return stat.cadenceDays != null && stat.cadenceDays > 0;
+  return stat.cadenceDays != null && (stat.cadenceDays > 0 || isNeverPredicted(stat));
 }
 
 /** Cadence presets offered in the UI, in days. */
@@ -204,8 +223,11 @@ export function dueAt(stat: ItemStat): number {
 
 export function isDue(stat: ItemStat, now: number): boolean {
   // Resting items never come due — that is the whole point of resting, and
-  // enforcing it here means every caller inherits it for free.
-  if (isResting(stat)) return false;
+  // enforcing it here means every caller inherits it for free. Same for items
+  // the user has told Korb not to predict: one line here keeps them out of the
+  // Vibe Check deck, the weekly builder and the Pantry's Running low section
+  // without any of those three needing to know the setting exists.
+  if (isResting(stat) || isNeverPredicted(stat)) return false;
   return stat.lastPurchasedAt > 0 && now >= dueAt(stat);
 }
 
@@ -221,6 +243,10 @@ export function isDue(stat: ItemStat, now: number): boolean {
 export const LOW_THRESHOLD = 0.35;
 
 export function lifeRemaining(stat: ItemStat, now: number): number {
+  // Always full: the Pantry's "running low" rule reads this, so a never-predict
+  // item must never drift down into it on its own. Putting it on a list by hand
+  // still shows it as low, which is the user saying so rather than Korb.
+  if (isNeverPredicted(stat)) return 1;
   if (!stat.lastPurchasedAt) return 1;
   const span = effectiveInterval(stat) * DAY;
   if (span <= 0) return 1;
@@ -368,6 +394,11 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
  * not already carry.
  */
 export function statusLabel(stat: ItemStat, now: number, t: Translate): string {
+  // First, because the rest of this function answers a question the user has
+  // explicitly told Korb not to ask. dueAt() still returns a date for these
+  // items — it falls back to the learned interval — so without this line the
+  // row would count down to a due date nothing else in the app honours.
+  if (isNeverPredicted(stat)) return t('status.noPredict');
   if (!stat.lastPurchasedAt) return t('status.learning');
   const days = Math.ceil((dueAt(stat) - now) / DAY);
   if (days > 0) return t('status.daysLeft', { count: days });

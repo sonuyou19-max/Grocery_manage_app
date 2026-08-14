@@ -249,6 +249,9 @@ const nl = {
     cadencePinned: { one: 'Ingesteld op elke %{count} dag', other: 'Ingesteld op elke %{count} dagen' },
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
+    cadenceNever: 'Niet voorspellen',
+    cadenceNeverState: 'Korb voorspelt dit product niet',
+    cadenceNeverNote: 'Blijft met zijn geschiedenis in je voorraad — Korb meldt het alleen nooit als op.',
   },
   eco: {
     tier: {
@@ -494,6 +497,7 @@ const nl = {
   status: {
     learning: 'Ik leer je tempo',
     dueNow: 'Nu aanvullen',
+    noPredict: 'Geen voorspelling',
     daysOver: { one: '%{count} dag te laat', other: '%{count} dagen te laat' },
     daysLeft: { one: 'nog ~%{count} dag', other: 'nog ~%{count} dagen' },
   },

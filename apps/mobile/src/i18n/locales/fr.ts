@@ -250,6 +250,9 @@ const fr = {
     cadencePinned: { one: 'Réglé sur tous les %{count} jour', other: 'Réglé sur tous les %{count} jours' },
     cadenceLearned: { one: 'Korb a appris environ %{count} jour', other: 'Korb a appris environ %{count} jours' },
     cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
+    cadenceNever: 'Ne pas prédire',
+    cadenceNeverState: 'Korb ne prédit rien pour cet article',
+    cadenceNeverNote: 'Il reste dans ton garde-manger avec son historique — Korb ne le signalera jamais comme à racheter.',
   },
   eco: {
     tier: {
@@ -495,6 +498,7 @@ const fr = {
   status: {
     learning: 'J’apprends ton rythme',
     dueNow: 'À racheter',
+    noPredict: 'Sans prédiction',
     daysOver: { one: 'en retard de %{count} jour', other: 'en retard de %{count} jours' },
     daysLeft: { one: '~%{count} jour restant', other: '~%{count} jours restants' },
   },
