@@ -261,6 +261,18 @@ function SignedInInsights() {
       .sort((a, b) => b.cents - a.cents);
   }, [spendScoped]);
   const storeSpend = useMemo(() => spendByStore(storeScoped), [storeScoped]);
+  /*
+   * Whether a store has EVER been priced, independent of the chosen range.
+   *
+   * The card used to be gated on the scoped result, so picking a range with no
+   * store spend in it unmounted the whole card — including the range picker,
+   * which is the only way back. Gating on the unscoped answer keeps the card
+   * (and the picker) present whenever it has anything to say at all.
+   */
+  const hasStoreSpendEver = useMemo(
+    () => spendByStore(pricedItems).some((x) => x.store != null),
+    [pricedItems],
+  );
   const cheaper = useMemo(() => cheaperStoreHints(pricedItems), [pricedItems]);
 
   /**
@@ -535,7 +547,12 @@ function SignedInInsights() {
           rendered on every account that had never entered a price, the empty
           state two branches down was unreachable, and the header read "1 priced"
           above a total of €0.00. */}
-      {spendScoped.length > 0 ? (
+      {/* Two different empty states, and only one of them means "there is
+          nothing to show here". No price has EVER been logged is the teaser
+          below. This range happens to be empty is NOT: the card stays, with its
+          picker, because unmounting it took away the only control that could
+          get back to a range with data in it. */}
+      {pricedItems.length > 0 ? (
         <Card>
           <CardHead
             icon="cash-outline"
@@ -543,6 +560,12 @@ function SignedInInsights() {
             action={<RangePicker value={spendRange} onChange={setSpendRange} />}
           />
           <Recalc trigger={spendRange} style={styles.recalc}>
+            {spendScoped.length === 0 ? (
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t("insights.noneInRange")}
+              </Text>
+            ) : (
+            <>
             <View style={styles.spendTotal}>
               <Text style={[type.sub, { color: colors.muted }]}>
                 {t("insights.totalLogged")}
@@ -562,6 +585,8 @@ function SignedInInsights() {
                 </Text>
               </View>
             ))}
+            </>
+            )}
           </Recalc>
         </Card>
       ) : (
@@ -577,8 +602,9 @@ function SignedInInsights() {
         </Card>
       )}
 
-      {/* Spend per store — only when at least one priced item has a store. */}
-      {storeSpend.some((s) => s.store != null) && (
+      {/* Spend per store — whenever a store has ever been priced. Scoped to the
+          chosen range inside, so an empty range says so rather than vanishing. */}
+      {hasStoreSpendEver && (
         <Card>
           <CardHead
             icon="storefront-outline"
@@ -586,6 +612,11 @@ function SignedInInsights() {
             action={<RangePicker value={storeRange} onChange={setStoreRange} />}
           />
           <Recalc trigger={storeRange} style={styles.recalc}>
+            {storeSpend.length === 0 && (
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t("insights.noneInRange")}
+              </Text>
+            )}
             {storeSpend.map((s) => (
               <View key={s.store ?? "none"} style={styles.row}>
                 {s.store ? (

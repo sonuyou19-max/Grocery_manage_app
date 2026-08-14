@@ -542,6 +542,7 @@ const en = {
     spendingOptional: 'Optional',
     spendingEmpty:
       'Add a price to items as you shop and Korb shows weekly spend and where your money goes. Always optional — until then this stays out of your way.',
+    noneInRange: 'No prices logged in this range.',
     whereTitle: 'Where you shop',
     whereHint: 'By store',
     noStore: 'No store set',
