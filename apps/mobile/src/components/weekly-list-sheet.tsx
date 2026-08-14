@@ -79,6 +79,7 @@ export function WeeklyListSheet({
 
         <ScrollView
           {...scrollIndicator}
+          style={styles.scrollArea}
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
         >
@@ -161,6 +162,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: spacing.sm,
     maxHeight: "85%",
+    // Clips to the sheet's own bounds. Without it the footer, laid out past the
+    // bottom edge, simply painted over the list instead of being cut off — the
+    // overflow was invisible as overflow and looked like a button on top of a row.
+    overflow: "hidden",
   },
   grab: {
     width: 44,
@@ -176,6 +181,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xs,
   },
+  /*
+   * flexShrink: 1 is what makes the pinned footer work, and its absence is the
+   * whole bug. A ScrollView defaults to flexShrink: 0, so once the sheet hits
+   * maxHeight the list keeps its full content height and the footer is placed
+   * beyond the sheet's bottom edge rather than the list giving up room for it.
+   * item-sheet and quick-add-sheet, the other two sheets with a pinned footer,
+   * both carry this; this one was written without it.
+   */
+  scrollArea: { flexShrink: 1 },
   body: { padding: spacing.lg, gap: spacing.sm },
   grow: { flex: 1, minWidth: 0 },
   row: {
