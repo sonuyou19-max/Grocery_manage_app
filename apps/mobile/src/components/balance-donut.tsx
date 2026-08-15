@@ -185,8 +185,32 @@ const styles = StyleSheet.create({
   legend: { flexShrink: 1, minWidth: 0, gap: spacing.xs },
   legendRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  // Claims the slack within the legend's own width, so the percentages line up
-  // with each other rather than trailing each label at a ragged edge.
-  legendLabel: { flex: 1, minWidth: 0, marginRight: spacing.lg },
+  /*
+   * flexGrow + flexShrink, and NOT the `flex: 1` shorthand. This shipped as
+   * `flex: 1` and every label rendered at zero width — a legend of dots and
+   * percentages with the names missing entirely.
+   *
+   * `flex: 1` expands to `flexGrow: 1, flexShrink: 1, flexBasis: 0`, and a
+   * basis of 0 says "my content contributes nothing to how wide I want to be".
+   * That is harmless while the parent is stretched by something else, which is
+   * why this idiom is safe everywhere else in the app. It is fatal here,
+   * because the legend above is deliberately sized BY its content: the rows
+   * reported a width of dot + gaps + percentage, the labels were allotted what
+   * was left of that, which is nothing, and Text at zero width draws nothing.
+   *
+   * Leaving the basis at `auto` means each label asks for its own text width,
+   * the legend sizes to the widest row, and flexGrow then pulls every label out
+   * to that same width — so the percentages still align as a column, which was
+   * the entire point. Verified against Yoga rather than a browser: browsers
+   * size a shrink-to-fit flex container by looking through a zero basis at the
+   * content anyway, so a CSS mock of this renders correctly and is worthless as
+   * evidence. That mock is exactly what let this ship.
+   */
+  legendLabel: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: spacing.lg,
+  },
   percent: { fontVariant: ["tabular-nums"] },
 });
