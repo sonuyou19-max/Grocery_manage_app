@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.lg,
+    gap: spacing.xl,
   },
   chart: { width: SIZE, height: SIZE },
   centre: {
@@ -166,11 +166,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 13,
   },
-  // Takes the rest of the row, so the percentage column lands on the card's
-  // right margin rather than wherever the longest label happens to end.
-  legend: { flex: 1, minWidth: 0, gap: spacing.xs },
+  /*
+   * Sized to its own content, NOT `flex: 1`.
+   *
+   * Stretching it to the card's right margin is what put a hand's width of
+   * empty space between "Produce" and "40%" — the eye then has to travel the
+   * gap to pair a label with its number, and the labels read as crowded
+   * against the ring by comparison, because all the air in the row had
+   * collected on the wrong side of them.
+   *
+   * Content-sized, the legend is as wide as its widest row, and `flex: 1` on
+   * the label inside each row still right-aligns every percentage to that same
+   * edge. So the numbers stay a column — which is the point of them being
+   * right-aligned at all — but the column sits just past the longest label
+   * instead of out at the margin. flexShrink lets it give way on a narrow
+   * screen or a long translation rather than pushing the ring off the card.
+   */
+  legend: { flexShrink: 1, minWidth: 0, gap: spacing.xs },
   legendRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  legendLabel: { flex: 1, minWidth: 0 },
+  // Claims the slack within the legend's own width, so the percentages line up
+  // with each other rather than trailing each label at a ragged edge.
+  legendLabel: { flex: 1, minWidth: 0, marginRight: spacing.lg },
   percent: { fontVariant: ["tabular-nums"] },
 });
