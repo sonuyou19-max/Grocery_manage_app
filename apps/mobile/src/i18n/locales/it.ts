@@ -238,6 +238,13 @@ const it = {
     allRestingTitle: 'È tutto a riposo',
     allRestingBody: 'Al momento non viene seguito nulla. Risveglia qualcosa, oppure spunta un articolo da una lista per ricominciare.',
   },
+  forget: {
+    action: 'Elimina %{item}',
+    title: 'Eliminare %{item}?',
+    body: 'L’articolo esce dalla dispensa e tutti gli acquisti registrati per lui vengono eliminati. Cambiano anche gli Insights — spesa, immancabili, confronti di prezzo e impatto se ne vanno con lui. Le liste della spesa restano invariate. Non si può annullare.',
+    confirm: 'Elimina',
+    toast: '%{item} eliminato',
+  },
   staple: {
     badge: 'Essenziale',
     openFor: 'Impostazioni di riacquisto per %{item}',

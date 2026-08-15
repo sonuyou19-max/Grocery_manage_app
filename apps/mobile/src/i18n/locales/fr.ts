@@ -239,6 +239,13 @@ const fr = {
     allRestingTitle: 'Tout est en pause',
     allRestingBody: 'Rien n’est suivi pour le moment. Réveille un article, ou coche-en un sur une liste pour recommencer.',
   },
+  forget: {
+    action: 'Supprimer %{item}',
+    title: 'Supprimer %{item} ?',
+    body: 'L’article quitte ton garde-manger et tous les achats enregistrés pour lui sont supprimés. Tes Insights changent aussi — dépenses, incontournables, comparaisons de prix et impact partent avec. Tes listes de courses ne bougent pas. C’est irréversible.',
+    confirm: 'Supprimer',
+    toast: '%{item} supprimé',
+  },
   staple: {
     badge: 'Essentiel',
     openFor: 'Réglages de réapprovisionnement pour %{item}',

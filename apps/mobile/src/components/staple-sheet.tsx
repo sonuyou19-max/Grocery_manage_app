@@ -52,6 +52,12 @@ interface StapleSheetProps {
   }) => void;
   /** Retire the item from prediction. The caller closes the sheet. */
   onRest: () => void;
+  /**
+   * Erase the item and its whole history. The caller confirms first and closes
+   * the sheet — this component only offers the control, because the warning
+   * has to name what else goes with it and only the caller knows that.
+   */
+  onDelete: () => void;
   /** Every logged purchase, so the sheet can offer this item's history. */
   purchases: Purchase[];
   onOpenHistory: () => void;
@@ -71,6 +77,7 @@ export function StapleSheet({
   onClose,
   onChange,
   onRest,
+  onDelete,
   purchases,
   onOpenHistory,
   lists: openLists,
@@ -148,7 +155,8 @@ export function StapleSheet({
           style={styles.scrollArea}
           contentContainerStyle={styles.content}
         >
-          <View>
+          <View style={styles.headRow}>
+            <View style={styles.grow}>
             {/* Name and list tags share one row, the tags reading as a suffix
                 to the name rather than as a separate fact below it — "Pizza,
                 which is on Weekly" instead of "Pizza" then "Weekly".
@@ -187,6 +195,25 @@ export function StapleSheet({
             <Text style={[type.sub, { color: colors.muted }]}>
               {categoryLabel(item.category, t)}
             </Text>
+            </View>
+
+            {/* Opposite the name, and deliberately NOT down beside "Let it
+                rest". Those two are the opposite kinds of action: rest is
+                reversible and belongs with the settings it changes, this ends
+                the item. A destructive control at the foot of a list of
+                settings is one that gets hit by somebody working down the
+                sheet. Muted, not red — the confirmation is where the weight
+                belongs, and a red button up here would shout on a screen the
+                user opened to change a cadence. */}
+            <Pressable
+              onPress={onDelete}
+              accessibilityRole="button"
+              accessibilityLabel={t("forget.action", { item: item.display })}
+              hitSlop={12}
+              style={styles.trash}
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.muted} />
+            </Pressable>
           </View>
 
           {/* Staple toggle */}
@@ -339,6 +366,14 @@ function CadenceChip({
 }
 
 const styles = StyleSheet.create({
+  // Name block and the delete control, top-aligned so the icon stays level
+  // with the first line of a name that wraps to two.
+  headRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+  },
+  trash: { paddingTop: 2 },
   titleRow: {
     flexDirection: "row",
     flexWrap: "wrap",

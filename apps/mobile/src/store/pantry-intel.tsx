@@ -105,6 +105,22 @@ interface PantryIntelContext {
    * its countdown (see applyResting).
    */
   setResting: (key: string, resting: boolean) => void;
+  /**
+   * Erase an item from the household entirely: the pantry row AND every
+   * purchase ever logged against it.
+   *
+   * The hard counterpart to `setResting`, and the difference is the whole
+   * reason both exist. Resting keeps the history and stops the questions —
+   * it is for something you have stopped buying but might buy again, and it
+   * is reversible. This is for a row that should never have been there: a
+   * typo, a one-off, an item somebody else in the household added by mistake.
+   * It is not reversible, and because the purchase log is what Insights is
+   * computed from, it also takes that item out of spending, staples, price
+   * comparisons and the impact score. Callers MUST say so before asking.
+   *
+   * Shopping lists are deliberately left alone — see the Pantry tab for why.
+   */
+  forgetItem: (key: string) => void;
   /** Dev-only: inject back-dated stats so the deck is populated for testing. */
   seedDemo: () => void;
 }
@@ -371,6 +387,7 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       markStillGood: () => {},
       setStaple: () => {},
       setResting: () => {},
+      forgetItem: () => {},
       seedDemo: () => {},
     }),
     [purchases],
@@ -909,6 +926,56 @@ function CloudPantryIntelProvider({
         const next = applyResting(statsRef.current, key, resting);
         apply(next);
         upsert([key], next);
+      },
+      forgetItem: (key) => {
+        // Local state first, both halves, so the row leaves the Pantry and the
+        // Insights figures drop it on the same frame. Neither read waits on the
+        // network; a failed delete is surfaced by the refetch below putting the
+        // rows back, which is the honest outcome rather than a row that looks
+        // gone until the next launch.
+        const next = { ...statsRef.current };
+        delete next[key];
+        apply(next);
+
+        const doomed = purchasesRef.current.filter((p) => p.key === key);
+        applyPurchases(purchasesRef.current.filter((p) => p.key !== key));
+
+        void supabase
+          .from('pantry_items')
+          .delete()
+          .eq('household_id', householdId)
+          .eq('item_key', key)
+          .then(({ error }) => reportWriteFailure('pantry_items.delete', error));
+
+        // By key, which reaches rows older than the 52-week window the client
+        // never loaded — the point of this action is that nothing is left.
+        void supabase
+          .from('price_entries')
+          .delete()
+          .eq('household_id', householdId)
+          .eq('item_key', key)
+          .then(({ error }) => {
+            reportWriteFailure('price_entries.delete', error);
+            if (error) void fetchPurchases();
+          });
+
+        // And by id for what IS loaded, because item_key is nullable: rows
+        // written before 0013 were backfilled with `lower(btrim(name))`, which
+        // does not collapse internal whitespace the way normalizeKey does. Such
+        // a row answers to a key the delete above never asks for, and would
+        // reappear on the next fetch as an item the user had just deleted.
+        const ids = doomed.map((p) => p.id);
+        if (ids.length > 0) {
+          void supabase
+            .from('price_entries')
+            .delete()
+            .eq('household_id', householdId)
+            .in('id', ids)
+            .then(({ error }) => {
+              reportWriteFailure('price_entries.delete', error);
+              if (error) void fetchPurchases();
+            });
+        }
       },
       seedDemo: () => {
         const next = seededDemoStats(statsRef.current);

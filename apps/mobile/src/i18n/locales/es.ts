@@ -238,6 +238,13 @@ const es = {
     allRestingTitle: 'Todo está en reposo',
     allRestingBody: 'Ahora mismo no se sigue nada. Despierta algo o marca un artículo en una lista para empezar de nuevo.',
   },
+  forget: {
+    action: 'Eliminar %{item}',
+    title: '¿Eliminar %{item}?',
+    body: 'Sale de tu despensa y se borran todas las compras registradas para él. Tus Insights también cambian: su gasto, imprescindibles, comparaciones de precio e impacto se van con él. Las listas de la compra no se tocan. No se puede deshacer.',
+    confirm: 'Eliminar',
+    toast: '%{item} eliminado',
+  },
   staple: {
     badge: 'Básico',
     openFor: 'Ajustes de reposición de %{item}',

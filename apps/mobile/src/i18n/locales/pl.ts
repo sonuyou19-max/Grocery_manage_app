@@ -268,6 +268,13 @@ const pl = {
     allRestingTitle: 'Wszystko odpoczywa',
     allRestingBody: 'Nic nie jest teraz śledzone. Obudź coś albo odhacz produkt na liście, żeby zacząć od nowa.',
   },
+  forget: {
+    action: 'Usuń %{item}',
+    title: 'Usunąć %{item}?',
+    body: 'Produkt zniknie ze spiżarni, a wszystkie zapisane zakupy zostaną usunięte. Zmienią się też Insights — wydatki, stałe zakupy, porównania cen i wpływ znikną razem z nim. Listy zakupów pozostają bez zmian. Tego nie da się cofnąć.',
+    confirm: 'Usuń',
+    toast: 'Usunięto %{item}',
+  },
   staple: {
     badge: 'Podstawa',
     openFor: 'Ustawienia uzupełniania dla %{item}',

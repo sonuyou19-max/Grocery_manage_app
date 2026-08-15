@@ -239,6 +239,13 @@ const de = {
     allRestingTitle: 'Alles ruht',
     allRestingBody: 'Gerade wird nichts verfolgt. Wecke etwas auf oder hake einen Artikel auf einer Liste ab, um neu zu starten.',
   },
+  forget: {
+    action: '%{item} löschen',
+    title: '%{item} löschen?',
+    body: 'Der Artikel verschwindet aus deinem Vorrat und alle dazu erfassten Einkäufe werden gelöscht. Auch deine Insights ändern sich — Ausgaben, Immerwieder-Käufe, Preisvergleiche und Klimawirkung gehen mit. Einkaufslisten bleiben unberührt. Das lässt sich nicht rückgängig machen.',
+    confirm: 'Löschen',
+    toast: '%{item} gelöscht',
+  },
   staple: {
     badge: 'Basis',
     openFor: 'Nachkauf-Einstellungen für %{item}',

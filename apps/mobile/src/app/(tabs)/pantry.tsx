@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ItemCategory } from '@korb/shared';
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
 import {
+  Alert,
   LayoutAnimation,
   Pressable,
   StyleSheet,
@@ -91,8 +92,16 @@ function SignedInPantry() {
   const t = useT();
   // Shared with Insights and the dashboard — see lib/plus-gate.ts.
   const { locked, requirePlus } = usePlusGate();
-  const { stats, purchases, logPurchase, markAlmostOut, markStillGood, setStaple, setResting } =
-    usePantryIntel();
+  const {
+    stats,
+    purchases,
+    logPurchase,
+    markAlmostOut,
+    markStillGood,
+    setStaple,
+    setResting,
+    forgetItem,
+  } = usePantryIntel();
   const { addToHomeList, addToChosenList } = useHomeListAdd();
   const { lists } = useGroceries();
   const { showToast } = useToast();
@@ -184,6 +193,44 @@ function SignedInPantry() {
     setResting(item.key, true);
     haptics.success();
     showToast(t('rest.toastResting', { item: item.display }));
+  };
+
+  /*
+   * Delete for good: the item and every purchase ever logged against it.
+   *
+   * Confirmed here rather than in the sheet because the warning has to name
+   * what else disappears, and only this screen knows. The purchase log is what
+   * Insights is computed FROM — spending, staples, cheaper-elsewhere, the
+   * impact score — so erasing an item's log silently rewrites four cards on
+   * another tab. A user who is told that and proceeds has made a choice; one
+   * who is not has had data taken.
+   *
+   * Shopping lists are deliberately left alone. A row on a list is a thing
+   * somebody intends to buy, possibly the person holding a different phone in
+   * a different shop right now, and quietly removing it from under them is a
+   * worse surprise than the item returning. If it IS bought later, it comes
+   * back as a fresh item with one purchase and no history, which is exactly
+   * what the pantry should say about it — so the message promises that rather
+   * than hiding it.
+   */
+  const onDelete = (item: ItemStat) => {
+    Alert.alert(
+      t('forget.title', { item: item.display }),
+      t('forget.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('forget.confirm'),
+          style: 'destructive',
+          onPress: () => {
+            setStapleKey(null);
+            forgetItem(item.key);
+            haptics.success();
+            showToast(t('forget.toast', { item: item.display }));
+          },
+        },
+      ],
+    );
   };
 
   const onWake = (item: ItemStat) => {
@@ -467,6 +514,10 @@ function SignedInPantry() {
         onRest={() => {
           const item = stapleKey ? stats[stapleKey] : null;
           if (item) onRest(item);
+        }}
+        onDelete={() => {
+          const item = stapleKey ? stats[stapleKey] : null;
+          if (item) onDelete(item);
         }}
         purchases={purchases}
         /* Plus gates this by PROMPTING, not hiding.

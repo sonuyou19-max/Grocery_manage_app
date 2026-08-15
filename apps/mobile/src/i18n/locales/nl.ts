@@ -238,6 +238,13 @@ const nl = {
     allRestingTitle: 'Alles rust',
     allRestingBody: 'Er wordt op dit moment niets gevolgd. Maak iets wakker, of vink een item af op een lijst om opnieuw te beginnen.',
   },
+  forget: {
+    action: '%{item} verwijderen',
+    title: '%{item} verwijderen?',
+    body: 'Het verdwijnt uit je voorraad en alle aankopen die eraan gekoppeld zijn worden gewist. Je Insights veranderen ook — uitgaven, vaste boodschappen, prijsvergelijkingen en impact gaan mee. Je boodschappenlijsten blijven ongemoeid. Dit kun je niet ongedaan maken.',
+    confirm: 'Verwijderen',
+    toast: '%{item} verwijderd',
+  },
   staple: {
     badge: 'Basis',
     openFor: 'Aanvulinstellingen voor %{item}',

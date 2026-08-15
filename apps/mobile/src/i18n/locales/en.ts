@@ -250,6 +250,13 @@ const en = {
     allRestingTitle: 'Everything is resting',
     allRestingBody: 'Nothing is being tracked right now. Wake something up, or check an item off a list to start again.',
   },
+  forget: {
+    action: 'Delete %{item}',
+    title: 'Delete %{item}?',
+    body: 'This removes it from your pantry and deletes every purchase logged against it. Your Insights change too — its spending, staples, price comparisons and impact all go with it. Shopping lists are left alone. This can\'t be undone.',
+    confirm: 'Delete',
+    toast: '%{item} deleted',
+  },
   staple: {
     badge: 'Staple',
     openFor: 'Restock settings for %{item}',
