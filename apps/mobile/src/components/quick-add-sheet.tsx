@@ -12,7 +12,11 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import Animated, {
   cancelAnimation,
@@ -214,7 +218,9 @@ export function QuickAddSheet({
       animationType="none"
       onRequestClose={() => requestClose()}
     >
-      <View style={styles.fill}>
+      {/* Gesture root per Modal window — see sheet.tsx. Without it the drag
+          handle below is inert. */}
+      <GestureHandlerRootView style={styles.fill}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable style={styles.fillPlain} onPress={() => requestClose()} />
         </Animated.View>
@@ -403,7 +409,7 @@ export function QuickAddSheet({
               the screen bottom — so no gap ever shows at the sheet's corners. */}
           <Animated.View style={keyboardSpacerStyle} />
         </Animated.View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

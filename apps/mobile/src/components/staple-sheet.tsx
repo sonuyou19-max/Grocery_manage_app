@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Sheet } from "@/components/sheet";
+import { Sheet, SheetHandle } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { categoryLabel } from "@/lib/categorize";
 import {
@@ -142,7 +142,7 @@ export function StapleSheet({
         radius={radii.lg}
         style={[styles.sheet, { maxHeight: cardCap }]}
       >
-        <View style={styles.grabber} />
+        <SheetHandle />
         <ScrollView
           {...scrollIndicator}
           style={styles.scrollArea}
@@ -368,14 +368,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-  },
-  grabber: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(128,128,128,0.4)",
-    marginTop: spacing.sm,
   },
   // flexGrow 0 so a short item sizes the sheet to its own content instead of
   // stretching to the cap; flexShrink 1 so a long one gives way to it.

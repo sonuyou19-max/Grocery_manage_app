@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, {
   cancelAnimation,
@@ -215,6 +215,12 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={() => requestClose()}>
+      {/* A Modal is its own native window, and gesture-handler only sees
+          touches that pass through one of ITS roots. The one in _layout.tsx is
+          in the app's window, not this one, so the pull-to-dismiss below had
+          never run in its life — the handle was decoration. See sheet.tsx for
+          the full account. */}
+      <GestureHandlerRootView style={styles.fill}>
       <KeyboardAvoidingView
         behavior="padding"
         style={styles.fill}
@@ -461,6 +467,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
+      </GestureHandlerRootView>
 
       <TextPromptModal
         visible={customStore}

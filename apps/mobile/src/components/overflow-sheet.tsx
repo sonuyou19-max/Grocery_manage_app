@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Sheet } from "@/components/sheet";
+import { Sheet, SheetHandle } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { useT } from "@/store/locale";
 import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
@@ -78,7 +78,7 @@ export function OverflowSheet({
   const cardCap = Math.round(windowHeight * 0.8);
 
   return (
-    <Sheet visible={visible} onClose={onClose} scrim gutter={0}>
+    <Sheet visible={visible} onClose={onClose} scrim gutter={0} motion="slide">
       <GlassView
         over="content"
         radius={radii.lg}
@@ -92,7 +92,7 @@ export function OverflowSheet({
           },
         ]}
       >
-        <View style={styles.grabber} />
+        <SheetHandle />
         <Text style={[type.h2, { color: colors.ink }]}>{title}</Text>
         <ScrollView
           style={styles.scroll}
@@ -144,14 +144,6 @@ const styles = StyleSheet.create({
     // Lets cardCap squeeze the card rather than the card overflowing it. The
     // cap is applied inline, since it is computed from the window at render.
     flexShrink: 1,
-  },
-  grabber: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(128,128,128,0.4)",
-    marginBottom: spacing.xs,
   },
   scroll: { maxHeight: 380, flexGrow: 0, flexShrink: 1 },
   // A row's worth of room under the last entry, so the end of the list reads

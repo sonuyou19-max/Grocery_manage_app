@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -11,6 +12,7 @@ import {
   Pressable,
   StyleSheet,
   useWindowDimensions,
+  View,
   type ViewStyle,
 } from "react-native";
 import Animated, {
@@ -25,10 +27,16 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+  type PanGesture,
+} from "react-native-gesture-handler";
 
 import { useDeferUntilClosed } from "@/lib/modal-nav";
-import { SPRING } from "@/lib/motion";
-import { spacing } from "@/theme";
+import { rubberBand, SPRING, springTo } from "@/lib/motion";
+import { radii, spacing, useTheme } from "@/theme";
 
 /**
  * One dialog, one motion, one way to leave it.
@@ -75,6 +83,8 @@ interface SheetApi {
    * actually gone. Navigation and paywalls MUST go through this; see above.
    */
   dismiss: (action?: () => void) => void;
+  /** The pull-down gesture, for sheets that slide. Null for the others. */
+  drag: PanGesture | null;
 }
 
 const Ctx = createContext<SheetApi | null>(null);
@@ -84,6 +94,33 @@ export function useSheetDismiss(): SheetApi["dismiss"] {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useSheetDismiss must be used within a <Sheet>");
   return ctx.dismiss;
+}
+
+/**
+ * The grab handle for a sliding sheet, with pull-to-dismiss already on it.
+ *
+ * Offered as a component rather than a raw gesture because WHERE the gesture
+ * goes is the whole difficulty. It cannot go on the card: every one of these
+ * sheets has a ScrollView in it, and a Pan covering the card fights the scroll
+ * for the same downward drag. Bound to the handle — a strip nobody scrolls —
+ * both work, which is exactly what item-sheet already did by hand.
+ *
+ * Renders the bar alone when the sheet is not a sliding one, so a child can use
+ * it unconditionally.
+ */
+export function SheetHandle() {
+  const ctx = useContext(Ctx);
+  const { colors } = useTheme();
+  const bar = (
+    // A generous target around a small bar: the visible 36x4 is far under the
+    // 44dp minimum, and a handle you have to hit precisely is one users decide
+    // is decorative — which is what was reported.
+    <View style={styles.handleZone} collapsable={false}>
+      <View style={[styles.grabber, { backgroundColor: colors.line }]} />
+    </View>
+  );
+  if (!ctx?.drag) return bar;
+  return <GestureDetector gesture={ctx.drag}>{bar}</GestureDetector>;
 }
 
 /** Long enough to read as a movement, short enough not to sit in the way. */
@@ -239,6 +276,50 @@ export function Sheet({
     [whenClosed, onClose],
   );
 
+  /*
+   * Pull down to dismiss, for sliding sheets.
+   *
+   * Past 110px of travel, or thrown faster than 800px/s, it goes; otherwise it
+   * springs back carrying the release velocity, so letting go mid-drag
+   * continues the motion rather than restarting it. The numbers are
+   * item-sheet's, deliberately — that sheet is the one users have learned the
+   * feel of, and two bottom sheets with different dismiss thresholds is the
+   * same inconsistency in a subtler form.
+   *
+   * Dismissing just flips `visible`; the effect above then springs from
+   * wherever the finger left the sheet down to screenH, so the hand-off is
+   * continuous without the gesture needing to own the exit.
+   */
+  const drag = useMemo(
+    () =>
+      Gesture.Pan()
+        // Only after a deliberate downward move, so a tap on the handle is
+        // still a tap and a horizontal swipe is left alone.
+        .activeOffsetY(8)
+        .onUpdate((e) => {
+          // Down tracks the finger exactly; up rubber-bands, so dragging a
+          // sheet that is already fully open pushes back instead of nothing
+          // happening.
+          sheetY.value =
+            e.translationY >= 0
+              ? e.translationY
+              : -rubberBand(-e.translationY, 0, 44);
+        })
+        .onEnd((e) => {
+          if (sheetY.value > 110 || e.velocityY > 800) {
+            runOnJS(onClose)();
+          } else {
+            sheetY.value = springTo(0, e.velocityY, SPRING.sheet);
+          }
+        }),
+    [sheetY, onClose],
+  );
+
+  const api = useMemo<SheetApi>(
+    () => ({ dismiss, drag: motion === "slide" ? drag : null }),
+    [dismiss, drag, motion],
+  );
+
   const body = (
     <Pressable
       style={[
@@ -290,7 +371,7 @@ export function Sheet({
   );
 
   return (
-    <Ctx.Provider value={{ dismiss }}>
+    <Ctx.Provider value={api}>
       <Modal
         visible={mounted}
         transparent
@@ -299,13 +380,29 @@ export function Sheet({
         animationType="none"
         onRequestClose={onClose}
       >
-        {avoidKeyboard ? (
-          <KeyboardAvoidingView behavior="padding" style={styles.fill}>
-            {body}
-          </KeyboardAvoidingView>
-        ) : (
-          body
-        )}
+        {/* Gesture handler needs its own root INSIDE the Modal, and this one
+            line is why no sheet in this app could be swiped away.
+
+            Read RNGestureHandlerRootView.kt: touches reach the gesture system
+            through that view's dispatchTouchEvent, and it walks UP looking for
+            an existing one — stopping the moment it meets any RootView. A
+            Modal's content hangs off ReactModalHostView.DialogRootViewGroup,
+            its own window root, so the walk stops there and never sees the one
+            at the app root in _layout.tsx. RNGH's own comment on that check
+            names modals as the reason it exists.
+
+            So every Pan inside every Modal here was inert. item-sheet had a
+            fully written pull-to-dismiss that had never once run, which is
+            precisely the report: the handle is purely visual. */}
+        <GestureHandlerRootView style={styles.fill}>
+          {avoidKeyboard ? (
+            <KeyboardAvoidingView behavior="padding" style={styles.fill}>
+              {body}
+            </KeyboardAvoidingView>
+          ) : (
+            body
+          )}
+        </GestureHandlerRootView>
       </Modal>
     </Ctx.Provider>
   );
@@ -313,6 +410,15 @@ export function Sheet({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  // 44dp of grabbable height around a 4dp bar. The bar is the affordance; the
+  // zone is what makes it work with a thumb.
+  handleZone: {
+    height: 28,
+    paddingTop: spacing.sm,
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  grabber: { width: 36, height: 4, borderRadius: radii.pill },
   backdrop: { flex: 1 },
   scrim: { backgroundColor: "rgba(12,18,10,0.45)" },
   end: { justifyContent: "flex-end" },
