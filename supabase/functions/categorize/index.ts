@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
   // where it isn't available the promise is simply left to run.
   if (emoji) {
     const write = offerToLexicon(
-      { term: name.trim(), emoji, category, generic, unit, carbon },
+      { term: name.trim(), emoji, category, generic, unit, carbon, group },
       `ip:${clientIp(req)}`,
     );
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })

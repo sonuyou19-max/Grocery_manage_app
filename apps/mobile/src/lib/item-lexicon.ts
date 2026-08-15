@@ -1,6 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { asCarbonTier, asUnit, type CarbonTier, type ItemCategory, type ItemUnit } from '@korb/shared';
+import {
+  asCarbonTier,
+  asFoodGroup,
+  asUnit,
+  type CarbonTier,
+  type FoodGroup,
+  type ItemCategory,
+  type ItemUnit,
+} from '@korb/shared';
 
 import { supabase } from '@/lib/supabase';
 
@@ -39,6 +47,16 @@ interface LexiconEntry {
    * group, so an absent value here is routine rather than a gap.
    */
   carbon: CarbonTier | null;
+  /**
+   * The coarse food group, or null when not established.
+   *
+   * The model has always answered this on the same call that gives the emoji
+   * and category; until migration 0032 nothing stored it, and lib/nutrition
+   * guessed instead from an English keyword table. Consulted after that table
+   * so a curated answer still wins, and before the category fallback, which is
+   * where the wrong answers were coming from.
+   */
+  group: FoodGroup | null;
 }
 
 // v3 adds `carbon`, for exactly the reason v2 added `unit`: the band arrives as
@@ -46,8 +64,13 @@ interface LexiconEntry {
 // updated_at would never fetch them again — every term learned before migration
 // 0027 would sit in the cache with no band forever. Bumping both keys costs one
 // full re-sync, once, which is the cheapest correct answer.
-const CACHE_KEY = 'korb.itemLexicon.v3';
-const CURSOR_KEY = 'korb.itemLexicon.cursor.v3';
+// v4 adds `group`, for exactly the reason v3 added `carbon` and v2 added
+// `unit`: it arrives as a new column on rows this device may already hold, and
+// a delta keyed on updated_at would never fetch them again — every term learned
+// before migration 0032 would sit in the cache with no group forever. One full
+// re-sync, once.
+const CACHE_KEY = 'korb.itemLexicon.v4';
+const CURSOR_KEY = 'korb.itemLexicon.cursor.v4';
 
 /**
  * Ceiling on what we keep locally.
@@ -115,6 +138,7 @@ export function learnLexiconEntry(
   category: ItemCategory | null,
   unit: ItemUnit | null = null,
   carbon: CarbonTier | null = null,
+  group: FoodGroup | null = null,
 ): void {
   if (!foldedTerm || !emoji) return;
   const existing = entries.get(foldedTerm);
@@ -122,11 +146,12 @@ export function learnLexiconEntry(
     existing?.emoji === emoji &&
     existing.category === category &&
     existing.unit === unit &&
-    existing.carbon === carbon
+    existing.carbon === carbon &&
+    existing.group === group
   ) {
     return;
   }
-  entries.set(foldedTerm, { emoji, category, unit, carbon });
+  entries.set(foldedTerm, { emoji, category, unit, carbon, group });
   changed();
   void persist();
 }
@@ -138,9 +163,9 @@ function persist(): Promise<void> {
     saveTimer = setTimeout(() => {
       const flat: Record<
         string,
-        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null]
+        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null, FoodGroup | null]
       > = {};
-      for (const [term, e] of entries) flat[term] = [e.emoji, e.category, e.unit, e.carbon];
+      for (const [term, e] of entries) flat[term] = [e.emoji, e.category, e.unit, e.carbon, e.group];
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(flat)).catch(() => {}).finally(resolve);
     }, 400);
   });
@@ -159,11 +184,17 @@ export async function hydrateLexicon(): Promise<void> {
     if (raw) {
       const flat = JSON.parse(raw) as Record<
         string,
-        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null]
+        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null, FoodGroup | null]
       >;
       const next = new Map<string, LexiconEntry>();
-      for (const [term, [emoji, category, unit, carbon]] of Object.entries(flat)) {
-        next.set(term, { emoji, category, unit: unit ?? null, carbon: carbon ?? null });
+      for (const [term, [emoji, category, unit, carbon, group]] of Object.entries(flat)) {
+        next.set(term, {
+          emoji,
+          category,
+          unit: unit ?? null,
+          carbon: carbon ?? null,
+          group: group ?? null,
+        });
       }
       entries = next;
       changed();
@@ -195,7 +226,7 @@ export async function syncLexicon(): Promise<void> {
     for (let page = 0; page < 25; page += 1) {
       let q = supabase
         .from('item_lexicon')
-        .select('term, emoji, category, unit, carbon, updated_at')
+        .select('term, emoji, category, unit, carbon, food_group, updated_at')
         .order('updated_at', { ascending: true })
         .limit(PAGE);
       if (cursor) q = q.gt('updated_at', cursor);
@@ -209,6 +240,7 @@ export async function syncLexicon(): Promise<void> {
         category: ItemCategory | null;
         unit: string | null;
         carbon: string | null;
+        food_group: string | null;
         updated_at: string;
       }>) {
         if (entries.size >= MAX_ENTRIES && !entries.has(row.term)) continue;
@@ -223,6 +255,8 @@ export async function syncLexicon(): Promise<void> {
           // CHECK, and an older or hand-edited database must not be able to
           // put an unknown band into a score.
           carbon: asCarbonTier(row.carbon),
+          // asFoodGroup for the same reason as the two above.
+          group: asFoodGroup(row.food_group),
         });
         cursor = row.updated_at;
         moved = true;

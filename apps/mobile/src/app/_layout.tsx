@@ -16,8 +16,9 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { ToastProvider } from '@/components/toast';
 import { hydrateCategoryCache } from '@/lib/categorize';
 import { hydrateItemHomeLists } from '@/lib/item-home-list';
-import { setEmojiLexicon } from '@/lib/item-emoji';
+import { fold, setEmojiLexicon } from '@/lib/item-emoji';
 import { hydrateLexicon, lexiconLookup, syncLexicon } from '@/lib/item-lexicon';
+import { setGroupLexicon } from '@/lib/nutrition';
 import { setUnitLexicon } from '@/lib/item-unit';
 import { hydrateItemMemory } from '@/lib/item-memory';
 import { initMonitoring, trackRoute } from '@/lib/monitoring';
@@ -92,6 +93,10 @@ export default function RootLayout() {
     // it is correct whenever it happens to be called, and item-emoji stays a
     // pure module that knows nothing about storage.
     setEmojiLexicon((term) => lexiconLookup(term)?.emoji);
+    // Food groups from the same rows. Takes the raw name and folds it here,
+    // because lib/nutrition is called with display names from three screens and
+    // should not have to know how the lexicon keys itself.
+    setGroupLexicon((name) => lexiconLookup(fold(name))?.group);
     // Units come from the same rows. Note the shape: this returns `undefined`
     // for a term the lexicon has never heard of and `null` for one it knows and
     // has no confident unit for. unitFor() treats those differently — the first

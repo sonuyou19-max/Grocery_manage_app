@@ -1,6 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { asUnit, type FoodGroup, type ItemCategory, type ItemUnit } from '@korb/shared';
+import {
+  asFoodGroup,
+  asUnit,
+  type FoodGroup,
+  type ItemCategory,
+  type ItemUnit,
+} from '@korb/shared';
 
 import { categoryFromTables } from '@/lib/item-category';
 import { fold } from '@/lib/item-emoji';
@@ -217,15 +223,20 @@ export async function resolveCategoryAsync(
     // lands as null — "not established" — and the caller falls through to the
     // curated table. No version negotiation needed.
     const unit = asUnit(data.unit);
+    // The group the model already answered. Seeded into the local cache on the
+    // spot rather than waited for: publication needs three distinct askers
+    // (migration 0019), so without this the person who asked FIRST would see
+    // their own item mis-grouped until two strangers happened to type it too.
+    const group = asFoodGroup(data.group);
     // Structural sanity only. The allowlist check that actually matters ran
     // server-side before this value was allowed anywhere near the shared table
     // (functions/_shared/emoji-allowlist.ts); re-listing 200 glyphs here would
     // just be a second copy to drift out of step. This guards against a
     // malformed response, not against a hostile one.
     if (typeof data.emoji === 'string' && data.emoji.length > 0 && data.emoji.length <= 8) {
-      learnLexiconEntry(fold(name), data.emoji, data.category, unit);
+      learnLexiconEntry(fold(name), data.emoji, data.category, unit, null, group);
     }
-    return { category: data.category, group: data.group ?? null, unit };
+    return { category: data.category, group, unit };
   } catch {
     return null;
   }

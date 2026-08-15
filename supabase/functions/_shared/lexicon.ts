@@ -72,6 +72,13 @@ export interface LexiconCandidate {
    * not food. Null is stored as null for the same reason as unit; see 0027.
    */
   carbon?: string | null;
+  /**
+   * The coarse food group. Already computed by the same call — see 0032 for
+   * how long it was being discarded. 'nonfood' is a real value here, not an
+   * absence: it is what lets a client exclude an item from the mix rather than
+   * counting it as "other".
+   */
+  group?: string | null;
 }
 
 /**
@@ -111,6 +118,13 @@ export async function offerToLexicon(
     typeof candidate.carbon === 'string' && ['low', 'medium', 'high'].includes(candidate.carbon)
       ? candidate.carbon
       : null;
+  // Same arrangement again, against FOOD_GROUPS in packages/shared and the
+  // CHECK in 0032. 'nonfood' belongs in this list: see the migration.
+  const group =
+    typeof candidate.group === 'string' &&
+    ['produce', 'protein', 'carbs', 'fats', 'other', 'nonfood'].includes(candidate.group)
+      ? candidate.group
+      : null;
 
   try {
     // Ensure the row exists without disturbing an existing one. ignoreDuplicates
@@ -126,6 +140,7 @@ export async function offerToLexicon(
           category: candidate.category,
           unit,
           carbon,
+          food_group: group,
           sightings: 0,
           published: false,
         },
@@ -145,6 +160,15 @@ export async function offerToLexicon(
     // 0027 can still acquire a band without any of them becoming rewritable.
     if (carbon) {
       await db.from('item_lexicon').update({ carbon }).eq('term', term).is('carbon', null);
+    }
+    // And once more for the group, so every term published before 0032 can
+    // acquire one without any of them becoming rewritable.
+    if (group) {
+      await db
+        .from('item_lexicon')
+        .update({ food_group: group })
+        .eq('term', term)
+        .is('food_group', null);
     }
 
     const hash = await callerHash(caller, salt);

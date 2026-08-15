@@ -163,12 +163,46 @@ function keywordGroup(name: string): FoodGroup | null {
 }
 
 /**
+ * The shared lexicon's answer for a term, injected rather than imported.
+ *
+ * Same arrangement as item-emoji's, for the same reason: the lexicon cache
+ * needs AsyncStorage and Supabase, and this module is called from render on
+ * three screens. `lib/item-lexicon` also imports nothing from here, and this
+ * keeps it that way.
+ */
+type GroupResolver = (name: string) => FoodGroup | null | undefined;
+let lexiconGroupResolver: GroupResolver = () => undefined;
+
+export function setGroupLexicon(resolver: GroupResolver): void {
+  lexiconGroupResolver = resolver;
+}
+
+function lexiconGroup(name: string): FoodGroup | null {
+  return lexiconGroupResolver(name) ?? null;
+}
+
+/**
  * An item's display food group, or null when it's non-food (excluded).
- * Deterministic (keyword → shared category), so every household member's app
- * computes the identical mix.
+ *
+ * Three sources, most trusted first:
+ *
+ *   1. the curated keyword map above — few, hand-checked, and the place a
+ *      deliberate correction goes;
+ *   2. the shared lexicon, which is the model's own answer to the very call
+ *      that classified this item. It was being discarded until migration 0032
+ *      gave it a column, and it is the only one of the three that works in the
+ *      six languages this app ships besides English — "Olio extravergine
+ *      d'oliva" is a fat here and was a carbohydrate before;
+ *   3. the item's category, which is a drawer rather than a food group and is
+ *      therefore the last resort rather than the second.
+ *
+ * Still deterministic, which was always the point: the lexicon is shared and
+ * published, so every member of a household resolves a term the same way. What
+ * changed is that the shared answer now reaches this function instead of being
+ * re-guessed locally from an English word list.
  */
 export function foodGroupOf(name: string, category: ItemCategory): DisplayGroup | null {
-  const g = keywordGroup(name) ?? CATEGORY_GROUP[category];
+  const g = keywordGroup(name) ?? lexiconGroup(name) ?? CATEGORY_GROUP[category];
   return g === 'nonfood' ? null : g;
 }
 

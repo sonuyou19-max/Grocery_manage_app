@@ -65,8 +65,29 @@ export type QuickAddRequest = z.infer<typeof quickAddRequestSchema>;
  * Coarse nutritional food group for the "basket balance" insight. `nonfood`
  * covers household/personal-care items so they're excluded from the mix.
  */
-export const foodGroupSchema = z.enum(['protein', 'carbs', 'produce', 'fats', 'other', 'nonfood']);
+export const FOOD_GROUP_VALUES = [
+  'protein',
+  'carbs',
+  'produce',
+  'fats',
+  'other',
+  'nonfood',
+] as const;
+export const foodGroupSchema = z.enum(FOOD_GROUP_VALUES);
 export type FoodGroup = z.infer<typeof foodGroupSchema>;
+
+/**
+ * Narrow an arbitrary string to a known food group, or null.
+ *
+ * Same job as asCarbonTier below and for the same reason: item_lexicon.food_group
+ * is plain text with a CHECK (migration 0032), and a client running against an
+ * older or hand-edited database must not be able to put an unknown group into
+ * the basket mix.
+ */
+export const asFoodGroup = (value: unknown): FoodGroup | null =>
+  typeof value === 'string' && (FOOD_GROUP_VALUES as readonly string[]).includes(value)
+    ? (value as FoodGroup)
+    : null;
 
 /**
  * How heavy an item's climate footprint is, as three coarse bands.
