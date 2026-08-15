@@ -73,7 +73,22 @@ const CATEGORY_GROUP: Record<ItemCategory, FoodGroup> = {
   dairy_eggs: 'protein',
   meat_fish: 'protein',
   bakery: 'carbs',
-  pantry: 'carbs',
+  /*
+   * `other`, not `carbs`, and this was wrong for a long time.
+   *
+   * `pantry` is not a food group, it is the dry-goods drawer: pasta and rice
+   * live there, but so do salt, pepper, oregano, vinegar, stock cubes, tinned
+   * tomatoes and olive oil. Mapping the whole drawer to carbs meant every one
+   * of those was counted and LABELLED as a carb — a basket detail page showed
+   * "kosher salt", "oregano" and "Olio extravergine d'oliva" under Carbs · 21%,
+   * which is both a wrong number and a visibly silly list.
+   *
+   * The real carbs in that drawer are named by the keyword map below, so they
+   * still land in carbs. What falls through is the genuinely mixed remainder,
+   * and `other` is what that bin is for. Being uncounted-but-honest beats being
+   * counted-and-wrong on a chart whose own caption calls it a rough guide.
+   */
+  pantry: 'other',
   frozen: 'other',
   drinks: 'other',
   household: 'nonfood',
@@ -86,22 +101,56 @@ const CATEGORY_GROUP: Record<ItemCategory, FoodGroup> = {
 // the cases the category map alone gets wrong — oil is "pantry" but a fat, a
 // potato is a carb, etc. Kept deterministic on purpose: a per-device AI cache
 // would make the same household show different mixes.
+/*
+ * Two rules for adding to this map, both learned from the same bug:
+ *
+ *   1. PLURALS ARE SEPARATE WORDS. Matching is whole-word, so `olive` does not
+ *      catch "green olives" — that one shipped, and put olives under Carbs.
+ *   2. Only add a word the CATEGORY gets wrong. "black pepper" is `pantry` and
+ *      "red pepper" is `fruit_veg`, so the category already separates them and
+ *      a `pepper` entry here could only make one of the two worse. Same for
+ *      salt, oregano, vinegar and every other seasoning: `pantry → other` is
+ *      already right for them, so they are deliberately absent.
+ */
 const GROUP_KEYWORDS: Record<string, FoodGroup> = {
   // fats
-  oil: 'fats', olive: 'fats', butter: 'fats', margarine: 'fats', nuts: 'fats', nut: 'fats',
-  almond: 'fats', almonds: 'fats', peanut: 'fats', cashew: 'fats', avocado: 'fats', seeds: 'fats', tahini: 'fats',
+  oil: 'fats', oils: 'fats', olive: 'fats', olives: 'fats', butter: 'fats',
+  margarine: 'fats', ghee: 'fats', lard: 'fats', mayonnaise: 'fats', mayo: 'fats',
+  nuts: 'fats', nut: 'fats',
+  almond: 'fats', almonds: 'fats', peanut: 'fats', peanuts: 'fats', cashew: 'fats',
+  cashews: 'fats', walnut: 'fats', walnuts: 'fats', hazelnut: 'fats', hazelnuts: 'fats',
+  pistachio: 'fats', pistachios: 'fats',
+  avocado: 'fats', avocados: 'fats', seeds: 'fats', tahini: 'fats',
   // protein
   chicken: 'protein', beef: 'protein', pork: 'protein', turkey: 'protein', lamb: 'protein',
   fish: 'protein', salmon: 'protein', tuna: 'protein', shrimp: 'protein', ham: 'protein', bacon: 'protein', sausage: 'protein',
   egg: 'protein', eggs: 'protein', tofu: 'protein', tempeh: 'protein', bean: 'protein', beans: 'protein',
   lentil: 'protein', lentils: 'protein', chickpea: 'protein', chickpeas: 'protein', hummus: 'protein',
   yogurt: 'protein', yoghurt: 'protein', cheese: 'protein', milk: 'protein',
-  // carbs
-  bread: 'carbs', rice: 'carbs', pasta: 'carbs', noodles: 'carbs', cereal: 'carbs', oats: 'carbs',
-  flour: 'carbs', sugar: 'carbs', potato: 'carbs', potatoes: 'carbs', tortilla: 'carbs',
+  // carbs — the pasta shapes matter now that `pantry` no longer defaults here:
+  // "rigatoni" is a carb and nothing else in the chain knows that.
+  bread: 'carbs', rice: 'carbs', pasta: 'carbs', noodles: 'carbs', cereal: 'carbs',
+  oats: 'carbs', oat: 'carbs', muesli: 'carbs', granola: 'carbs',
+  flour: 'carbs', sugar: 'carbs', potato: 'carbs', potatoes: 'carbs',
+  tortilla: 'carbs', tortillas: 'carbs', wrap: 'carbs', wraps: 'carbs',
+  spaghetti: 'carbs', penne: 'carbs', rigatoni: 'carbs', macaroni: 'carbs',
+  fusilli: 'carbs', farfalle: 'carbs', tagliatelle: 'carbs', lasagne: 'carbs',
+  lasagna: 'carbs', gnocchi: 'carbs', couscous: 'carbs', quinoa: 'carbs',
+  bulgur: 'carbs', barley: 'carbs', bagel: 'carbs', bagels: 'carbs',
+  croissant: 'carbs', croissants: 'carbs', baguette: 'carbs',
+  cracker: 'carbs', crackers: 'carbs',
   // produce
-  apple: 'produce', apples: 'produce', banana: 'produce', bananas: 'produce', tomato: 'produce',
-  onion: 'produce', carrot: 'produce', lettuce: 'produce', spinach: 'produce', cucumber: 'produce', broccoli: 'produce',
+  apple: 'produce', apples: 'produce', banana: 'produce', bananas: 'produce',
+  tomato: 'produce', tomatoes: 'produce',
+  onion: 'produce', onions: 'produce', carrot: 'produce', carrots: 'produce',
+  lettuce: 'produce', spinach: 'produce', cucumber: 'produce', cucumbers: 'produce',
+  broccoli: 'produce', mushroom: 'produce', mushrooms: 'produce',
+  garlic: 'produce', lemon: 'produce', lemons: 'produce', lime: 'produce',
+  limes: 'produce', orange: 'produce', oranges: 'produce',
+  strawberry: 'produce', strawberries: 'produce', grape: 'produce', grapes: 'produce',
+  cabbage: 'produce', kale: 'produce', celery: 'produce', leek: 'produce',
+  leeks: 'produce', courgette: 'produce', zucchini: 'produce', aubergine: 'produce',
+  eggplant: 'produce',
 };
 
 const norm = (name: string) => name.trim().toLowerCase();
