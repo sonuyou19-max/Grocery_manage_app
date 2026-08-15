@@ -114,7 +114,21 @@ function SignedInInsights() {
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
   // Recomputed against a single `now` so the chart and the copy agree.
-  const now = Date.now();
+  //
+  // Quantised to the minute, and that is not a detail. A raw Date.now() is a
+  // new number on every render, and five useMemos below take `now` as a
+  // dependency — so not one of them ever hit. Every render of this tab, for any
+  // reason, walked the whole purchase log five times and rebuilt every derived
+  // array, including the 39 row objects the staples sheet renders. The tab has
+  // twenty-one cards; that work lands on the JS thread while the user is
+  // touching the screen.
+  //
+  // Every consumer asks a question about days, weeks or months — "last 7 days",
+  // "last 8 weeks", which week are we in, what's in season — so a boundary that
+  // moves up to 60s late is invisible, and in exchange the memos below become
+  // real memos.
+  const minute = Math.floor(Date.now() / 60_000);
+  const now = useMemo(() => minute * 60_000, [minute]);
 
   /**
    * How many weeks the free tier is showing, derived from the server's own
