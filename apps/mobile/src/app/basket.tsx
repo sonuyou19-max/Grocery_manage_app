@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { BalanceBar } from "@/components/balance-bar";
 import { EmptyState } from "@/components/empty-state";
 import { Frosted } from "@/components/frosted";
+import { ItemEmoji } from "@/components/item-emoji";
 import { MeshBackground } from "@/components/mesh-background";
 import {
   basketBalance,
@@ -164,35 +165,46 @@ export default function BasketScreen() {
                 </Text>
               </Frosted>
             )}
-            renderItem={({ item: row, index, section }) => (
-              <Animated.View
-                // Capped at twelve steps. Uncapped, the fortieth row of a big
-                // shop waits over a second to appear, which stops reading as a
-                // flourish and starts reading as the screen being slow.
-                entering={FadeInDown.delay(
-                  Math.min(row.order, 12) * 28,
-                ).duration(240)}
-                style={[
-                  styles.row,
-                  index < section.data.length - 1 && {
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.line,
-                  },
-                ]}
-              >
-                <Text
-                  style={[type.body, styles.grow, { color: colors.ink }]}
-                  numberOfLines={1}
+            renderItem={({ item: row, index, section }) => {
+              const amount = amountLabel(row.item);
+              return (
+                <Animated.View
+                  // Capped at twelve steps. Uncapped, the fortieth row of a big
+                  // shop waits over a second to appear, which stops reading as a
+                  // flourish and starts reading as the screen being slow.
+                  entering={FadeInDown.delay(
+                    Math.min(row.order, 12) * 28,
+                  ).duration(240)}
+                  style={[
+                    styles.row,
+                    index < section.data.length - 1 && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: colors.line,
+                    },
+                  ]}
                 >
-                  {row.item.name}
-                </Text>
-                {amountLabel(row.item) ? (
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {amountLabel(row.item)}
-                  </Text>
-                ) : null}
-              </Animated.View>
-            )}
+                  {/* Emoji and name are one cell, tight together, so the
+                      amount on the right is the only thing the row's own gap
+                      separates. Every other item row in the app carries this —
+                      ItemEmoji subscribes to the lexicon itself, so a glyph that
+                      arrives after a sync appears without this screen knowing. */}
+                  <View style={styles.nameCell}>
+                    <ItemEmoji name={row.item.name} category={row.item.category} />
+                    <Text
+                      style={[type.body, styles.grow, { color: colors.ink }]}
+                      numberOfLines={1}
+                    >
+                      {row.item.name}
+                    </Text>
+                  </View>
+                  {amount ? (
+                    <Text style={[type.sub, { color: colors.muted }]}>
+                      {amount}
+                    </Text>
+                  ) : null}
+                </Animated.View>
+              );
+            }}
           />
         )}
       </SafeAreaView>
@@ -244,5 +256,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.md,
+  },
+  // grow/shrink rather than `flex: 1`: identical here, because the row has a
+  // definite width from the list, but it stays correct if this ever sits in a
+  // content-sized parent — where a zero basis renders the name at no width at
+  // all. That exact mistake shipped once, in balance-donut's legend.
+  nameCell: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
 });
