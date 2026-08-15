@@ -12,13 +12,22 @@ data residency.
 
 ## Setup
 
+Run the CLI through `npx` rather than installing it globally. A global install
+is the one step here that fails differently on every machine — it is a Go
+binary behind an npm shim, so `npm i -g supabase` is unsupported on some
+platforms and simply absent from PATH on others (Git Bash on Windows in
+particular, where it fails as `bash: supabase: command not found`). `npx` needs
+nothing installed and pins the version in the command itself.
+
 ```sh
-npm i -g supabase
-supabase login
-supabase link --project-ref <your-project-ref>
-supabase db push                       # applies migrations/
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-supabase functions deploy quick-add-parse
+npx supabase@latest login
+# Only if supabase/config.toml is missing — it is not committed. This writes
+# the config and leaves migrations/ and functions/ untouched.
+npx supabase@latest init
+npx supabase@latest link --project-ref <your-project-ref>
+npx supabase@latest db push                    # applies migrations/
+npx supabase@latest secrets set ANTHROPIC_API_KEY=sk-ant-...
+npx supabase@latest functions deploy quick-add-parse
 ```
 
 Then copy the project URL + anon key into `apps/mobile/.env` (see `.env.example`).
@@ -28,7 +37,7 @@ Then copy the project URL + anon key into `apps/mobile/.env` (see `.env.example`
 Always look before pushing:
 
 ```sh
-supabase migration list        # Local vs Remote per version
+npx supabase@latest migration list   # Local vs Remote per version
 ```
 
 `db push` runs only what the remote ledger is missing. Two states break a plain
@@ -41,7 +50,7 @@ app works) yet nothing records how they got there — dashboard SQL editor runs 
 ledger the truth first; this executes no SQL:
 
 ```sh
-supabase migration repair --status applied 0001 0002 0003   # …through the last one present
+npx supabase@latest migration repair --status applied 0001 0002 0003   # …through the last one present
 ```
 
 To find "the last one present", run `verify_schema.sql` (or
@@ -53,10 +62,10 @@ nothing at all. Drop those ledger rows — again no schema change, `reverted` on
 deletes the row and never runs a down-migration:
 
 ```sh
-supabase migration repair --status reverted <version> <version>
+npx supabase@latest migration repair --status reverted <version> <version>
 ```
 
-Do **not** take the CLI's other suggestion of `supabase db pull` here: it
+Do **not** take the CLI's other suggestion of `db pull` here: it
 generates a fresh local migration mirroring the remote schema, which collides
 with the existing numbered history and leaves two competing sources of truth.
 
