@@ -148,6 +148,11 @@ const de = {
     addTheseTo: 'Diese Artikel hinzufügen zu',
     itemsCount: { one: '%{count} Artikel', other: '%{count} Artikel' },
   },
+  basket: {
+    seeAll: 'Inhalt ansehen',
+    emptyTitle: 'Nichts im Korb',
+    emptyBody: 'Leg Lebensmittel auf eine Einkaufsliste, dann erscheint der Mix hier — nach Art gruppiert.',
+  },
   cards: {
     title: 'Kundenkarten',
     subtitle: 'Deine Kundenkarten, auf diesem Handy',

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   LayoutAnimation,
@@ -11,6 +12,7 @@ import {
 import type { ItemCategory } from "@korb/shared";
 
 import { AnimatedMoney } from "@/components/animated-money";
+import { BalanceBar } from "@/components/balance-bar";
 import { BalanceDonut } from "@/components/balance-donut";
 import { Recalc } from "@/components/recalc";
 import { Card } from "@/components/card";
@@ -37,12 +39,7 @@ import {
   type HeaviestStaple,
 } from "@/lib/eco";
 import { ecoScoreFor } from "@/lib/item-carbon";
-import {
-  basketBalance,
-  GROUP_COLORS,
-  groupLabel,
-  type BalanceSlice,
-} from "@/lib/nutrition";
+import { basketBalance } from "@/lib/nutrition";
 import { isResting } from "@/lib/pantry-intel";
 import { inSeason } from "@/lib/seasonal";
 import {
@@ -417,9 +414,25 @@ function SignedInInsights() {
             hint={t("insights.basketHint", { count: cart.total })}
           />
           <BalanceBar slices={cart.slices} />
-          <Text style={[type.sub, { color: colors.muted }]}>
-            {t("insights.basketNote")}
-          </Text>
+          {/* A route rather than a sheet, unlike everything else that expands
+              on this tab — see app/basket.tsx for why. Whole footer is the
+              target, not just the chevron. */}
+          <Pressable
+            onPress={() => {
+              haptics.tick();
+              router.push("/basket");
+            }}
+            accessibilityRole="button"
+            style={styles.basketMore}
+          >
+            <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
+              {t("insights.basketNote")}
+            </Text>
+            <Text style={[type.sub, { color: colors.accent }]}>
+              {t("basket.seeAll")}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+          </Pressable>
         </Card>
       )}
 
@@ -1126,36 +1139,6 @@ function EcoTrend({ weeks }: { weeks: EcoWeek[] }) {
   );
 }
 
-/** A stacked, weighted bar of food-group slices with a percentage legend. */
-function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
-  const { colors } = useTheme();
-  const { t } = useLocale();
-  return (
-    <View style={{ gap: spacing.md }}>
-      <View style={[styles.bar, { backgroundColor: colors.line }]}>
-        {slices.map((s) => (
-          <View
-            key={s.group}
-            style={{ flex: s.count, backgroundColor: GROUP_COLORS[s.group] }}
-          />
-        ))}
-      </View>
-      <View style={styles.legend}>
-        {slices.map((s) => (
-          <View key={s.group} style={styles.legendItem}>
-            <View
-              style={[styles.dot, { backgroundColor: GROUP_COLORS[s.group] }]}
-            />
-            <Text style={[type.sub, { color: colors.ink }]}>
-              {groupLabel(s.group, t)} {Math.round(s.fraction * 100)}%
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   // Mirrors the dashboard's status row: wraps rather than squeezing the
   // subtitle, which is what broke the greeting into three lines last time.
@@ -1186,6 +1169,14 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  // The bar's footer doubles as the way into the detail page, so the note and
+  // the affordance share a line rather than stacking two rows of chrome.
+  basketMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+  },
   moreRow: {
     flexDirection: "row",
     alignItems: "center",

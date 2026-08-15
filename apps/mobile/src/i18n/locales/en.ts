@@ -156,6 +156,11 @@ const en = {
     addTheseTo: 'Add these items to',
     itemsCount: { one: '%{count} item', other: '%{count} items' },
   },
+  basket: {
+    seeAll: 'See what’s in it',
+    emptyTitle: 'Nothing in the basket',
+    emptyBody: 'Add food to a shopping list and the mix appears here, grouped by kind.',
+  },
   cards: {
     // The wallet
     title: 'Store cards',

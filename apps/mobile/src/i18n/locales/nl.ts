@@ -147,6 +147,11 @@ const nl = {
     addTheseTo: 'Voeg deze items toe aan',
     itemsCount: { one: '%{count} item', other: '%{count} items' },
   },
+  basket: {
+    seeAll: 'Bekijk de inhoud',
+    emptyTitle: 'Niets in de mand',
+    emptyBody: 'Zet eten op een boodschappenlijst en de mix verschijnt hier, gegroepeerd per soort.',
+  },
   cards: {
     title: 'Klantenkaarten',
     subtitle: 'Je klantenkaarten, op dit toestel',

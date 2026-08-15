@@ -174,6 +174,11 @@ const pl = {
       other: '%{count} produktów',
     },
   },
+  basket: {
+    seeAll: 'Zobacz zawartość',
+    emptyTitle: 'Koszyk jest pusty',
+    emptyBody: 'Dodaj jedzenie do listy zakupów, a mieszanka pojawi się tutaj, pogrupowana według rodzaju.',
+  },
   cards: {
     title: 'Karty sklepowe',
     subtitle: 'Twoje karty lojalnościowe, na tym telefonie',

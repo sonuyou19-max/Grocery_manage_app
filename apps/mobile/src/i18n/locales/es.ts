@@ -147,6 +147,11 @@ const es = {
     addTheseTo: 'Añadir estos artículos a',
     itemsCount: { one: '%{count} artículo', other: '%{count} artículos' },
   },
+  basket: {
+    seeAll: 'Ver qué hay',
+    emptyTitle: 'Cesta vacía',
+    emptyBody: 'Añade comida a una lista de la compra y la mezcla aparece aquí, agrupada por tipo.',
+  },
   cards: {
     title: 'Tarjetas de fidelidad',
     subtitle: 'Tus tarjetas de fidelidad, en este teléfono',
