@@ -145,10 +145,30 @@ export function BalanceDonut({
 }
 
 const styles = StyleSheet.create({
+  /*
+   * space-evenly, and the reason is that the two obvious answers are each
+   * wrong in the other's direction.
+   *
+   * A legend at `flex: 1` reaches the right margin, so the percentages sit out
+   * there and English — "Fats", "Carbs" — leaves a hand's width between a label
+   * and its number. Sizing the legend to its content fixes that and moves the
+   * problem: the pair now hugs the left of the card and the dead space
+   * collects at the right edge, which is worse, because an edge void reads as
+   * a layout that failed rather than as spacing.
+   *
+   * Both are the same mistake — letting the length of five English words decide
+   * where things land. space-evenly takes the decision away from the text: the
+   * ring and the legend keep their natural widths, and whatever is left over is
+   * divided equally before, between and after them. The card is balanced by
+   * construction in every locale, and the percentages stay next to the labels
+   * they belong to. `gap` stays as a floor for the narrow case, where there is
+   * no slack to distribute and the two would otherwise touch.
+   */
   root: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xl,
+    justifyContent: "space-evenly",
+    gap: spacing.md,
   },
   chart: { width: SIZE, height: SIZE },
   centre: {
