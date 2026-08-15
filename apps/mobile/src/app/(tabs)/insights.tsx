@@ -39,7 +39,7 @@ import {
   type HeaviestStaple,
 } from "@/lib/eco";
 import { ecoScoreFor } from "@/lib/item-carbon";
-import { basketBalance } from "@/lib/nutrition";
+import { basketBalance, basketItems } from "@/lib/nutrition";
 import { isResting } from "@/lib/pantry-intel";
 import { inSeason } from "@/lib/seasonal";
 import {
@@ -208,9 +208,11 @@ function SignedInInsights() {
   const cart = useMemo(
     () =>
       basketBalance(
-        lists
-          .flatMap((l) => l.items)
-          .map((it) => ({ name: it.name, category: it.category })),
+        // basketItems, not every row on every list: a ticked row has been
+        // bought and belongs to the Pantry, so counting it here described the
+        // same groceries twice and left this card at its least accurate the
+        // moment the shop was finished.
+        basketItems(lists).map((it) => ({ name: it.name, category: it.category })),
       ),
     [lists],
   );

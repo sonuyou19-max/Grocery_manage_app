@@ -1,5 +1,7 @@
 import type { FoodGroup, ItemCategory } from '@korb/shared';
 
+import { normalizeKey, queuedKeys } from '@/lib/pantry-intel';
+
 /**
  * "Basket balance" — a rough, honest read of a cart or pantry's food-group mix.
  * It's a directional guide by item, NOT a nutrition tracker: we don't have
@@ -210,6 +212,42 @@ export interface BalanceSlice {
   group: DisplayGroup;
   count: number;
   fraction: number; // 0..1 of the food items
+}
+
+/**
+ * The rows that are actually still in the basket: on a list and not yet bought.
+ *
+ * The basket card and its breakdown page both counted every row on every list,
+ * ticked ones included, and that is wrong in a way that compounds. A ticked row
+ * is a PURCHASE — the item has been bought and now belongs to the Pantry, which
+ * is already tracking it. Counting it here means the same groceries are
+ * described twice by two different screens, and the basket keeps claiming them
+ * until the sweep clears the row at the end of the day (see lib/list-sweep).
+ * So "In your basket" drifted further from the truth the more of the shop you
+ * actually did — it was at its most wrong the moment you finished.
+ *
+ * The rule comes from queuedKeys rather than a local `!checked`, because one
+ * item can sit on two lists and the two answers differ. Ticking gnocchi off the
+ * weekly shop while a recipe list still has it unticked means it is bought; a
+ * tick anywhere is the later and more concrete statement. Reusing that function
+ * is also what keeps this screen and the Pantry's "running low" from
+ * contradicting each other about the same item — which is exactly the bug its
+ * own comment was written for.
+ *
+ * Sound only because the lists handed in are the SWEPT ones, which the store
+ * guarantees: a ticked row that survives the sweep was ticked today.
+ */
+export function basketItems<T extends { name: string; checked: boolean }>(
+  lists: readonly { items: readonly T[] }[],
+): T[] {
+  const wanted = queuedKeys(lists);
+  const out: T[] = [];
+  for (const list of lists) {
+    for (const item of list.items) {
+      if (wanted.has(normalizeKey(item.name))) out.push(item);
+    }
+  }
+  return out;
 }
 
 /** Tally a cart/pantry into food-group slices (food items only). */

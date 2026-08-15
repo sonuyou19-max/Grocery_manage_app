@@ -12,6 +12,7 @@ import { ItemEmoji } from "@/components/item-emoji";
 import { MeshBackground } from "@/components/mesh-background";
 import {
   basketBalance,
+  basketItems,
   foodGroupOf,
   GROUP_COLORS,
   groupLabel,
@@ -60,7 +61,9 @@ export default function BasketScreen() {
   const { lists } = useGroceries();
   const insets = useSafeAreaInsets();
 
-  const items = useMemo(() => lists.flatMap((l) => l.items), [lists]);
+  // Not `lists.flatMap(l => l.items)`: that counted rows already ticked off,
+  // which are purchases the Pantry owns. See basketItems.
+  const items = useMemo(() => basketItems(lists), [lists]);
 
   // The same call the card makes, on the same input, so the bar here and the
   // bar there cannot disagree.
