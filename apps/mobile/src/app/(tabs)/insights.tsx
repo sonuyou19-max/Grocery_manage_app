@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   LayoutAnimation,
   Pressable,
@@ -19,7 +19,7 @@ import {
   withinRange,
   type Range,
 } from "@/components/range-picker";
-import { StaplesSheet } from "@/components/staples-sheet";
+import { OverflowSheet, RankedRow } from "@/components/overflow-sheet";
 import { InsightsTeaser } from "@/components/insights-teaser";
 import { PlusBadge } from "@/components/plus-badge";
 import { Screen } from "@/components/screen";
@@ -44,7 +44,12 @@ import {
 } from "@/lib/nutrition";
 import { isResting } from "@/lib/pantry-intel";
 import { inSeason } from "@/lib/seasonal";
-import { cheaperStoreHints, spendByStore } from "@/lib/price-intel";
+import {
+  cheaperStoreHints,
+  spendByStore,
+  type CheaperHint,
+  type StoreSpend,
+} from "@/lib/price-intel";
 // `priced` is imported under a longer name on purpose. As `priced` it sat one
 // character away from the `pricedItems` array below, and `priced.length` — the
 // arity of a function, which is 1 — type-checked perfectly as a number and shipped
@@ -54,20 +59,48 @@ import {
   priceMoves,
   spendTrend,
   weekStartOf,
+  type PriceMove,
 } from "@/lib/purchase-log";
 import { supermarketLabel } from "@/lib/supermarkets";
 import { usePlusGate } from "@/lib/plus-gate";
 import { useAuth } from "@/store/auth";
 import { useEntitlement } from "@/store/entitlement";
 import { useGroceries } from "@/store/groceries";
-import { useLocale } from "@/store/locale";
+import { useLocale, useT } from "@/store/locale";
 import { usePantryIntel } from "@/store/pantry-intel";
 import { radii, spacing, type, useTheme } from "@/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-/** How many staples the card shows before handing off to the sheet. */
+/**
+ * How many rows each card shows before handing off to the overflow sheet.
+ *
+ * Every one of these lists was already truncated or already bounded; what was
+ * missing was the door. `cheaper` and `moves` sliced silently, so a household
+ * with forty items cheaper somewhere else saw six and was never told the other
+ * thirty-four existed — worse than a long card, because you cannot tell you are
+ * missing anything. Stores are bounded at eighteen by the catalog, which is not
+ * unbounded but is still more card than anyone reads.
+ *
+ * Spend-by-category deliberately has no entry here. It maxes out at ten rows
+ * (CATEGORY_ORDER, zeros filtered) and the whole job of that card is showing
+ * where the money went — putting the complete answer behind a tap would cost
+ * more than the height it saves.
+ */
 const STAPLES_SHOWN = 5;
+const MOVES_SHOWN = 5;
+const STORES_SHOWN = 6;
+const CHEAPER_SHOWN = 6;
+
+/** Which card, if any, has its full list open in the overflow sheet. */
+type Expanded = "staples" | "moves" | "stores" | "cheaper";
+
+/** Derived on this screen rather than in a lib, so it is named here. */
+interface StapleDatum {
+  key: string;
+  display: string;
+  times: number;
+}
 
 /**
  * Insights: a feed of what the app has learned about your shopping. Basket
@@ -109,7 +142,6 @@ function SignedInInsights() {
   // The one definition, shared with the Pantry, the dashboard and the Vibe
   // Check. See lib/plus-gate.ts for why it is not two lines written here.
   const { locked } = usePlusGate();
-  const perUnitPrice = usePerUnitPrice();
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
@@ -158,7 +190,22 @@ function SignedInInsights() {
   const [spendRange, setSpendRange] = useState<Range>("month");
   const [storeRange, setStoreRange] = useState<Range>("month");
   const [stapleRange, setStapleRange] = useState<Range>("month");
-  const [staplesOpen, setStaplesOpen] = useState(false);
+  // One state, not one flag per card: only ever one sheet is up, and four
+  // booleans would let a bug open two Modals at once — which on Android is the
+  // stacked-window hazard lib/modal-nav.ts exists for.
+  const [expanded, setExpanded] = useState<Expanded | null>(null);
+  /*
+   * Which card the sheet is SHOWING, which is not the same question once it is
+   * closing. Sheet deliberately keeps its children mounted through the exit
+   * animation so there is something to animate, so reading `expanded` directly
+   * blanked the title and dropped every row on the frame the user tapped Done —
+   * the sheet then spent 160ms folding away empty.
+   *
+   * A ref rather than state: this must not schedule a render of its own, and it
+   * is only ever read on a render `expanded` has already caused.
+   */
+  const showing = useRef<Expanded | null>(null);
+  if (expanded) showing.current = expanded;
 
   const cart = useMemo(
     () =>
@@ -415,34 +462,14 @@ function SignedInInsights() {
               anybody came for — but it should still be reachable. */}
             {staples.slice(0, STAPLES_SHOWN).map((s) => (
               <View key={s.key} style={styles.row}>
-                <Text
-                  style={[type.body, styles.grow, { color: colors.ink }]}
-                  numberOfLines={1}
-                >
-                  {s.display}
-                </Text>
-                <Text style={[type.sub, { color: colors.muted }]}>
-                  {t("insights.boughtTimes", { count: s.times })}
-                </Text>
+                <StapleRow staple={s} />
               </View>
             ))}
             {staples.length > STAPLES_SHOWN && (
-              <Pressable
-                onPress={() => {
-                  haptics.tick();
-                  setStaplesOpen(true);
-                }}
-                style={styles.moreRow}
-              >
-                <Text style={[type.sub, { color: colors.accent }]}>
-                  {t("insights.viewAllStaples", { count: staples.length })}
-                </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={colors.accent}
-                />
-              </Pressable>
+              <ViewAllRow
+                label={t("insights.viewAllStaples", { count: staples.length })}
+                onPress={() => setExpanded("staples")}
+              />
             )}
           </Recalc>
         </Card>
@@ -527,31 +554,15 @@ function SignedInInsights() {
             title={t("insights.movesTitle")}
             hint={t("insights.movesHint")}
           />
-          {moves.slice(0, 5).map((m) => (
-            <View key={m.key} style={styles.row}>
-              <Ionicons
-                name={m.change > 0 ? "trending-up" : "trending-down"}
-                size={18}
-                color={m.change > 0 ? colors.warn : colors.accent}
-              />
-              <Text
-                style={[type.body, styles.grow, { color: colors.ink }]}
-                numberOfLines={1}
-              >
-                {m.name}
-              </Text>
-              <Text
-                style={[type.sub, { color: colors.muted }]}
-                numberOfLines={1}
-              >
-                {t(m.change > 0 ? "insights.moveUp" : "insights.moveDown", {
-                  percent: Math.abs(Math.round(m.change * 100)),
-                  price: money(m.latestCents),
-                  usual: money(m.baselineCents),
-                })}
-              </Text>
-            </View>
+          {moves.slice(0, MOVES_SHOWN).map((m) => (
+            <MoveRow key={m.key} move={m} />
           ))}
+          {moves.length > MOVES_SHOWN && (
+            <ViewAllRow
+              label={t("insights.viewAllMoves", { count: moves.length })}
+              onPress={() => setExpanded("moves")}
+            />
+          )}
         </Card>
       )}
 
@@ -631,30 +642,15 @@ function SignedInInsights() {
                 {t("insights.noneInRange")}
               </Text>
             )}
-            {storeSpend.map((s) => (
-              <View key={s.store ?? "none"} style={styles.row}>
-                {s.store ? (
-                  <SupermarketBadge store={s.store} size={20} />
-                ) : (
-                  <Ionicons
-                    name="pricetag-outline"
-                    size={20}
-                    color={colors.muted}
-                  />
-                )}
-                <Text
-                  style={[type.sub, styles.grow, { color: colors.ink }]}
-                  numberOfLines={1}
-                >
-                  {s.store
-                    ? (supermarketLabel(s.store) ?? s.store)
-                    : t("insights.noStore")}
-                </Text>
-                <Text style={[type.sub, { color: colors.muted }]}>
-                  {money(s.cents)}
-                </Text>
-              </View>
+            {storeSpend.slice(0, STORES_SHOWN).map((s) => (
+              <StoreRow key={s.store ?? "none"} spend={s} />
             ))}
+            {storeSpend.length > STORES_SHOWN && (
+              <ViewAllRow
+                label={t("insights.viewAllShops", { count: storeSpend.length })}
+                onPress={() => setExpanded("stores")}
+              />
+            )}
           </Recalc>
         </Card>
       )}
@@ -673,46 +669,15 @@ function SignedInInsights() {
             title={t("insights.cheaperTitle")}
             hint={t("insights.cheaperHint")}
           />
-          {cheaper.slice(0, 6).map((h) => (
-            <View key={h.name} style={styles.hintRow}>
-              <Text
-                style={[type.body, { color: colors.ink }]}
-                numberOfLines={1}
-              >
-                {h.name}
-              </Text>
-              <View style={styles.hintDetail}>
-                <SupermarketBadge store={h.cheapStore} size={16} />
-                {/* The saving is the point of the row, so the winning price is
-                    the only thing here set in a bold weight. The two prices
-                    were the same size, the same weight and one step apart in
-                    colour, which made the reader compare two numbers instead of
-                    being handed the answer. */}
-                <Text
-                  style={[
-                    type.sub,
-                    styles.cheapPrice,
-                    { color: colors.accent },
-                  ]}
-                >
-                  {t("insights.cheaperAt", {
-                    price: perUnitPrice(h.cheapCents, h.perUnit),
-                    store: supermarketLabel(h.cheapStore) ?? h.cheapStore,
-                  })}
-                </Text>
-                {/* Still legible — it is half the comparison and removing it
-                    would leave a price with nothing to be cheaper THAN — but
-                    set back so the eye reaches it second. */}
-                <Text
-                  style={[type.sub, styles.dearPrice, { color: colors.muted }]}
-                >
-                  {t("insights.cheaperVs", {
-                    price: perUnitPrice(h.dearCents, h.perUnit),
-                  })}
-                </Text>
-              </View>
-            </View>
+          {cheaper.slice(0, CHEAPER_SHOWN).map((h) => (
+            <CheaperRow key={h.name} hint={h} />
           ))}
+          {cheaper.length > CHEAPER_SHOWN && (
+            <ViewAllRow
+              label={t("insights.viewAllCheaper", { count: cheaper.length })}
+              onPress={() => setExpanded("cheaper")}
+            />
+          )}
         </Card>
       )}
 
@@ -763,12 +728,174 @@ function SignedInInsights() {
           is found at the end of the reader's own figures rather than in front
           of them. A free tab still ends with something to read. */}
 
-      <StaplesSheet
-        visible={staplesOpen}
-        staples={staples}
-        onClose={() => setStaplesOpen(false)}
-      />
+      <OverflowSheet
+        visible={expanded !== null}
+        title={showing.current ? t(SHEET_TITLE[showing.current]) : ""}
+        onClose={() => setExpanded(null)}
+      >
+        {/* The sheet shows the SAME rows the card does, from the same arrays,
+            just without the slice — so the two can never disagree about what a
+            row says. Staples keep their rank column because that list is a
+            ranking the reader is scanning by position; the others are not. */}
+        {showing.current === "staples" &&
+          staples.map((s, i) => (
+            <RankedRow key={s.key} rank={i + 1}>
+              <StapleRow staple={s} />
+            </RankedRow>
+          ))}
+        {showing.current === "moves" &&
+          moves.map((m) => <MoveRow key={m.key} move={m} />)}
+        {showing.current === "stores" &&
+          storeSpend.map((s) => <StoreRow key={s.store ?? "none"} spend={s} />)}
+        {showing.current === "cheaper" &&
+          cheaper.map((h) => <CheaperRow key={h.name} hint={h} />)}
+      </OverflowSheet>
     </Screen>
+  );
+}
+
+/** The overflow sheet reuses each card's own title — it is the same list. */
+const SHEET_TITLE: Record<Expanded, string> = {
+  staples: "insights.staplesTitle",
+  moves: "insights.movesTitle",
+  stores: "insights.whereTitle",
+  cheaper: "insights.cheaperTitle",
+};
+
+/**
+ * The row of each expandable card, extracted so the card and the sheet render
+ * one definition rather than two copies that drift.
+ *
+ * They read their own theme and locale instead of taking them as props, which
+ * keeps the call sites to the datum alone — and keeps them at module scope,
+ * where React can reconcile them across renders. Declared inside the screen
+ * they would be new component types every render, and every row would remount
+ * on every keystroke of state above them.
+ */
+function StapleRow({ staple }: { staple: StapleDatum }) {
+  const { colors } = useTheme();
+  const t = useT();
+  return (
+    <>
+      <Text
+        style={[type.body, styles.grow, { color: colors.ink }]}
+        numberOfLines={1}
+      >
+        {staple.display}
+      </Text>
+      <Text style={[type.sub, { color: colors.muted }]}>
+        {t("insights.boughtTimes", { count: staple.times })}
+      </Text>
+    </>
+  );
+}
+
+function MoveRow({ move }: { move: PriceMove }) {
+  const { colors } = useTheme();
+  const { t, money } = useLocale();
+  const up = move.change > 0;
+  return (
+    <View style={styles.row}>
+      <Ionicons
+        name={up ? "trending-up" : "trending-down"}
+        size={18}
+        color={up ? colors.warn : colors.accent}
+      />
+      <Text
+        style={[type.body, styles.grow, { color: colors.ink }]}
+        numberOfLines={1}
+      >
+        {move.name}
+      </Text>
+      <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+        {t(up ? "insights.moveUp" : "insights.moveDown", {
+          percent: Math.abs(Math.round(move.change * 100)),
+          price: money(move.latestCents),
+          usual: money(move.baselineCents),
+        })}
+      </Text>
+    </View>
+  );
+}
+
+function StoreRow({ spend }: { spend: StoreSpend }) {
+  const { colors } = useTheme();
+  const { t, money } = useLocale();
+  return (
+    <View style={styles.row}>
+      {spend.store ? (
+        <SupermarketBadge store={spend.store} size={20} />
+      ) : (
+        <Ionicons name="pricetag-outline" size={20} color={colors.muted} />
+      )}
+      <Text
+        style={[type.sub, styles.grow, { color: colors.ink }]}
+        numberOfLines={1}
+      >
+        {spend.store
+          ? (supermarketLabel(spend.store) ?? spend.store)
+          : t("insights.noStore")}
+      </Text>
+      <Text style={[type.sub, { color: colors.muted }]}>
+        {money(spend.cents)}
+      </Text>
+    </View>
+  );
+}
+
+function CheaperRow({ hint }: { hint: CheaperHint }) {
+  const { colors } = useTheme();
+  const t = useT();
+  const perUnitPrice = usePerUnitPrice();
+  return (
+    <View style={styles.hintRow}>
+      <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+        {hint.name}
+      </Text>
+      <View style={styles.hintDetail}>
+        <SupermarketBadge store={hint.cheapStore} size={16} />
+        {/* The saving is the point of the row, so the winning price is the only
+            thing here set in a bold weight. The two prices were the same size,
+            the same weight and one step apart in colour, which made the reader
+            compare two numbers instead of being handed the answer. */}
+        <Text style={[type.sub, styles.cheapPrice, { color: colors.accent }]}>
+          {t("insights.cheaperAt", {
+            price: perUnitPrice(hint.cheapCents, hint.perUnit),
+            store: supermarketLabel(hint.cheapStore) ?? hint.cheapStore,
+          })}
+        </Text>
+        {/* Still legible — it is half the comparison and removing it would
+            leave a price with nothing to be cheaper THAN — but set back so the
+            eye reaches it second. */}
+        <Text style={[type.sub, styles.dearPrice, { color: colors.muted }]}>
+          {t("insights.cheaperVs", {
+            price: perUnitPrice(hint.dearCents, hint.perUnit),
+          })}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The row that opens the sheet. Shared by all four cards so the affordance is
+ * one thing wherever it appears — it was a one-off inside the staples card, and
+ * the whole point of this pass is that a truncated list always says so.
+ */
+function ViewAllRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.tick();
+        onPress();
+      }}
+      accessibilityRole="button"
+      style={styles.moreRow}
+    >
+      <Text style={[type.sub, { color: colors.accent }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+    </Pressable>
   );
 }
 
