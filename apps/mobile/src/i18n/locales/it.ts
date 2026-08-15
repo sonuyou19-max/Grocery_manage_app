@@ -521,6 +521,7 @@ const it = {
     basketNote: 'Un’indicazione di massima per articolo — non un contatore nutrizionale.',
     pantryMixTitle: 'Il mix della tua dispensa',
     pantryMixHint: '%{count} monitorati',
+    mixTotal: 'articoli in totale',
     staplesTitle: 'I tuoi immancabili',
     staplesHint: 'Comprati più spesso',
     viewAllStaples: 'Vedi tutti i %{count} immancabili',

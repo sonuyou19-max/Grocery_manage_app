@@ -522,6 +522,7 @@ const de = {
     basketNote: 'Nur ein grober Anhaltspunkt pro Artikel — kein Ernährungstracker.',
     pantryMixTitle: 'Dein Vorratsmix',
     pantryMixHint: '%{count} erfasst',
+    mixTotal: 'Artikel gesamt',
     staplesTitle: 'Deine Basics',
     staplesHint: 'Am häufigsten gekauft',
     viewAllStaples: 'Alle %{count} Immerwieder-Käufe',

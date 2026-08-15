@@ -614,6 +614,7 @@ const pl = {
     basketNote: 'Orientacyjna wskazówka dla produktu — to nie licznik wartości odżywczych.',
     pantryMixTitle: 'Skład Twojej spiżarni',
     pantryMixHint: '%{count} śledzonych',
+    mixTotal: 'produktów łącznie',
     staplesTitle: 'Twoje podstawy',
     staplesHint: 'Kupowane najczęściej',
     viewAllStaples: 'Zobacz wszystkie stałe zakupy (%{count})',

@@ -521,6 +521,7 @@ const fr = {
     basketNote: 'Un aperçu indicatif par article — pas un suivi nutritionnel.',
     pantryMixTitle: 'Ton profil de garde-manger',
     pantryMixHint: '%{count} suivis',
+    mixTotal: 'articles au total',
     staplesTitle: 'Tes incontournables',
     staplesHint: 'Les plus achetés',
     viewAllStaples: 'Voir les %{count} incontournables',

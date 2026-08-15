@@ -521,6 +521,7 @@ const es = {
     basketNote: 'Una guía aproximada por artículo — no es un contador nutricional.',
     pantryMixTitle: 'La mezcla de tu despensa',
     pantryMixHint: '%{count} controlados',
+    mixTotal: 'artículos en total',
     staplesTitle: 'Tus básicos',
     staplesHint: 'Los más comprados',
     viewAllStaples: 'Ver los %{count} imprescindibles',

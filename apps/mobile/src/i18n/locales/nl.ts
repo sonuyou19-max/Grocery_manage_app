@@ -520,6 +520,7 @@ const nl = {
     basketNote: 'Een ruwe indicatie per item — geen voedingstracker.',
     pantryMixTitle: 'Je voorraadmix',
     pantryMixHint: '%{count} bijgehouden',
+    mixTotal: 'items totaal',
     staplesTitle: 'Je vaste producten',
     staplesHint: 'Meest gekocht',
     viewAllStaples: 'Bekijk alle %{count} vaste boodschappen',

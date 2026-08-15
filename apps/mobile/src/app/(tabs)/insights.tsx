@@ -11,6 +11,7 @@ import {
 import type { ItemCategory } from "@korb/shared";
 
 import { AnimatedMoney } from "@/components/animated-money";
+import { BalanceDonut } from "@/components/balance-donut";
 import { Recalc } from "@/components/recalc";
 import { Card } from "@/components/card";
 import { EcoBar } from "@/components/eco-bar";
@@ -430,18 +431,21 @@ function SignedInInsights() {
           is what it is. */}
       {eco.score != null && <EcoCard eco={eco} heaviest={heaviest} now={now} />}
 
-      {/* Plus: HIDE, not prompt. A pantry mix is a single bar and a legend —
-          there is no shell worth leaving behind, and a locked one would just be
-          a rectangle asking for money in the middle of the reader's own
-          figures. The Plus card at the foot of the tab makes the offer once. */}
+      {/* Plus: HIDE, not prompt. A pantry mix is a ring and a legend — there is
+          no shell worth leaving behind, and a locked one would just be a
+          rectangle asking for money in the middle of the reader's own figures.
+          The Plus card at the foot of the tab makes the offer once.
+
+          No `hint` here, unlike the basket above: the total now sits in the
+          middle of the ring, and the same count in both places was the header
+          repeating what the chart already said. */}
       {!locked && pantry.total > 0 && (
         <Card>
           <CardHead
             icon="file-tray-full-outline"
             title={t("insights.pantryMixTitle")}
-            hint={t("insights.pantryMixHint", { count: pantry.total })}
           />
-          <BalanceBar slices={pantry.slices} />
+          <BalanceDonut slices={pantry.slices} total={pantry.total} />
         </Card>
       )}
 

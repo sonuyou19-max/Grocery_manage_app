@@ -532,6 +532,7 @@ const en = {
     basketNote: 'A rough guide by item — not a nutrition tracker.',
     pantryMixTitle: 'Your pantry mix',
     pantryMixHint: '%{count} tracked',
+    mixTotal: 'total items',
     staplesTitle: 'Your staples',
     staplesHint: 'Bought most often',
     viewAllStaples: 'View all %{count} staples',
