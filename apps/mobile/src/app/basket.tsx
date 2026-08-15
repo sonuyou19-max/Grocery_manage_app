@@ -55,6 +55,16 @@ import { spacing, type, useTheme } from "@/theme";
  * That second point is the one worth not undoing later: the header says N food
  * items for exactly that reason.
  */
+/**
+ * Cells per row.
+ *
+ * Two, because the cell has to hold an emoji, a name that people actually read,
+ * and sometimes an amount. At three the name column is under 100dp and almost
+ * every item truncates, which trades the page's length for its legibility —
+ * the wrong way round, since the names are the content.
+ */
+const COLUMNS = 2;
+
 export default function BasketScreen() {
   const { colors, scheme } = useTheme();
   const { t } = useLocale();
@@ -84,16 +94,30 @@ export default function BasketScreen() {
       if (bucket) bucket.push(it);
       else byGroup.set(g, [it]);
     }
-    // `order` is a running index across the WHOLE list, because the entrance
-    // stagger has to cascade down the screen rather than restart at each
-    // heading — five groups each starting their own wave reads as five
-    // separate animations rather than one.
+    /*
+     * A section's `data` is ROWS of items, not items.
+     *
+     * SectionList has no numColumns — that is FlatList only — so the grid is
+     * made by chunking here and rendering a row of cells per entry. Doing it
+     * this way rather than switching to a FlatList keeps the sticky headings,
+     * which are the thing that makes a long grouped page navigable and are
+     * exactly what a flattened FlatList would have cost.
+     *
+     * `order` is a running index across the WHOLE page, so the entrance
+     * cascades down the screen instead of restarting at each heading — five
+     * groups each starting their own wave reads as five animations rather than
+     * one. It counts ROWS now, since a row is what enters.
+     */
     let order = 0;
-    return slices.map((s) => ({
-      group: s.group,
-      fraction: s.fraction,
-      data: (byGroup.get(s.group) ?? []).map((it) => ({ item: it, order: order++ })),
-    }));
+    return slices.map((s) => {
+      const bucket = byGroup.get(s.group) ?? [];
+      const rows: { key: string; order: number; cells: typeof items }[] = [];
+      for (let i = 0; i < bucket.length; i += COLUMNS) {
+        const cells = bucket.slice(i, i + COLUMNS);
+        rows.push({ key: cells[0].id, order: order++, cells });
+      }
+      return { group: s.group, fraction: s.fraction, data: rows };
+    });
   }, [items, slices]);
 
   return (
@@ -128,7 +152,7 @@ export default function BasketScreen() {
         ) : (
           <SectionList
             sections={sections}
-            keyExtractor={(row) => row.item.id}
+            keyExtractor={(row) => row.key}
             stickySectionHeadersEnabled
             // Asked for explicitly: no rail down the side of this page. It is
             // the one screen here that hides it — the rest of the app shows it
@@ -168,46 +192,58 @@ export default function BasketScreen() {
                 </Text>
               </Frosted>
             )}
-            renderItem={({ item: row, index, section }) => {
-              const amount = amountLabel(row.item);
-              return (
-                <Animated.View
-                  // Capped at twelve steps. Uncapped, the fortieth row of a big
-                  // shop waits over a second to appear, which stops reading as a
-                  // flourish and starts reading as the screen being slow.
-                  entering={FadeInDown.delay(
-                    Math.min(row.order, 12) * 28,
-                  ).duration(240)}
-                  style={[
-                    styles.row,
-                    index < section.data.length - 1 && {
-                      borderBottomWidth: StyleSheet.hairlineWidth,
-                      borderBottomColor: colors.line,
-                    },
-                  ]}
-                >
-                  {/* Emoji and name are one cell, tight together, so the
-                      amount on the right is the only thing the row's own gap
-                      separates. Every other item row in the app carries this —
-                      ItemEmoji subscribes to the lexicon itself, so a glyph that
-                      arrives after a sync appears without this screen knowing. */}
-                  <View style={styles.nameCell}>
-                    <ItemEmoji name={row.item.name} category={row.item.category} />
-                    <Text
-                      style={[type.body, styles.grow, { color: colors.ink }]}
-                      numberOfLines={1}
-                    >
-                      {row.item.name}
-                    </Text>
-                  </View>
-                  {amount ? (
-                    <Text style={[type.sub, { color: colors.muted }]}>
-                      {amount}
-                    </Text>
-                  ) : null}
-                </Animated.View>
-              );
-            }}
+            renderItem={({ item: row, index, section }) => (
+              <Animated.View
+                // On the ROW, not the cell: two cells entering side by side a
+                // frame apart reads as a stutter rather than a cascade.
+                //
+                // Capped at twelve steps. Uncapped, the fortieth row of a big
+                // shop waits over a second to appear, which stops reading as a
+                // flourish and starts reading as the screen being slow.
+                entering={FadeInDown.delay(
+                  Math.min(row.order, 12) * 28,
+                ).duration(240)}
+                style={[
+                  styles.gridRow,
+                  index < section.data.length - 1 && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.line,
+                  },
+                ]}
+              >
+                {row.cells.map((cell) => {
+                  const amount = amountLabel(cell);
+                  return (
+                    <View key={cell.id} style={styles.cell}>
+                      {/* ItemEmoji subscribes to the lexicon itself, so a glyph
+                          that arrives after a sync appears without this screen
+                          knowing. */}
+                      <ItemEmoji name={cell.name} category={cell.category} />
+                      <View style={styles.cellText}>
+                        {/* Two lines, not one. In a half-width cell a single
+                            truncating line loses the end of most real grocery
+                            names ("Coriander powder", "Olio extravergine"),
+                            and the name is the whole content of the row. */}
+                        <Text
+                          style={[type.body, { color: colors.ink }]}
+                          numberOfLines={2}
+                        >
+                          {cell.name}
+                        </Text>
+                        {amount ? (
+                          <Text style={[type.sub, { color: colors.muted }]}>
+                            {amount}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+                {/* Keeps a lone last cell at half width instead of letting it
+                    stretch across the page and stop looking like a grid. */}
+                {row.cells.length < COLUMNS && <View style={styles.cell} />}
+              </Animated.View>
+            )}
           />
         )}
       </SafeAreaView>
@@ -254,22 +290,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  row: {
+  gridRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.md,
     paddingVertical: spacing.md,
   },
-  // grow/shrink rather than `flex: 1`: identical here, because the row has a
-  // definite width from the list, but it stays correct if this ever sits in a
-  // content-sized parent — where a zero basis renders the name at no width at
-  // all. That exact mistake shipped once, in balance-donut's legend.
-  nameCell: {
+  // Equal columns: basis 0 so the two share the row evenly whatever their
+  // content, which is the one place a zero basis is what you want.
+  cell: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.xs,
+    flexBasis: 0,
     flexGrow: 1,
     flexShrink: 1,
     minWidth: 0,
   },
+  // grow/shrink rather than `flex: 1`: the cell above already fixed the width,
+  // so this only has to take what is left beside the emoji without forcing the
+  // name to zero.
+  cellText: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
 });
