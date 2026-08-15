@@ -5,8 +5,10 @@ import {
   StyleSheet,
   Switch,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Sheet } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
@@ -74,6 +76,8 @@ export function StapleSheet({
 }: StapleSheetProps) {
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const t = useT();
 
   if (!item) return null;
@@ -83,11 +87,35 @@ export function StapleSheet({
   const learned = Math.round(effectiveInterval(item));
   const pinned = hasUserCadence(item);
 
+  /*
+   * A real pixel ceiling, replacing `maxHeight: '85%'`.
+   *
+   * The percentage had nothing definite to resolve against: everything above
+   * this card in Sheet — a Pressable, an Animated.View, another Pressable — is
+   * sized from its own content, so "85% of my parent" asks a parent that is
+   * still asking its children. purchase-ledger hit this first and wrote it up;
+   * the symptom there and here is the same, a card laid out against a
+   * degenerate constraint with its last rows clipped away by GlassView's
+   * overflow: hidden. On this sheet that took "Let it rest" and Done with it,
+   * which is the way out of the sheet.
+   */
+  const cardCap = Math.round(windowHeight * 0.85);
+
   return (
-    <Sheet visible onClose={onClose} scrim gutter={spacing.md}>
-      <GlassView over="content" radius={radii.lg} style={styles.sheet}>
+    // gutter 0 and square bottom corners: this is a bottom sheet that meets the
+    // screen edge, the way the list's item sheet does, rather than a card
+    // floating inside a margin. Same component, same motion — only the resting
+    // shape differs.
+    <Sheet visible onClose={onClose} scrim gutter={0}>
+      <GlassView
+        over="content"
+        radius={radii.lg}
+        style={[styles.sheet, { maxHeight: cardCap }]}
+      >
+        <View style={styles.grabber} />
         <ScrollView
           {...scrollIndicator}
+          style={styles.scrollArea}
           contentContainerStyle={styles.content}
         >
           <View>
@@ -227,13 +255,21 @@ export function StapleSheet({
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
-
-          <Pressable onPress={onClose} style={styles.done} hitSlop={8}>
-            <Text style={[type.body, { color: colors.accent }]}>
-              {t("common.done")}
-            </Text>
-          </Pressable>
         </ScrollView>
+
+        {/* Outside the ScrollView, like the list's item sheet: the way out of a
+            sheet must not be something you have to scroll to find. It also
+            carries the safe-area inset, because the card now meets the bottom
+            of the screen and the gesture bar is its floor. */}
+        <Pressable
+          onPress={onClose}
+          style={[styles.done, { paddingBottom: spacing.sm + insets.bottom }]}
+          hitSlop={8}
+        >
+          <Text style={[type.body, { color: colors.accent }]}>
+            {t("common.done")}
+          </Text>
+        </Pressable>
       </GlassView>
     </Sheet>
   );
@@ -295,8 +331,25 @@ const styles = StyleSheet.create({
   },
   tagText: { fontSize: 12, fontWeight: "700" },
   // Capped so a long item name plus the presets can't push the Done row off a
-  // short screen — the content scrolls instead.
-  sheet: { maxHeight: "85%" },
+  // short screen — the content scrolls instead. The cap itself is applied
+  // inline (cardCap, from the window); flexShrink is the static half that lets
+  // it actually squeeze rather than the card overflowing it.
+  sheet: {
+    flexShrink: 1,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  grabber: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(128,128,128,0.4)",
+    marginTop: spacing.sm,
+  },
+  // flexGrow 0 so a short item sizes the sheet to its own content instead of
+  // stretching to the cap; flexShrink 1 so a long one gives way to it.
+  scrollArea: { flexGrow: 0, flexShrink: 1 },
   content: { padding: spacing.lg, gap: spacing.lg },
   section: { gap: spacing.sm },
   row: {
