@@ -6,17 +6,28 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Modal, Pressable, StyleSheet, type ViewStyle } from "react-native";
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  type ViewStyle,
+} from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
+  Extrapolation,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { useDeferUntilClosed } from "@/lib/modal-nav";
+import { SPRING } from "@/lib/motion";
 import { spacing } from "@/theme";
 
 /**
@@ -114,6 +125,25 @@ export interface SheetProps {
   gutter?: number;
   /** Style for the card wrapper, e.g. a max width on a wide menu. */
   cardStyle?: ViewStyle;
+  /**
+   * How it arrives.
+   *
+   * `scale` (default) is the fold-out-of-the-bottom described above, and is
+   * what every dialog and menu here uses.
+   *
+   * `slide` travels up from off-screen on a clamped spring with the scrim
+   * fading in lockstep — the motion components/item-sheet.tsx already had, and
+   * never gave up when the other ten modals were consolidated. That is the
+   * reason this option exists rather than a second copy of it: a full-height
+   * bottom sheet that meets the screen edge reads as coming FROM the edge, and
+   * scaling one out of nothing reads as a dialog wearing a sheet's shape. Two
+   * bottom sheets in the same app arriving two different ways is what a user
+   * noticed and reported.
+   *
+   * Use it for sheets that sit flush to the bottom. Leave it alone for
+   * anything centred: a dialog has no edge to travel from.
+   */
+  motion?: "scale" | "slide";
   children: ReactNode;
 }
 
@@ -126,6 +156,7 @@ export function Sheet({
   scrim = false,
   gutter = spacing.lg,
   cardStyle,
+  motion = "scale",
   children,
 }: SheetProps) {
   /*
@@ -137,12 +168,29 @@ export function Sheet({
   const [mounted, setMounted] = useState(visible);
   const progress = useSharedValue(0);
 
+  // `slide` travels this value from screenH to 0 instead. Kept as its own
+  // shared value rather than reusing `progress` because the scrim reads it in
+  // pixels — the fade has to finish while the sheet is still well clear of its
+  // resting place, or the last of the dim lands after the sheet has stopped.
+  const { height: screenH } = useWindowDimensions();
+  const sheetY = useSharedValue(screenH);
+
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      progress.value = withTiming(1, {
-        duration: OPEN_MS,
-        easing: Easing.out(Easing.cubic),
+      if (motion === "slide") {
+        cancelAnimation(sheetY);
+        sheetY.value = withSpring(0, SPRING.sheet);
+      } else {
+        progress.value = withTiming(1, {
+          duration: OPEN_MS,
+          easing: Easing.out(Easing.cubic),
+        });
+      }
+    } else if (motion === "slide") {
+      cancelAnimation(sheetY);
+      sheetY.value = withSpring(screenH, SPRING.sheet, (done) => {
+        if (done) runOnJS(setMounted)(false);
       });
     } else {
       progress.value = withTiming(
@@ -153,13 +201,30 @@ export function Sheet({
         },
       );
     }
-  }, [visible, progress]);
+  }, [visible, progress, sheetY, motion, screenH]);
 
-  const cardAnim = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    // 0.82, not 0: shrinking to nothing reads as a card being destroyed. A
-    // shallow scale reads as one folding away, which is the thing being said.
-    transform: [{ scale: 0.82 + progress.value * 0.18 }],
+  const cardAnim = useAnimatedStyle(() =>
+    motion === "slide"
+      ? { transform: [{ translateY: sheetY.value }] }
+      : {
+          opacity: progress.value,
+          // 0.82, not 0: shrinking to nothing reads as a card being destroyed.
+          // A shallow scale reads as one folding away, which is the thing
+          // being said.
+          transform: [{ scale: 0.82 + progress.value * 0.18 }],
+        },
+  );
+
+  // Only used by `slide`. The scale motion keeps its scrim as a flat background
+  // colour on the backdrop, exactly as before — this is deliberately not a
+  // behaviour change for the ten modals that did not ask for one.
+  const scrimAnim = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      sheetY.value,
+      [0, screenH * 0.7],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   // Keyed on `mounted`, the Modal's real visibility — not on `visible`, which
@@ -179,12 +244,25 @@ export function Sheet({
       style={[
         styles.backdrop,
         { padding: gutter },
-        scrim ? styles.scrim : null,
+        scrim && motion !== "slide" ? styles.scrim : null,
         align === "center" ? styles.center : styles.end,
         bottomClearance != null ? { paddingBottom: bottomClearance } : null,
       ]}
       onPress={onClose}
     >
+      {/* The sliding scrim is its own layer rather than a colour on the
+          backdrop, because it has to fade and the backdrop must not: this
+          Pressable is what catches a tap outside the card, and animating the
+          view that owns the touch target is how that stops being reliable.
+          pointerEvents none for the same reason — it sits over the backdrop
+          and would otherwise be the thing tapped. */}
+      {scrim && motion === "slide" && (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.scrim, scrimAnim]}
+        />
+      )}
+
       {/* Stops a tap on the card itself from closing it. Wraps the card and
           nothing else — anything that ADDS layout in here (padding, margin,
           a minimum size) eats the backdrop's taps, which is what once left a

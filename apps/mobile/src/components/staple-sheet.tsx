@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRef } from "react";
 import {
   Pressable,
   ScrollView,
@@ -66,13 +67,13 @@ interface StapleSheetProps {
 }
 
 export function StapleSheet({
-  item,
+  item: openItem,
   onClose,
   onChange,
   onRest,
   purchases,
   onOpenHistory,
-  lists,
+  lists: openLists,
 }: StapleSheetProps) {
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
@@ -80,7 +81,30 @@ export function StapleSheet({
   const { height: windowHeight } = useWindowDimensions();
   const t = useT();
 
-  if (!item) return null;
+  /*
+   * What to draw, which stops being "the open item" the moment it closes.
+   *
+   * The Pantry closes this sheet by clearing the key it looks the item up by,
+   * so `item` goes null on the same frame `visible` does — and this component
+   * used to answer that with `if (!item) return null`, tearing the whole Sheet
+   * down before it could play anything. That is why the sheet had no exit at
+   * all: it did not animate away, it simply stopped existing. Sheet's own
+   * `mounted` cannot help, because the thing being unmounted is Sheet.
+   *
+   * So the last item to have been open is kept, and rendered until the close
+   * animation is over. `lists` rides along with it for the same reason — the
+   * tags under the name are derived from the open key too, and would have
+   * blinked out a beat before the sheet did.
+   */
+  const last = useRef<{
+    item: ItemStat;
+    lists: { id: string; name: string }[];
+  } | null>(null);
+  if (openItem) last.current = { item: openItem, lists: openLists };
+
+  const snapshot = last.current;
+  if (!snapshot) return null;
+  const { item, lists } = snapshot;
 
   const history = historyFor(purchases, item.display);
 
@@ -106,7 +130,13 @@ export function StapleSheet({
     // screen edge, the way the list's item sheet does, rather than a card
     // floating inside a margin. Same component, same motion — only the resting
     // shape differs.
-    <Sheet visible onClose={onClose} scrim gutter={0}>
+    <Sheet
+      visible={openItem != null}
+      onClose={onClose}
+      scrim
+      gutter={0}
+      motion="slide"
+    >
       <GlassView
         over="content"
         radius={radii.lg}
