@@ -262,6 +262,20 @@ const es = {
     cadenceLearned: { one: 'Korb ha aprendido unos %{count} día', other: 'Korb ha aprendido unos %{count} días' },
     cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
   },
+  climate: {
+    seeAll: 'Ver tus artículos más pesados',
+    heavyTitle: 'Artículos más pesados',
+    seasonTitle: 'De temporada ahora',
+    tapForSwaps: 'Toca para ver alternativas más ligeras',
+    loading: 'Buscando opciones más ligeras…',
+    noSwaps: 'No hay una alternativa más ligera que proponer para este.',
+    tier1: 'Buena bajada de impacto',
+    tier2: 'Gran bajada de impacto',
+    tier3: 'La mejor bajada de impacto',
+    addAlt: 'Añadir %{item} a una lista',
+    emptyTitle: 'Aún no hay nada que puntuar',
+    emptyBody: 'Marca algunos artículos de una lista de la compra y tu mezcla climática aparecerá aquí.',
+  },
   eco: {
     tier: {
       low: 'Impacto bajo',

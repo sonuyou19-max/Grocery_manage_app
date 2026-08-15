@@ -307,6 +307,20 @@ const pl = {
     },
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
   },
+  climate: {
+    seeAll: 'Zobacz swoje najcięższe produkty',
+    heavyTitle: 'Najcięższe produkty',
+    seasonTitle: 'Teraz w sezonie',
+    tapForSwaps: 'Dotknij, aby zobaczyć lżejsze zamienniki',
+    loading: 'Szukam lżejszych opcji…',
+    noSwaps: 'Brak lżejszego zamiennika dla tego produktu.',
+    tier1: 'Dobry spadek wpływu',
+    tier2: 'Duży spadek wpływu',
+    tier3: 'Największy spadek wpływu',
+    addAlt: 'Dodaj %{item} do listy',
+    emptyTitle: 'Nie ma jeszcze czego oceniać',
+    emptyBody: 'Odhacz kilka produktów na liście zakupów, a Twój miks klimatyczny pojawi się tutaj.',
+  },
   eco: {
     tier: {
       low: 'Niski wpływ',

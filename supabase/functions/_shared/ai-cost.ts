@@ -117,6 +117,14 @@ export const FN_CALL_CAPS: Record<string, number> = {
   // Without an entry here it fell through to the 100 default — the loosest end
   // of that range, for the most expensive call.
   'recipe-import': 40,
+  // Tapped, not rendered: this fires when a shopper opens ONE of their own
+  // heavy items on the Climate Mix page, and every answer is cached in
+  // item_swaps by (term, locale) for everyone after. So the honest ceiling is
+  // curiosity, not basket size — a person who opened sixty different heavy
+  // items in a day is not shopping. Well under categorize because the cache
+  // absorbs the popular terms within days of launch and what is left is the
+  // long tail, which by definition nobody asks about twice.
+  'suggest-swaps': 60,
 };
 
 /**

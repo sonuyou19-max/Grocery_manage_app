@@ -1089,6 +1089,22 @@ function EcoCard({
           </Text>
         </View>
       )}
+
+      {/* A route rather than a sheet, same as the basket card — see
+          app/climate.tsx. Whole footer is the target, not just the chevron. */}
+      <Pressable
+        onPress={() => {
+          haptics.tick();
+          router.push("/climate");
+        }}
+        accessibilityRole="button"
+        style={styles.basketMore}
+      >
+        <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
+          {t("climate.seeAll")}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+      </Pressable>
     </Card>
   );
 }

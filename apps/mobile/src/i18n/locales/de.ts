@@ -263,6 +263,20 @@ const de = {
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
   },
+  climate: {
+    seeAll: 'Deine größten Posten ansehen',
+    heavyTitle: 'Größte Posten',
+    seasonTitle: 'Jetzt Saison',
+    tapForSwaps: 'Tippen für leichtere Alternativen',
+    loading: 'Suche leichtere Optionen…',
+    noSwaps: 'Für dieses Produkt gibt es keine leichtere Alternative.',
+    tier1: 'Gut für die Bilanz',
+    tier2: 'Deutlich besser',
+    tier3: 'Am besten',
+    addAlt: '%{item} zu einer Liste hinzufügen',
+    emptyTitle: 'Noch nichts zu bewerten',
+    emptyBody: 'Hake ein paar Artikel auf einer Einkaufsliste ab, dann erscheint dein Klimamix hier.',
+  },
   eco: {
     tier: {
       low: 'Geringe Wirkung',

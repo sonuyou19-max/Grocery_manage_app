@@ -262,6 +262,20 @@ const it = {
     cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
   },
+  climate: {
+    seeAll: 'Vedi i tuoi articoli più pesanti',
+    heavyTitle: 'Articoli più pesanti',
+    seasonTitle: 'Di stagione adesso',
+    tapForSwaps: 'Tocca per alternative più leggere',
+    loading: 'Cerco opzioni più leggere…',
+    noSwaps: 'Nessuna alternativa più leggera da proporre per questo.',
+    tier1: 'Buon calo d’impatto',
+    tier2: 'Ottimo calo d’impatto',
+    tier3: 'Miglior calo d’impatto',
+    addAlt: 'Aggiungi %{item} a una lista',
+    emptyTitle: 'Ancora niente da valutare',
+    emptyBody: 'Spunta qualche articolo da una lista della spesa e il tuo mix climatico apparirà qui.',
+  },
   eco: {
     tier: {
       low: 'Impatto basso',

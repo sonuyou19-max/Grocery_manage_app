@@ -262,6 +262,20 @@ const nl = {
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
   },
+  climate: {
+    seeAll: 'Bekijk je zwaarste producten',
+    heavyTitle: 'Zwaarste producten',
+    seasonTitle: 'Nu in het seizoen',
+    tapForSwaps: 'Tik voor lichtere alternatieven',
+    loading: 'Lichtere opties zoeken…',
+    noSwaps: 'Geen lichter alternatief om voor te stellen.',
+    tier1: 'Goede daling',
+    tier2: 'Flinke daling',
+    tier3: 'Grootste daling',
+    addAlt: '%{item} aan een lijst toevoegen',
+    emptyTitle: 'Nog niets te scoren',
+    emptyBody: 'Vink een paar items af op een boodschappenlijst en je klimaatmix verschijnt hier.',
+  },
   eco: {
     tier: {
       low: 'Lage impact',

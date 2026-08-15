@@ -391,6 +391,37 @@ const HABIT_PURCHASES = 3;
  * you buy regularly"; being told would turn an observation into a lecture, and
  * the lecture is the part people uninstall over.
  */
+/**
+ * Every heavy item this household buys, most frequent first.
+ *
+ * The plural of heaviestStaple, and it exists for a screen that did not before:
+ * the card names ONE item because a card has room for one sentence, while the
+ * Climate Mix page is a place the reader chose to go and can hold a short list.
+ *
+ * Deliberately NOT gated on HABIT_PURCHASES. That threshold guards a claim —
+ * the card says "regularly", and twice is not regularly. This list makes no
+ * such claim: it is "the heavy things you bought", and a steak bought once is
+ * still a heavy thing you bought. Applying the habit gate here would empty the
+ * page for anyone who shops varied, which is most people.
+ */
+export function heavyHitters(items: EcoPurchase[], limit = 8): HeaviestStaple[] {
+  const counts = new Map<string, { name: string; times: number }>();
+  for (const p of items) {
+    if (carbonOf(p.name, p.category ?? 'other') !== 'high') continue;
+    const key = fold(p.name);
+    if (!key) continue;
+    const found = counts.get(key);
+    if (found) found.times += 1;
+    else counts.set(key, { name: p.name.trim(), times: 1 });
+  }
+  return [...counts.values()]
+    // Ties broken by name so the order is stable between renders — an unstable
+    // sort here would reshuffle the page under the reader's finger every time
+    // a purchase synced.
+    .sort((a, b) => b.times - a.times || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
 export function heaviestStaple(items: EcoPurchase[]): HeaviestStaple | null {
   const counts = new Map<string, { name: string; times: number }>();
 

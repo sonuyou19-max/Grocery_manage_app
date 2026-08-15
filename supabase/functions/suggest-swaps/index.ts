@@ -1,0 +1,212 @@
+// Supabase Edge Function: suggest-swaps
+// Three lighter alternatives for one high-impact grocery item, as a ladder:
+// an easy like-for-like swap, a plant-based stand-in, and a whole-food change.
+//
+// Called only when a shopper TAPS one of their own heavy items on the Climate
+// Mix page. That matters for cost as much as for tone: the call is gated behind
+// a deliberate finger rather than fired for every row on a screen, so the ceiling
+// is "items a person was curious enough to open", not "items they own".
+//
+// Every answer is cached in item_swaps by (folded term, locale), so the second
+// household to wonder about beef pays nothing — and the cache is checked BEFORE
+// the budget is reserved, because a cache hit is not an AI call and must not
+// consume anyone's daily allowance.
+//
+// Deploy:  supabase functions deploy suggest-swaps
+// Secrets: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+//          (the same key the other functions use; nothing new to set)
+
+import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+
+import { isShareableTerm } from '../_shared/emoji-allowlist.ts';
+import { fold } from '../_shared/fold.ts';
+import { reserveBudget } from '../_shared/rate-limit.ts';
+
+/** The app's seven, mirrored by the CHECK in migration 0033. */
+const LOCALES = ['en', 'de', 'fr', 'it', 'es', 'nl', 'pl'] as const;
+type Locale = (typeof LOCALES)[number];
+
+const LANGUAGE: Record<Locale, string> = {
+  en: 'English',
+  de: 'German',
+  fr: 'French',
+  it: 'Italian',
+  es: 'Spanish',
+  nl: 'Dutch',
+  pl: 'Polish',
+};
+
+let admin: SupabaseClient | null = null;
+function adminClient(): SupabaseClient {
+  if (!admin) {
+    admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } },
+    );
+  }
+  return admin;
+}
+
+/*
+ * The three rungs are named in the prompt because they are a designed ladder,
+ * not a ranked list of "greener foods". Asking for three alternatives without
+ * saying what each rung is for reliably produced three versions of the same
+ * answer — three kinds of bean for beef — which is useless to the one shopper
+ * who will not eat beans and reads as a lecture to everyone else.
+ *
+ * The tone rules are load-bearing, not decoration. This app deleted a
+ * suggestions feature once for being preachy (see lib/eco.ts), and a model
+ * asked for "climate-friendly swaps" volunteers guilt unprompted.
+ */
+const SYSTEM_PROMPT = `You suggest lighter-footprint grocery alternatives.
+
+Given one grocery item with a high climate footprint, reply with exactly three
+alternatives that a supermarket shopper could buy instead, as a ladder:
+
+1. The easy swap: the same KIND of product, same role in a meal, noticeably
+   lighter. For beef mince this is turkey or chicken mince — not a vegetable.
+2. The plant-based stand-in: a manufactured product that plays the same part.
+   For beef mince this is plant-based mince.
+3. The whole-food change: an unprocessed plant food that fills the same place
+   on a plate. For beef mince this is lentils or beans.
+
+Rules:
+- Answer with product names a shopper would write on a list, 1-3 words each.
+- Every name must be in %{language}, spelled as a shopper in that country
+  would write it. Do not answer in English unless %{language} is English.
+- Each rung must be genuinely lighter than the item asked about, and rung 3
+  lighter than rung 1.
+- Never repeat the item asked about, and never repeat a rung.
+- No sentences, no reasons, no encouragement, no judgement. Names only.
+- If the item is not food, or has no sensible lighter alternative, reply
+  {"ok": false}.
+
+Reply with JSON only, no prose:
+{"ok": true, "tier1": "...", "tier2": "...", "tier3": "..."}`;
+
+/** Pull the outermost JSON object out of a possibly-noisy model response. */
+function extractJson(raw: string): string {
+  const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  return start !== -1 && end !== -1 ? cleaned.slice(start, end + 1) : cleaned;
+}
+
+/**
+ * A suggestion the table will accept.
+ *
+ * Length matches the CHECK in 0033 rather than being merely "sensible": a value
+ * this rejects is one the insert would refuse anyway, and finding that out here
+ * costs nothing while finding it out there loses the whole answer.
+ */
+function cleanName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const name = value.trim().replace(/\s+/g, ' ');
+  if (name.length < 2 || name.length > 40) return null;
+  return name;
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+
+  const body = await req.json().catch(() => ({}));
+  const name = typeof body?.name === 'string' ? body.name.trim() : '';
+  const locale = (LOCALES as readonly string[]).includes(body?.locale)
+    ? (body.locale as Locale)
+    : 'en';
+
+  if (!name) {
+    return Response.json({ error: 'Body must be {"name": string}' }, { status: 400 });
+  }
+
+  const term = fold(name);
+  // The same gate the lexicon uses. A term too long or too odd to share is one
+  // that probably carries a person's own words ("beef for sarah's party"), and
+  // it must not reach a table every household reads through.
+  if (!isShareableTerm(term)) {
+    return Response.json({ ok: false, reason: 'term' });
+  }
+
+  const db = adminClient();
+
+  // Cache first, and BEFORE reserveBudget. A hit is not an AI call; charging a
+  // caller's daily allowance for one would mean the more popular a term became,
+  // the more it cost to look up.
+  const { data: cached } = await db
+    .from('item_swaps')
+    .select('tier1, tier2, tier3')
+    .eq('term', term)
+    .eq('locale', locale)
+    .maybeSingle();
+
+  if (cached) {
+    return Response.json({
+      ok: true,
+      cached: true,
+      tiers: [cached.tier1, cached.tier2, cached.tier3],
+    });
+  }
+
+  const system = SYSTEM_PROMPT.replace(/%\{language\}/g, LANGUAGE[locale]);
+
+  // Three short names plus JSON punctuation. Generous, because a truncated
+  // response parses as nothing and costs the whole call. Declared once: the
+  // budget guard has to know the ceiling before the call and the two must not
+  // drift apart.
+  const MAX_TOKENS = 120;
+  const guard = await reserveBudget(req, 'suggest-swaps', system + name, MAX_TOKENS);
+  if (guard.denied) return guard.denied;
+
+  const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
+  const message = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: MAX_TOKENS,
+    system,
+    messages: [{ role: 'user', content: name }],
+  });
+
+  // Refund before anything below can throw: a parse failure must not leave the
+  // caller charged the worst case for a call that cost a fraction of it.
+  await guard.settle(message.usage);
+
+  const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
+  let tiers: [string, string, string] | null = null;
+  try {
+    const parsed = JSON.parse(extractJson(raw)) as {
+      ok?: boolean;
+      tier1?: unknown;
+      tier2?: unknown;
+      tier3?: unknown;
+    };
+    const one = cleanName(parsed.tier1);
+    const two = cleanName(parsed.tier2);
+    const three = cleanName(parsed.tier3);
+    // All three or none. Two rungs of a three-rung ladder is not a smaller
+    // answer, it is a different and worse one — the shape is the meaning.
+    if (parsed.ok !== false && one && two && three) tiers = [one, two, three];
+  } catch {
+    // Falls through to the not-ok reply below.
+  }
+
+  if (!tiers) return Response.json({ ok: false, reason: 'no-answer' });
+
+  // Fire-and-forget: the caller has their answer and a cache write that fails
+  // costs the next reader one call, not this reader anything. ignoreDuplicates
+  // because two people can open the same item in the same second.
+  const write = db
+    .from('item_swaps')
+    .upsert(
+      { term, locale, tier1: tiers[0], tier2: tiers[1], tier3: tiers[2] },
+      { onConflict: 'term,locale', ignoreDuplicates: true },
+    )
+    .then(() => {});
+
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })
+    .EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(write);
+  else void write;
+
+  return Response.json({ ok: true, cached: false, tiers });
+});

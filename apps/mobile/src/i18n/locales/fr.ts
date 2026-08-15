@@ -263,6 +263,20 @@ const fr = {
     cadenceLearned: { one: 'Korb a appris environ %{count} jour', other: 'Korb a appris environ %{count} jours' },
     cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
   },
+  climate: {
+    seeAll: 'Voir tes postes les plus lourds',
+    heavyTitle: 'Postes les plus lourds',
+    seasonTitle: 'De saison en ce moment',
+    tapForSwaps: 'Touche pour des alternatives plus légères',
+    loading: 'Recherche d’options plus légères…',
+    noSwaps: 'Aucune alternative plus légère à proposer pour celui-ci.',
+    tier1: 'Bonne baisse d’impact',
+    tier2: 'Belle baisse d’impact',
+    tier3: 'Meilleure baisse d’impact',
+    addAlt: 'Ajouter %{item} à une liste',
+    emptyTitle: 'Rien à évaluer pour l’instant',
+    emptyBody: 'Coche quelques articles sur une liste de courses et ton mélange climat apparaîtra ici.',
+  },
   eco: {
     tier: {
       low: 'Faible impact',

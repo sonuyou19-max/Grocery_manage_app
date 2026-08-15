@@ -274,6 +274,20 @@ const en = {
     cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
     cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
   },
+  climate: {
+    seeAll: 'See your heavy hitters',
+    heavyTitle: 'Heavy hitters',
+    seasonTitle: 'In season right now',
+    tapForSwaps: 'Tap for lighter alternatives',
+    loading: 'Finding lighter options…',
+    noSwaps: 'No lighter alternative to suggest for this one.',
+    tier1: 'Good impact drop',
+    tier2: 'Great impact drop',
+    tier3: 'Best impact drop',
+    addAlt: 'Add %{item} to a list',
+    emptyTitle: 'Nothing to score yet',
+    emptyBody: 'Check a few items off a shopping list and your climate mix appears here.',
+  },
   eco: {
     tier: {
       low: 'Low impact',
