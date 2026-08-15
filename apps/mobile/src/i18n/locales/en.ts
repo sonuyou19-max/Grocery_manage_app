@@ -261,9 +261,6 @@ const en = {
     cadencePinned: { one: 'Set to every %{count} day', other: 'Set to every %{count} days' },
     cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
     cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
-    cadenceNever: 'Don’t predict',
-    cadenceNeverState: 'Korb won’t predict this one',
-    cadenceNeverNote: 'It stays in your pantry with its history — Korb just never says it’s due.',
   },
   eco: {
     tier: {
@@ -509,7 +506,6 @@ const en = {
   status: {
     learning: 'Learning your pace',
     dueNow: 'Due now',
-    noPredict: 'Not predicted',
     daysOver: { one: '%{count} day over', other: '%{count} days over' },
     daysLeft: { one: '~%{count} day left', other: '~%{count} days left' },
   },

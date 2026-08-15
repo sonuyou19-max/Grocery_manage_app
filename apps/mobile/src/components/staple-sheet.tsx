@@ -12,11 +12,9 @@ import { Sheet } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { categoryLabel } from "@/lib/categorize";
 import {
-  CADENCE_NEVER,
   CADENCE_PRESETS,
   effectiveInterval,
   hasUserCadence,
-  isNeverPredicted,
   type ItemStat,
 } from "@/lib/pantry-intel";
 import { listTint } from "@/lib/list-tint";
@@ -40,17 +38,6 @@ import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
  * Keeping them separate matters: you can want a fixed cadence on something
  * that isn't a staple, and mark a staple while still letting Korb learn its
  * rhythm. Collapsing them into one control would take that away.
- *
- * The cadence row has a third answer, "Don't predict", for items bought on no
- * schedule at all — party candles, sun cream, flour when you decide to bake.
- * Any interval is wrong for those, so Korb keeps the item and its history and
- * simply never says it's due.
- *
- * That is deliberately not the same as **Let it rest** at the bottom of this
- * sheet, and the two must not be collapsed. Resting archives the item: it
- * leaves the pantry's active list, for something you have stopped buying.
- * "Don't predict" is for something you do still buy, unpredictably — it stays
- * on screen, searchable, with its prices intact.
  */
 
 interface StapleSheetProps {
@@ -95,7 +82,6 @@ export function StapleSheet({
 
   const learned = Math.round(effectiveInterval(item));
   const pinned = hasUserCadence(item);
-  const never = isNeverPredicted(item);
 
   return (
     <Sheet visible onClose={onClose} scrim gutter={spacing.md}>
@@ -169,11 +155,9 @@ export function StapleSheet({
               {t("staple.cadenceTitle")}
             </Text>
             <Text style={[type.sub, { color: colors.muted }]}>
-              {never
-                ? t("staple.cadenceNeverState")
-                : pinned
-                  ? t("staple.cadencePinned", { count: item.cadenceDays ?? 0 })
-                  : t("staple.cadenceLearned", { count: learned })}
+              {pinned
+                ? t("staple.cadencePinned", { count: item.cadenceDays ?? 0 })
+                : t("staple.cadenceLearned", { count: learned })}
             </Text>
             <View style={styles.chips}>
               {/* "Learn it" is first and is the default state, so handing
@@ -191,20 +175,9 @@ export function StapleSheet({
                   onPress={() => onChange({ cadenceDays: days })}
                 />
               ))}
-              {/* Last, after the intervals, because it is the answer for the
-                  minority of items that have no interval at all. It belongs on
-                  this row rather than beside "Let it rest" below: both are
-                  answers to "how often do you restock this", and the item stays
-                  in the pantry either way. Resting is the other thing — it
-                  archives the item out of the list entirely. */}
-              <CadenceChip
-                label={t("staple.cadenceNever")}
-                active={never}
-                onPress={() => onChange({ cadenceDays: CADENCE_NEVER })}
-              />
             </View>
             <Text style={[type.sub, { color: colors.muted }]}>
-              {never ? t("staple.cadenceNeverNote") : t("staple.cadenceNote")}
+              {t("staple.cadenceNote")}
             </Text>
           </View>
 

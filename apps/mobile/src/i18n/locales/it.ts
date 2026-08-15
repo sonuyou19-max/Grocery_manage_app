@@ -249,9 +249,6 @@ const it = {
     cadencePinned: { one: 'Impostato ogni %{count} giorno', other: 'Impostato ogni %{count} giorni' },
     cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
-    cadenceNever: 'Non prevedere',
-    cadenceNeverState: 'Korb non fa previsioni per questo',
-    cadenceNeverNote: 'Resta nella dispensa con il suo storico — Korb non lo segnalerà mai come da ricomprare.',
   },
   eco: {
     tier: {
@@ -498,7 +495,6 @@ const it = {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Imparo il tuo ritmo',
     dueNow: 'Da ricomprare',
-    noPredict: 'Nessuna previsione',
     daysOver: { one: 'in ritardo di %{count} giorno', other: 'in ritardo di %{count} giorni' },
     daysLeft: { one: '~%{count} giorno rimasto', other: '~%{count} giorni rimasti' },
   },

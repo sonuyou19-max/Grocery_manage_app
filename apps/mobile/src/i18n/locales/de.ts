@@ -250,9 +250,6 @@ const de = {
     cadencePinned: { one: 'Auf alle %{count} Tag gesetzt', other: 'Auf alle %{count} Tage gesetzt' },
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
-    cadenceNever: 'Nicht vorhersagen',
-    cadenceNeverState: 'Korb sagt hier nichts voraus',
-    cadenceNeverNote: 'Bleibt mit seiner Historie im Vorrat — Korb meldet es nur nie als fällig.',
   },
   eco: {
     tier: {
@@ -499,7 +496,6 @@ const de = {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Lerne dein Tempo',
     dueNow: 'Jetzt fällig',
-    noPredict: 'Keine Vorhersage',
     daysOver: { one: 'seit %{count} Tag fällig', other: 'seit %{count} Tagen fällig' },
     daysLeft: { one: 'noch ~%{count} Tag', other: 'noch ~%{count} Tage' },
   },

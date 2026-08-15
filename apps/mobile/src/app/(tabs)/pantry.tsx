@@ -40,7 +40,6 @@ import {
   dueAt,
   hasUserCadence,
   isLowStat,
-  isNeverPredicted,
   isResting,
   lastBoughtLabel,
   lifeRemaining,
@@ -117,17 +116,7 @@ function SignedInPantry() {
   const { items, resting } = useMemo(() => {
     const all = Object.values(stats);
     return {
-      items: all
-        .filter((s) => !isResting(s))
-        // Never-predicted items sort last whatever their dates say. They still
-        // have a dueAt — it falls back to the learned interval — and without
-        // this an item bought a year ago would head the list looking urgent
-        // while every other part of its row says Korb is not tracking it.
-        .sort(
-          (a, b) =>
-            Number(isNeverPredicted(a)) - Number(isNeverPredicted(b)) ||
-            dueAt(a) - dueAt(b),
-        ),
+      items: all.filter((s) => !isResting(s)).sort((a, b) => dueAt(a) - dueAt(b)),
       resting: all
         .filter(isResting)
         .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
@@ -727,11 +716,7 @@ function PantrySwipeRow({
             <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
               {queued ? t('pantry.onList') : categoryLabel(item.category, t)} ·{' '}
               {lastBoughtLabel(item.lastPurchasedAt, now, t)}
-              {isNeverPredicted(item)
-                ? ` · ${t('staple.cadenceNever')}`
-                : hasUserCadence(item)
-                  ? ` · ${t('staple.everyDays', { count: item.cadenceDays ?? 0 })}`
-                  : ''}
+              {hasUserCadence(item) ? ` · ${t('staple.everyDays', { count: item.cadenceDays ?? 0 })}` : ''}
             </Text>
           </Pressable>
           <View style={styles.stock}>

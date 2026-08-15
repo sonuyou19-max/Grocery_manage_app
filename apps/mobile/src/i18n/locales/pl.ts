@@ -294,9 +294,6 @@ const pl = {
       other: 'Korb nauczył się około %{count} dni',
     },
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
-    cadenceNever: 'Nie przewiduj',
-    cadenceNeverState: 'Korb nie przewiduje tego produktu',
-    cadenceNeverNote: 'Zostaje w spiżarni razem z historią — Korb po prostu nigdy nie zgłosi, że trzeba go kupić.',
   },
   eco: {
     tier: {
@@ -561,7 +558,6 @@ const pl = {
   status: {
     learning: 'Poznaję Twoje tempo',
     dueNow: 'Czas uzupełnić',
-    noPredict: 'Bez przewidywań',
     daysOver: {
       one: '%{count} dzień po terminie',
       few: '%{count} dni po terminie',
