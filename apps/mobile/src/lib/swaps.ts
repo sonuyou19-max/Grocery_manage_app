@@ -181,15 +181,34 @@ export async function fetchSwaps(name: string, locale: string): Promise<SwapResu
       if (data.ok === false) return 'none';
       if (!Array.isArray(data.tiers) || data.tiers.length !== 3) return 'error';
 
+      /*
+       * Reads BOTH shapes, and that is not politeness — it is the only way this
+       * survives its own deploys.
+       *
+       * A rung used to be a bare string; it is now an object with the emoji,
+       * category and group alongside. The client ships over the air and the
+       * function ships through the Supabase CLI, so the two cannot land in the
+       * same instant, and for a while one of them is older than the other.
+       * Strict parsing turned that window into "Couldn't reach the suggestions"
+       * on a function that was answering perfectly well — the app calling its
+       * own backend a liar because it had not been redeployed yet.
+       *
+       * An old string still yields a usable rung: the name is the whole content,
+       * and a missing emoji already falls back to the category glyph by design.
+       */
       const tiers = data.tiers.map((raw) => {
+        if (typeof raw === 'string') {
+          return { name: raw.trim(), emoji: null, category: null, group: null };
+        }
         const r = (raw ?? {}) as Record<string, unknown>;
         return {
-          name: String(r.name ?? ''),
+          name: typeof r.name === 'string' ? r.name.trim() : '',
           emoji: typeof r.emoji === 'string' && r.emoji ? r.emoji : null,
           category: (typeof r.category === 'string' ? r.category : null) as ItemCategory | null,
           group: asFoodGroup(r.group),
         };
       }) as Swaps['tiers'];
+      // A rung with no name is genuinely unusable, whichever shape it arrived in.
       if (tiers.some((r) => !r.name)) return 'error';
 
       /*
