@@ -117,8 +117,13 @@ function adminClient(): SupabaseClient {
  *      (migration 0035). No change to the RUNGS' quality — but it is a change to
  *      the output shape and the key is part of what a row means, so a row from
  *      version 5 has no key and must re-ask to get one, which the bump ensures.
+ *   7  stocks and condiments. "Beef stock cubes" came back with nothing: the
+ *      ladder was written for foods on a plate and drinks in a cup, so a
+ *      flavouring made from meat fit nowhere and the model refused rather than
+ *      offer vegetable stock. Now spelled out — a thing that flavours a pot is
+ *      answered with other things that flavour a pot.
  */
-const PROMPT_VERSION = 6;
+const PROMPT_VERSION = 7;
 
 /*
  * The three rungs are named in the prompt because they are a designed ladder,
@@ -196,6 +201,15 @@ bulked out with nuts or raisins, then a carob bar, then dried fruit and nuts —
 NOT dark chocolate, which has more cocoa per bar and is therefore heavier than
 the chocolate asked about, not lighter. A food with no lighter version of ITSELF
 still has rungs 2 and 3, so reach for those rather than refusing.
+
+A STOCK, BOUILLON, BROTH, GRAVY or other flavouring made from meat is a real
+case of that, and must NOT be refused: it flavours a pot, so its rungs are other
+things that flavour a pot. A beef stock cube becomes a chicken or fish stock cube
+(lighter meat), then a vegetable or mushroom stock cube (the manufactured
+plant-based stand-in), then yeast extract, miso or dried herbs and pepper (the
+whole-food seasoning). Keep the FORM — a cube stays a cube, a paste stays a
+paste, a liquid stock stays liquid — the same rule as everywhere else. The same
+shape covers a fish sauce, a shrimp paste or a meat gravy granule.
 
 Those examples are illustrations of the three rungs, not a menu to pick from.
 The constraint that each rung be genuinely lighter than the item ASKED ABOUT

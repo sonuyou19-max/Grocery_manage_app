@@ -101,8 +101,10 @@ export type SwapResult = Swaps | 'none' | 'error';
  * through. v7 is a KEY change, not a content one: entries are now filed under
  * the canonicalised term (see below), so "sharp cheddar" and "cheddar" share a
  * slot — old entries filed under the un-canonicalised term would never be hit.
+ * v8 teaches the prompt stocks and condiments (a beef stock cube was refused
+ * outright), so stale "no answer" copies must re-ask.
  */
-const CACHE_KEY = 'korb.swaps.v7';
+const CACHE_KEY = 'korb.swaps.v8';
 
 /**
  * Ceiling on the device copy. Each entry is three short strings; a few hundred

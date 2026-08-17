@@ -222,6 +222,29 @@ const PLANT_QUALIFIERS = [
   'cashews', 'coconut', 'hafer', 'avena', 'owsiane', 'mandel',
 ];
 
+/*
+ * Words that say "this is a flavouring made from the meat, not the meat".
+ *
+ * A beef stock cube is mostly salt with a trace of beef extract; a 10g cube used
+ * across a week of meals is not the ribeye its name shares. But the scan below
+ * reads `beef` and calls it high, which put "beef stock cubes" into Heavy
+ * Hitters next to a braising joint and set the same red alarm — over-claiming, in
+ * a feature whose whole promise is an honest, unpreachy number.
+ *
+ * So a marker here CAPS the item at medium: checked after the plant qualifiers
+ * (a "vegetable stock" is still lighter than a beef one) and before the animal
+ * nouns, so the meat word can no longer drive the band up. Medium rather than low
+ * because we are not crediting it as a lentil either — just refusing to sound the
+ * alarm a whole cut earns. The effect that matters: capped at medium, it drops
+ * out of Heavy Hitters, which lists `high` only.
+ */
+const DILUTED_MARKERS = [
+  // en
+  'stock', 'broth', 'bouillon', 'gravy', 'consomme',
+  // de / nl (bouillon shared)
+  'bruhe', 'bruehe', 'fond', 'brodo', 'dado', 'caldo', 'bulion', 'rosol',
+];
+
 function keywordCarbon(name: string): CarbonTier | null {
   const clean = fold(name);
   // Whole name first — "ice cream" must not be decided by a word inside it —
@@ -231,6 +254,8 @@ function keywordCarbon(name: string): CarbonTier | null {
   const words = clean.split(/[\s,./-]+/);
   // Before the animal nouns, never after. See PLANT_QUALIFIERS.
   if (words.some((w) => PLANT_QUALIFIERS.includes(w))) return 'low';
+  // A stock or condiment made from meat is capped, not scored by the meat.
+  if (words.some((w) => DILUTED_MARKERS.includes(w))) return 'medium';
 
   for (const word of words) {
     if (CARBON_KEYWORDS[word]) return CARBON_KEYWORDS[word];
