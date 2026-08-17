@@ -270,6 +270,7 @@ const de = {
     tapForSwaps: 'Tippen für leichtere Alternativen',
     loading: 'Suche leichtere Optionen…',
     noSwaps: 'Für dieses Produkt gibt es keine leichtere Alternative.',
+    swapsFailed: 'Vorschläge nicht erreichbar. Nochmal tippen zum Wiederholen.',
     tier1: 'Gut für die Bilanz',
     tier2: 'Deutlich besser',
     tier3: 'Am besten',

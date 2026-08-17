@@ -38,7 +38,12 @@ import { haptics } from "@/lib/haptics";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { isResting } from "@/lib/pantry-intel";
 import { inSeason } from "@/lib/seasonal";
-import { cachedSwaps, fetchSwaps, hydrateSwaps, type Swaps } from "@/lib/swaps";
+import {
+  cachedSwaps,
+  fetchSwaps,
+  hydrateSwaps,
+  type SwapResult,
+} from "@/lib/swaps";
 import { useHomeListAdd } from "@/lib/use-home-list-add";
 import { useLocale } from "@/store/locale";
 import { usePantryIntel } from "@/store/pantry-intel";
@@ -168,7 +173,7 @@ export default function ClimateScreen() {
 
   /** The one open row, by name. Null when everything is closed. */
   const [openName, setOpenName] = useState<string | null>(null);
-  const [swaps, setSwaps] = useState<Record<string, Swaps | null>>({});
+  const [swaps, setSwaps] = useState<Record<string, SwapResult>>({});
 
   const toggle = (name: string) => {
     haptics.tick();
@@ -177,7 +182,9 @@ export default function ClimateScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const next = openName === name ? null : name;
     setOpenName(next);
-    if (!next || swaps[next] !== undefined) return;
+    // An 'error' is not an answer, so reopening the row asks again. A cached
+    // 'none' or a real set of rungs is, and does not.
+    if (!next || (swaps[next] !== undefined && swaps[next] !== "error")) return;
 
     const cached = cachedSwaps(name, language);
     if (cached) {
@@ -185,9 +192,9 @@ export default function ClimateScreen() {
       return;
     }
     void fetchSwaps(name, language).then((res) => {
-      // Straight into state whether or not it worked: `null` is a real answer
-      // ("nothing lighter to suggest") and the row must stop spinning either
-      // way. A spinner that never ends is the worst way to say "no".
+      // Straight into state whichever it is: the row has to stop spinning even
+      // when the answer is "nothing" or "could not ask". A spinner that never
+      // ends is the worst way to say either.
       setSwaps((prev) => ({ ...prev, [name]: res }));
     });
   };
@@ -361,8 +368,8 @@ function HeavyRow({
   name: string;
   order: number;
   open: boolean;
-  /** undefined = not asked yet, null = asked and there is nothing to suggest. */
-  swaps: Swaps | null | undefined;
+  /** undefined = not asked yet; otherwise see SwapResult. */
+  swaps: SwapResult | undefined;
   onToggle: () => void;
   onAdd: (alt: string) => void;
 }) {
@@ -400,7 +407,15 @@ function HeavyRow({
             <Text style={[type.sub, { color: colors.muted }]}>
               {t("climate.loading")}
             </Text>
-          ) : swaps === null ? (
+          ) : swaps === "error" ? (
+            /* Deliberately NOT the "nothing lighter" sentence. This one is
+               about the app failing to ask, and saying otherwise would be
+               confidently wrong about the food. Tapping the row again retries,
+               which the copy says out loud. */
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t("climate.swapsFailed")}
+            </Text>
+          ) : swaps === "none" ? (
             <Text style={[type.sub, { color: colors.muted }]}>
               {t("climate.noSwaps")}
             </Text>

@@ -269,6 +269,7 @@ const nl = {
     tapForSwaps: 'Tik voor lichtere alternatieven',
     loading: 'Lichtere opties zoeken…',
     noSwaps: 'Geen lichter alternatief om voor te stellen.',
+    swapsFailed: 'Suggesties niet bereikbaar. Tik opnieuw om het nog eens te proberen.',
     tier1: 'Goede daling',
     tier2: 'Flinke daling',
     tier3: 'Grootste daling',

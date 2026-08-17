@@ -269,6 +269,7 @@ const es = {
     tapForSwaps: 'Toca para ver alternativas más ligeras',
     loading: 'Buscando opciones más ligeras…',
     noSwaps: 'No hay una alternativa más ligera que proponer para este.',
+    swapsFailed: 'No se pudo obtener las sugerencias. Toca de nuevo para reintentar.',
     tier1: 'Buena bajada de impacto',
     tier2: 'Gran bajada de impacto',
     tier3: 'La mejor bajada de impacto',

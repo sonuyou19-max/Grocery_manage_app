@@ -314,6 +314,7 @@ const pl = {
     tapForSwaps: 'Dotknij, aby zobaczyć lżejsze zamienniki',
     loading: 'Szukam lżejszych opcji…',
     noSwaps: 'Brak lżejszego zamiennika dla tego produktu.',
+    swapsFailed: 'Nie udało się pobrać podpowiedzi. Dotknij ponownie, aby spróbować jeszcze raz.',
     tier1: 'Dobry spadek wpływu',
     tier2: 'Duży spadek wpływu',
     tier3: 'Największy spadek wpływu',

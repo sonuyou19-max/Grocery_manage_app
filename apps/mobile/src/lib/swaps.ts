@@ -35,6 +35,23 @@ export interface Swaps {
   tiers: [string, string, string];
 }
 
+/**
+ * What a lookup can come back as, and why three cases rather than two.
+ *
+ * The first version returned `Swaps | null` and the screen printed one sentence
+ * for the null — "no lighter alternative to suggest for this one". That sentence
+ * is a claim about the FOOD, and it was being shown for things that were really
+ * claims about the app: the function not deployed yet, a missing API key, a
+ * tripped spend cap, a plane. Telling someone there is no lighter option than
+ * beef is worse than telling them nothing, because it is confidently wrong and
+ * they have no way to know.
+ *
+ *   Swaps    three rungs
+ *   'none'   the engine answered and genuinely has nothing for this item
+ *   'error'  the engine could not be reached or refused — say so, and retry
+ */
+export type SwapResult = Swaps | 'none' | 'error';
+
 const CACHE_KEY = 'korb.swaps.v1';
 
 /**
@@ -50,7 +67,7 @@ const memory = new Map<string, Swaps>();
  * promise rather than a boolean, so the second caller gets the same answer
  * instead of nothing.
  */
-const inFlight = new Map<string, Promise<Swaps | null>>();
+const inFlight = new Map<string, Promise<SwapResult>>();
 let hydrated = false;
 
 const cacheKey = (term: string, locale: string) => `${locale}|${term}`;
@@ -87,13 +104,14 @@ export function cachedSwaps(name: string, locale: string): Swaps | undefined {
 }
 
 /**
- * Fetch the three rungs for an item, or null when there is no useful answer.
+ * Fetch the three rungs for an item.
  *
- * Null is a real result and the caller must render it as one — "no lighter
- * version of this" is true of plenty of things, and a spinner that never ends
- * is the worst way to say so.
+ * 'none' is a real result and the caller must render it as one — plenty of
+ * foods have no lighter stand-in, and a spinner that never ends is the worst way
+ * to say so. 'error' is NOT that, and must not be shown as if it were; see
+ * SwapResult.
  */
-export async function fetchSwaps(name: string, locale: string): Promise<Swaps | null> {
+export async function fetchSwaps(name: string, locale: string): Promise<SwapResult> {
   const term = fold(name);
   const key = cacheKey(term, locale);
 
@@ -103,24 +121,30 @@ export async function fetchSwaps(name: string, locale: string): Promise<Swaps | 
   const running = inFlight.get(key);
   if (running) return running;
 
-  const call = (async (): Promise<Swaps | null> => {
+  const call = (async (): Promise<SwapResult> => {
     try {
       const res = await fetch(`${supabaseUrl}/functions/v1/suggest-swaps`, {
         method: 'POST',
         headers: await aiFunctionHeaders(),
         body: JSON.stringify({ name, locale }),
       });
-      if (!res.ok) return null;
+      // Anything other than 200 is about the app, not the food: 404 when the
+      // function is not deployed, 500 for a missing key, 503 when the spend cap
+      // has tripped. None of those are "there is nothing lighter than beef".
+      if (!res.ok) return 'error';
       const data = (await res.json()) as { ok?: boolean; tiers?: unknown };
-      if (!data.ok || !Array.isArray(data.tiers) || data.tiers.length !== 3) return null;
+      // ok:false IS about the food — the function looked and declined.
+      if (data.ok === false) return 'none';
+      if (!Array.isArray(data.tiers) || data.tiers.length !== 3) return 'error';
       const tiers = data.tiers.map((v) => String(v)) as [string, string, string];
       const value: Swaps = { tiers };
       memory.set(key, value);
       persist();
       return value;
     } catch {
-      // Offline, or the function is down. The caller shows the row as it was.
-      return null;
+      // Offline, or DNS, or the request was cut off mid-flight. Not the food's
+      // fault either.
+      return 'error';
     } finally {
       inFlight.delete(key);
     }

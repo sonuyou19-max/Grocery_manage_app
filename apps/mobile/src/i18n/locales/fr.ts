@@ -270,6 +270,7 @@ const fr = {
     tapForSwaps: 'Touche pour des alternatives plus légères',
     loading: 'Recherche d’options plus légères…',
     noSwaps: 'Aucune alternative plus légère à proposer pour celui-ci.',
+    swapsFailed: 'Suggestions inaccessibles. Touche à nouveau pour réessayer.',
     tier1: 'Bonne baisse d’impact',
     tier2: 'Belle baisse d’impact',
     tier3: 'Meilleure baisse d’impact',

@@ -281,6 +281,7 @@ const en = {
     tapForSwaps: 'Tap for lighter alternatives',
     loading: 'Finding lighter options…',
     noSwaps: 'No lighter alternative to suggest for this one.',
+    swapsFailed: 'Couldn’t reach the suggestions. Tap again to retry.',
     tier1: 'Good impact drop',
     tier2: 'Great impact drop',
     tier3: 'Best impact drop',
