@@ -1,6 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import {
+  asFoodGroup,
+  type FoodGroup,
+  type ItemCategory,
+} from '@korb/shared';
+
 import { fold } from '@/lib/item-emoji';
+import { learnLexiconEntry } from '@/lib/item-lexicon';
 import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
 
 /**
@@ -30,9 +37,30 @@ import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
  * app's language must not serve the old language's answers.
  */
 
+/**
+ * One rung of the ladder.
+ *
+ * The metadata rides along with the name because the alternative is asking
+ * twice. Without it the row drew the `other` category's shopping-cart glyph for
+ * everything the client's own keyword table did not recognise — "plant-based
+ * mince" and "lentils" both came back as 🛒 — and adding one to a list then
+ * fired a SECOND AI call to categorize the very item we had just invented.
+ * These fields cost a handful of output tokens on a call already being made.
+ *
+ * emoji and category are nullable: a model answer outside the allowlist is
+ * dropped rather than shown, and the client falls back to its own category
+ * glyph. A worse row, not a broken one.
+ */
+export interface SwapRung {
+  name: string;
+  emoji: string | null;
+  category: ItemCategory | null;
+  group: FoodGroup | null;
+}
+
 export interface Swaps {
-  /** Three names, easiest swap first. Always three, or the answer is dropped. */
-  tiers: [string, string, string];
+  /** Three rungs, easiest swap first. Always three, or the answer is dropped. */
+  tiers: [SwapRung, SwapRung, SwapRung];
 }
 
 /**
@@ -52,7 +80,10 @@ export interface Swaps {
  */
 export type SwapResult = Swaps | 'none' | 'error';
 
-const CACHE_KEY = 'korb.swaps.v1';
+// v2: a rung is an object now, not a bare string. An old v1 payload would
+// deserialise into three strings where the screen expects three objects, so the
+// key changes rather than the parser learning to read both.
+const CACHE_KEY = 'korb.swaps.v2';
 
 /**
  * Ceiling on the device copy. Each entry is three short strings; a few hundred
@@ -79,7 +110,7 @@ export async function hydrateSwaps(): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return;
-    const flat = JSON.parse(raw) as Record<string, [string, string, string]>;
+    const flat = JSON.parse(raw) as Record<string, Swaps['tiers']>;
     for (const [key, tiers] of Object.entries(flat)) {
       if (Array.isArray(tiers) && tiers.length === 3) memory.set(key, { tiers });
     }
@@ -89,7 +120,7 @@ export async function hydrateSwaps(): Promise<void> {
 }
 
 function persist(): void {
-  const flat: Record<string, [string, string, string]> = {};
+  const flat: Record<string, Swaps['tiers']> = {};
   let n = 0;
   for (const [key, value] of memory) {
     if (n++ >= MAX_ENTRIES) break;
@@ -136,7 +167,31 @@ export async function fetchSwaps(name: string, locale: string): Promise<SwapResu
       // ok:false IS about the food — the function looked and declined.
       if (data.ok === false) return 'none';
       if (!Array.isArray(data.tiers) || data.tiers.length !== 3) return 'error';
-      const tiers = data.tiers.map((v) => String(v)) as [string, string, string];
+
+      const tiers = data.tiers.map((raw) => {
+        const r = (raw ?? {}) as Record<string, unknown>;
+        return {
+          name: String(r.name ?? ''),
+          emoji: typeof r.emoji === 'string' && r.emoji ? r.emoji : null,
+          category: (typeof r.category === 'string' ? r.category : null) as ItemCategory | null,
+          group: asFoodGroup(r.group),
+        };
+      }) as Swaps['tiers'];
+      if (tiers.some((r) => !r.name)) return 'error';
+
+      /*
+       * Seed the shared lexicon locally, right now.
+       *
+       * Publication needs three distinct askers (migration 0019), so without
+       * this the person who asked FIRST would see their own suggestions drawn
+       * with the fallback cart glyph until two strangers happened to open the
+       * same item. Writing it here also means adding the suggestion to a list
+       * costs no categorize call: the term is already classified.
+       */
+      for (const r of tiers) {
+        if (r.emoji) learnLexiconEntry(fold(r.name), r.emoji, r.category, null, null, r.group);
+      }
+
       const value: Swaps = { tiers };
       memory.set(key, value);
       persist();

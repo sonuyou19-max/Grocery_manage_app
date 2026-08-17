@@ -43,6 +43,7 @@ import {
   fetchSwaps,
   hydrateSwaps,
   type SwapResult,
+  type SwapRung,
 } from "@/lib/swaps";
 import { useHomeListAdd } from "@/lib/use-home-list-add";
 import { useLocale } from "@/store/locale";
@@ -279,12 +280,17 @@ export default function ClimateScreen() {
                   onToggle={() => toggle(item)}
                   onAdd={(alt) => {
                     haptics.success();
-                    // No list picker fallback here on purpose: this is a
-                    // browsing screen, and throwing a modal over it to ask
-                    // "which list?" would interrupt the reading it exists for.
-                    // addToHomeList returns false only when there is no list at
-                    // all, which the Insights tab cannot be reached without.
-                    addToHomeList(alt, "other");
+                    // The rung's real category, so the item lands classified and
+                    // does NOT trigger a categorize call — resolveIfUnknown fires
+                    // precisely on "unknown name, category other", which is what
+                    // this used to pass.
+                    //
+                    // No list picker fallback on purpose: this is a browsing
+                    // screen, and a modal asking "which list?" would interrupt
+                    // the reading it exists for. addToHomeList returns false only
+                    // when there is no list at all, which the Insights tab cannot
+                    // be reached without.
+                    addToHomeList(alt.name, alt.category ?? "other");
                   }}
                 />
               ) : (
@@ -371,7 +377,7 @@ function HeavyRow({
   /** undefined = not asked yet; otherwise see SwapResult. */
   swaps: SwapResult | undefined;
   onToggle: () => void;
-  onAdd: (alt: string) => void;
+  onAdd: (alt: SwapRung) => void;
 }) {
   const { colors } = useTheme();
   const { t } = useLocale();
@@ -421,11 +427,16 @@ function HeavyRow({
             </Text>
           ) : (
             swaps.tiers.map((alt, i) => (
-              <View key={alt} style={styles.swapRow}>
-                <ItemEmoji name={alt} category="other" />
+              <View key={alt.name} style={styles.swapRow}>
+                {/* The rung's own category, not "other". That constant was why
+                    every unrecognised suggestion drew the fallback cart: 🛒 is
+                    what `other` resolves to. ItemEmoji still reads the lexicon
+                    first, which fetchSwaps has just seeded with the emoji the
+                    same call returned. */}
+                <ItemEmoji name={alt.name} category={alt.category ?? "other"} />
                 <View style={styles.grow}>
                   <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                    {alt}
+                    {alt.name}
                   </Text>
                   <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
                     {t(`climate.tier${i + 1}`)}
@@ -435,7 +446,7 @@ function HeavyRow({
                   onPress={() => onAdd(alt)}
                   hitSlop={10}
                   accessibilityRole="button"
-                  accessibilityLabel={t("climate.addAlt", { item: alt })}
+                  accessibilityLabel={t("climate.addAlt", { item: alt.name })}
                   style={[styles.add, { borderColor: colors.accent }]}
                 >
                   <Ionicons name="add" size={18} color={colors.accent} />

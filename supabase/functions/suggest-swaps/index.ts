@@ -19,9 +19,17 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
-import { isShareableTerm } from '../_shared/emoji-allowlist.ts';
+import { EMOJI_ALLOWLIST, isAllowedEmoji, isShareableTerm } from '../_shared/emoji-allowlist.ts';
 import { fold } from '../_shared/fold.ts';
-import { reserveBudget } from '../_shared/rate-limit.ts';
+import { offerToLexicon } from '../_shared/lexicon.ts';
+import { clientIp, reserveBudget } from '../_shared/rate-limit.ts';
+
+/** Mirrors packages/shared. Deno cannot import from the workspace. */
+const CATEGORIES = [
+  'fruit_veg', 'dairy_eggs', 'meat_fish', 'bakery', 'pantry',
+  'frozen', 'drinks', 'household', 'personal_care', 'other',
+] as const;
+const GROUPS = ['protein', 'carbs', 'produce', 'fats', 'other', 'nonfood'] as const;
 
 /** The app's seven, mirrored by the CHECK in migration 0033. */
 const LOCALES = ['en', 'de', 'fr', 'it', 'es', 'nl', 'pl'] as const;
@@ -83,8 +91,22 @@ Rules:
 - If the item is not food, or has no sensible lighter alternative, reply
   {"ok": false}.
 
+For EACH rung also give the fields below. They cost a few tokens on a call
+already being made, and without them the app has to ask a second time — once to
+draw the row and again the moment somebody adds it to a list.
+
+category is one of: ${CATEGORIES.join(', ')}.
+group is the coarse food group, one of: ${GROUPS.join(', ')}.
+emoji MUST be copied exactly from this list, nothing else:
+${EMOJI_ALLOWLIST.join(' ')}
+Pick the closest match for what the food IS.
+
 Reply with JSON only, no prose:
-{"ok": true, "tier1": "...", "tier2": "...", "tier3": "..."}`;
+{"ok": true, "tiers": [
+  {"name": "...", "emoji": "...", "category": "...", "group": "..."},
+  {"name": "...", "emoji": "...", "category": "...", "group": "..."},
+  {"name": "...", "emoji": "...", "category": "...", "group": "..."}
+]}`;
 
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
@@ -106,6 +128,44 @@ function cleanName(value: unknown): string | null {
   const name = value.trim().replace(/\s+/g, ' ');
   if (name.length < 2 || name.length > 40) return null;
   return name;
+}
+
+/** One rung, as the client receives it. */
+interface Rung {
+  name: string;
+  /** Null when the model gave something outside the allowlist. */
+  emoji: string | null;
+  category: string | null;
+  group: string | null;
+}
+
+function pick<T extends string>(value: unknown, allowed: readonly T[]): T | null {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : null;
+}
+
+/**
+ * Read one rung out of the model's answer.
+ *
+ * The NAME is required and everything else is optional, because they fail
+ * differently. Without a name there is no rung. Without an emoji the client
+ * falls back to its own category glyph, which is a slightly worse row rather
+ * than a broken one — so a single out-of-allowlist emoji must not throw away a
+ * ladder that is otherwise correct.
+ */
+function readRung(value: unknown): Rung | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  const name = cleanName(raw.name);
+  if (!name) return null;
+  const emoji = typeof raw.emoji === 'string' && isAllowedEmoji(raw.emoji) ? raw.emoji : null;
+  return {
+    name,
+    emoji,
+    category: pick(raw.category, CATEGORIES),
+    group: pick(raw.group, GROUPS),
+  };
 }
 
 Deno.serve(async (req) => {
@@ -142,20 +202,49 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (cached) {
+    /*
+     * The names are cached here; their emoji, category and group are NOT, and
+     * deliberately are not. item_lexicon is already the app's term → metadata
+     * store and every client syncs it, so copying those three fields into
+     * item_swaps as well would be the same facts in two tables, free to drift.
+     *
+     * One extra read fills them in, and it is a read rather than a model call —
+     * which is the whole point of getting here.
+     */
+    const names: string[] = [cached.tier1, cached.tier2, cached.tier3];
+    const terms = names.map(fold);
+    const { data: known } = await db
+      .from('item_lexicon')
+      .select('term, emoji, category, food_group')
+      .in('term', terms);
+
+    const byTerm = new Map(
+      (known ?? []).map((r) => [
+        r.term as string,
+        { emoji: r.emoji as string | null, category: r.category as string | null, group: r.food_group as string | null },
+      ]),
+    );
+
     return Response.json({
       ok: true,
       cached: true,
-      tiers: [cached.tier1, cached.tier2, cached.tier3],
+      tiers: names.map((n, i) => ({
+        name: n,
+        emoji: byTerm.get(terms[i])?.emoji ?? null,
+        category: byTerm.get(terms[i])?.category ?? null,
+        group: byTerm.get(terms[i])?.group ?? null,
+      })),
     });
   }
 
   const system = SYSTEM_PROMPT.replace(/%\{language\}/g, LANGUAGE[locale]);
 
-  // Three short names plus JSON punctuation. Generous, because a truncated
-  // response parses as nothing and costs the whole call. Declared once: the
-  // budget guard has to know the ceiling before the call and the two must not
-  // drift apart.
-  const MAX_TOKENS = 120;
+  // Three rungs of four short fields, plus JSON punctuation. Raised from 120
+  // when the emoji, category and group were added: a truncated response parses
+  // as nothing and costs the whole call, so the ceiling has to clear the
+  // biggest honest answer with room to spare. Declared once, because the budget
+  // guard has to know it before the call and the two must not drift apart.
+  const MAX_TOKENS = 340;
   const guard = await reserveBudget(req, 'suggest-swaps', system + name, MAX_TOKENS);
   if (guard.denied) return guard.denied;
 
@@ -172,41 +261,65 @@ Deno.serve(async (req) => {
   await guard.settle(message.usage);
 
   const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
-  let tiers: [string, string, string] | null = null;
+  let tiers: [Rung, Rung, Rung] | null = null;
   try {
-    const parsed = JSON.parse(extractJson(raw)) as {
-      ok?: boolean;
-      tier1?: unknown;
-      tier2?: unknown;
-      tier3?: unknown;
-    };
-    const one = cleanName(parsed.tier1);
-    const two = cleanName(parsed.tier2);
-    const three = cleanName(parsed.tier3);
-    // All three or none. Two rungs of a three-rung ladder is not a smaller
-    // answer, it is a different and worse one — the shape is the meaning.
-    if (parsed.ok !== false && one && two && three) tiers = [one, two, three];
+    const parsed = JSON.parse(extractJson(raw)) as { ok?: boolean; tiers?: unknown };
+    if (parsed.ok !== false && Array.isArray(parsed.tiers)) {
+      const rungs = parsed.tiers.map(readRung);
+      // All three or none. Two rungs of a three-rung ladder is not a smaller
+      // answer, it is a different and worse one — the shape is the meaning.
+      if (rungs.length === 3 && rungs.every((r): r is Rung => r !== null)) {
+        tiers = rungs as [Rung, Rung, Rung];
+      }
+    }
   } catch {
     // Falls through to the not-ok reply below.
   }
 
   if (!tiers) return Response.json({ ok: false, reason: 'no-answer' });
 
-  // Fire-and-forget: the caller has their answer and a cache write that fails
-  // costs the next reader one call, not this reader anything. ignoreDuplicates
-  // because two people can open the same item in the same second.
-  const write = db
-    .from('item_swaps')
-    .upsert(
-      { term, locale, tier1: tiers[0], tier2: tiers[1], tier3: tiers[2] },
-      { onConflict: 'term,locale', ignoreDuplicates: true },
-    )
-    .then(() => {});
+  /*
+   * Fire-and-forget, and two separate writes because they answer to two
+   * different tables with two different lifetimes.
+   *
+   * item_swaps is the ladder: which three foods stand in for this one, in this
+   * language. ignoreDuplicates because two people can open the same item in the
+   * same second.
+   *
+   * item_lexicon is what each suggested food IS — emoji, category, group. That
+   * belongs there and nowhere else, so a suggestion the shopper adds to a list
+   * arrives already classified and costs no second call to categorize. It goes
+   * through the same publication gates as any other term; `generic: true`
+   * because these names are ours, not something a user typed.
+   */
+  const writes = Promise.all([
+    db
+      .from('item_swaps')
+      .upsert(
+        { term, locale, tier1: tiers[0].name, tier2: tiers[1].name, tier3: tiers[2].name },
+        { onConflict: 'term,locale', ignoreDuplicates: true },
+      )
+      .then(() => {}),
+    ...tiers
+      .filter((r) => r.emoji)
+      .map((r) =>
+        offerToLexicon(
+          {
+            term: r.name,
+            emoji: r.emoji as string,
+            category: r.category,
+            generic: true,
+            group: r.group,
+          },
+          `ip:${clientIp(req)}`,
+        ),
+      ),
+  ]).then(() => {});
 
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })
     .EdgeRuntime;
-  if (runtime?.waitUntil) runtime.waitUntil(write);
-  else void write;
+  if (runtime?.waitUntil) runtime.waitUntil(writes);
+  else void writes;
 
   return Response.json({ ok: true, cached: false, tiers });
 });
