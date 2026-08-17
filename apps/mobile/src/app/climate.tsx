@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+
+import type { ItemCategory } from "@korb/shared";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -81,30 +83,58 @@ export default function ClimateScreen() {
   const hour = Math.floor(Date.now() / 3_600_000);
   const now = useMemo(() => hour * 3_600_000, [hour]);
 
-  // The same figures the card shows, from the same source, so the score here
-  // and the score there cannot disagree.
   const tracked = useMemo(
     () => Object.values(stats).filter((s) => !isResting(s)),
     [stats],
   );
-  const eco = useMemo(
-    () => ecoScoreFor(tracked.map((s) => ({ name: s.display, category: s.category }))),
-    [tracked],
+
+  /*
+   * The PURCHASE LOG, not the pantry, and the distinction is the whole reason
+   * this is written out rather than reaching for `stats`.
+   *
+   * The card this page opens from scores `ecoPurchases` — one entry per logged
+   * purchase, so buying cheese four times counts four times. Scoring the pantry
+   * instead counts each tracked item once, which is a different question with a
+   * different answer: the first build of this page did exactly that and would
+   * have shown a different number under the same title, one tap apart.
+   *
+   * `category` falls back to the pantry only when the log has none, matching
+   * the card: the log has carried its own since 0023, and the recorded category
+   * is the one the user may have corrected by hand.
+   */
+  const statsByKey = useMemo(() => {
+    const m = new Map<string, (typeof tracked)[number]>();
+    for (const s of tracked) m.set(s.key, s);
+    return m;
+  }, [tracked]);
+
+  const ecoPurchases = useMemo(
+    () =>
+      purchases.map((p) => ({
+        name: p.name,
+        category: p.category ?? statsByKey.get(p.key)?.category ?? null,
+        store: p.store,
+        at: p.at,
+        bio: p.bio,
+      })),
+    [purchases, statsByKey],
   );
 
-  const heavy = useMemo(
+  const eco = useMemo(
     () =>
-      heavyHitters(
-        purchases.map((p) => ({
+      ecoScoreFor(
+        ecoPurchases.map((p) => ({
           name: p.name,
-          category: p.category,
-          store: p.store,
-          at: p.at,
+          category: p.category ?? ("other" as ItemCategory),
           bio: p.bio,
         })),
       ),
-    [purchases],
+    [ecoPurchases],
   );
+
+  // Same array the score reads, so a heavy hitter is always one of the
+  // purchases the number above it was computed from.
+  const heavy = useMemo(() => heavyHitters(ecoPurchases), [ecoPurchases]);
 
   const season = useMemo(() => inSeason(new Date(now)), [now]);
 
@@ -154,9 +184,16 @@ export default function ClimateScreen() {
           >
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
           </Pressable>
-          <Text style={[type.h2, styles.grow, { color: colors.ink }]}>
-            {t("eco.cardTitle")}
-          </Text>
+          <View style={styles.grow}>
+            <Text style={[type.h2, { color: colors.ink }]}>
+              {t("eco.cardTitle")}
+            </Text>
+            {/* The card's own count, verbatim. Same number under the same
+                title on both sides of the tap. */}
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t("eco.cardHint", { count: eco.total })}
+            </Text>
+          </View>
         </View>
 
         {eco.score == null ? (
