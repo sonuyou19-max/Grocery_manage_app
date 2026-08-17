@@ -19,6 +19,7 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
+import { canonicalize } from '../_shared/canonical.ts';
 import { EMOJI_ALLOWLIST, isAllowedEmoji, isShareableTerm } from '../_shared/emoji-allowlist.ts';
 import { fold } from '../_shared/fold.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
@@ -30,6 +31,32 @@ const CATEGORIES = [
   'frozen', 'drinks', 'household', 'personal_care', 'other',
 ] as const;
 const GROUPS = ['protein', 'carbs', 'produce', 'fats', 'other', 'nonfood'] as const;
+
+/**
+ * The canonical vocabulary: what the item ASKED ABOUT fundamentally is, as one
+ * form-encoded slug. Stored on the row (migration 0035) so distinct spellings of
+ * one product can later be seen as the same thing — for now to be measured, not
+ * yet to redirect a lookup.
+ *
+ * Form-encoded where form changes the right answer, which is the whole reason a
+ * steak must not be handed mince: beef_mince and beef_whole_cut are two keys, so
+ * are cheese_hard and cheese_grated. Coarser elsewhere, where it does not.
+ *
+ * Only high-impact items are ever tapped (Heavy Hitters shows `high` only), so
+ * this leans to the heavy foods; `other` is the honest escape when none fits,
+ * and a hallucinated key outside this list is dropped rather than stored.
+ */
+const CANONICAL_KEYS = [
+  'beef_mince', 'beef_whole_cut', 'beef_roast', 'beef_stew', 'beef_processed',
+  'lamb_mince', 'lamb_whole_cut', 'veal',
+  'pork_whole_cut', 'pork_mince', 'pork_processed',
+  'chicken_whole_cut', 'chicken_mince', 'chicken_processed', 'turkey',
+  'fish_white', 'fish_oily', 'fish_processed', 'prawns_shellfish',
+  'cheese_hard', 'cheese_soft', 'cheese_blue', 'cheese_grated', 'cheese_processed',
+  'butter', 'ghee', 'cream', 'milk', 'yogurt', 'ice_cream', 'eggs',
+  'oil', 'chocolate', 'cocoa', 'coffee', 'tea', 'rice',
+  'other',
+] as const;
 
 /** The app's seven, mirrored by the CHECK in migration 0033. */
 const LOCALES = ['en', 'de', 'fr', 'it', 'es', 'nl', 'pl'] as const;
@@ -86,8 +113,12 @@ function adminClient(): SupabaseClient {
  *      which ingredient makes this heavy, and does the answer contain more of it
  *      per kilo. Version 4's own chocolate example was wrong for the same
  *      reason and is replaced; dark chocolate has MORE cocoa, not less.
+ *   6  the answer now also carries a canonical key for the item asked about
+ *      (migration 0035). No change to the RUNGS' quality — but it is a change to
+ *      the output shape and the key is part of what a row means, so a row from
+ *      version 5 has no key and must re-ask to get one, which the bump ensures.
  */
-const PROMPT_VERSION = 5;
+const PROMPT_VERSION = 6;
 
 /*
  * The three rungs are named in the prompt because they are a designed ladder,
@@ -195,8 +226,16 @@ emoji MUST be copied exactly from this list, nothing else:
 ${EMOJI_ALLOWLIST.join(' ')}
 Pick the closest match for what the food IS.
 
+Also give ONE "key" for the ITEM ASKED ABOUT — not the rungs — the slug from
+this list that best describes what the shopper bought. It exists to group
+different wordings of the same product: "sharp cheddar" and "mature cheddar" are
+both cheese_hard; a steak is beef_whole_cut and mince is beef_mince, because
+those are different products. Match the FORM, the same way the rungs do. Use
+"other" only when nothing here fits.
+key is one of: ${CANONICAL_KEYS.join(', ')}.
+
 Reply with JSON only, no prose:
-{"ok": true, "tiers": [
+{"ok": true, "key": "...", "tiers": [
   {"name": "...", "emoji": "...", "category": "...", "group": "..."},
   {"name": "...", "emoji": "...", "category": "...", "group": "..."},
   {"name": "...", "emoji": "...", "category": "...", "group": "..."}
@@ -275,7 +314,12 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Body must be {"name": string}' }, { status: 400 });
   }
 
-  const term = fold(name);
+  // fold makes "Beef" and "beef " one key; canonicalize makes "Sharp Cheddar",
+  // "Mature Cheddar" and "Organic Cheddar" one key too, so the first spelling
+  // tapped warms the row the rest hit for free. The ORIGINAL name still goes to
+  // the model below — canonicalisation only decides which cache slot the answer
+  // lives in, and dropping "sharp" does not change what's lighter than cheddar.
+  const term = canonicalize(fold(name));
   // The same gate the lexicon uses. A term too long or too odd to share is one
   // that probably carries a person's own words ("beef for sarah's party"), and
   // it must not reach a table every household reads through.
@@ -341,7 +385,7 @@ Deno.serve(async (req) => {
   // as nothing and costs the whole call, so the ceiling has to clear the
   // biggest honest answer with room to spare. Declared once, because the budget
   // guard has to know it before the call and the two must not drift apart.
-  const MAX_TOKENS = 340;
+  const MAX_TOKENS = 360;
   const guard = await reserveBudget(req, 'suggest-swaps', system + name, MAX_TOKENS);
   if (guard.denied) return guard.denied;
 
@@ -359,14 +403,24 @@ Deno.serve(async (req) => {
 
   const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
   let tiers: [Rung, Rung, Rung] | null = null;
+  // The item's canonical key, or null. Validated against the vocabulary rather
+  // than trusted: a key the model invented ("beef mince", "cheddar_ish") would
+  // fragment the very grouping the column exists for, so an unknown one is
+  // dropped to null and the row simply carries no key rather than a bad one.
+  let key: string | null = null;
   try {
-    const parsed = JSON.parse(extractJson(raw)) as { ok?: boolean; tiers?: unknown };
+    const parsed = JSON.parse(extractJson(raw)) as {
+      ok?: boolean;
+      key?: unknown;
+      tiers?: unknown;
+    };
     if (parsed.ok !== false && Array.isArray(parsed.tiers)) {
       const rungs = parsed.tiers.map(readRung);
       // All three or none. Two rungs of a three-rung ladder is not a smaller
       // answer, it is a different and worse one — the shape is the meaning.
       if (rungs.length === 3 && rungs.every((r): r is Rung => r !== null)) {
         tiers = rungs as [Rung, Rung, Rung];
+        key = pick(parsed.key, CANONICAL_KEYS);
       }
     }
   } catch {
@@ -397,6 +451,7 @@ Deno.serve(async (req) => {
           term,
           locale,
           prompt_version: PROMPT_VERSION,
+          canonical_key: key,
           tier1: tiers[0].name,
           tier2: tiers[1].name,
           tier3: tiers[2].name,

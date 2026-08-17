@@ -221,6 +221,35 @@ export const fold = (s: string): string =>
     .trim();
 
 /**
+ * The mirror of supabase/functions/_shared/canonical.ts. See that file for why
+ * this exists and which words are — and are NOT — stripped. The two must agree
+ * character for character or the device and server swap caches stop lining up;
+ * scripts/check-canonical.mjs asserts it.
+ *
+ * Kept in THIS module rather than its own so the swaps device cache can reach it
+ * without a second import, and so the one file the check script already loads to
+ * compare folds carries the canonicaliser too.
+ */
+const CANONICAL_NOISE = new Set<string>([
+  'organic', 'bio', 'biologico', 'biologisch', 'ecologico', 'ekologiczny',
+  'premium', 'finest', 'deluxe', 'extra', 'value', 'economy', 'basic',
+  'free', 'range', 'grass', 'fed', 'farm', 'farmhouse', 'local',
+  'freiland', 'weide', 'fermier', 'fattoria', 'granja', 'boerderij', 'wiejski',
+  'unsalted', 'salted', 'ungesalzen', 'gesalzen', 'salato', 'salado',
+  'niesolony', 'solony', 'ongezouten', 'gezouten',
+  'sharp', 'mature', 'mild', 'strong',
+  'wurzig', 'gereift', 'affine', 'doux', 'fort', 'stagionato', 'dolce',
+  'piccante', 'suave', 'fuerte', 'belegen', 'pittig', 'lagodny', 'ostry',
+]);
+
+/** Drop store-tier, provenance, salt and maturity words from a folded name. */
+export const canonicalize = (folded: string): string => {
+  if (!folded) return folded;
+  const kept = folded.split(' ').filter((w) => w && !CANONICAL_NOISE.has(w));
+  return kept.length ? kept.join(' ') : folded;
+};
+
+/**
  * The shared lexicon (migration 0019), injected rather than imported.
  *
  * This module is pure on purpose — no storage, no network, no React — so it can

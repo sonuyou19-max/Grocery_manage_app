@@ -8,7 +8,7 @@ import {
 } from '@korb/shared';
 
 import { carbonOf } from '@/lib/eco';
-import { fold } from '@/lib/item-emoji';
+import { canonicalize, fold } from '@/lib/item-emoji';
 import { learnLexiconEntry } from '@/lib/item-lexicon';
 import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
 
@@ -98,9 +98,11 @@ export type SwapResult = Swaps | 'none' | 'error';
  * a CONCENTRATED version of the same thing (ghee for butter) and gives drinks a
  * ladder of their own, since coffee was refusing outright; v6 widens that same
  * rule past animal products, which is where cocoa powder for chocolate slipped
- * through.
+ * through. v7 is a KEY change, not a content one: entries are now filed under
+ * the canonicalised term (see below), so "sharp cheddar" and "cheddar" share a
+ * slot — old entries filed under the un-canonicalised term would never be hit.
  */
-const CACHE_KEY = 'korb.swaps.v6';
+const CACHE_KEY = 'korb.swaps.v7';
 
 /**
  * Ceiling on the device copy. Each entry is three short strings; a few hundred
@@ -272,7 +274,13 @@ const memory = new Map<string, Swaps>();
 const inFlight = new Map<string, Promise<SwapResult>>();
 let hydrated = false;
 
-const cacheKey = (term: string, locale: string) => `${locale}|${term}`;
+/**
+ * The device cache key for a name, matching the server's storage key exactly:
+ * fold then canonicalize, so "Sharp Cheddar" and "Cheddar" resolve to the same
+ * slot on the phone just as they do on the server. Both call sites go through
+ * here so the two can never drift.
+ */
+const cacheKey = (name: string, locale: string) => `${locale}|${canonicalize(fold(name))}`;
 
 /** Read the device copy. Cheap, and safe to call more than once. */
 export async function hydrateSwaps(): Promise<void> {
@@ -302,7 +310,7 @@ function persist(): void {
 
 /** What the device already knows, or undefined. Synchronous, for render. */
 export function cachedSwaps(name: string, locale: string): Swaps | undefined {
-  return memory.get(cacheKey(fold(name), locale));
+  return memory.get(cacheKey(name, locale));
 }
 
 /**
@@ -314,8 +322,7 @@ export function cachedSwaps(name: string, locale: string): Swaps | undefined {
  * SwapResult.
  */
 export async function fetchSwaps(name: string, locale: string): Promise<SwapResult> {
-  const term = fold(name);
-  const key = cacheKey(term, locale);
+  const key = cacheKey(name, locale);
 
   const hit = memory.get(key);
   if (hit) return hit;
