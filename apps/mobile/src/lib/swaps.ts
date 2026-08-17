@@ -2,10 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   asFoodGroup,
+  type CarbonTier,
   type FoodGroup,
   type ItemCategory,
 } from '@korb/shared';
 
+import { carbonOf } from '@/lib/eco';
 import { fold } from '@/lib/item-emoji';
 import { learnLexiconEntry } from '@/lib/item-lexicon';
 import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
@@ -106,6 +108,128 @@ const CACHE_KEY = 'korb.swaps.v6';
  * it, new answers simply are not persisted rather than growing without bound.
  */
 const MAX_ENTRIES = 300;
+
+/**
+ * Dev-only: shout when a rung is not actually lighter than the thing it
+ * replaces.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this exists
+ * ---------------------------------------------------------------------------
+ *
+ * Three bad suggestions shipped in a row and every one was found by a person
+ * looking at a screenshot: ghee for butter, dark chocolate for chocolate, cocoa
+ * powder for chocolate. They share a shape. Each is the right KIND of answer —
+ * same aisle, same use, plausible to read — and each is heavier than what was
+ * asked about, which makes it the one thing a lighter-alternatives feature must
+ * never say.
+ *
+ * The app already knows. `carbonOf` scored dark chocolate `high` at the very
+ * moment the row was drawing it as a "Good impact drop". Nothing was consulting
+ * it, so the contradiction sat on screen unremarked. That is the whole bug: two
+ * opinions about the same food in one process, never compared.
+ *
+ * So compare them. Every fetched ladder is now checked against the same table
+ * that scores the shopper's basket, and a rung that fails prints the reason.
+ *
+ * ---------------------------------------------------------------------------
+ * Why dev-only, and why a warning rather than a filter
+ * ---------------------------------------------------------------------------
+ *
+ * Dropping a bad rung in production sounds better and is worse. The response
+ * shape is all-three-or-nothing on purpose — a two-rung ladder reads as a bug
+ * and a one-rung ladder as an opinion — so a filter would have to fall back to
+ * 'none', turning "the prompt needs a fix" into "there is nothing lighter than
+ * chocolate". Silently repairing the output would also hide the very signal
+ * that gets the prompt fixed: the fix belongs in PROMPT_VERSION, not in a
+ * client-side patch that quietly compensates forever.
+ *
+ * The keyword table is not the last word either. It is coarse by design (three
+ * bands, movers only), so it will occasionally flag a rung a nutritionist would
+ * defend. A warning invites that judgement. A filter would silently impose it.
+ */
+const BAND_RANK: Record<CarbonTier, number> = { low: 0, medium: 1, high: 2 };
+
+function auditRungs(item: string, tiers: Swaps['tiers']): void {
+  if (!__DEV__) return;
+
+  /*
+   * 'other' as the asked item's category, which needs justifying rather than
+   * hand-waving: GROUP_CARBON contains no `high` at all, so every `high` band
+   * in this app comes from the keyword table, which does not look at the
+   * category. Heavy Hitters shows `high` items only. So for the one screen that
+   * calls this, the substituted category provably cannot change the answer.
+   *
+   * Where it can differ is `foodGroupOf` deciding this name is not food, giving
+   * null and skipping the audit. A missed warning in dev, which is the right
+   * way for a diagnostic to fail.
+   */
+  const asked = carbonOf(item, 'other');
+  if (!asked) return;
+
+  const bands = tiers.map((r) => carbonOf(r.name, r.category ?? 'other'));
+  const faults: string[] = [];
+  /*
+   * Two different things can make a rung score no lighter, and conflating them
+   * would have made this warning useless within a day of writing it.
+   *
+   * A FAULT is a genuinely wrong answer: ghee for butter, cocoa powder for
+   * chocolate. Different word, same or worse band, no defence.
+   *
+   * A VARIANT is a rung that names the item back — "instant coffee" for coffee,
+   * "chocolate with raisins" for chocolate. Those can be perfectly good advice
+   * and are still unscoreable here, because the keyword table matches on words
+   * and cannot tell a variant from its parent. Every keyword-scored food has
+   * this hole at rung 1, so a check that shouted about it would shout on nearly
+   * every ladder and get muted.
+   *
+   * Worth keeping visible rather than dropping, though: a variant rung means the
+   * row's "Good impact drop" badge is a claim the app cannot back.
+   */
+  const variants: string[] = [];
+  const askedWords = new Set(fold(item).split(/[\s,./-]+/).filter(Boolean));
+
+  bands.forEach((band, i) => {
+    const rung = `rung ${i + 1} "${tiers[i].name}"`;
+    if (!band) {
+      faults.push(`${rung} does not score as food`);
+      return;
+    }
+    if (BAND_RANK[band] < BAND_RANK[asked]) return;
+    const shared = fold(tiers[i].name)
+      .split(/[\s,./-]+/)
+      .find((w) => askedWords.has(w));
+    if (shared) {
+      variants.push(`${rung} shares "${shared}" with the item, so both score ${band}`);
+    } else {
+      faults.push(`${rung} is ${band}, and "${item}" is ${asked} — not a drop`);
+    }
+  });
+
+  // The ladder's own promise, separately: rung 3 is sold as the "Best impact
+  // drop", so it must not score above rung 1's "Good".
+  const [first, , third] = bands;
+  if (first && third && BAND_RANK[third] > BAND_RANK[first]) {
+    faults.push(`rung 3 (${third}) scores above rung 1 (${first}) — ladder inverted`);
+  }
+
+  if (faults.length > 0) {
+    console.warn(
+      `[swaps] suggestions for "${item}" are not all lighter than it:\n  ` +
+        `${faults.join('\n  ')}\n` +
+        '  Fix the prompt and bump PROMPT_VERSION in suggest-swaps, or add the ' +
+        'missing term to CARBON_KEYWORDS in lib/eco.ts.',
+    );
+  }
+  if (variants.length > 0) {
+    console.info(
+      `[swaps] "${item}" has rungs the impact table cannot separate from it:\n  ` +
+        `${variants.join('\n  ')}\n` +
+        '  Not necessarily wrong advice — but the badge promises a drop the ' +
+        'score will not show.',
+    );
+  }
+}
 
 const memory = new Map<string, Swaps>();
 /**
@@ -225,6 +349,16 @@ export async function fetchSwaps(name: string, locale: string): Promise<SwapResu
       for (const r of tiers) {
         if (r.emoji) learnLexiconEntry(fold(r.name), r.emoji, r.category, null, null, r.group);
       }
+
+      /*
+       * Audited here, on the fetch, rather than on every read: a memory hit
+       * re-renders as the accordion opens and closes, and a warning that
+       * reprints on each tap trains you to ignore it. Server-cache hits still
+       * come through this path, so a bad answer warmed by somebody else is
+       * caught too — which matters, because those are the ones this device
+       * never asked for and would otherwise never inspect.
+       */
+      auditRungs(name, tiers);
 
       const value: Swaps = { tiers };
       memory.set(key, value);
