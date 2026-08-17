@@ -80,8 +80,14 @@ function adminClient(): SupabaseClient {
  *      entirely: coffee answered ok:false, because the model could find no
  *      "lighter coffee" and no "plant-based coffee" and the shape demands all
  *      three rungs. Also tells the model the item name may be in any language.
+ *   5  the concentration rule from 4 said "the same ANIMAL product", so it did
+ *      not stop cocoa powder being offered for chocolate — the identical
+ *      mistake, one crop over. Generalised to any product, with the test named:
+ *      which ingredient makes this heavy, and does the answer contain more of it
+ *      per kilo. Version 4's own chocolate example was wrong for the same
+ *      reason and is replaced; dark chocolate has MORE cocoa, not less.
  */
-const PROMPT_VERSION = 4;
+const PROMPT_VERSION = 5;
 
 /*
  * The three rungs are named in the prompt because they are a designed ladder,
@@ -134,22 +140,31 @@ Then, keeping that form:
    mushrooms; ground beef becomes lentils; stewing beef becomes butter beans;
    cheese becomes nutritional yeast flakes; butter becomes olive oil.
 
-NEVER answer with a more concentrated form of the same animal product. Ghee is
-butter with the water cooked out — about 1.25 kg of butter per kilo — so it is
-HEAVIER than butter, not lighter, and the same trap catches cream for milk,
-condensed milk for milk, and hard cheese for a soft one. If the only same-family
-option is more concentrated, use a reduced-fat or blended version instead
-(butter becomes a light spread or a butter-and-oil blend), or skip straight to
-what rung 2 would have been.
+NEVER answer with a more CONCENTRATED form of the same product. Ghee is butter
+with the water cooked out — about 1.25 kg of butter per kilo — so it is HEAVIER
+than butter, not lighter. This applies to plants exactly as much as to animals:
+cocoa powder is not lighter than a chocolate bar, because cocoa is the part of
+the bar that carries the footprint and the powder is that part with the sugar
+and milk removed. The same trap catches cream for milk, condensed milk for milk,
+hard cheese for a soft one, tomato puree for tomatoes, and any oil for the crop
+it is pressed from. Ask which ingredient makes the item heavy, and never answer
+with MORE of that ingredient per kilo.
+
+If the only same-family option is more concentrated, use a diluted, reduced-fat
+or bulked-out version instead — butter becomes a light spread or a
+butter-and-oil blend; chocolate becomes a bar bulked out with nuts, raisins or
+wafer, so there is less cocoa in the same bar — or skip straight to what rung 2
+would have been.
 
 The three rungs apply to everything, not only meat and dairy. For a drink or a
 store-cupboard good, read them the same way: rung 1 is a lighter version of the
 same thing, rung 2 is a manufactured substitute used the same way, rung 3 is a
 different product that fills the same moment. Coffee becomes instant coffee,
-then a chicory or barley coffee substitute, then tea. Chocolate becomes dark
-chocolate with a lower cocoa-butter content, then a cocoa-reduced or oat-based
-bar, then dried fruit and nuts. A food with no lighter version of ITSELF still
-has rungs 2 and 3, so reach for those rather than refusing.
+then a chicory or barley coffee substitute, then tea. Chocolate becomes a bar
+bulked out with nuts or raisins, then a carob bar, then dried fruit and nuts —
+NOT dark chocolate, which has more cocoa per bar and is therefore heavier than
+the chocolate asked about, not lighter. A food with no lighter version of ITSELF
+still has rungs 2 and 3, so reach for those rather than refusing.
 
 Those examples are illustrations of the three rungs, not a menu to pick from.
 The constraint that each rung be genuinely lighter than the item ASKED ABOUT

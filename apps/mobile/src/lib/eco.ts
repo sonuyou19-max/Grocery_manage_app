@@ -123,6 +123,13 @@ const CARBON_KEYWORDS: Record<string, CarbonTier> = {
   prawns: 'high', prawn: 'high', shrimp: 'high', scampi: 'high', garnelen: 'high',
   crevettes: 'high', gamberi: 'high', gambas: 'high', garnalen: 'high', krewetki: 'high',
   chocolate: 'high', schokolade: 'high', chocolat: 'high', cioccolato: 'high', czekolada: 'high',
+  // Cocoa is the part of a chocolate bar that carries the footprint, so the
+  // powder is not the lighter option — it is the same crop with the sugar and
+  // milk taken out. Missing here, it fell to `other` and scored medium, which
+  // made the powder look like an improvement on the bar AND kept it off Heavy
+  // Hitters however often it was bought.
+  cocoa: 'high', cacao: 'high', kakao: 'high',
+  kakaopulver: 'high', cacaopoeder: 'high',
   coffee: 'high', kaffee: 'high', cafe: 'high', caffe: 'high', koffie: 'high', kawa: 'high',
 
   // ---- medium: pork, poultry, eggs, fish, dairy liquids, rice, oils.
@@ -155,6 +162,11 @@ const CARBON_KEYWORDS: Record<string, CarbonTier> = {
   nuts: 'low', almonds: 'low', walnuts: 'low', nusse: 'low', mandeln: 'low',
   noix: 'low', amandes: 'low', noci: 'low', mandorle: 'low', nueces: 'low', almendras: 'low',
   noten: 'low', orzechy: 'low', migdaly: 'low',
+  // The cocoa substitute, and the only reason it is listed: it is what rung 2
+  // of a chocolate ladder should be, and a suggestion the app then scores as
+  // medium is a suggestion that does not pay.
+  carob: 'low', johannisbrot: 'low', carruba: 'low', carrube: 'low',
+  algarroba: 'low', karob: 'low', caroube: 'low',
 };
 
 /**

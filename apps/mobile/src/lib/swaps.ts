@@ -94,9 +94,11 @@ export type SwapResult = Swaps | 'none' | 'error';
  * forever. So when suggest-swaps' PROMPT_VERSION goes up, this goes up with it.
  * v3 was the format-aware prompt; v4 the dairy ladder; v5 stops rung 1 offering
  * a CONCENTRATED version of the same thing (ghee for butter) and gives drinks a
- * ladder of their own, since coffee was refusing outright.
+ * ladder of their own, since coffee was refusing outright; v6 widens that same
+ * rule past animal products, which is where cocoa powder for chocolate slipped
+ * through.
  */
-const CACHE_KEY = 'korb.swaps.v5';
+const CACHE_KEY = 'korb.swaps.v6';
 
 /**
  * Ceiling on the device copy. Each entry is three short strings; a few hundred
