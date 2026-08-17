@@ -159,6 +159,15 @@ const CARBON_KEYWORDS: Record<string, CarbonTier> = {
   beans: 'low', bean: 'low', chickpeas: 'low', bohnen: 'low', kichererbsen: 'low',
   haricots: 'low', pois: 'low', fagioli: 'low', ceci: 'low', frijoles: 'low', garbanzos: 'low',
   bonen: 'low', fasola: 'low', ciecierzyca: 'low',
+  // Whole-name entries, and the reason is a word collision: the scan below finds
+  // the FIRST keyword in a name, and "butter beans" contains `butter` (high)
+  // before `beans` (low), so this legume was scoring as dairy butter — the exact
+  // trap that made it show as a high-impact suggestion under a "Best impact drop"
+  // badge. Matched whole, before the scan, they read as the beans they are.
+  // Peanut butter is the same collision the other way: a ground legume spread,
+  // nearer eggs than beef, not the `high` its `butter` earned it.
+  'butter beans': 'low', 'butter bean': 'low', butterbeans: 'low',
+  'peanut butter': 'medium', 'peanut butters': 'medium',
   nuts: 'low', almonds: 'low', walnuts: 'low', nusse: 'low', mandeln: 'low',
   noix: 'low', amandes: 'low', noci: 'low', mandorle: 'low', nueces: 'low', almendras: 'low',
   noten: 'low', orzechy: 'low', migdaly: 'low',
