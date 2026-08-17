@@ -292,8 +292,8 @@ const de = {
     bioBadge: 'Bio oder regional',
     cardTitle: 'Dein Klima-Mix',
     cardHint: {
-      one: '%{count} Lebensmittel',
-      other: '%{count} Lebensmittel',
+      one: '%{count} Einkauf',
+      other: '%{count} Einkäufe',
     },
     outOf: 'von 100',
     bioCount: {

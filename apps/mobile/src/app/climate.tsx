@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import type { ItemCategory } from "@korb/shared";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   LayoutAnimation,
@@ -27,6 +27,12 @@ import { EmptyState } from "@/components/empty-state";
 import { Frosted } from "@/components/frosted";
 import { ItemEmoji } from "@/components/item-emoji";
 import { MeshBackground } from "@/components/mesh-background";
+import {
+  RangePicker,
+  RANGES,
+  withinRange,
+  type Range,
+} from "@/components/range-picker";
 import { CARBON_COLORS, heavyHitters } from "@/lib/eco";
 import { haptics } from "@/lib/haptics";
 import { ecoScoreFor } from "@/lib/item-carbon";
@@ -68,6 +74,21 @@ type Part = "heavy" | "season";
 
 export default function ClimateScreen() {
   const { colors } = useTheme();
+  /*
+   * The window the card was showing, handed over on the way in, and adjustable
+   * here afterwards.
+   *
+   * Read defensively rather than cast: route params arrive as strings from a URL
+   * and a deep link can carry anything. An unknown value falls back to the same
+   * default the card starts on, so a bad link shows the ordinary screen instead
+   * of an empty one.
+   */
+  const params = useLocalSearchParams<{ range?: string }>();
+  const [range, setRange] = useState<Range>(
+    (RANGES as readonly string[]).includes(params.range ?? "")
+      ? (params.range as Range)
+      : "month",
+  );
   const { t, language } = useLocale();
   const { stats, purchases } = usePantryIntel();
   const insets = useSafeAreaInsets();
@@ -108,7 +129,7 @@ export default function ClimateScreen() {
     return m;
   }, [tracked]);
 
-  const ecoPurchases = useMemo(
+  const allPurchases = useMemo(
     () =>
       purchases.map((p) => ({
         name: p.name,
@@ -118,6 +139,13 @@ export default function ClimateScreen() {
         bio: p.bio,
       })),
     [purchases, statsByKey],
+  );
+
+  // Scoped like the card, and to the same window: the count is PURCHASES, so
+  // unscoped it only ever climbs and describes the install rather than the shop.
+  const ecoPurchases = useMemo(
+    () => withinRange(allPurchases, range, now),
+    [allPurchases, range, now],
   );
 
   const eco = useMemo(
@@ -188,12 +216,13 @@ export default function ClimateScreen() {
             <Text style={[type.h2, { color: colors.ink }]}>
               {t("eco.cardTitle")}
             </Text>
-            {/* The card's own count, verbatim. Same number under the same
-                title on both sides of the tap. */}
+            {/* The card's own count, verbatim. Same number under the same title
+                on both sides of the tap. */}
             <Text style={[type.sub, { color: colors.muted }]}>
               {t("eco.cardHint", { count: eco.total })}
             </Text>
           </View>
+          <RangePicker value={range} onChange={setRange} />
         </View>
 
         {eco.score == null ? (

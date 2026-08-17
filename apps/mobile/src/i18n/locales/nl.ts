@@ -291,8 +291,8 @@ const nl = {
     bioBadge: 'Biologisch of lokaal',
     cardTitle: 'Je klimaatmix',
     cardHint: {
-      one: '%{count} levensmiddel',
-      other: '%{count} levensmiddelen',
+      one: '%{count} aankoop',
+      other: '%{count} aankopen',
     },
     outOf: 'van de 100',
     bioCount: {

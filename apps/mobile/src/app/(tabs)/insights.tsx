@@ -188,6 +188,7 @@ function SignedInInsights() {
   const [spendRange, setSpendRange] = useState<Range>("month");
   const [storeRange, setStoreRange] = useState<Range>("month");
   const [stapleRange, setStapleRange] = useState<Range>("month");
+  const [ecoRange, setEcoRange] = useState<Range>("month");
   // One state, not one flag per card: only ever one sheet is up, and four
   // booleans would let a bug open two Modals at once — which on Android is the
   // stacked-window hazard lib/modal-nav.ts exists for.
@@ -359,16 +360,29 @@ function SignedInInsights() {
       })),
     [purchases, statsByKey],
   );
+  /*
+   * Scoped like the money cards, and for a plainer reason than they are: this
+   * count is PURCHASES, not items, so it only ever climbs. Unscoped it read
+   * "312 purchases" for a household six months in — a number that describes the
+   * install, not the shop, and which nothing on the card could be compared
+   * against. A window makes the score answerable ("this month") and the count
+   * finite.
+   */
+  const ecoScoped = useMemo(
+    () => withinRange(ecoPurchases, ecoRange, now),
+    [ecoPurchases, ecoRange, now],
+  );
+
   const eco = useMemo(
     () =>
       ecoScoreFor(
-        ecoPurchases.map((p) => ({
+        ecoScoped.map((p) => ({
           name: p.name,
           category: p.category ?? ("other" as ItemCategory),
           bio: p.bio,
         })),
       ),
-    [ecoPurchases],
+    [ecoScoped],
   );
   const ecoWeeks = useMemo(
     () => weeklyEco(ecoPurchases, now, weekStartOf, locked ? 4 : 8),
@@ -379,7 +393,9 @@ function SignedInInsights() {
    * three times — below that it is a meal, not a habit, and the sentence says
    * "regularly" out loud.
    */
-  const heaviest = useMemo(() => heaviestStaple(ecoPurchases), [ecoPurchases]);
+  // Scoped with the score, or the card would say "this month" above a
+  // sentence about a habit from last spring.
+  const heaviest = useMemo(() => heaviestStaple(ecoScoped), [ecoScoped]);
 
   /** Two scored weeks is the minimum that can show a direction. */
   const ecoScored = ecoWeeks.filter((w) => w.score != null);
@@ -444,7 +460,15 @@ function SignedInInsights() {
           also the hook: somebody has to see the feature work before there is
           any reason to pay for its history. See lib/eco.ts for why the number
           is what it is. */}
-      {eco.score != null && <EcoCard eco={eco} heaviest={heaviest} now={now} />}
+      {eco.score != null && (
+        <EcoCard
+          eco={eco}
+          heaviest={heaviest}
+          now={now}
+          range={ecoRange}
+          onRange={setEcoRange}
+        />
+      )}
 
       {/* Plus: HIDE, not prompt. A pantry mix is a ring and a legend — there is
           no shell worth leaving behind, and a locked one would just be a
@@ -995,10 +1019,14 @@ function EcoCard({
   eco,
   heaviest,
   now,
+  range,
+  onRange,
 }: {
   eco: EcoScore;
   heaviest: HeaviestStaple | null;
   now: number;
+  range: Range;
+  onRange: (r: Range) => void;
 }) {
   const { colors } = useTheme();
   const { t } = useLocale();
@@ -1012,9 +1040,7 @@ function EcoCard({
         <Text style={[type.label, styles.grow, { color: colors.ink }]}>
           {t("eco.cardTitle")}
         </Text>
-        <Text style={[type.sub, { color: colors.muted }]}>
-          {t("eco.cardHint", { count: eco.total })}
-        </Text>
+        <RangePicker value={range} onChange={onRange} />
         <Pressable
           onPress={() => {
             haptics.tick();
@@ -1037,10 +1063,17 @@ function EcoCard({
         </Pressable>
       </View>
 
+      {/* The count sits with the score it describes rather than in the header.
+          It was up there next to the title, which put two unrelated numbers a
+          few pixels apart — a score of 69 beside "69 food items" read as one
+          fact stated twice. */}
       <View style={styles.heroRow}>
         <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
-        <Text style={[type.sub, { color: colors.muted }]}>
+        <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
           {t("eco.outOf")}
+        </Text>
+        <Text style={[type.sub, { color: colors.muted }]}>
+          {t("eco.cardHint", { count: eco.total })}
         </Text>
       </View>
       <EcoBar shares={eco.shares} counts={eco.counts} />

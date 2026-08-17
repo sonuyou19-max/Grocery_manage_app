@@ -303,8 +303,8 @@ const en = {
     bioBadge: 'Organic or local',
     cardTitle: 'Your climate mix',
     cardHint: {
-      one: '%{count} food item',
-      other: '%{count} food items',
+      one: '%{count} purchase',
+      other: '%{count} purchases',
     },
     outOf: 'out of 100',
     bioCount: {

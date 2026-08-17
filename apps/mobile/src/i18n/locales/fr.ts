@@ -292,8 +292,8 @@ const fr = {
     bioBadge: 'Bio ou local',
     cardTitle: 'Ton mix climat',
     cardHint: {
-      one: '%{count} produit alimentaire',
-      other: '%{count} produits alimentaires',
+      one: '%{count} achat',
+      other: '%{count} achats',
     },
     outOf: 'sur 100',
     bioCount: {

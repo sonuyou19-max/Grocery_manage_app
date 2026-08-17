@@ -336,10 +336,10 @@ const pl = {
     bioBadge: 'Bio lub lokalne',
     cardTitle: 'Twój miks klimatyczny',
     cardHint: {
-      one: '%{count} produkt spożywczy',
-      few: '%{count} produkty spożywcze',
-      many: '%{count} produktów spożywczych',
-      other: '%{count} produktów spożywczych',
+      one: '%{count} zakup',
+      few: '%{count} zakupy',
+      many: '%{count} zakupów',
+      other: '%{count} zakupów',
     },
     outOf: 'na 100',
     bioCount: {

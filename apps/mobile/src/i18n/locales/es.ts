@@ -291,8 +291,8 @@ const es = {
     bioBadge: 'Ecológico o local',
     cardTitle: 'Tu mezcla climática',
     cardHint: {
-      one: '%{count} alimento',
-      other: '%{count} alimentos',
+      one: '%{count} compra',
+      other: '%{count} compras',
     },
     outOf: 'sobre 100',
     bioCount: {
