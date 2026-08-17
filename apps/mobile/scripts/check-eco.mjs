@@ -54,7 +54,12 @@ const eco = compile('eco.ts', (spec) => {
   return {};
 });
 const { carbonOf, ecoScore, heaviestStaple, weeklyEco, CARBON_COLORS } = eco;
-const { inSeason, SEASONAL_PRODUCE, PRODUCE_KIND } = seasonal;
+const { inSeason, SEASONAL_PRODUCE, PRODUCE_KIND, PRODUCE_EMOJI } = seasonal;
+// The shared glyph vocabulary, so the seasonal icons are held to exactly the set
+// the AI is held to rather than to whatever looked fine while typing.
+const allowlist = compileAt(
+  join(HERE, '..', '..', '..', 'supabase', 'functions', '_shared', 'emoji-allowlist.ts'),
+);
 const { weekStartOf } = purchaseLog;
 
 let failures = 0;
@@ -243,7 +248,11 @@ check(
 for (let m = 0; m < 12; m++) {
   const items = inSeason(new Date(Date.UTC(2026, m, 15)));
   assert(`month ${m + 1} has produce`, items.length > 0);
-  assert(`month ${m + 1} names at most three`, items.length <= 3);
+  // Six, and exactly six, because the section is a two-column grid: five leaves
+  // a half-empty last row and seven starts a fourth row with one cell in it.
+  // Asserted as equality rather than a ceiling so a month cannot quietly thin
+  // out to three again while the grid keeps its shape.
+  assert(`month ${m + 1} names exactly six`, items.length === 6);
   // A key with no locale string renders as a missing-translation error in the
   // one line of this feature that is supposed to feel like a gift.
   for (const k of items) {
@@ -259,6 +268,15 @@ for (let m = 0; m < 12; m++) {
   assert(`month ${m + 1}: every item is classified`, kinds.every(Boolean));
   assert(`month ${m + 1} names a fruit`, kinds.includes('fruit'));
   assert(`month ${m + 1} names a vegetable`, kinds.includes('veg'));
+
+  // No two items in the SAME month may share a glyph. Repeats across the table
+  // are unavoidable — the allowlist has one leaf for five leafy greens — but two
+  // cells side by side showing the same icon reads as a rendering bug rather than
+  // as two vegetables. The assignments dodge this by pairing each shared glyph
+  // with keys from opposite seasons, and that only stays true if it is checked:
+  // moving kale into spring, or currants into autumn, breaks it silently.
+  const glyphs = items.map((k) => PRODUCE_EMOJI[k]);
+  assert(`month ${m + 1} has no repeated emoji`, new Set(glyphs).size === glyphs.length);
 }
 
 // The classification has to cover the list, or a new key would silently make
@@ -266,6 +284,25 @@ for (let m = 0; m < 12; m++) {
 assert(
   'every produce key is classified as fruit or veg',
   SEASONAL_PRODUCE.every((k) => PRODUCE_KIND[k] === 'fruit' || PRODUCE_KIND[k] === 'veg'),
+);
+
+// The emoji map has to be TOTAL over the keys. It replaced the generic
+// item-emoji lookup, which took the translated name and matched none of these
+// words — so every seasonal row drew the fruit_veg fallback and "plums" rendered
+// as a head of lettuce. A key added without an emoji here would silently bring
+// that back for one item, so the gap fails the build instead.
+check(
+  'every produce key has an emoji',
+  SEASONAL_PRODUCE.filter((k) => typeof PRODUCE_EMOJI[k] !== 'string' || !PRODUCE_EMOJI[k]),
+  [],
+);
+// And each one is from the shared allowlist, so the seasonal icons stay inside
+// the same vocabulary the model is restricted to — no flags, no people, nothing
+// that renders as two glyphs on one platform and a box on another.
+check(
+  'every produce emoji is in the shared allowlist',
+  SEASONAL_PRODUCE.filter((k) => !allowlist.isAllowedEmoji(PRODUCE_EMOJI[k])),
+  [],
 );
 
 // Strawberries in December would be the single most obvious way to lose the

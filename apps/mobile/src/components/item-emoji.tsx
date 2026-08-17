@@ -31,11 +31,23 @@ export function ItemEmoji({
   size = 17,
   /** Dimmed for items already ticked off, matching the muted row text. */
   dim = false,
+  /**
+   * An explicit glyph, skipping the name lookup.
+   *
+   * For the callers that already KNOW the emoji and would only lose by asking —
+   * the seasonal grid holds a table keyed by produce key, which is right in all
+   * seven languages, while `emojiFor` matches translated words and has none of
+   * them (every seasonal row used to draw the generic leaf). They still want the
+   * fixed width, the hidden-from-screen-readers behaviour and the shared sizing,
+   * which is the whole reason this is a prop rather than a second component.
+   */
+  glyph,
 }: {
   name: string;
   category: ItemCategory;
   size?: number;
   dim?: boolean;
+  glyph?: string;
 }) {
   useSyncExternalStore(subscribeLexicon, lexiconVersion, lexiconVersion);
   return (
@@ -48,7 +60,7 @@ export function ItemEmoji({
         dim && styles.dim,
       ]}
     >
-      {emojiFor(name, category)}
+      {glyph ?? emojiFor(name, category)}
     </Text>
   );
 }
