@@ -9,7 +9,7 @@ import { categoryLabel } from '@/lib/categorize';
 import { ecoScoreFor } from '@/lib/item-carbon';
 import { basketBalance } from '@/lib/nutrition';
 import { dueAt, isResting } from '@/lib/pantry-intel';
-import { inSeason } from '@/lib/seasonal';
+import { bandForRegion, inSeason } from '@/lib/seasonal';
 import { recapRuns } from '@/lib/recap-markup';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
@@ -40,7 +40,7 @@ type Phase = 'empty' | 'loading' | 'ready' | 'error';
  */
 export function WeeklyRecapCard() {
   const { colors } = useTheme();
-  const { t, language } = useLocale();
+  const { t, language, region } = useLocale();
   const appActive = useAppActive();
   const { lists } = useGroceries();
   const { stats } = usePantryIntel();
@@ -103,9 +103,9 @@ export function WeeklyRecapCard() {
       // Translated here rather than in the function: the edge function has no
       // locale files, and a produce name is exactly the kind of word a model
       // will translate loosely if asked to.
-      inSeason: inSeason(new Date()).map((k) => t(`eco.season.${k}`)),
+      inSeason: inSeason(new Date(), bandForRegion(region)).map((k) => t(`eco.season.${k}`)),
     };
-  }, [lists, stats, members]);
+  }, [lists, stats, members, region, t]);
 
   const enoughData = payload.itemCount > 0 || payload.staples.length > 0;
 

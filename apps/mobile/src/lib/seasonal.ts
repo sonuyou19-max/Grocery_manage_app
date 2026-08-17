@@ -19,19 +19,48 @@
  * even for somebody who does not care about the climate at all.
  *
  * ---------------------------------------------------------------------------
- * One calendar for a continent, and how it stays honest
+ * Three calendars, chosen by the region the user already told us
  * ---------------------------------------------------------------------------
  *
- * Asparagus is done in Spain before it starts in Poland. Korb knows the
- * reader's LANGUAGE, which is not their country — `de` is Germany, Austria and
- * Switzerland; `es` is Spain and, for many users, Latin America — so there is
- * no reliable way to pick a regional calendar without asking, and asking for a
- * country to power one line of copy is a bad trade.
+ * Asparagus is done in Spain before it starts in Poland, so a single European
+ * calendar is wrong for somebody however it is written.
  *
- * So this is a single temperate-Europe calendar built from the OVERLAP rather
- * than the union: an item appears in a month only if it is plausibly in season
- * across most of the continent that month, and the genuinely regional cases are
- * simply left out. Fewer items, none of them wrong for the reader.
+ * This file used to carry one, justified like this: "Korb knows the reader's
+ * LANGUAGE, which is not their country... there is no reliable way to pick a
+ * regional calendar without asking, and asking for a country to power one line
+ * of copy is a bad trade."
+ *
+ * That was simply false, and it survived here for a while because it sounded
+ * reasonable. The app asks for a COUNTRY on first launch — see
+ * components/locale-setup.tsx and i18n/regions.ts — stores it, and already uses
+ * it for currency. The information was sitting there the whole time; nobody has
+ * to be asked anything new.
+ *
+ * Using the region rather than the language also closes the hole the old comment
+ * was worried about. Language is spoken across hemispheres: `es` would have
+ * handed a Chilean reader "strawberries in May" while they were heading into
+ * winter. The region list is a closed set of twenty European countries, so a
+ * calendar keyed off it cannot end up on the wrong side of the equator.
+ *
+ * So: three climate bands, because latitude is what actually moves a growing
+ * season.
+ *
+ *   north    SE DK NO FI          later spring, shorter summer, longer storage
+ *   central  DE FR NL BE AT PL    the temperate middle
+ *            CZ HU RO CH GB IE
+ *   south    ES IT PT GR          earlier and longer, local citrus in winter
+ *
+ * Three and not twenty, because a per-country calendar is a research project
+ * with twenty times the surface to be wrong in, and the honest gain over a band
+ * is small: Belgium and the Netherlands do not differ enough to notice on a
+ * grocery list. Within a band the OVERLAP rule still holds — an item appears in
+ * a month only if it is plausibly in season across that whole band, and the
+ * genuinely local cases are left out rather than shown to half the band wrongly.
+ *
+ * What this is NOT: a dataset. It is built from ordinary horticultural knowledge
+ * of European growing seasons, not from a citable source, so any single entry is
+ * arguable at the edges. It is accurate enough to be useful and honest about
+ * being a guide rather than an almanac.
  *
  * Six per month, in a two-column grid.
  *
@@ -44,8 +73,46 @@
  *
  * The ceiling is that overlap rule, not the layout: a month gets six because six
  * honest items exist for it, and the balance check in check-eco keeps each month
- * from being all fruit or all vegetable.
+ * from being all fruit or all vegetable — in every band.
  */
+
+/**
+ * The three climate bands. See the header for why three.
+ */
+export type SeasonBand = 'north' | 'central' | 'south';
+
+/**
+ * ISO 3166-1 alpha-2 → band, for every country i18n/regions.ts offers.
+ *
+ * A plain map rather than an import from i18n, so this module stays free of the
+ * locale stack and check-eco can load it on its own. check-eco asserts that every
+ * region in REGIONS appears here, so adding a country to the picker without
+ * giving it a band fails the build instead of silently getting the middle one.
+ *
+ * The two judgement calls, stated so they can be argued with rather than
+ * discovered: Ireland and the UK sit in `central` despite the latitude, because
+ * an oceanic climate keeps their season closer to northern France than to
+ * Scandinavia. Romania sits in `central` rather than `south` because it is
+ * continental, not Mediterranean, whatever the map suggests.
+ */
+const BAND_BY_REGION: Record<string, SeasonBand> = {
+  SE: 'north', DK: 'north', NO: 'north', FI: 'north',
+  DE: 'central', FR: 'central', NL: 'central', BE: 'central', AT: 'central',
+  PL: 'central', CZ: 'central', HU: 'central', RO: 'central', CH: 'central',
+  GB: 'central', IE: 'central',
+  ES: 'south', IT: 'south', PT: 'south', GR: 'south',
+};
+
+/**
+ * The band for a region code, defaulting to the temperate middle.
+ *
+ * `central` for an unknown or missing code because it is the least wrong answer
+ * for Europe as a whole, and because DEFAULT_REGION in i18n/regions.ts is DE —
+ * so a user who has not finished setup sees the same calendar they will keep.
+ */
+export function bandForRegion(code: string | null | undefined): SeasonBand {
+  return (code && BAND_BY_REGION[code.toUpperCase()]) || 'central';
+}
 
 /**
  * Locale key stems. The display name is `eco.season.${key}` in each locale, so
@@ -133,29 +200,87 @@ export const PRODUCE_EMOJI: Record<SeasonalProduce, string> = {
  * fruit bowl. Winter fruit is real (stored apples and pears, Mediterranean
  * citrus), so the balance costs no honesty.
  */
-const CALENDAR: readonly (readonly SeasonalProduce[])[] = [
-  // Winter leans on stored roots and brassicas plus Mediterranean citrus, which
-  // is the honest answer: the alternative is pretending January has berries.
-  ['leeks', 'kale', 'oranges', 'cabbage', 'parsnips', 'pears'], // January
-  ['cabbage', 'kale', 'oranges', 'leeks', 'celeriac', 'apples'], // February
-  ['spinach', 'rhubarb', 'leeks', 'cabbage', 'radishes', 'oranges'], // March
-  ['asparagus', 'rhubarb', 'radishes', 'spinach', 'lettuce', 'oranges'], // April
-  ['asparagus', 'strawberries', 'peas', 'radishes', 'lettuce', 'rhubarb'], // May
-  ['strawberries', 'cherries', 'newPotatoes', 'peas', 'courgettes', 'redcurrants'], // June
-  ['cherries', 'raspberries', 'courgettes', 'blueberries', 'tomatoes', 'greenBeans'], // July
-  ['tomatoes', 'plums', 'peppers', 'courgettes', 'blackberries', 'sweetcorn'], // August
-  ['apples', 'blackberries', 'mushrooms', 'plums', 'grapes', 'sweetcorn'], // September
-  ['apples', 'pumpkin', 'mushrooms', 'pears', 'grapes', 'leeks'], // October
-  ['pumpkin', 'parsnips', 'apples', 'kale', 'leeks', 'pears'], // November
-  ['sprouts', 'leeks', 'pears', 'kale', 'oranges', 'parsnips'], // December
-];
+const CALENDARS: Record<SeasonBand, readonly (readonly SeasonalProduce[])[]> = {
+  /*
+   * Scandinavia. Spring arrives late and leaves early, so the shoulder months
+   * lean on stored roots, brassicas and imported citrus rather than pretending
+   * March has anything fresh in it. Berries run roughly a month behind central
+   * Europe — Nordic strawberries are a July crop, not a May one — and the summer
+   * window is genuinely short, which is why so much of this year is storage.
+   */
+  north: [
+    ['kale', 'cabbage', 'oranges', 'leeks', 'parsnips', 'apples'], // January
+    ['cabbage', 'kale', 'oranges', 'celeriac', 'leeks', 'pears'], // February
+    ['cabbage', 'kale', 'leeks', 'celeriac', 'oranges', 'apples'], // March
+    ['spinach', 'radishes', 'rhubarb', 'lettuce', 'leeks', 'oranges'], // April
+    ['asparagus', 'rhubarb', 'spinach', 'radishes', 'lettuce', 'apples'], // May
+    ['strawberries', 'rhubarb', 'asparagus', 'peas', 'lettuce', 'radishes'], // June
+    ['strawberries', 'newPotatoes', 'peas', 'courgettes', 'redcurrants', 'lettuce'], // July
+    ['raspberries', 'blueberries', 'courgettes', 'tomatoes', 'newPotatoes', 'greenBeans'], // August
+    ['apples', 'blackberries', 'plums', 'mushrooms', 'cabbage', 'greenBeans'], // September
+    ['apples', 'pears', 'pumpkin', 'mushrooms', 'leeks', 'cabbage'], // October
+    ['apples', 'pears', 'pumpkin', 'parsnips', 'kale', 'leeks'], // November
+    ['sprouts', 'kale', 'leeks', 'parsnips', 'apples', 'oranges'], // December
+  ],
+
+  /*
+   * The temperate middle, and the band this file started as. Winter leans on
+   * stored roots and brassicas plus Mediterranean citrus, which is the honest
+   * answer: the alternative is pretending January has berries.
+   */
+  central: [
+    ['leeks', 'kale', 'oranges', 'cabbage', 'parsnips', 'pears'], // January
+    ['cabbage', 'kale', 'oranges', 'leeks', 'celeriac', 'apples'], // February
+    ['spinach', 'rhubarb', 'leeks', 'cabbage', 'radishes', 'oranges'], // March
+    ['asparagus', 'rhubarb', 'radishes', 'spinach', 'lettuce', 'oranges'], // April
+    ['asparagus', 'strawberries', 'peas', 'radishes', 'lettuce', 'rhubarb'], // May
+    ['strawberries', 'cherries', 'newPotatoes', 'peas', 'courgettes', 'redcurrants'], // June
+    ['cherries', 'raspberries', 'courgettes', 'blueberries', 'tomatoes', 'greenBeans'], // July
+    ['tomatoes', 'plums', 'peppers', 'courgettes', 'blackberries', 'sweetcorn'], // August
+    ['apples', 'blackberries', 'mushrooms', 'plums', 'grapes', 'sweetcorn'], // September
+    ['apples', 'pumpkin', 'mushrooms', 'pears', 'grapes', 'leeks'], // October
+    ['pumpkin', 'parsnips', 'apples', 'kale', 'leeks', 'pears'], // November
+    ['sprouts', 'leeks', 'pears', 'kale', 'oranges', 'parsnips'], // December
+  ],
+
+  /*
+   * The Mediterranean. Two real differences from the middle, not a shuffle:
+   * citrus in winter is LOCAL rather than imported, so it belongs at the front of
+   * a winter month rather than as the token fruit; and the summer crops start in
+   * May and run to October, so tomatoes and peppers occupy five months instead of
+   * two. Spring fruit is genuinely early — Spanish strawberries are a March crop
+   * — while the autumn brassica-and-root season starts later than up north.
+   */
+  south: [
+    ['oranges', 'spinach', 'cabbage', 'leeks', 'celeriac', 'pears'], // January
+    ['oranges', 'spinach', 'cabbage', 'leeks', 'lettuce', 'apples'], // February
+    ['strawberries', 'oranges', 'spinach', 'lettuce', 'asparagus', 'radishes'], // March
+    ['strawberries', 'asparagus', 'oranges', 'lettuce', 'radishes', 'peas'], // April
+    ['cherries', 'strawberries', 'asparagus', 'peas', 'courgettes', 'lettuce'], // May
+    ['cherries', 'courgettes', 'tomatoes', 'peppers', 'peas', 'newPotatoes'], // June
+    // Only one fruit, deliberately: raspberries sat here for a while and they are
+    // a cool-climate crop, not a Mediterranean-July one. Plums are the honest
+    // stone fruit of a southern high summer, and one true entry beats two with a
+    // wrong one in it.
+    ['tomatoes', 'peppers', 'plums', 'courgettes', 'greenBeans', 'sweetcorn'], // July
+    ['tomatoes', 'peppers', 'grapes', 'plums', 'courgettes', 'sweetcorn'], // August
+    ['grapes', 'tomatoes', 'peppers', 'apples', 'blackberries', 'sweetcorn'], // September
+    ['grapes', 'apples', 'pears', 'mushrooms', 'peppers', 'pumpkin'], // October
+    ['oranges', 'apples', 'pears', 'pumpkin', 'mushrooms', 'spinach'], // November
+    ['oranges', 'cabbage', 'leeks', 'spinach', 'pears', 'celeriac'], // December
+  ],
+};
 
 /**
- * What is in season, for the month a date falls in.
+ * What is in season, for the month a date falls in and the reader's band.
  *
  * Takes a Date rather than reading the clock, so the caller controls "now" and
  * the check script can walk all twelve months without mocking anything.
+ *
+ * `band` defaults to `central` so a caller that has no region to hand still gets
+ * the least-wrong European answer rather than nothing — but every caller in the
+ * app passes one, via bandForRegion(region) off the locale store.
  */
-export function inSeason(at: Date): readonly SeasonalProduce[] {
-  return CALENDAR[at.getMonth()] ?? [];
+export function inSeason(at: Date, band: SeasonBand = 'central'): readonly SeasonalProduce[] {
+  return CALENDARS[band][at.getMonth()] ?? [];
 }

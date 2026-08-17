@@ -37,7 +37,12 @@ import { CARBON_COLORS, heavyHitters } from "@/lib/eco";
 import { haptics } from "@/lib/haptics";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { isResting } from "@/lib/pantry-intel";
-import { inSeason, PRODUCE_EMOJI, type SeasonalProduce } from "@/lib/seasonal";
+import {
+  bandForRegion,
+  inSeason,
+  PRODUCE_EMOJI,
+  type SeasonalProduce,
+} from "@/lib/seasonal";
 import {
   cachedSwaps,
   fetchSwaps,
@@ -110,7 +115,7 @@ export default function ClimateScreen() {
       ? (params.range as Range)
       : "month",
   );
-  const { t, language } = useLocale();
+  const { t, language, region } = useLocale();
   const { stats, purchases } = usePantryIntel();
   const insets = useSafeAreaInsets();
   const { addToHomeList } = useHomeListAdd();
@@ -185,7 +190,12 @@ export default function ClimateScreen() {
   // purchases the number above it was computed from.
   const heavy = useMemo(() => heavyHitters(ecoPurchases), [ecoPurchases]);
 
-  const season = useMemo(() => inSeason(new Date(now)), [now]);
+  // The reader's own climate band, not one calendar for the continent: a Finn
+  // and a Sicilian do not have the same June. See lib/seasonal.ts.
+  const season = useMemo(
+    () => inSeason(new Date(now), bandForRegion(region)),
+    [now, region],
+  );
 
   /** The one open row, by name. Null when everything is closed. */
   const [openName, setOpenName] = useState<string | null>(null);

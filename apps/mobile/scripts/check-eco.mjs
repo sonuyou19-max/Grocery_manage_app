@@ -54,7 +54,7 @@ const eco = compile('eco.ts', (spec) => {
   return {};
 });
 const { carbonOf, ecoScore, heaviestStaple, weeklyEco, CARBON_COLORS } = eco;
-const { inSeason, SEASONAL_PRODUCE, PRODUCE_KIND, PRODUCE_EMOJI } = seasonal;
+const { inSeason, bandForRegion, SEASONAL_PRODUCE, PRODUCE_KIND, PRODUCE_EMOJI } = seasonal;
 // The shared glyph vocabulary, so the seasonal icons are held to exactly the set
 // the AI is held to rather than to whatever looked fine while typing.
 const allowlist = compileAt(
@@ -243,31 +243,35 @@ check(
 
 /* ------------------------------------------------------------- in season */
 
-// Every month must have something to say, or the card ends on a blank line in
-// whichever month nobody thought about.
+// Every month of every BAND must hold, not just the default one. The bands exist
+// because one European calendar was wrong for somebody however it was written, so
+// a band that quietly thinned out or went all-vegetable would be the same bug
+// back again in a place nobody looks.
+for (const band of ['north', 'central', 'south']) {
 for (let m = 0; m < 12; m++) {
-  const items = inSeason(new Date(Date.UTC(2026, m, 15)));
-  assert(`month ${m + 1} has produce`, items.length > 0);
+  const items = inSeason(new Date(Date.UTC(2026, m, 15)), band);
+  const where = `${band} month ${m + 1}`;
+  assert(`${where} has produce`, items.length > 0);
   // Six, and exactly six, because the section is a two-column grid: five leaves
   // a half-empty last row and seven starts a fourth row with one cell in it.
   // Asserted as equality rather than a ceiling so a month cannot quietly thin
   // out to three again while the grid keeps its shape.
-  assert(`month ${m + 1} names exactly six`, items.length === 6);
+  assert(`${where} names exactly six`, items.length === 6);
   // A key with no locale string renders as a missing-translation error in the
   // one line of this feature that is supposed to feel like a gift.
   for (const k of items) {
-    assert(`month ${m + 1}: "${k}" is a known produce key`, SEASONAL_PRODUCE.includes(k));
+    assert(`${where}: "${k}" is a known produce key`, SEASONAL_PRODUCE.includes(k));
   }
   // Repeating an item inside one month would print "apples, apples, pears".
-  assert(`month ${m + 1} has no duplicates`, new Set(items).size === items.length);
+  assert(`${where} has no duplicates`, new Set(items).size === items.length);
 
   // A balanced mix, not three of a kind. "In season now: pumpkin, parsnips,
   // cabbage" answers half the question somebody planning a shop is asking, and
   // three months of the calendar used to read exactly like that.
   const kinds = items.map((k) => PRODUCE_KIND[k]);
-  assert(`month ${m + 1}: every item is classified`, kinds.every(Boolean));
-  assert(`month ${m + 1} names a fruit`, kinds.includes('fruit'));
-  assert(`month ${m + 1} names a vegetable`, kinds.includes('veg'));
+  assert(`${where}: every item is classified`, kinds.every(Boolean));
+  assert(`${where} names a fruit`, kinds.includes('fruit'));
+  assert(`${where} names a vegetable`, kinds.includes('veg'));
 
   // No two items in the SAME month may share a glyph. Repeats across the table
   // are unavoidable — the allowlist has one leaf for five leafy greens — but two
@@ -276,8 +280,40 @@ for (let m = 0; m < 12; m++) {
   // with keys from opposite seasons, and that only stays true if it is checked:
   // moving kale into spring, or currants into autumn, breaks it silently.
   const glyphs = items.map((k) => PRODUCE_EMOJI[k]);
-  assert(`month ${m + 1} has no repeated emoji`, new Set(glyphs).size === glyphs.length);
+  assert(`${where} has no repeated emoji`, new Set(glyphs).size === glyphs.length);
 }
+}
+
+/* --------------------------------- every region resolves to a real band */
+
+// The bands are chosen by the country the user picked at setup, and a country
+// with no band silently falls back to `central` — which is exactly the "one
+// calendar for everyone" bug the bands replaced, reintroduced for whichever
+// region someone adds to the picker next. So the mapping has to be total over
+// REGIONS, and it has to be checked here rather than trusted.
+const regions = compileAt(join(HERE, '..', 'src', 'i18n', 'regions.ts'));
+const BANDS = ['north', 'central', 'south'];
+const unbanded = regions.REGIONS.filter((r) => !BANDS.includes(bandForRegion(r.code)));
+check('every region in the picker has a climate band', unbanded.map((r) => r.code), []);
+// And the default region must resolve, since it is what a half-finished setup
+// gets. DE is central, so this also pins that the middle band is the fallback.
+check('DEFAULT_REGION has a band', bandForRegion(regions.DEFAULT_REGION), 'central');
+check('an unknown region falls back to central', bandForRegion('ZZ'), 'central');
+check('a missing region falls back to central', bandForRegion(null), 'central');
+check('region codes are matched case-insensitively', bandForRegion('se'), 'north');
+
+// The bands must actually DIFFER, or three calendars is just three copies and the
+// whole change is decoration. May is the sharpest month: Nordic strawberries are
+// six weeks off while Spain is already into cherries.
+const may = (band) => inSeason(new Date(Date.UTC(2026, 4, 15)), band);
+assert('north has no strawberries in May', !may('north').includes('strawberries'));
+assert('central does have strawberries in May', may('central').includes('strawberries'));
+assert('south is already on cherries in May', may('south').includes('cherries'));
+// And the south's winter citrus is local rather than a token import.
+assert(
+  'south names oranges in January',
+  inSeason(new Date(Date.UTC(2026, 0, 15)), 'south').includes('oranges'),
+);
 
 // The classification has to cover the list, or a new key would silently make
 // the balance check above vacuous for whatever month it lands in.

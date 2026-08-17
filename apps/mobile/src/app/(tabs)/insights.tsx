@@ -41,7 +41,7 @@ import {
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { basketBalance, basketItems } from "@/lib/nutrition";
 import { isResting } from "@/lib/pantry-intel";
-import { inSeason } from "@/lib/seasonal";
+import { bandForRegion, inSeason } from "@/lib/seasonal";
 import {
   cheaperStoreHints,
   spendByStore,
@@ -1029,9 +1029,11 @@ function EcoCard({
   onRange: (r: Range) => void;
 }) {
   const { colors } = useTheme();
-  const { t } = useLocale();
+  const { t, region } = useLocale();
   const [explained, setExplained] = useState(false);
-  const season = inSeason(new Date(now));
+  // Banded by the user's country, so this line agrees with the Climate page it
+  // opens into rather than showing a different continent's June.
+  const season = inSeason(new Date(now), bandForRegion(region));
 
   return (
     <Card>
