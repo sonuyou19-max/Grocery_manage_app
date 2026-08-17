@@ -92,11 +92,11 @@ export type SwapResult = Swaps | 'none' | 'error';
  * server's cache handles this properly — prompt_version is part of its key
  * (migration 0034) — but this one would happily serve last month's answers
  * forever. So when suggest-swaps' PROMPT_VERSION goes up, this goes up with it.
- * v3 was the format-aware prompt; v4 extends it past meat — solid before liquid,
- * and a named dairy ladder, because cheese was answering rung 2 with a seasoning
- * and rung 3 with a sauce.
+ * v3 was the format-aware prompt; v4 the dairy ladder; v5 stops rung 1 offering
+ * a CONCENTRATED version of the same thing (ghee for butter) and gives drinks a
+ * ladder of their own, since coffee was refusing outright.
  */
-const CACHE_KEY = 'korb.swaps.v4';
+const CACHE_KEY = 'korb.swaps.v5';
 
 /**
  * Ceiling on the device copy. Each entry is three short strings; a few hundred

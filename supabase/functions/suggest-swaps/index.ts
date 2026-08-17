@@ -74,8 +74,14 @@ function adminClient(): SupabaseClient {
  *      ladder named, because cheese was answering rung 2 with a seasoning
  *      (nutritional yeast) and rung 3 with a sauce (cashew cream). Neither is
  *      something you slice onto bread.
+ *   4  two holes closed. Rung 1 was offering CONCENTRATED versions of the same
+ *      animal product — ghee for butter — which is heavier per kilo, not
+ *      lighter. And anything that was not meat or dairy fell through the ladder
+ *      entirely: coffee answered ok:false, because the model could find no
+ *      "lighter coffee" and no "plant-based coffee" and the shape demands all
+ *      three rungs. Also tells the model the item name may be in any language.
  */
-const PROMPT_VERSION = 3;
+const PROMPT_VERSION = 4;
 
 /*
  * The three rungs are named in the prompt because they are a designed ladder,
@@ -92,6 +98,11 @@ const SYSTEM_PROMPT = `You suggest lighter-footprint grocery alternatives.
 
 Given one grocery item with a high climate footprint, reply with exactly three
 alternatives a supermarket shopper could buy instead, as a ladder.
+
+The item name arrives as the shopper typed it, in ANY of the languages this app
+ships — "Kawa" is coffee, "Kaas" is cheese, "Rindfleisch" is beef. Work out what
+the food is first. Never refuse because a name is unfamiliar; refuse only when
+the thing genuinely is not food or genuinely has no lighter alternative.
 
 FIRST read the FORM the shopper bought, not just the food. "Steak", "ground
 beef", "stewing beef", "beef roast", "sliced ham", "cheese block" and "grated
@@ -122,6 +133,23 @@ Then, keeping that form:
    seasoning or a spread is finally the right answer. Steak becomes portobello
    mushrooms; ground beef becomes lentils; stewing beef becomes butter beans;
    cheese becomes nutritional yeast flakes; butter becomes olive oil.
+
+NEVER answer with a more concentrated form of the same animal product. Ghee is
+butter with the water cooked out — about 1.25 kg of butter per kilo — so it is
+HEAVIER than butter, not lighter, and the same trap catches cream for milk,
+condensed milk for milk, and hard cheese for a soft one. If the only same-family
+option is more concentrated, use a reduced-fat or blended version instead
+(butter becomes a light spread or a butter-and-oil blend), or skip straight to
+what rung 2 would have been.
+
+The three rungs apply to everything, not only meat and dairy. For a drink or a
+store-cupboard good, read them the same way: rung 1 is a lighter version of the
+same thing, rung 2 is a manufactured substitute used the same way, rung 3 is a
+different product that fills the same moment. Coffee becomes instant coffee,
+then a chicory or barley coffee substitute, then tea. Chocolate becomes dark
+chocolate with a lower cocoa-butter content, then a cocoa-reduced or oat-based
+bar, then dried fruit and nuts. A food with no lighter version of ITSELF still
+has rungs 2 and 3, so reach for those rather than refusing.
 
 Those examples are illustrations of the three rungs, not a menu to pick from.
 The constraint that each rung be genuinely lighter than the item ASKED ABOUT

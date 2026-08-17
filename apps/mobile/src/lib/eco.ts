@@ -114,6 +114,12 @@ const CARBON_KEYWORDS: Record<string, CarbonTier> = {
   cheese: 'high', parmesan: 'high', cheddar: 'high', gouda: 'high', brie: 'high',
   kase: 'high', fromage: 'high', formaggio: 'high', queso: 'high', kaas: 'high', ser: 'high',
   butter: 'high', beurre: 'high', burro: 'high', mantequilla: 'high', maslo: 'high',
+  // Clarified butter: roughly 1.25 kg of butter cooked down into 1 kg of this,
+  // so it is heavier per kilo than what it is made from and can never be the
+  // lighter answer. Named explicitly because without it `ghee` fell through to
+  // the `fats` group default of medium, and the swap engine duly offered it as a
+  // lighter alternative to butter.
+  ghee: 'high', tallow: 'high', lard: 'high',
   prawns: 'high', prawn: 'high', shrimp: 'high', scampi: 'high', garnelen: 'high',
   crevettes: 'high', gamberi: 'high', gambas: 'high', garnalen: 'high', krewetki: 'high',
   chocolate: 'high', schokolade: 'high', chocolat: 'high', cioccolato: 'high', czekolada: 'high',
@@ -159,12 +165,53 @@ const CARBON_KEYWORDS: Record<string, CarbonTier> = {
  * German shopper types it would be dead code, matched by nothing.
  */
 
+/*
+ * Words that mean "this is the plant version", in the seven languages shipped.
+ *
+ * These have to be checked BEFORE the animal keywords, and the reason is a bug
+ * worth stating plainly: the table below scores by the heaviest word it finds,
+ * so "plant-based butter" found `butter` and came back HIGH — the same band as
+ * the dairy butter it exists to replace. So did "plant-based mince" (`mince`)
+ * and "plant-based cheddar slices" (`cheddar`). Which made the swap suggestions
+ * self-defeating: follow the advice, buy the alternative, and the score does not
+ * move, because the app has just scored the substitute as the original.
+ *
+ * A qualifier wins over everything after it. "Pflanzliche Butter" is not butter,
+ * whatever the noun says.
+ *
+ * `low` rather than `medium`, and it is a coarse call. Plant analogues run
+ * around 2-4 kg CO2e/kg against beef's 60 and butter's 12, which puts them with
+ * the legumes and breads this app already calls low. Three bands cannot express
+ * "lower than dairy but above a lentil", and of the two available answers `low`
+ * is much closer to true than `medium`.
+ */
+const PLANT_QUALIFIERS = [
+  // en
+  'plant', 'plantbased', 'vegan', 'meatfree', 'dairyfree', 'meatless',
+  // de / nl
+  'pflanzlich', 'pflanzliche', 'pflanzlicher', 'plantaardig', 'plantaardige',
+  'vegane', 'veganer', 'veganes',
+  // fr / it / es
+  'vegetal', 'vegetale', 'vegetali', 'vegetaux', 'vegano', 'vegana',
+  'vegetariano', 'vegetarien',
+  // pl
+  'roslinne', 'roslinny', 'roslinna', 'weganskie', 'weganski', 'weganska',
+  // the common plant bases, which carry the same meaning without saying "vegan"
+  'oat', 'oats', 'soy', 'soya', 'soja', 'almond', 'almonds', 'cashew',
+  'cashews', 'coconut', 'hafer', 'avena', 'owsiane', 'mandel',
+];
+
 function keywordCarbon(name: string): CarbonTier | null {
   const clean = fold(name);
   // Whole name first — "ice cream" must not be decided by a word inside it —
   // then each word, so "organic beef mince" still finds beef.
   if (CARBON_KEYWORDS[clean]) return CARBON_KEYWORDS[clean];
-  for (const word of clean.split(/[\s,./-]+/)) {
+
+  const words = clean.split(/[\s,./-]+/);
+  // Before the animal nouns, never after. See PLANT_QUALIFIERS.
+  if (words.some((w) => PLANT_QUALIFIERS.includes(w))) return 'low';
+
+  for (const word of words) {
     if (CARBON_KEYWORDS[word]) return CARBON_KEYWORDS[word];
   }
   return null;
