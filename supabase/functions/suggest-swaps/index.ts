@@ -57,6 +57,22 @@ function adminClient(): SupabaseClient {
   return admin;
 }
 
+/**
+ * Which generation of the prompt below produced an answer.
+ *
+ * Part of item_swaps' key (migration 0034). BUMP THIS whenever a change to the
+ * prompt would change the answers — every cached row from an older version
+ * becomes invisible rather than wrong-but-served, and warms again on the next
+ * reader. Leaving it alone after a real prompt change is the failure mode this
+ * exists to prevent: the improvement ships and nobody who already asked ever
+ * sees it.
+ *
+ *   1  first version. One worked example, beef mince, which anchored the model
+ *      hard enough that a steak got mince suggested back.
+ *   2  format-aware: read the FORM the shopper bought and keep it.
+ */
+const PROMPT_VERSION = 2;
+
 /*
  * The three rungs are named in the prompt because they are a designed ladder,
  * not a ranked list of "greener foods". Asking for three alternatives without
@@ -71,21 +87,36 @@ function adminClient(): SupabaseClient {
 const SYSTEM_PROMPT = `You suggest lighter-footprint grocery alternatives.
 
 Given one grocery item with a high climate footprint, reply with exactly three
-alternatives that a supermarket shopper could buy instead, as a ladder:
+alternatives a supermarket shopper could buy instead, as a ladder.
 
-1. The easy swap: the same KIND of product, same role in a meal, noticeably
-   lighter. For beef mince this is turkey or chicken mince — not a vegetable.
-2. The plant-based stand-in: a manufactured product that plays the same part.
-   For beef mince this is plant-based mince.
-3. The whole-food change: an unprocessed plant food that fills the same place
-   on a plate. For beef mince this is lentils or beans.
+FIRST read the FORM the shopper bought, not just the food. "Steak", "ground
+beef", "stewing beef", "beef roast", "sliced ham", "cheese block" and "grated
+cheese" are different products that get bought for different meals, and an
+alternative in the wrong form is useless however light it is. Nobody grills
+mince.
+
+Then, keeping that form:
+
+1. The easy swap — the same kind of product in the SAME FORM, noticeably
+   lighter. Steak becomes a chicken breast, not chicken mince. Ground beef
+   becomes turkey mince. Stewing beef becomes diced chicken thigh.
+2. The plant-based stand-in — a manufactured product that plays the same part,
+   in the same form where one exists. Steak becomes a plant-based steak or
+   seitan steak; ground beef becomes plant-based mince; sliced ham becomes
+   plant-based deli slices.
+3. The whole-food change — an unprocessed plant food that fills the same place
+   on the plate and cooks the same way. Steak becomes portobello mushrooms;
+   ground beef becomes lentils; stewing beef becomes butter beans.
+
+If the item names no form at all ("beef", "cheese", "coffee"), do NOT invent
+one: answer with the plainest common version of each rung.
 
 Rules:
-- Answer with product names a shopper would write on a list, 1-3 words each.
-- Every name must be in %{language}, spelled as a shopper in that country
-  would write it. Do not answer in English unless %{language} is English.
-- Each rung must be genuinely lighter than the item asked about, and rung 3
-  lighter than rung 1.
+- Product names a shopper would write on a list, 1-3 words each.
+- Every name in %{language}, spelled as a shopper in that country would write
+  it. Do not answer in English unless %{language} is English.
+- Each rung genuinely lighter than the item asked about, and rung 3 lighter
+  than rung 1.
 - Never repeat the item asked about, and never repeat a rung.
 - No sentences, no reasons, no encouragement, no judgement. Names only.
 - If the item is not food, or has no sensible lighter alternative, reply
@@ -199,6 +230,9 @@ Deno.serve(async (req) => {
     .select('tier1, tier2, tier3')
     .eq('term', term)
     .eq('locale', locale)
+    // Rows from an older prompt are not answers to the current question. See
+    // PROMPT_VERSION.
+    .eq('prompt_version', PROMPT_VERSION)
     .maybeSingle();
 
   if (cached) {
@@ -296,8 +330,15 @@ Deno.serve(async (req) => {
     db
       .from('item_swaps')
       .upsert(
-        { term, locale, tier1: tiers[0].name, tier2: tiers[1].name, tier3: tiers[2].name },
-        { onConflict: 'term,locale', ignoreDuplicates: true },
+        {
+          term,
+          locale,
+          prompt_version: PROMPT_VERSION,
+          tier1: tiers[0].name,
+          tier2: tiers[1].name,
+          tier3: tiers[2].name,
+        },
+        { onConflict: 'term,locale,prompt_version', ignoreDuplicates: true },
       )
       .then(() => {}),
     ...tiers

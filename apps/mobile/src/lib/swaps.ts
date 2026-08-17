@@ -80,10 +80,22 @@ export interface Swaps {
  */
 export type SwapResult = Swaps | 'none' | 'error';
 
-// v2: a rung is an object now, not a bare string. An old v1 payload would
-// deserialise into three strings where the screen expects three objects, so the
-// key changes rather than the parser learning to read both.
-const CACHE_KEY = 'korb.swaps.v2';
+/*
+ * v3, and this key has to move for TWO different reasons, which is worth
+ * knowing before the next change.
+ *
+ * A SHAPE change: v2 made a rung an object rather than a bare string, and an old
+ * payload would deserialise into three strings where the screen expects three
+ * objects.
+ *
+ * A CONTENT change: the device copy has no idea which prompt produced it. The
+ * server's cache handles this properly — prompt_version is part of its key
+ * (migration 0034) — but this one would happily serve last month's answers
+ * forever. So when suggest-swaps' PROMPT_VERSION goes up, this goes up with it.
+ * v3 is the format-aware prompt: a steak now gets steak-shaped suggestions
+ * rather than mince.
+ */
+const CACHE_KEY = 'korb.swaps.v3';
 
 /**
  * Ceiling on the device copy. Each entry is three short strings; a few hundred
