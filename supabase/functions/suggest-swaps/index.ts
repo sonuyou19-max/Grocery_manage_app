@@ -70,8 +70,12 @@ function adminClient(): SupabaseClient {
  *   1  first version. One worked example, beef mince, which anchored the model
  *      hard enough that a steak got mince suggested back.
  *   2  format-aware: read the FORM the shopper bought and keep it.
+ *   3  form rule extended past meat — solid before liquid — and the dairy
+ *      ladder named, because cheese was answering rung 2 with a seasoning
+ *      (nutritional yeast) and rung 3 with a sauce (cashew cream). Neither is
+ *      something you slice onto bread.
  */
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 
 /*
  * The three rungs are named in the prompt because they are a designed ladder,
@@ -93,20 +97,36 @@ FIRST read the FORM the shopper bought, not just the food. "Steak", "ground
 beef", "stewing beef", "beef roast", "sliced ham", "cheese block" and "grated
 cheese" are different products that get bought for different meals, and an
 alternative in the wrong form is useless however light it is. Nobody grills
-mince.
+mince, and nobody slices a sauce onto bread.
+
+So: a solid stays a solid, sliced stays sliced, grated stays gratable, a spread
+stays spreadable. Never answer a solid food with a liquid, a cream or a
+seasoning while a solid alternative exists. Reach for a sauce or a sprinkle only
+when the thing asked about was one.
 
 Then, keeping that form:
 
 1. The easy swap — the same kind of product in the SAME FORM, noticeably
    lighter. Steak becomes a chicken breast, not chicken mince. Ground beef
-   becomes turkey mince. Stewing beef becomes diced chicken thigh.
+   becomes turkey mince. Stewing beef becomes diced chicken thigh. Hard cheese
+   becomes a fresh, high-moisture cheese: ricotta, cottage cheese, feta.
 2. The plant-based stand-in — a manufactured product that plays the same part,
-   in the same form where one exists. Steak becomes a plant-based steak or
-   seitan steak; ground beef becomes plant-based mince; sliced ham becomes
-   plant-based deli slices.
-3. The whole-food change — an unprocessed plant food that fills the same place
-   on the plate and cooks the same way. Steak becomes portobello mushrooms;
-   ground beef becomes lentils; stewing beef becomes butter beans.
+   in the same form. This rung is a 1:1 REPLACEMENT and nothing else: if the
+   shopper could not use it the same way, it does not belong here. Steak becomes
+   a plant-based steak or seitan steak; ground beef becomes plant-based mince;
+   sliced ham becomes plant-based deli slices; cheese becomes plant-based
+   cheddar slices or a vegan mozzarella block — NOT nutritional yeast, which is
+   a seasoning, and NOT cashew cream, which is a sauce.
+3. The whole-food change — an unprocessed plant food or simple store-cupboard
+   staple that fills the same place on the plate. This is the rung where a
+   seasoning or a spread is finally the right answer. Steak becomes portobello
+   mushrooms; ground beef becomes lentils; stewing beef becomes butter beans;
+   cheese becomes nutritional yeast flakes; butter becomes olive oil.
+
+Those examples are illustrations of the three rungs, not a menu to pick from.
+The constraint that each rung be genuinely lighter than the item ASKED ABOUT
+always wins: if a listed example is not lighter than what the shopper bought,
+choose something else rather than using it.
 
 If the item names no form at all ("beef", "cheese", "coffee"), do NOT invent
 one: answer with the plainest common version of each rung.
