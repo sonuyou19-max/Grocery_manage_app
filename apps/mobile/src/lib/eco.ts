@@ -456,6 +456,21 @@ export interface HeaviestStaple {
   name: string;
   /** Purchases in the window — what makes it a habit rather than a one-off. */
   times: number;
+  /**
+   * The category of the purchases behind it, carried through the aggregation.
+   *
+   * Not decoration: the row draws an emoji, and emojiFor falls back to the
+   * CATEGORY's glyph for any name its tables and the lexicon do not know. The
+   * Climate page had no category here, so it passed a hardcoded 'other' and every
+   * unrecognised heavy hitter drew 🛒 — the same shopping-cart bug that hit the
+   * swap suggestions and the pantry mix.
+   *
+   * First one wins, which is deliberate: it comes from the purchase log where the
+   * category was recorded at check-off, and the alternative (recomputing here)
+   * would make this module depend on the categoriser it is supposed to be
+   * summarising.
+   */
+  category: ItemCategory;
 }
 
 /**
@@ -498,14 +513,15 @@ const HABIT_PURCHASES = 3;
  * page for anyone who shops varied, which is most people.
  */
 export function heavyHitters(items: EcoPurchase[], limit = 8): HeaviestStaple[] {
-  const counts = new Map<string, { name: string; times: number }>();
+  const counts = new Map<string, HeaviestStaple>();
   for (const p of items) {
-    if (carbonOf(p.name, p.category ?? 'other') !== 'high') continue;
+    const category = p.category ?? 'other';
+    if (carbonOf(p.name, category) !== 'high') continue;
     const key = fold(p.name);
     if (!key) continue;
     const found = counts.get(key);
     if (found) found.times += 1;
-    else counts.set(key, { name: p.name.trim(), times: 1 });
+    else counts.set(key, { name: p.name.trim(), times: 1, category });
   }
   return [...counts.values()]
     // Ties broken by name so the order is stable between renders — an unstable
@@ -516,15 +532,16 @@ export function heavyHitters(items: EcoPurchase[], limit = 8): HeaviestStaple[] 
 }
 
 export function heaviestStaple(items: EcoPurchase[]): HeaviestStaple | null {
-  const counts = new Map<string, { name: string; times: number }>();
+  const counts = new Map<string, HeaviestStaple>();
 
   for (const p of items) {
-    if (carbonOf(p.name, p.category ?? 'other') !== 'high') continue;
+    const category = p.category ?? 'other';
+    if (carbonOf(p.name, category) !== 'high') continue;
     const key = fold(p.name);
     if (!key) continue;
     const found = counts.get(key);
     if (found) found.times += 1;
-    else counts.set(key, { name: p.name.trim(), times: 1 });
+    else counts.set(key, { name: p.name.trim(), times: 1, category });
   }
 
   let best: HeaviestStaple | null = null;

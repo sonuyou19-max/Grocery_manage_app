@@ -10,7 +10,7 @@ import {
 
 import { categoryFromTables } from '@/lib/item-category';
 import { fold } from '@/lib/item-emoji';
-import { learnLexiconEntry } from '@/lib/item-lexicon';
+import { learnLexiconEntry, lexiconLookup } from '@/lib/item-lexicon';
 import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
 
 /** Display labels + store-aisle ordering for categories. */
@@ -174,18 +174,73 @@ function keywordMatch(name: string): ItemCategory | null {
   return null;
 }
 
-/** True when we can categorize without asking the AI. */
-export function isKnown(name: string): boolean {
-  return Boolean(learned[norm(name)]) || keywordMatch(name) != null;
+/**
+ * The shared dictionary's answer for a name, or null.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this tier had to exist
+ * ---------------------------------------------------------------------------
+ *
+ * item_lexicon is where the AI's answers accumulate, and item-emoji.ts has
+ * always read it — so the GLYPH for "salad mix" came from the lexicon while the
+ * CATEGORY came from the two functions below, which had never heard of it. One
+ * item, two sources of truth, and they disagreed: the same product showed 🥗 on
+ * a list, 🥬 after a quick-add and 🛒 in the Pantry, because those routes differ
+ * in whether an AI call ever happened and nothing consulted the answer already
+ * on the device.
+ *
+ * It also asked the model for things it already knew. `isKnown` gates the
+ * background upgrade, so a term sitting in the lexicon still counted as unknown
+ * and still cost a categorize call — every time, on every device.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it sits AFTER the curated tables
+ * ---------------------------------------------------------------------------
+ *
+ * The curated tables are deterministic and cover all seven languages, and this
+ * app's standing promise is that the same item lands in the same place in every
+ * language on every device. The lexicon is a model's answer, published once
+ * three unrelated households have typed the term. So the order is: what this
+ * device has confirmed, then what the tables know for certain, then what the
+ * dictionary has learned, then 'other'.
+ *
+ * The practical effect is that this can only ever turn an 'other' into a real
+ * category. It cannot change an answer that already works, which is what makes
+ * it safe to add underneath four different entry points at once.
+ *
+ * A known nuance, left deliberate: item-emoji.ts puts the lexicon ABOVE its
+ * word-by-word scan but below its whole-name matches, so a lexicon entry there
+ * can beat a lucky word hit ("chocolate milk" finding `milk`). `keywordMatch`
+ * folds whole-name and word-scan into one call, so replicating that split here
+ * would mean restructuring it. Not worth it for a case that is hypothetical
+ * today — but it is the reason these two precedences are not identical.
+ *
+ * Hydration timing is the same tolerance the emoji path already lives with: the
+ * lexicon loads from storage a moment after launch, so an item added in that
+ * window misses this tier and falls through exactly as it did before.
+ */
+function lexiconCategory(name: string): ItemCategory | null {
+  return lexiconLookup(fold(name))?.category ?? null;
 }
 
 /**
- * Instant, synchronous best guess: learned cache first, then keywords,
- * else 'other'. Unknown items show under 'Other' immediately while the AI
- * resolves the real category in the background.
+ * True when we can categorize without asking the AI.
+ *
+ * The lexicon counts. That is the whole point of paying for an answer once.
+ */
+export function isKnown(name: string): boolean {
+  return (
+    Boolean(learned[norm(name)]) || keywordMatch(name) != null || lexiconCategory(name) != null
+  );
+}
+
+/**
+ * Instant, synchronous best guess: learned cache first, then keywords, then the
+ * shared lexicon, else 'other'. Unknown items show under 'Other' immediately
+ * while the AI resolves the real category in the background.
  */
 export function categorizeSync(name: string): ItemCategory {
-  return learned[norm(name)] ?? keywordMatch(name) ?? 'other';
+  return learned[norm(name)] ?? keywordMatch(name) ?? lexiconCategory(name) ?? 'other';
 }
 
 /**

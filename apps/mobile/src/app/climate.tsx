@@ -228,7 +228,12 @@ export default function ClimateScreen() {
      * FlatList only), so the grid is made by chunking here, the same way
      * basket.tsx builds its two columns.
      */
-    if (heavy.length > 0) out.push({ part: "heavy", data: heavy.map((h) => [h.name]) });
+    // [name, category] — the category so the row's emoji can resolve properly.
+    // It used to pass a hardcoded "other", whose glyph is 🛒, so every heavy item
+    // the emoji tables did not recognise drew a shopping cart.
+    if (heavy.length > 0) {
+      out.push({ part: "heavy", data: heavy.map((h) => [h.name, h.category]) });
+    }
     if (season.length > 0) {
       const rows: string[][] = [];
       for (let i = 0; i < season.length; i += SEASON_COLUMNS) {
@@ -306,6 +311,7 @@ export default function ClimateScreen() {
               section.part === "heavy" ? (
                 <HeavyRow
                   name={item[0]}
+                  category={item[1] as ItemCategory}
                   order={index}
                   open={openName === item[0]}
                   swaps={swaps[item[0]]}
@@ -397,6 +403,7 @@ function Sparkle() {
 
 function HeavyRow({
   name,
+  category,
   order,
   open,
   swaps,
@@ -404,6 +411,8 @@ function HeavyRow({
   onAdd,
 }: {
   name: string;
+  /** The purchases' own category, so the emoji can fall back to something true. */
+  category: ItemCategory;
   order: number;
   open: boolean;
   /** undefined = not asked yet; otherwise see SwapResult. */
@@ -423,7 +432,7 @@ function HeavyRow({
         style={styles.row}
       >
         <View style={[styles.tierDot, { backgroundColor: CARBON_COLORS.high }]} />
-        <ItemEmoji name={name} category="other" />
+        <ItemEmoji name={name} category={category} />
         <View style={styles.grow}>
           <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
             {name}
