@@ -42,6 +42,8 @@ import {
   cachedSwaps,
   fetchSwaps,
   hydrateSwaps,
+  rungBand,
+  scoresLighter,
   type SwapResult,
   type SwapRung,
 } from "@/lib/swaps";
@@ -426,7 +428,37 @@ function HeavyRow({
               {t("climate.noSwaps")}
             </Text>
           ) : (
-            swaps.tiers.map((alt, i) => (
+            swaps.tiers.map((alt, i) => {
+              /*
+               * The badge is EARNED, not assigned by position.
+               *
+               * It used to read `climate.tier${i + 1}` — rung 1 said "Good
+               * impact drop" because it was first. Three suggestions shipped
+               * where that was false and the app knew it was false: ghee for
+               * butter, dark chocolate and cocoa powder for chocolate, each
+               * scored `high` by the same table that had just scored the item
+               * above them `high`. The row promised a fall the score could not
+               * show.
+               *
+               * So the ladder label is used only when the drop is real. When it
+               * is not, the rung's OWN band is shown instead — the same
+               * "High impact" / "Medium impact" wording as the mix above and the
+               * dot on the row, so the reader gets the app's honest opinion of
+               * the suggestion rather than a claim about it. That also reads as
+               * the explanation it is: a substitute still marked high impact is
+               * visibly not the win, without a word of lecture.
+               *
+               * Nothing at all when the band is unknown. An empty line is a
+               * worse row; an invented one is a worse app.
+               */
+              const band = rungBand(alt);
+              const badge = scoresLighter(name, alt)
+                ? t(`climate.tier${i + 1}`)
+                : band
+                  ? t(`eco.tier.${band}`)
+                  : null;
+
+              return (
               <View key={alt.name} style={styles.swapRow}>
                 {/* The rung's own category, not "other". That constant was why
                     every unrecognised suggestion drew the fallback cart: 🛒 is
@@ -438,9 +470,11 @@ function HeavyRow({
                   <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
                     {alt.name}
                   </Text>
-                  <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-                    {t(`climate.tier${i + 1}`)}
-                  </Text>
+                  {badge !== null && (
+                    <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                      {badge}
+                    </Text>
+                  )}
                 </View>
                 <Pressable
                   onPress={() => onAdd(alt)}
@@ -452,7 +486,8 @@ function HeavyRow({
                   <Ionicons name="add" size={18} color={colors.accent} />
                 </Pressable>
               </View>
-            ))
+              );
+            })
           )}
         </View>
       )}

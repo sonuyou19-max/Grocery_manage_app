@@ -150,6 +150,38 @@ const MAX_ENTRIES = 300;
  */
 const BAND_RANK: Record<CarbonTier, number> = { low: 0, medium: 1, high: 2 };
 
+/**
+ * The band this app's own table gives a suggestion, or null if it reads as
+ * non-food.
+ *
+ * The rung's OWN category, never 'other' — that constant is what drew a
+ * shopping-cart glyph for every unrecognised suggestion, and it would mislead
+ * here in the same way.
+ */
+export function rungBand(rung: SwapRung): CarbonTier | null {
+  return carbonOf(rung.name, rung.category ?? 'other');
+}
+
+/**
+ * Whether the score the reader is looking at would actually improve if they took
+ * this suggestion.
+ *
+ * This is the question the badge under each rung was answering by ASSUMPTION —
+ * rung 1 always said "Good impact drop" because it was first, not because
+ * anything had checked. For ghee, dark chocolate and cocoa powder that claim was
+ * false, and the app's own table said so at the same moment the row was drawing
+ * it. Now the row asks.
+ *
+ * An unknown band is not a drop. Better to say less than to claim a fall the
+ * score will not show.
+ */
+export function scoresLighter(item: string, rung: SwapRung): boolean {
+  const asked = carbonOf(item, 'other');
+  const band = rungBand(rung);
+  if (!asked || !band) return false;
+  return BAND_RANK[band] < BAND_RANK[asked];
+}
+
 function auditRungs(item: string, tiers: Swaps['tiers']): void {
   if (!__DEV__) return;
 
@@ -167,7 +199,7 @@ function auditRungs(item: string, tiers: Swaps['tiers']): void {
   const asked = carbonOf(item, 'other');
   if (!asked) return;
 
-  const bands = tiers.map((r) => carbonOf(r.name, r.category ?? 'other'));
+  const bands = tiers.map(rungBand);
   const faults: string[] = [];
   /*
    * Two different things can make a rung score no lighter, and conflating them
