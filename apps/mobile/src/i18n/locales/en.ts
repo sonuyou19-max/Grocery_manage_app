@@ -148,7 +148,7 @@ const en = {
     buildWeekly: "Build this week's list",
     emptyTitle: 'No lists yet',
     emptyBody:
-      'Tap “New list” to start your first shopping list. Add items, tick them off as you shop, and (once you’re in a household) share it live with the people you shop for.',
+      'Tap + below to start one — a blank list, or a recipe Korb turns into ingredients. Add items, tick them off as you shop, and share the list live with the people you shop for.',
     newList: 'New list',
     newListInline: 'New list…',
     newListPlaceholder: 'e.g. Weekly groceries',

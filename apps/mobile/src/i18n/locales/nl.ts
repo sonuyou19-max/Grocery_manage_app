@@ -139,7 +139,7 @@ const nl = {
     buildWeekly: 'Stel je weeklijst samen',
     emptyTitle: 'Nog geen lijsten',
     emptyBody:
-      'Tik op “Nieuwe lijst” om je eerste boodschappenlijst te starten. Voeg items toe, vink ze af tijdens het winkelen en (zodra je in een huishouden zit) deel je de lijst live met de mensen voor wie je winkelt.',
+      'Tik onderaan op + om te beginnen — een lege lijst of een recept waar Korb de ingrediënten uit haalt. Voeg items toe, vink ze af tijdens het winkelen en deel de lijst live met de mensen voor wie je winkelt.',
     newList: 'Nieuwe lijst',
     newListInline: 'Nieuwe lijst…',
     newListPlaceholder: 'bijv. Weekboodschappen',

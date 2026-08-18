@@ -161,7 +161,7 @@ const pl = {
     buildWeekly: 'Ułóż listę na ten tydzień',
     emptyTitle: 'Nie masz jeszcze list',
     emptyBody:
-      'Dotknij „Nowa lista”, aby zacząć swoją pierwszą listę zakupów. Dodawaj produkty, odhaczaj je podczas zakupów i (gdy dołączysz do gospodarstwa) udostępniaj ją na żywo osobom, dla których kupujesz.',
+      'Dotknij + na dole, aby zacząć — pusta lista albo przepis, z którego Korb wyciągnie składniki. Dodawaj produkty, odhaczaj je podczas zakupów i udostępniaj listę na żywo osobom, dla których kupujesz.',
     newList: 'Nowa lista',
     newListInline: 'Nowa lista…',
     newListPlaceholder: 'np. Zakupy tygodniowe',

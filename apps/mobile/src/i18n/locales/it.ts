@@ -139,7 +139,7 @@ const it = {
     buildWeekly: 'Crea la lista della settimana',
     emptyTitle: 'Ancora nessuna lista',
     emptyBody:
-      'Tocca “Nuova lista” per iniziare la tua prima lista della spesa. Aggiungi articoli, spuntali mentre fai la spesa e (una volta in una famiglia) condividila in tempo reale con chi conta su di te.',
+      'Tocca + in basso per iniziare — una lista vuota o una ricetta da cui Korb estrae gli ingredienti. Aggiungi articoli, spuntali mentre fai la spesa e condividi la lista in tempo reale con chi conta su di te.',
     newList: 'Nuova lista',
     newListInline: 'Nuova lista…',
     newListPlaceholder: 'es. Spesa settimanale',

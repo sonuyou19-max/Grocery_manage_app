@@ -140,7 +140,7 @@ const de = {
     buildWeekly: 'Wochenliste zusammenstellen',
     emptyTitle: 'Noch keine Listen',
     emptyBody:
-      'Tippe auf „Neue Liste“, um deine erste Einkaufsliste zu starten. Füge Artikel hinzu, hake sie beim Einkaufen ab und teile sie (sobald du in einem Haushalt bist) live mit den Menschen, für die du einkaufst.',
+      'Tippe unten auf +, um zu starten — eine leere Liste oder ein Rezept, aus dem Korb die Zutaten zieht. Füge Artikel hinzu, hake sie beim Einkaufen ab und teile die Liste live mit den Menschen, für die du einkaufst.',
     newList: 'Neue Liste',
     newListInline: 'Neue Liste…',
     newListPlaceholder: 'z. B. Wocheneinkauf',

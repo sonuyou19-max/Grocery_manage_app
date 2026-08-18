@@ -139,7 +139,7 @@ const es = {
     buildWeekly: 'Crear la lista de esta semana',
     emptyTitle: 'Aún no hay listas',
     emptyBody:
-      'Toca «Nueva lista» para empezar tu primera lista de la compra. Añade artículos, márcalos mientras compras y (cuando estés en un hogar) compártela en directo con la gente para la que compras.',
+      'Toca + abajo para empezar — una lista en blanco o una receta de la que Korb saca los ingredientes. Añade artículos, márcalos mientras compras y comparte la lista en directo con la gente para la que compras.',
     newList: 'Nueva lista',
     newListInline: 'Nueva lista…',
     newListPlaceholder: 'p. ej. Compra semanal',

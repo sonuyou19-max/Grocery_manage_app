@@ -140,7 +140,7 @@ const fr = {
     buildWeekly: 'Composer ma liste de la semaine',
     emptyTitle: 'Aucune liste',
     emptyBody:
-      'Appuie sur « Nouvelle liste » pour créer ta première liste de courses. Ajoute des articles, coche-les en faisant tes courses et (une fois dans un foyer) partage-la en direct avec tes proches.',
+      'Appuie sur + en bas pour commencer — une liste vierge ou une recette dont Korb extrait les ingrédients. Ajoute des articles, coche-les en faisant tes courses et partage la liste en direct avec tes proches.',
     newList: 'Nouvelle liste',
     newListInline: 'Nouvelle liste…',
     newListPlaceholder: 'ex. Courses de la semaine',
