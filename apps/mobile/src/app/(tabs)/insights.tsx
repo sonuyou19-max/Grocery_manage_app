@@ -32,16 +32,18 @@ import { SpendTrendChart } from "@/components/spend-trend-chart";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { haptics } from "@/lib/haptics";
 import {
+  CARBON_COLORS,
   heaviestStaple,
   weeklyEco,
   type EcoScore,
   type EcoWeek,
   type HeaviestStaple,
 } from "@/lib/eco";
+import { ItemEmoji } from "@/components/item-emoji";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { basketBalance, basketItems } from "@/lib/nutrition";
 import { isResting } from "@/lib/pantry-intel";
-import { bandForRegion, inSeason } from "@/lib/seasonal";
+import { bandForRegion, inSeason, PRODUCE_EMOJI } from "@/lib/seasonal";
 import {
   cheaperStoreHints,
   spendByStore,
@@ -469,6 +471,12 @@ function SignedInInsights() {
           onRange={setEcoRange}
         />
       )}
+
+      {/* FREE, and ungated on data — it is a fact about the month rather than
+          about the reader, so it is the one card a day-one install can show.
+          Directly after the climate card on purpose: see EcoCard's header, which
+          now depends on something good following it. */}
+      <SeasonCard now={now} />
 
       {/* Plus: HIDE, not prompt. A pantry mix is a ring and a legend — there is
           no shell worth leaving behind, and a locked one would just be a
@@ -1006,15 +1014,91 @@ function CardHead({
  * once.
  *
  * ---------------------------------------------------------------------------
- * The card deliberately ends on something good
+ * Something good still has to follow this card
  * ---------------------------------------------------------------------------
  *
  * Score, mix, then "the heaviest thing you buy" — three readings in a row that
  * are, at best, neutral. A feature whose every sentence is a shortcoming is one
- * people stop opening, so the last line is what is in season: true, useful to
- * somebody who has never thought about carbon, and the only place here where
- * Korb gets to be pleased about something.
+ * people stop opening, which is why this card used to end on what is in season.
+ *
+ * That line is now SeasonCard, immediately below. The reasoning did not change
+ * and neither did the reading order — the good news still lands right after the
+ * shortcomings, it just has room to name six things instead of three and does
+ * not have to borrow a climate card's last line to do it. If the two are ever
+ * separated in the layout, this card goes back to ending on a shortcoming and
+ * something else has to answer for that.
  */
+/**
+ * What is in season, as its own card.
+ *
+ * It was the last line of the climate card and a section at the foot of the
+ * Climate Mix page. Both were the wrong home for it. Inside the climate card it
+ * was a consolation prize appended to three neutral readings; on the Climate Mix
+ * page it sat under "Heavy hitters", which made a list of good things read as a
+ * footnote to a list of bad ones.
+ *
+ * It also does not belong to the climate feature in the way the rest of that
+ * card does. Everything else there is computed from what the reader bought and
+ * says something about them. This is a fact about the month — it needs no
+ * purchases, no history and no Plus, and it is the one card a brand-new install
+ * can show on day one.
+ *
+ * Free, and ungated on data for exactly that reason.
+ */
+function SeasonCard({ now }: { now: number }) {
+  const { colors } = useTheme();
+  const { t, region } = useLocale();
+
+  // Banded by the country chosen at setup — a Finn and a Sicilian do not have
+  // the same June. See lib/seasonal.ts.
+  const season = useMemo(
+    () => inSeason(new Date(now), bandForRegion(region)),
+    [now, region],
+  );
+
+  // Two columns, chunked here: six items is three tidy rows, and a name like
+  // "fasolka szparagowa" needs half a card's width rather than a third.
+  const rows = useMemo(() => {
+    const out: (typeof season)[] = [];
+    for (let i = 0; i < season.length; i += 2) out.push(season.slice(i, i + 2));
+    return out;
+  }, [season]);
+
+  if (season.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHead icon="sunny-outline" title={t("climate.seasonTitle")} />
+      {rows.map((row) => (
+        <View key={row.join("|")} style={styles.seasonRow}>
+          {row.map((key) => (
+            <View key={key} style={styles.seasonCell}>
+              <View
+                style={[styles.seasonDot, { backgroundColor: CARBON_COLORS.low }]}
+              />
+              <ItemEmoji
+                name={key}
+                category="fruit_veg"
+                glyph={PRODUCE_EMOJI[key]}
+              />
+              <Text
+                style={[type.sub, styles.grow, { color: colors.ink }]}
+                numberOfLines={2}
+              >
+                {t(`eco.season.${key}`)}
+              </Text>
+            </View>
+          ))}
+          {/* Holds a lone last item at half width rather than letting it stretch
+              across and break the column the eye is following. Six divides by
+              two, so this is defensive rather than reachable today. */}
+          {row.length < 2 && <View style={styles.seasonCell} />}
+        </View>
+      ))}
+    </Card>
+  );
+}
+
 function EcoCard({
   eco,
   heaviest,
@@ -1029,11 +1113,8 @@ function EcoCard({
   onRange: (r: Range) => void;
 }) {
   const { colors } = useTheme();
-  const { t, region } = useLocale();
+  const { t } = useLocale();
   const [explained, setExplained] = useState(false);
-  // Banded by the user's country, so this line agrees with the Climate page it
-  // opens into rather than showing a different continent's June.
-  const season = inSeason(new Date(now), bandForRegion(region));
 
   return (
     <Card>
@@ -1112,19 +1193,6 @@ function EcoCard({
         </View>
       )}
 
-      {season.length > 0 && (
-        <View style={styles.row}>
-          <Ionicons name="sunny-outline" size={16} color={colors.accent} />
-          <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
-            {t("eco.inSeason", {
-              items: season
-                .map((k) => t(`eco.season.${k}`))
-                .join(t("common.listJoin")),
-            })}
-          </Text>
-        </View>
-      )}
-
       {/* A route rather than a sheet, same as the basket card — see
           app/climate.tsx. Whole footer is the target, not just the chevron. */}
       <Pressable
@@ -1193,6 +1261,27 @@ function EcoTrend({ weeks }: { weeks: EcoWeek[] }) {
 }
 
 const styles = StyleSheet.create({
+  // The seasonal grid. flex-start so a two-line name in one cell does not drag
+  // the other cell's dot and emoji down to meet it.
+  seasonRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+  },
+  // Equal halves whatever the words: basis 0 is what makes the two share the row
+  // evenly, and it is safe here because the parent row is full-width. In a
+  // content-sized parent the same line collapses the cell to nothing — which is
+  // how the pantry-mix legend lost its labels.
+  seasonCell: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  seasonDot: { width: 8, height: 8, borderRadius: 4 },
   // Mirrors the dashboard's status row: wraps rather than squeezing the
   // subtitle, which is what broke the greeting into three lines last time.
   statusRow: {

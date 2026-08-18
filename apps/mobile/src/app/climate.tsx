@@ -38,12 +38,6 @@ import { haptics } from "@/lib/haptics";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { isResting } from "@/lib/pantry-intel";
 import {
-  bandForRegion,
-  inSeason,
-  PRODUCE_EMOJI,
-  type SeasonalProduce,
-} from "@/lib/seasonal";
-import {
   cachedSwaps,
   fetchSwaps,
   hydrateSwaps,
@@ -82,21 +76,15 @@ import { radii, spacing, type, useTheme } from "@/theme";
  * has already had the thought; finishing it for them is the part that grates.
  */
 
-/** Which section a row belongs to. Sections are fixed, so this is a union. */
-type Part = "heavy" | "season";
-
 /**
- * Columns in the seasonal grid.
+ * Which section a row belongs to.
  *
- * Two, not three: the cell holds an emoji, a dot and a name that has to survive
- * German and Polish — "junge Kartoffeln", "fasolka szparagowa" — and at a third
- * of the width those wrap to three lines or truncate. Two also divides six
- * evenly, so the section ends on a full row.
- *
- * check-eco asserts every month names exactly six, which is what keeps that
- * true.
+ * One member, and kept as a union rather than deleted: the SectionList still
+ * needs a sticky header, and "In season right now" moved to its own card on the
+ * Insights tab rather than being cut — so this page may well gain a second
+ * section again.
  */
-const SEASON_COLUMNS = 2;
+type Part = "heavy";
 
 export default function ClimateScreen() {
   const { colors } = useTheme();
@@ -124,9 +112,9 @@ export default function ClimateScreen() {
     void hydrateSwaps();
   }, []);
 
-  // Quantised to the hour: `inSeason` asks which month it is, and a fresh
-  // Date.now() every render would make the memos below dependencies of the
-  // clock. Same reasoning as the Insights tab's minute.
+  // Quantised to the hour rather than read fresh, or every memo below becomes a
+  // dependency of the clock and recomputes on each render. Same reasoning as the
+  // Insights tab's minute. An hour is plenty: nothing here changes faster.
   const hour = Math.floor(Date.now() / 3_600_000);
   const now = useMemo(() => hour * 3_600_000, [hour]);
 
@@ -190,13 +178,6 @@ export default function ClimateScreen() {
   // purchases the number above it was computed from.
   const heavy = useMemo(() => heavyHitters(ecoPurchases), [ecoPurchases]);
 
-  // The reader's own climate band, not one calendar for the continent: a Finn
-  // and a Sicilian do not have the same June. See lib/seasonal.ts.
-  const season = useMemo(
-    () => inSeason(new Date(now), bandForRegion(region)),
-    [now, region],
-  );
-
   /** The one open row, by name. Null when everything is closed. */
   const [openName, setOpenName] = useState<string | null>(null);
   const [swaps, setSwaps] = useState<Record<string, SwapResult>>({});
@@ -226,33 +207,21 @@ export default function ClimateScreen() {
   };
 
   const sections = useMemo(() => {
-    const out: { part: Part; data: string[][] }[] = [];
     /*
-     * Both sections carry ARRAYS of names, so one renderItem can serve a full
-     * -width row and a grid row without a second data shape.
+     * Still an array of arrays, and still a SectionList, with one section in it.
      *
-     * Heavy hitters stay one per row: the row opens into a three-rung accordion,
+     * Heavy hitters are one per row: the row opens into a three-rung accordion,
      * and two of those expanding side by side would fight for the width the
-     * suggestions need. Seasonal produce is a name and an icon, which is exactly
-     * what a half-width cell holds — and SectionList has no numColumns (that is
-     * FlatList only), so the grid is made by chunking here, the same way
-     * basket.tsx builds its two columns.
+     * suggestions need. The [name, category] pair rides along so the row's emoji
+     * can resolve — it used to pass a hardcoded "other", whose glyph is a
+     * shopping cart.
      */
-    // [name, category] — the category so the row's emoji can resolve properly.
-    // It used to pass a hardcoded "other", whose glyph is 🛒, so every heavy item
-    // the emoji tables did not recognise drew a shopping cart.
+    const out: { part: Part; data: string[][] }[] = [];
     if (heavy.length > 0) {
       out.push({ part: "heavy", data: heavy.map((h) => [h.name, h.category]) });
     }
-    if (season.length > 0) {
-      const rows: string[][] = [];
-      for (let i = 0; i < season.length; i += SEASON_COLUMNS) {
-        rows.push([...season.slice(i, i + SEASON_COLUMNS)]);
-      }
-      out.push({ part: "season", data: rows });
-    }
     return out;
-  }, [heavy, season]);
+  }, [heavy]);
 
   return (
     <View style={styles.root}>
@@ -308,17 +277,16 @@ export default function ClimateScreen() {
                  removing them — see scripts/check-blur.mjs. */
               <Frosted over="mesh" style={styles.sectionHead}>
                 <Ionicons
-                  name={section.part === "heavy" ? "flame-outline" : "sunny-outline"}
+                  name="flame-outline"
                   size={16}
-                  color={section.part === "heavy" ? CARBON_COLORS.high : colors.accent}
+                  color={CARBON_COLORS.high}
                 />
                 <Text style={[type.label, { color: colors.ink }]}>
-                  {t(section.part === "heavy" ? "climate.heavyTitle" : "climate.seasonTitle")}
+                  {t("climate.heavyTitle")}
                 </Text>
               </Frosted>
             )}
-            renderItem={({ item, index, section }) =>
-              section.part === "heavy" ? (
+            renderItem={({ item, index }) => (
                 <HeavyRow
                   name={item[0]}
                   category={item[1] as ItemCategory}
@@ -341,10 +309,7 @@ export default function ClimateScreen() {
                     addToHomeList(alt.name, alt.category ?? "other");
                   }}
                 />
-              ) : (
-                <SeasonGridRow produce={item} order={index} />
-              )
-            }
+            )}
           />
         )}
       </SafeAreaView>
@@ -544,49 +509,6 @@ function HeavyRow({
   );
 }
 
-/**
- * One row of the seasonal grid — two produce cells, or one plus a spacer.
- *
- * The animation is on the ROW rather than the cell, so a row arrives as a unit:
- * two cells entering a frame apart side by side reads as a stutter, not a
- * cascade. Same reasoning, and the same delay curve, as basket.tsx.
- */
-function SeasonGridRow({ produce, order }: { produce: string[]; order: number }) {
-  const { colors } = useTheme();
-  const { t } = useLocale();
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(Math.min(order, 10) * 30).duration(240)}
-      style={styles.seasonRow}
-    >
-      {produce.map((key) => (
-        <View key={key} style={styles.seasonCell}>
-          <View style={[styles.tierDot, { backgroundColor: CARBON_COLORS.low }]} />
-          {/* An explicit glyph, because ItemEmoji's own lookup matches the
-              TRANSLATED name and not one seasonal word is in its table — so every
-              row drew the fruit_veg fallback and "plums" came out as a head of
-              lettuce. PRODUCE_EMOJI is keyed by the stable produce key, so one
-              entry is right in all seven languages. */}
-          <ItemEmoji
-            name={key}
-            category="fruit_veg"
-            glyph={PRODUCE_EMOJI[key as SeasonalProduce]}
-          />
-          {/* Two lines, like the basket's cells: at half width a single line
-              truncates "junge Kartoffeln" and "fasolka szparagowa", which are
-              ordinary words rather than edge cases. */}
-          <Text style={[type.body, styles.grow, { color: colors.ink }]} numberOfLines={2}>
-            {t(`eco.season.${key}`)}
-          </Text>
-        </View>
-      ))}
-      {/* Holds a lone last cell at half width instead of letting it stretch
-          across the row and break the column the eye is following. */}
-      {produce.length < SEASON_COLUMNS && <View style={styles.seasonCell} />}
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1, backgroundColor: "transparent" },
@@ -620,27 +542,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   tierDot: { width: 10, height: 10, borderRadius: 5 },
-  seasonRow: {
-    flexDirection: "row",
-    // flex-start, so a two-line name in one cell does not drag the other cell's
-    // dot and emoji down to meet it.
-    alignItems: "flex-start",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  // Equal halves whatever the words: basis 0 is what makes the two share the row
-  // evenly, and it is safe here precisely because the parent row is full-width.
-  // (In a content-sized parent the same line collapses the cell to nothing —
-  // which is exactly how the pantry-mix legend lost its labels.)
-  seasonCell: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    flexBasis: 0,
-    flexGrow: 1,
-    flexShrink: 1,
-    minWidth: 0,
-  },
   // The soft tint that says "this belongs to the row above". accentSoft rather
   // than a new colour: it is already the app's "this is a related surface" fill.
   drawer: {
