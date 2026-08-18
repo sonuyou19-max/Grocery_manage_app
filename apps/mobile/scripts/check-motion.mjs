@@ -185,5 +185,74 @@ if (inline.length) {
   console.log('ok   every spring config is a named preset');
 }
 
+/* ------------------------------------- a dialog must be able to animate out */
+
+/*
+ * `<Sheet visible>` — hardcoded rather than bound — is a sheet that can never
+ * animate, and it is invisible in review because the component LOOKS animated:
+ * it renders Sheet, Sheet owns the motion, everything seems fine.
+ *
+ * What actually happens is the parent closes it by nulling the data it reads,
+ * the component answers `if (!thing) return null`, and the whole Sheet is
+ * unmounted on the closing frame. Sheet's exit cannot play when the thing being
+ * torn down IS Sheet. The entrance is missing for the mirror reason: mounted
+ * with visible already true, there is nothing to animate from.
+ *
+ * purchase-ledger shipped exactly this and the Pantry's history sheet appeared
+ * and vanished instantly; staple-sheet had shipped it before that. Two is a
+ * pattern, so it gets a guard: pass the real state and keep a snapshot of the
+ * last-open data to render during the exit.
+ */
+const hardcoded = [];
+for (const file of walk(APP)) {
+  const text = stripComments(readFileSync(file, 'utf8'));
+  for (const m of text.matchAll(/<Sheet\b([^>]*?)>/g)) {
+    // Attribute NAMES only. Values are blanked first, because `visible={visible}`
+    // contains the word twice and the second one is followed by `}` rather than
+    // `=` — which made the first version of this guard fail on a correct file.
+    const names = m[1]
+      .replace(/=\s*\{[^}]*\}/g, '=v')
+      .replace(/=\s*"[^"]*"/g, '=v');
+    // A bare `visible` with no `=` after it is the JSX shorthand for true.
+    if (/\bvisible\b(?!\s*=)/.test(names)) {
+      hardcoded.push(relative(APP, file).split('\\').join('/'));
+      break;
+    }
+  }
+}
+
+if (hardcoded.length) {
+  failures += 1;
+  console.log('FAIL a <Sheet> is mounted with a hardcoded `visible`');
+  for (const rel of [...new Set(hardcoded)]) console.log(`  ${rel}`);
+  console.log('  Pass the real open state so Sheet can animate both ways, and');
+  console.log('  keep a snapshot of the last-open data to render during the exit.');
+} else {
+  console.log('ok   every <Sheet> is given real open state to animate from');
+}
+
+/*
+ * Stock `fade` cross-dissolves a dialog in place, which says nothing about where
+ * it came from — the reason sheet.tsx took over the motion for all eleven of
+ * them. Banned rather than merely discouraged, because it is one word and looks
+ * harmless next to `animationType="none"`.
+ */
+const faded = [];
+for (const file of walk(APP)) {
+  if (/animationType\s*=\s*["']fade["']/.test(stripComments(readFileSync(file, 'utf8')))) {
+    faded.push(relative(APP, file).split('\\').join('/'));
+  }
+}
+if (faded.length) {
+  failures += 1;
+  console.log('FAIL animationType="fade" on a Modal');
+  for (const rel of faded) console.log(`  ${rel}`);
+  console.log('  Use <Sheet>, which scales out of the bottom of the screen, or');
+  console.log('  animationType="none" plus your own transform. A cross-dissolve');
+  console.log('  in place tells the reader nothing about where the dialog is from.');
+} else {
+  console.log('ok   no Modal cross-dissolves in place');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

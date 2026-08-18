@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -100,8 +100,27 @@ export function PurchaseLedger({
   const cardCap = Math.round(windowHeight * 0.8);
   const scrollCap = Math.max(120, cardCap - headerHeight);
 
-  if (!name) return null;
-  const rows = historyFor(purchases, name);
+  /*
+   * What to draw, which stops being "the open item" the moment it closes.
+   *
+   * This is the staple-sheet bug, in the one component that still had it. The
+   * Pantry closes this by clearing the name it looks the history up by, and the
+   * old code answered with `if (!name) return null` — tearing the whole Sheet
+   * down on the closing frame. Sheet's own exit animation cannot help when the
+   * thing being unmounted IS Sheet, so the ledger did not animate away: it
+   * stopped existing. The entrance was missing for the mirror-image reason,
+   * `visible` being hardcoded true, so Sheet mounted already-open and had
+   * nothing to animate from.
+   *
+   * So keep the last name to have been open, render it until the close animation
+   * is over, and let `visible` carry the actual state.
+   */
+  const last = useRef<{ name: string; category: ItemCategory } | null>(null);
+  if (name) last.current = { name, category };
+
+  const snapshot = last.current;
+  if (!snapshot) return null;
+  const rows = historyFor(purchases, snapshot.name);
 
   const dateOf = (at: number) =>
     new Date(at).toLocaleDateString(undefined, {
@@ -115,7 +134,7 @@ export function PurchaseLedger({
   // look wedged into the corner.
   return (
     <Sheet
-      visible
+      visible={name != null}
       onClose={onClose}
       scrim
       gutter={spacing.md}
@@ -127,10 +146,12 @@ export function PurchaseLedger({
         style={[styles.sheet, { maxHeight: cardCap }]}
       >
         <View style={styles.head} onLayout={onHeaderLayout}>
-          <ItemEmoji name={name} category={category} size={22} />
+          {/* Snapshot, not the live props: those go null on the closing
+              frame and the title would blink out a beat before the sheet. */}
+          <ItemEmoji name={snapshot.name} category={snapshot.category} size={22} />
           <View style={styles.grow}>
             <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
-              {name}
+              {snapshot.name}
             </Text>
             <Text style={[type.sub, { color: colors.muted }]}>
               {t("ledger.subtitle", { count: rows.length })}
