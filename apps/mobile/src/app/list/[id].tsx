@@ -45,7 +45,7 @@ import { SupermarketBadge } from "@/components/supermarket-badge";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { useCoachMark } from "@/lib/coach-marks";
 import { findDuplicate } from "@/lib/item-dup";
-import { emojiFor } from "@/lib/item-emoji";
+import { emojiFor, fold } from "@/lib/item-emoji";
 import { haptics } from "@/lib/haptics";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
 import { useAuth } from "@/store/auth";
@@ -106,6 +106,16 @@ export default function ListDetailScreen() {
   const [cartOpen, setCartOpen] = useState(false);
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [quickAdd, setQuickAdd] = useState(false);
+  /*
+   * The search text. Filters what the sections show and nothing else — it never
+   * changes what is ON the list, so clearing it always brings everything back.
+   */
+  const [query, setQuery] = useState("");
+  /*
+   * Whether the manual add field is showing. Closed by default, so the three
+   * buttons read as three choices rather than as decoration around an input.
+   */
+  const [adding, setAdding] = useState(false);
 
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
@@ -179,11 +189,19 @@ export default function ListDetailScreen() {
    */
   const grouped = useMemo(() => {
     if (!list) return [];
+    /*
+     * Folded on both sides, so "Käse" finds "kase" and a stray capital cannot
+     * hide a row. The same normalisation the rest of the app matches names with.
+     */
+    const needle = fold(query.trim());
+    const hit = (it: Item) => needle === "" || fold(it.name).includes(needle);
     return CATEGORY_ORDER.map((cat) => ({
       category: cat,
-      items: list.items.filter((it) => it.category === cat && !it.checked),
+      items: list.items.filter(
+        (it) => it.category === cat && !it.checked && hit(it),
+      ),
     })).filter((g) => g.items.length > 0);
-  }, [list]);
+  }, [list, query]);
 
   /** What's in the cart, newest first, for the collapsed section at the end. */
   const inCartItems = useMemo(
@@ -439,147 +457,161 @@ export default function ListDetailScreen() {
       <MeshBackground />
       <KeyboardAvoidingView style={styles.fillTransparent} behavior="padding">
         <SafeAreaView style={styles.fillTransparent} edges={["top"]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Pressable onPress={() => router.back()} hitSlop={12}>
+          {/* Header. Back stays pinned while everything below it scrolls
+              away — the spec has the title and buttons leaving the screen, and a
+              page you can scroll into with no way back out is worse than one
+              extra row of chrome. */}
+          <View style={styles.topBar}>
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.back")}
+            >
               <Ionicons name="chevron-back" size={26} color={colors.ink} />
             </Pressable>
-            <View style={styles.grow}>
-              <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
-                {list.name}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {list.store ?? t("listDetail.anyStore")} ·{" "}
-                {t("listDetail.inCartCount", {
-                  checked: checkedCount,
-                  total: list.items.length,
-                })}
-              </Text>
-              {/* Renders nothing when you're the only one here. */}
-              <ShoppersBadge names={shopperNames} />
-            </View>
-            {list.items.length > 0 && (
-              <Animated.View
-                ref={bagRef}
-                onLayout={measureBag}
-                style={bagStyle}
-              >
-                <Pressable
-                  onPress={() =>
-                    router.push({
-                      pathname: "/shop/[id]",
-                      params: { id: list.id },
-                    })
-                  }
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("listDetail.inCartCount", {
+          </View>
+
+          <ScrollView
+            {...scrollIndicator}
+            style={styles.scroll}
+            contentContainerStyle={styles.list}
+            /* The search bar is child index 1 and pins itself to the top; the
+               title, actions and summary above it scroll away. stickyHeaderIndices
+               keeps the pinned row inside the same scroll context, so it cannot
+               drift out of step with the content the way a separately positioned
+               bar does. */
+            stickyHeaderIndices={[1]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View>
+              <View style={styles.titleBlock}>
+                <Text style={[type.h1, { color: colors.ink }]} numberOfLines={2}>
+                  {list.name}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {list.store ?? t("listDetail.anyStore")} ·{" "}
+                  {t("listDetail.inCartCount", {
                     checked: checkedCount,
                     total: list.items.length,
                   })}
-                >
-                  <Ionicons
-                    name="bag-check-outline"
-                    size={22}
-                    color={colors.accent}
-                  />
-                  {/* The count is what makes the destination legible: the glyph
-                  arrives somewhere that visibly changes, rather than just
-                  vanishing behind an icon. */}
-                  {checkedCount > 0 && (
-                    <View
-                      style={[
-                        styles.bagBadge,
-                        { backgroundColor: colors.accent },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.bagBadgeText,
-                          { color: colors.accentInk },
-                        ]}
-                      >
-                        {checkedCount}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              </Animated.View>
-            )}
-            {/* Import straight into THIS list. Same flow as the create sheet's
-            row, minus the naming step — the list already has a name. */}
-            <Pressable
-              onPress={onImport}
-              hitSlop={12}
-              accessibilityLabel={t("recipe.title")}
-            >
-              <Ionicons
-                name="sparkles-outline"
-                size={22}
-                color={colors.plusInk}
-              />
-            </Pressable>
-          </View>
+                </Text>
+                {/* Renders nothing when you're the only one here. */}
+                <ShoppersBadge names={shopperNames} />
+              </View>
 
-          {/* Progress */}
-          <View
-            style={[styles.progressTrack, { backgroundColor: colors.line }]}
-          >
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress * 100}%`, backgroundColor: colors.accent },
-              ]}
-            />
-          </View>
+              {/* Primary actions. One for now: the receipt scanner does not exist
+                  yet, and a button that does nothing is worse than a button that
+                  is not there. The row is built to hold the second. */}
+              {list.items.length > 0 && (
+                <View style={styles.actionRow}>
+                  <Pressable
+                    onPress={() => {
+                      haptics.tick();
+                      router.push({
+                        pathname: "/shop/[id]",
+                        params: { id: list.id },
+                      });
+                    }}
+                    accessibilityRole="button"
+                    style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
+                  >
+                    <Ionicons name="cart-outline" size={18} color={colors.accentInk} />
+                    <Text style={[type.body, { color: colors.accentInk }]}>
+                      {t("listDetail.startShopping")}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
 
-          {/* Budget strip — only shows money once prices are logged */}
-          <GlassView radius={radii.md} style={styles.budget}>
-            {budget.hasPrices ? (
-              <>
-                <Stat
-                  label={t("listDetail.toBuy")}
-                  cents={budget.toBuy}
-                  colors={colors}
+              {/* Progress */}
+              <View
+                style={[styles.progressTrack, { backgroundColor: colors.line }]}
+              >
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${progress * 100}%`, backgroundColor: colors.accent },
+                  ]}
                 />
-                <Stat
-                  label={t("listDetail.inCartLabel")}
-                  cents={budget.inCart}
-                  colors={colors}
-                />
-                <Stat
-                  label={t("listDetail.priced")}
-                  value={t("listDetail.pricedOf", {
-                    count: budget.pricedCount,
-                    total: budget.totalCount,
-                  })}
-                  colors={colors}
-                />
-              </>
-            ) : (
-              <Text
+              </View>
+
+              {/* Budget strip — only shows money once prices are logged */}
+              <GlassView radius={radii.md} style={styles.budget}>
+                {budget.hasPrices ? (
+                  <>
+                    <Stat
+                      label={t("listDetail.toBuy")}
+                      cents={budget.toBuy}
+                      colors={colors}
+                    />
+                    <Stat
+                      label={t("listDetail.inCartLabel")}
+                      cents={budget.inCart}
+                      colors={colors}
+                    />
+                    <Stat
+                      label={t("listDetail.priced")}
+                      value={t("listDetail.pricedOf", {
+                        count: budget.pricedCount,
+                        total: budget.totalCount,
+                      })}
+                      colors={colors}
+                    />
+                  </>
+                ) : (
+                  <Text
+                    style={[
+                      type.sub,
+                      { color: colors.muted, textAlign: "center", flex: 1 },
+                    ]}
+                  >
+                    {t("listDetail.addPriceHint")}
+                  </Text>
+                )}
+              </GlassView>
+
+              {/* How light this basket is, while it is still a basket.
+              Free, and deliberately so: the feedback is only worth anything before
+              you have bought the thing, and a paywall on the one screen where it
+              could change a decision would make the whole feature decorative. */}
+              <BasketEcoStrip items={list.items} />
+
+              {/* Pantry, surfaced where you'd act on it: things you usually buy on this
+              list that are due. A view over the one pantry, not a per-list copy. */}
+              <ListPantryStrip list={list} />
+
+              {/* Items */}
+            </View>
+
+            {/* Sticky. Index 1, so everything above scrolls under it. Matches
+                the Pantry's search exactly — same height, same glyphs, same clear
+                button — because it is the same control doing the same job. */}
+            <View style={[styles.searchSticky, { backgroundColor: colors.bg }]}>
+              <View
                 style={[
-                  type.sub,
-                  { color: colors.muted, textAlign: "center", flex: 1 },
+                  styles.search,
+                  { backgroundColor: colors.surface, borderColor: colors.line },
                 ]}
               >
-                {t("listDetail.addPriceHint")}
-              </Text>
-            )}
-          </GlassView>
+                <Ionicons name="search" size={18} color={colors.muted} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={t("listDetail.search")}
+                  placeholderTextColor={colors.muted}
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  style={[styles.searchInput, { color: colors.ink }]}
+                />
+                {query.length > 0 && (
+                  <Pressable onPress={() => setQuery("")} hitSlop={8}>
+                    <Ionicons name="close-circle" size={18} color={colors.muted} />
+                  </Pressable>
+                )}
+              </View>
+            </View>
 
-          {/* How light this basket is, while it is still a basket.
-          Free, and deliberately so: the feedback is only worth anything before
-          you have bought the thing, and a paywall on the one screen where it
-          could change a decision would make the whole feature decorative. */}
-          <BasketEcoStrip items={list.items} />
-
-          {/* Pantry, surfaced where you'd act on it: things you usually buy on this
-          list that are due. A view over the one pantry, not a per-list copy. */}
-          <ListPantryStrip list={list} />
-
-          {/* Items */}
-          <ScrollView {...scrollIndicator} style={styles.scroll} contentContainerStyle={styles.list}>
             {grouped.map((group) => (
               <View key={group.category}>
                 <View style={styles.catRow}>
@@ -709,53 +741,125 @@ export default function ListDetailScreen() {
           and last in the tree so it paints above the header it flies toward. */}
           <FlyToCart ref={flightRef} onArrive={onGlyphArrive} />
 
-          {/* Add bar — pinned above the keyboard by the screen-level
-          KeyboardAvoidingView (padding on iOS, height on Android). */}
+          {/* Three ways in, said out loud.
+              The old bar was a text field with a sparkle tucked beside it, so
+              quick-add and recipe import were discoverable only if you already
+              knew they were there. Naming them costs one row and makes the AI
+              paths visible to somebody who has never found them.
+
+              The manual field is revealed rather than always shown, but it stays
+              open after each add and keeps focus — typing six things is still six
+              types and six returns, which is the fastest path and the one this
+              redesign must not slow down. */}
           <Frosted
             over="content"
             intensity={scheme === "dark" ? 40 : 60}
             style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
           >
             <SafeAreaView edges={["bottom"]}>
-              <View style={styles.addBar}>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder={t("listDetail.addItem")}
-                  placeholderTextColor={colors.muted}
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.ink,
-                      backgroundColor: colors.glassFill,
-                      borderColor: colors.glassBorder,
-                    },
-                  ]}
-                  returnKeyType="done"
-                  onSubmitEditing={submit}
-                />
-                <Pressable
-                  onPress={() => setQuickAdd(true)}
-                  hitSlop={8}
-                  style={styles.mic}
-                >
-                  <Ionicons
-                    name="sparkles-outline"
-                    size={22}
-                    color={colors.accent}
+              {adding && (
+                <View style={styles.addBar}>
+                  <TextInput
+                    value={draft}
+                    onChangeText={setDraft}
+                    placeholder={t("listDetail.addItem")}
+                    placeholderTextColor={colors.muted}
+                    autoFocus
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.ink,
+                        backgroundColor: colors.glassFill,
+                        borderColor: colors.glassBorder,
+                      },
+                    ]}
+                    returnKeyType="done"
+                    /* Submits without dismissing, so the next item is one more
+                       line of typing rather than another tap on the button. */
+                    blurOnSubmit={false}
+                    onSubmitEditing={submit}
                   />
-                </Pressable>
+                  <Pressable
+                    onPress={submit}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("listDetail.addItem")}
+                    style={[
+                      styles.addBtn,
+                      {
+                        backgroundColor: colors.accent,
+                        opacity: draft.trim() ? 1 : 0.45,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="add" size={24} color={colors.accentInk} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setAdding(false);
+                      setDraft("");
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("common.cancel")}
+                  >
+                    <Ionicons name="close" size={22} color={colors.muted} />
+                  </Pressable>
+                </View>
+              )}
+
+              <View style={styles.actionsBar}>
                 <Pressable
-                  onPress={submit}
+                  onPress={() => {
+                    haptics.tick();
+                    setQuickAdd(true);
+                  }}
+                  accessibilityRole="button"
+                  style={[styles.actionBtn, { borderColor: colors.glassBorder }]}
+                >
+                  <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+                  <Text
+                    style={[type.sub, styles.actionText, { color: colors.ink }]}
+                    numberOfLines={1}
+                  >
+                    {t("listDetail.quickAdd")}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={onImport}
+                  accessibilityRole="button"
+                  style={[styles.actionBtn, { borderColor: colors.glassBorder }]}
+                >
+                  <Ionicons name="book-outline" size={18} color={colors.plusInk} />
+                  <Text
+                    style={[type.sub, styles.actionText, { color: colors.ink }]}
+                    numberOfLines={1}
+                  >
+                    {t("listDetail.importRecipe")}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    haptics.tick();
+                    if (adding) setDraft("");
+                    setAdding((v) => !v);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: adding }}
                   style={[
-                    styles.addBtn,
-                    {
-                      backgroundColor: colors.accent,
-                      opacity: draft.trim() ? 1 : 0.45,
-                    },
+                    styles.actionBtn,
+                    { borderColor: adding ? colors.accent : colors.glassBorder },
+                    adding && { backgroundColor: colors.accentSoft },
                   ]}
                 >
-                  <Ionicons name="add" size={24} color={colors.accentInk} />
+                  <Ionicons name="add" size={18} color={colors.accent} />
+                  <Text
+                    style={[type.sub, styles.actionText, { color: colors.ink }]}
+                    numberOfLines={1}
+                  >
+                    {t("listDetail.addItemBtn")}
+                  </Text>
                 </Pressable>
               </View>
             </SafeAreaView>
@@ -1131,6 +1235,71 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  titleBlock: { paddingHorizontal: spacing.lg, gap: spacing.xs },
+  actionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  // flexGrow with a zero basis, not `flex`: the row is built to take a second
+  // button, and the two should share the width rather than one claiming it all.
+  primaryBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    height: 44,
+    borderRadius: radii.md,
+  },
+  // Opaque, or rows show through the pinned bar as they pass under it. A sticky
+  // header is the one place transparency reads as a rendering fault.
+  searchSticky: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  search: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    height: 46,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+  },
+  searchInput: { flex: 1, fontSize: 16 },
+  actionsBar: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  actionBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.xs,
+  },
+  // Shrinkable: three labels across a 360pt phone is tight in German, and the
+  // text must give way rather than push the buttons to unequal widths.
+  actionText: { flexShrink: 1, minWidth: 0 },
   progressTrack: {
     height: 6,
     borderRadius: 3,
