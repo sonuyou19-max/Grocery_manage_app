@@ -76,6 +76,14 @@ export interface ThemeColors {
    */
   overlaySolid: string;
   glassBorder: string;
+  /**
+   * The search field's fill and hairline — a tint ON the canvas rather than a
+   * surface floating above it. Deliberately not `surface`: a solid card behind
+   * a search input makes it read as a widget parked on the page instead of a
+   * part of it, which is what these two exist to undo.
+   */
+  searchFill: string;
+  searchLine: string;
   /** BlurView tint to use for glass/mesh in this scheme. */
   blurTint: 'light' | 'dark';
   /**
@@ -126,6 +134,8 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     glassSolid: 'rgba(252,253,248,0.9)',
     overlaySolid: '#FBFCF7',
     glassBorder: 'rgba(20,26,16,0.22)',
+    searchFill: 'rgba(20,26,16,0.04)',
+    searchLine: 'rgba(20,26,16,0.10)',
     blurTint: 'light',
     plusFrom: '#6D5AE6',
     plusTo: '#2FA5A0',
@@ -159,6 +169,8 @@ export const palette: Record<'light' | 'dark', ThemeColors> = {
     glassSolid: 'rgba(26,32,23,0.9)',
     overlaySolid: '#1A2017',
     glassBorder: 'rgba(255,255,255,0.16)',
+    searchFill: 'rgba(255,255,255,0.06)',
+    searchLine: 'rgba(255,255,255,0.14)',
     blurTint: 'dark',
     // Lifted and desaturated for the dark surface: the light-mode violet goes
     // muddy on #1E241B, and the teal has to stay legible as a 12px glyph.

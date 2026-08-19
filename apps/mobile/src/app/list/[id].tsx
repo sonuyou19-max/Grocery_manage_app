@@ -17,18 +17,22 @@ import {
   KeyboardController,
 } from "react-native-keyboard-controller";
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AnimatedMoney } from "@/components/animated-money";
 import { Frosted } from "@/components/frosted";
+import { PressScale } from "@/components/press-scale";
 import { ClaimChip, ShoppersBadge } from "@/components/claim-chip";
 import { CoachMark } from "@/components/coach-mark";
 import { FlyToCart, type FlyToCartHandle } from "@/components/fly-to-cart";
@@ -116,6 +120,29 @@ export default function ListDetailScreen() {
    * buttons read as three choices rather than as decoration around an input.
    */
   const [adding, setAdding] = useState(false);
+  /** Search focus, for the border colour. Local because nothing else needs it. */
+  const [focused, setFocused] = useState(false);
+
+  /*
+   * How "stuck" the search bar is: 0 at rest, 1 once the list has scrolled
+   * beneath it. Drives the frosted backdrop and the hairline under it.
+   *
+   * A shared value written from a scroll handler on the UI thread, so the fade
+   * never waits on React — a backdrop that appears a frame or two after the
+   * content starts sliding under it is exactly the pop this is meant to avoid.
+   * The threshold is a few points rather than zero so a rubber-band overscroll
+   * at the top does not flash it on.
+   */
+  const stuck = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      const past = e.contentOffset.y > 4 ? 1 : 0;
+      // 200ms linear, per the spec: a curve here reads as the header lagging
+      // behind the finger rather than responding to it.
+      stuck.value = withTiming(past, { duration: 200, easing: Easing.linear });
+    },
+  });
+  const stuckStyle = useAnimatedStyle(() => ({ opacity: stuck.value }));
 
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
@@ -472,8 +499,10 @@ export default function ListDetailScreen() {
             </Pressable>
           </View>
 
-          <ScrollView
+          <Animated.ScrollView
             {...scrollIndicator}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
             style={styles.scroll}
             contentContainerStyle={styles.list}
             /* The search bar is child index 1 and pins itself to the top; the
@@ -500,12 +529,20 @@ export default function ListDetailScreen() {
                 <ShoppersBadge names={shopperNames} />
               </View>
 
-              {/* Primary actions. One for now: the receipt scanner does not exist
-                  yet, and a button that does nothing is worse than a button that
-                  is not there. The row is built to hold the second. */}
+              {/* The two primary actions, sharing the row.
+                  Solid green carries the one you came here to do; the receipt is
+                  a ghost/outline so it reads as the second option rather than
+                  competing with it. Both flexGrow with a zero basis, so they are
+                  exactly half each whatever the labels say in German.
+
+                  Scan receipt is DISABLED and dimmed, because the scanner does
+                  not exist yet — the layout is here to be judged, but a button
+                  that looks live and answers nothing is a bug, not a preview. It
+                  becomes live by deleting `disabled` and pointing onPress at the
+                  scanner. */}
               {list.items.length > 0 && (
                 <View style={styles.actionRow}>
-                  <Pressable
+                  <PressScale
                     onPress={() => {
                       haptics.tick();
                       router.push({
@@ -517,59 +554,59 @@ export default function ListDetailScreen() {
                     style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
                   >
                     <Ionicons name="cart-outline" size={18} color={colors.accentInk} />
-                    <Text style={[type.body, { color: colors.accentInk }]}>
+                    <Text style={[type.body, styles.btnLabel, { color: colors.accentInk }]}>
                       {t("listDetail.startShopping")}
                     </Text>
-                  </Pressable>
+                  </PressScale>
+
+                  <PressScale
+                    disabled
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: true }}
+                    style={[
+                      styles.ghostBtn,
+                      { borderColor: colors.accent },
+                      styles.ghostBtnOff,
+                    ]}
+                  >
+                    <Ionicons name="receipt-outline" size={18} color={colors.accent} />
+                    <Text style={[type.body, styles.btnLabel, { color: colors.accent }]}>
+                      {t("listDetail.scanReceipt")}
+                    </Text>
+                  </PressScale>
                 </View>
               )}
 
-              {/* Progress */}
-              <View
-                style={[styles.progressTrack, { backgroundColor: colors.line }]}
-              >
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${progress * 100}%`, backgroundColor: colors.accent },
-                  ]}
-                />
-              </View>
-
-              {/* Budget strip — only shows money once prices are logged */}
-              <GlassView radius={radii.md} style={styles.budget}>
-                {budget.hasPrices ? (
-                  <>
-                    <Stat
-                      label={t("listDetail.toBuy")}
-                      cents={budget.toBuy}
-                      colors={colors}
-                    />
-                    <Stat
-                      label={t("listDetail.inCartLabel")}
-                      cents={budget.inCart}
-                      colors={colors}
-                    />
-                    <Stat
-                      label={t("listDetail.priced")}
-                      value={t("listDetail.pricedOf", {
-                        count: budget.pricedCount,
-                        total: budget.totalCount,
-                      })}
-                      colors={colors}
-                    />
-                  </>
-                ) : (
-                  <Text
-                    style={[
-                      type.sub,
-                      { color: colors.muted, textAlign: "center", flex: 1 },
-                    ]}
-                  >
-                    {t("listDetail.addPriceHint")}
-                  </Text>
-                )}
-              </GlassView>
+              {/* Budget strip — and NOTHING when there is no money to show.
+                  The empty state used to be a full-width card reading "add a
+                  price to any item to track spend", which is instructions
+                  wearing the costume of data: it occupied a card's worth of the
+                  most valuable space on the screen to tell you about a feature
+                  you had not asked for, on every list you had not priced. The
+                  hint is gone rather than restyled — the price field is one tap
+                  into any row, and a screen does not need to advertise it. */}
+              {budget.hasPrices && (
+                <GlassView radius={radii.md} style={styles.budget}>
+                  <Stat
+                    label={t("listDetail.toBuy")}
+                    cents={budget.toBuy}
+                    colors={colors}
+                  />
+                  <Stat
+                    label={t("listDetail.inCartLabel")}
+                    cents={budget.inCart}
+                    colors={colors}
+                  />
+                  <Stat
+                    label={t("listDetail.priced")}
+                    value={t("listDetail.pricedOf", {
+                      count: budget.pricedCount,
+                      total: budget.totalCount,
+                    })}
+                    colors={colors}
+                  />
+                </GlassView>
+              )}
 
               {/* How light this basket is, while it is still a basket.
               Free, and deliberately so: the feedback is only worth anything before
@@ -584,20 +621,46 @@ export default function ListDetailScreen() {
               {/* Items */}
             </View>
 
-            {/* Sticky. Index 1, so everything above scrolls under it. Matches
-                the Pantry's search exactly — same height, same glyphs, same clear
-                button — because it is the same control doing the same job. */}
-            <View style={[styles.searchSticky, { backgroundColor: colors.bg }]}>
+            {/* Sticky, and it earns its background only once it needs one.
+                At rest the input sits directly on the canvas — the white wrapper
+                card that used to hold it made a search field look like a floating
+                widget parked on the page. Once the list starts passing underneath,
+                a frosted layer and a hairline fade in behind it, because that is
+                the moment text would otherwise bleed through text.
+
+                Frosted, NOT backdrop-filter. Real-time blur on Android installs a
+                pre-draw listener that redraws and blurs the whole screen every
+                frame on the UI thread; this app spent a release removing them and
+                scripts/check-blur.mjs fails the build on a new one. Frosted is a
+                real blur on iOS and a 90% wash on Android, which buys the same
+                thing this needs — content not showing through — at no per-frame
+                cost. */}
+            <View style={styles.searchSticky}>
+              <Animated.View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, stuckStyle]}
+              >
+                <Frosted over="content" style={StyleSheet.absoluteFill} />
+                <View
+                  style={[styles.stickyEdge, { backgroundColor: colors.glassBorder }]}
+                />
+              </Animated.View>
+
               <View
                 style={[
                   styles.search,
-                  { backgroundColor: colors.surface, borderColor: colors.line },
+                  {
+                    backgroundColor: colors.searchFill,
+                    borderColor: focused ? colors.accent : colors.searchLine,
+                  },
                 ]}
               >
                 <Ionicons name="search" size={18} color={colors.muted} />
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
                   placeholder={t("listDetail.search")}
                   placeholderTextColor={colors.muted}
                   autoCorrect={false}
@@ -735,7 +798,7 @@ export default function ListDetailScreen() {
                   ))}
               </View>
             )}
-          </ScrollView>
+          </Animated.ScrollView>
 
           {/* Flight layer. Outside the ScrollView so an arc is never clipped by it,
           and last in the tree so it paints above the header it flies toward. */}
@@ -751,10 +814,15 @@ export default function ListDetailScreen() {
               open after each add and keeps focus — typing six things is still six
               types and six returns, which is the fastest path and the one this
               redesign must not slow down. */}
-          <Frosted
-            over="content"
-            intensity={scheme === "dark" ? 40 : 60}
-            style={[styles.addBarGlass, { borderTopColor: colors.glassBorder }]}
+          {/* Solid, not frosted. A translucent bar lets rows ghost through the
+              labels as they scroll under it, and this one sits over moving
+              content permanently — the one place in the app where "you can
+              faintly see through it" is a defect rather than a material. */}
+          <View
+            style={[
+              styles.addBarGlass,
+              { backgroundColor: colors.bg, borderTopColor: colors.glassBorder },
+            ]}
           >
             <SafeAreaView edges={["bottom"]}>
               {adding && (
@@ -808,7 +876,7 @@ export default function ListDetailScreen() {
               )}
 
               <View style={styles.actionsBar}>
-                <Pressable
+                <PressScale
                   onPress={() => {
                     haptics.tick();
                     setQuickAdd(true);
@@ -823,9 +891,9 @@ export default function ListDetailScreen() {
                   >
                     {t("listDetail.quickAdd")}
                   </Text>
-                </Pressable>
+                </PressScale>
 
-                <Pressable
+                <PressScale
                   onPress={onImport}
                   accessibilityRole="button"
                   style={[styles.actionBtn, { borderColor: colors.glassBorder }]}
@@ -837,9 +905,9 @@ export default function ListDetailScreen() {
                   >
                     {t("listDetail.importRecipe")}
                   </Text>
-                </Pressable>
+                </PressScale>
 
-                <Pressable
+                <PressScale
                   onPress={() => {
                     haptics.tick();
                     if (adding) setDraft("");
@@ -860,10 +928,10 @@ export default function ListDetailScreen() {
                   >
                     {t("listDetail.addItemBtn")}
                   </Text>
-                </Pressable>
+                </PressScale>
               </View>
             </SafeAreaView>
-          </Frosted>
+          </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
 
@@ -1248,8 +1316,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  // flexGrow with a zero basis, not `flex`: the row is built to take a second
-  // button, and the two should share the width rather than one claiming it all.
+  btnLabel: { flexShrink: 1, minWidth: 0 },
+  // The ghost half of the pair: same box, no fill, so it reads as the second
+  // option rather than a rival to the green one.
+  ghostBtn: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    backgroundColor: "transparent",
+  },
+  // Dimmed while the scanner does not exist. Opacity rather than a grey palette
+  // so the shape stays judgeable — the point of shipping it early is to see the
+  // row, not to see a placeholder.
+  ghostBtnOff: { opacity: 0.4 },
+  // flexGrow with a zero basis, not `flex`: the two halves share the width
+  // rather than one claiming it all.
   primaryBtn: {
     flexGrow: 1,
     flexBasis: 0,
@@ -1261,28 +1349,45 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radii.md,
   },
-  // Opaque, or rows show through the pinned bar as they pass under it. A sticky
-  // header is the one place transparency reads as a rendering fault.
+  // Transparent at rest: the canvas runs right up to the input, and the frosted
+  // layer behind it only fades in once content is passing underneath.
   searchSticky: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  // The hairline that says the pinned row is physically above the list. Sits on
+  // the fading layer, not the container, so it arrives with the backdrop rather
+  // than being drawn across the canvas at rest.
+  stickyEdge: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
   },
   search: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    height: 46,
+    height: 40,
     borderWidth: 1,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
   },
-  searchInput: { flex: 1, fontSize: 16 },
+  // 15, not the 16 the rest of the app uses for input: this is a filter over
+  // what is already on screen rather than somewhere you compose, and it should
+  // sit a step quieter than the item names it searches.
+  searchInput: { flex: 1, fontSize: 15, fontWeight: "400" },
   actionsBar: {
     flexDirection: "row",
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    // Extra beneath, for the home indicator and the Android gesture bar. The
+    // SafeAreaView around this already adds the measured inset; this is the
+    // breathing room on top of it, so the row never sits ON the bar.
+    paddingBottom: spacing.md,
   },
   actionBtn: {
     flexGrow: 1,

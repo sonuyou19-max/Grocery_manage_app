@@ -604,6 +604,7 @@ const es = {
     usuallyDue: 'Sueles comprar',
     emptyItems: 'Aquí todavía no hay nada — añade tu primer artículo abajo.',
     startShopping: 'Empezar compra',
+    scanReceipt: 'Escanear ticket',
     search: 'Buscar en la lista',
     quickAdd: 'Rápido',
     importRecipe: 'Receta',

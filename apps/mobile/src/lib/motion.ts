@@ -93,6 +93,21 @@ export const SPRING: Record<string, WithSpringConfig> = {
    * the tab icon you just selected and the bag catching an item.
    */
   punch: { damping: 12, stiffness: 320 },
+
+  /**
+   * A button coming back up after a press.
+   *
+   * Stiff and well damped: the finger has already left, so this is not a
+   * flourish to be watched — it is the control catching up, and it should be
+   * over before anyone decides it is an animation. Overshoot is left ON, so the
+   * return carries the faintest bounce that makes a tap feel like it pushed
+   * something physical rather than toggling a state.
+   *
+   * Used through components/press-scale, which is the only thing that should
+   * need it: one preset means every button in the app answers a finger the same
+   * way.
+   */
+  press: { damping: 25, stiffness: 400, mass: 1 },
 };
 
 /**

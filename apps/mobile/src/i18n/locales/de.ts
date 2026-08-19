@@ -605,6 +605,7 @@ const de = {
     usuallyDue: 'Kaufst du hier meist',
     emptyItems: 'Hier ist noch nichts — füge unten deinen ersten Artikel hinzu.',
     startShopping: 'Einkauf starten',
+    scanReceipt: 'Bon scannen',
     search: 'Liste durchsuchen',
     quickAdd: 'Schnell',
     importRecipe: 'Rezept',

@@ -702,6 +702,7 @@ const pl = {
     usuallyDue: 'Zwykle tu kupujesz',
     emptyItems: 'Jeszcze nic tu nie ma — dodaj poniżej swój pierwszy produkt.',
     startShopping: 'Zacznij zakupy',
+    scanReceipt: 'Skanuj paragon',
     search: 'Szukaj na liście',
     quickAdd: 'Szybko',
     importRecipe: 'Przepis',
