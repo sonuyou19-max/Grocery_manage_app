@@ -604,7 +604,6 @@ const nl = {
     emptyItems: 'Nog niets hier — voeg hieronder je eerste item toe.',
     startShopping: 'Start winkelen',
     scanReceipt: 'Bon scannen',
-    search: 'Zoek in lijst',
     quickAdd: 'Snel',
     importRecipe: 'Recept',
     addItemBtn: 'Item',

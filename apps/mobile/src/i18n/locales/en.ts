@@ -616,7 +616,6 @@ const en = {
     emptyItems: 'Nothing here yet — add your first item below.',
     startShopping: 'Start shopping',
     scanReceipt: 'Scan receipt',
-    search: 'Search this list',
     quickAdd: 'Quick add',
     importRecipe: 'Recipe',
     addItemBtn: 'Add item',

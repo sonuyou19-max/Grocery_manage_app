@@ -17,16 +17,13 @@ import {
   KeyboardController,
 } from "react-native-keyboard-controller";
 import Animated, {
-  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
-  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withSpring,
-  withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -49,7 +46,7 @@ import { SupermarketBadge } from "@/components/supermarket-badge";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { useCoachMark } from "@/lib/coach-marks";
 import { findDuplicate } from "@/lib/item-dup";
-import { emojiFor, fold } from "@/lib/item-emoji";
+import { emojiFor } from "@/lib/item-emoji";
 import { haptics } from "@/lib/haptics";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
 import { useAuth } from "@/store/auth";
@@ -111,38 +108,10 @@ export default function ListDetailScreen() {
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [quickAdd, setQuickAdd] = useState(false);
   /*
-   * The search text. Filters what the sections show and nothing else — it never
-   * changes what is ON the list, so clearing it always brings everything back.
-   */
-  const [query, setQuery] = useState("");
-  /*
    * Whether the manual add field is showing. Closed by default, so the three
    * buttons read as three choices rather than as decoration around an input.
    */
   const [adding, setAdding] = useState(false);
-  /** Search focus, for the border colour. Local because nothing else needs it. */
-  const [focused, setFocused] = useState(false);
-
-  /*
-   * How "stuck" the search bar is: 0 at rest, 1 once the list has scrolled
-   * beneath it. Drives the frosted backdrop and the hairline under it.
-   *
-   * A shared value written from a scroll handler on the UI thread, so the fade
-   * never waits on React — a backdrop that appears a frame or two after the
-   * content starts sliding under it is exactly the pop this is meant to avoid.
-   * The threshold is a few points rather than zero so a rubber-band overscroll
-   * at the top does not flash it on.
-   */
-  const stuck = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      const past = e.contentOffset.y > 4 ? 1 : 0;
-      // 200ms linear, per the spec: a curve here reads as the header lagging
-      // behind the finger rather than responding to it.
-      stuck.value = withTiming(past, { duration: 200, easing: Easing.linear });
-    },
-  });
-  const stuckStyle = useAnimatedStyle(() => ({ opacity: stuck.value }));
 
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
@@ -216,19 +185,11 @@ export default function ListDetailScreen() {
    */
   const grouped = useMemo(() => {
     if (!list) return [];
-    /*
-     * Folded on both sides, so "Käse" finds "kase" and a stray capital cannot
-     * hide a row. The same normalisation the rest of the app matches names with.
-     */
-    const needle = fold(query.trim());
-    const hit = (it: Item) => needle === "" || fold(it.name).includes(needle);
     return CATEGORY_ORDER.map((cat) => ({
       category: cat,
-      items: list.items.filter(
-        (it) => it.category === cat && !it.checked && hit(it),
-      ),
+      items: list.items.filter((it) => it.category === cat && !it.checked),
     })).filter((g) => g.items.length > 0);
-  }, [list, query]);
+  }, [list]);
 
   /** What's in the cart, newest first, for the collapsed section at the end. */
   const inCartItems = useMemo(
@@ -501,8 +462,6 @@ export default function ListDetailScreen() {
 
           <Animated.ScrollView
             {...scrollIndicator}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
             style={styles.scroll}
             contentContainerStyle={styles.list}
             /* The search bar is child index 1 and pins itself to the top; the
@@ -510,7 +469,6 @@ export default function ListDetailScreen() {
                keeps the pinned row inside the same scroll context, so it cannot
                drift out of step with the content the way a separately positioned
                bar does. */
-            stickyHeaderIndices={[1]}
             keyboardShouldPersistTaps="handled"
           >
             <View>
@@ -569,7 +527,7 @@ export default function ListDetailScreen() {
                       styles.ghostBtnOff,
                     ]}
                   >
-                    <Ionicons name="receipt-outline" size={18} color={colors.accent} />
+                    <Ionicons name="camera-outline" size={18} color={colors.accent} />
                     <Text style={[type.body, styles.btnLabel, { color: colors.accent }]}>
                       {t("listDetail.scanReceipt")}
                     </Text>
@@ -608,71 +566,26 @@ export default function ListDetailScreen() {
                 </GlassView>
               )}
 
+              {/* The gap is on THIS wrapper, not on the budget strip above it.
+                  It was on the strip, so when there were no prices to show and
+                  the strip did not render, the eco card jumped up flush against
+                  the buttons — the same list looked like two different layouts
+                  depending on whether one item had a price. Spacing that belongs
+                  to "what follows the actions" has to live on the thing that
+                  always follows them. */}
+              <View style={styles.ecoStrip}>
               {/* How light this basket is, while it is still a basket.
               Free, and deliberately so: the feedback is only worth anything before
               you have bought the thing, and a paywall on the one screen where it
               could change a decision would make the whole feature decorative. */}
               <BasketEcoStrip items={list.items} />
+              </View>
 
               {/* Pantry, surfaced where you'd act on it: things you usually buy on this
               list that are due. A view over the one pantry, not a per-list copy. */}
               <ListPantryStrip list={list} />
 
               {/* Items */}
-            </View>
-
-            {/* Sticky, and it earns its background only once it needs one.
-                At rest the input sits directly on the canvas — the white wrapper
-                card that used to hold it made a search field look like a floating
-                widget parked on the page. Once the list starts passing underneath,
-                a frosted layer and a hairline fade in behind it, because that is
-                the moment text would otherwise bleed through text.
-
-                Frosted, NOT backdrop-filter. Real-time blur on Android installs a
-                pre-draw listener that redraws and blurs the whole screen every
-                frame on the UI thread; this app spent a release removing them and
-                scripts/check-blur.mjs fails the build on a new one. Frosted is a
-                real blur on iOS and a 90% wash on Android, which buys the same
-                thing this needs — content not showing through — at no per-frame
-                cost. */}
-            <View style={styles.searchSticky}>
-              <Animated.View
-                pointerEvents="none"
-                style={[StyleSheet.absoluteFill, stuckStyle]}
-              >
-                <Frosted over="content" style={StyleSheet.absoluteFill} />
-                <View
-                  style={[styles.stickyEdge, { backgroundColor: colors.glassBorder }]}
-                />
-              </Animated.View>
-
-              <View
-                style={[
-                  styles.search,
-                  {
-                    backgroundColor: colors.searchFill,
-                    borderColor: focused ? colors.accent : colors.searchLine,
-                  },
-                ]}
-              >
-                <Ionicons name="search" size={18} color={colors.muted} />
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setFocused(false)}
-                  placeholder={t("listDetail.search")}
-                  placeholderTextColor={colors.muted}
-                  autoCorrect={false}
-                  returnKeyType="search"
-                  style={[styles.searchInput, { color: colors.ink }]}
-                />
-                {query.length > 0 && (
-                  <Pressable onPress={() => setQuery("")} hitSlop={8}>
-                    <Ionicons name="close-circle" size={18} color={colors.muted} />
-                  </Pressable>
-                )}
-              </View>
             </View>
 
             {grouped.map((group) => (
@@ -1349,36 +1262,6 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radii.md,
   },
-  // Transparent at rest: the canvas runs right up to the input, and the frosted
-  // layer behind it only fades in once content is passing underneath.
-  searchSticky: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  // The hairline that says the pinned row is physically above the list. Sits on
-  // the fading layer, not the container, so it arrives with the backdrop rather
-  // than being drawn across the canvas at rest.
-  stickyEdge: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: StyleSheet.hairlineWidth,
-  },
-  search: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    height: 40,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-  },
-  // 15, not the 16 the rest of the app uses for input: this is a filter over
-  // what is already on screen rather than somewhere you compose, and it should
-  // sit a step quieter than the item names it searches.
-  searchInput: { flex: 1, fontSize: 15, fontWeight: "400" },
   actionsBar: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -1416,10 +1299,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
-    marginBottom: spacing.sm,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
+  // The one gap that must not depend on what is above it. Equal to the budget
+  // strip's own marginTop, so the spacing under the action row is identical
+  // whether or not that strip rendered.
+  ecoStrip: { marginTop: spacing.md },
   stat: { flex: 1, alignItems: "center", gap: 2 },
   list: {
     paddingHorizontal: spacing.lg,

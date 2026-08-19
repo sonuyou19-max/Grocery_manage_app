@@ -605,7 +605,6 @@ const fr = {
     emptyItems: 'Rien ici pour l’instant — ajoute ton premier article ci-dessous.',
     startShopping: 'Commencer',
     scanReceipt: 'Scanner ticket',
-    search: 'Rechercher',
     quickAdd: 'Ajout auto',
     importRecipe: 'Recette',
     addItemBtn: 'Article',

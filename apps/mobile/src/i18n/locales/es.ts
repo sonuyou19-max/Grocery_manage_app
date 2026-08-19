@@ -605,7 +605,6 @@ const es = {
     emptyItems: 'Aquí todavía no hay nada — añade tu primer artículo abajo.',
     startShopping: 'Empezar compra',
     scanReceipt: 'Escanear ticket',
-    search: 'Buscar en la lista',
     quickAdd: 'Rápido',
     importRecipe: 'Receta',
     addItemBtn: 'Artículo',

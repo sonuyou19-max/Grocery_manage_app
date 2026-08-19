@@ -38,43 +38,55 @@ import { SPRING } from '@/lib/motion';
  * controls that should feel the same share one value rather than two literals
  * that agree today — and "how a button answers a tap" is the single most
  * repeated motion in the app, so it is exactly the case the rule is for.
+ *
+ * ---------------------------------------------------------------------------
+ * One animated node, not a wrapper around a Pressable
+ * ---------------------------------------------------------------------------
+ *
+ * The first version nested them — an Animated.View carrying the caller's style,
+ * with a bare Pressable inside holding the children. That laid the icon on top
+ * of the label on every button in the app, and the reason is worth keeping: the
+ * caller's `flexDirection: "row"` landed on the OUTER view, whose only child was
+ * the Pressable, while the icon and text were children of the Pressable — which
+ * had no style at all and so defaulted to `column`.
+ *
+ * Splitting a style between the node that sizes and the node that arranges is a
+ * trap with no good fix; making the pressable itself the animated node has none
+ * of the problem. The caller passes one style, it applies where the children
+ * are, and the transform rides along with it.
  */
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export const PressScale = forwardRef<View, PressableProps & { style?: ViewStyle | ViewStyle[] }>(
   function PressScale({ style, onPressIn, onPressOut, disabled, ...rest }, ref) {
     const scale = useSharedValue(1);
     const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
     return (
-      <Animated.View style={[animated, styleAsArray(style)]}>
-        <Pressable
-          ref={ref}
-          disabled={disabled}
-          // Both handlers are forwarded, not swallowed: a caller may want the
-          // press for its own reasons (a haptic, a preview) and should not have
-          // to choose between that and the animation.
-          onPressIn={(e) => {
-            // No spring on the way down. The finger is still moving, and a
-            // spring here means the button is still travelling when it is
-            // released — which reads as lag, not as softness.
-            scale.value = withSpring(0.96, SPRING.press);
-            onPressIn?.(e);
-          }}
-          onPressOut={(e) => {
-            scale.value = withSpring(1, SPRING.press);
-            onPressOut?.(e);
-          }}
-          {...rest}
-        />
-      </Animated.View>
+      <AnimatedPressable
+        ref={ref}
+        disabled={disabled}
+        style={[...styleAsArray(style), animated]}
+        // Both handlers are forwarded, not swallowed: a caller may want the press
+        // for its own reasons (a haptic, a preview) and should not have to choose
+        // between that and the animation.
+        onPressIn={(e) => {
+          scale.value = withSpring(0.96, SPRING.press);
+          onPressIn?.(e);
+        }}
+        onPressOut={(e) => {
+          scale.value = withSpring(1, SPRING.press);
+          onPressOut?.(e);
+        }}
+        {...rest}
+      />
     );
   },
 );
 
 /**
- * The animated wrapper takes the layout styles, so the scale applies to the
- * whole control rather than to its contents. Normalised because callers pass
- * either a style or an array of them, and spreading one into the other silently
- * drops the array case.
+ * Callers pass either a style or an array of them, and spreading one into the
+ * other silently drops the array case.
  */
 function styleAsArray(style: ViewStyle | ViewStyle[] | undefined): ViewStyle[] {
   if (!style) return [];
