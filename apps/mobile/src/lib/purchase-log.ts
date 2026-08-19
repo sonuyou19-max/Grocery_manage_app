@@ -314,9 +314,17 @@ export interface PriceMove {
 
 /** The parts of a purchase that decide whether two prices can be compared. */
 export interface Priceable {
+  /** The TOTAL paid, across every pack. Not the shelf price of one. */
   priceCents: number | null;
+  /** The size of ONE pack — the number on the label. */
   quantity: number | null;
   unit: string | null;
+  /**
+   * How many packs. Optional on the type and treated as 1 when absent, because
+   * this shape is read from rows written before migration 0036 and from callers
+   * that legitimately have no count (a flat price with no size at all).
+   */
+  packs?: number | null;
 }
 
 /**
@@ -336,7 +344,34 @@ export function unitPrice(p: Priceable): number | null {
   if (p.priceCents == null) return null;
   if (p.quantity == null) return null;
   if (p.quantity <= 0) return null;
-  return p.priceCents / p.quantity;
+  /*
+   * quantity is ONE pack's size, so the total amount bought is quantity × packs
+   * — four 250 ml pots is a litre, and its unit price is the total paid divided
+   * by that litre, not by 250 ml. Getting this wrong by leaving packs out would
+   * report the cream as four times its real price per ml.
+   *
+   * Absent or malformed packs falls back to 1, which reproduces the pre-0036
+   * formula exactly. That is what keeps every row written before this existed
+   * comparable with every row written after it.
+   */
+  const packs = p.packs != null && p.packs > 0 ? p.packs : 1;
+  return p.priceCents / (p.quantity * packs);
+}
+
+/**
+ * What the shopper actually hands over: the shelf price of one pack times how
+ * many of them.
+ *
+ * The entry flow asks for the per-pack price because that is the number printed
+ * on the label and on the receipt line, and doing the multiplication in the
+ * shopper's head at the shelf is the specific thing this feature exists to
+ * remove. Storage keeps the total, so nothing downstream has to know a pack
+ * count existed.
+ */
+export function totalCents(perPackCents: number, packs: number): number {
+  if (!Number.isFinite(perPackCents) || perPackCents < 0) return 0;
+  const n = Number.isFinite(packs) && packs > 0 ? Math.floor(packs) : 1;
+  return Math.round(perPackCents * n);
 }
 
 /**
