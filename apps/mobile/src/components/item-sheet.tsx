@@ -35,6 +35,7 @@ import { haptics } from '@/lib/haptics';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
 import { parsePriceToCents } from '@/lib/money';
+import { totalCents } from '@/lib/purchase-log';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -52,6 +53,13 @@ interface ItemSheetProps {
   onClose: () => void;
 }
 
+/**
+ * Trim floating-point dust off a computed total. 0.1 × 3 is 0.30000000000000004
+ * and "300.00000000000006 ml" on a sheet reads as a bug in the app rather than
+ * in binary floating point.
+ */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 const parseQuantity = (text: string): number | null => {
   const value = Number.parseFloat(text.replace(',', '.'));
   return Number.isNaN(value) || value <= 0 ? null : value;
@@ -66,7 +74,7 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
-  const { t, currency } = useLocale();
+  const { t, currency, money } = useLocale();
   const { updateItem, renameItem } = useGroceries();
   const liveItem = useItem(listId, itemId ?? undefined);
   const storePrefs = useStorePrefs();
@@ -94,7 +102,17 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
     if (!liveItem) return;
     setName(liveItem.name);
     setQtyText(liveItem.quantity != null ? String(liveItem.quantity) : '');
-    setPriceText(liveItem.priceCents != null ? (liveItem.priceCents / 100).toFixed(2) : '');
+    /*
+     * The field shows the PER-PACK price, so what is stored (the total) has to
+     * be divided back out by the count to seed it. Round to cents on the way in
+     * or 999c across 3 packs redisplays as 3.3299999999999996.
+     */
+    const packs = liveItem.packs > 0 ? liveItem.packs : 1;
+    setPriceText(
+      liveItem.priceCents != null
+        ? (Math.round(liveItem.priceCents / packs) / 100).toFixed(2)
+        : '',
+    );
     cancelAnimation(sheetY);
     // Entrance has no gesture behind it, but a spring still reads better than a
     // curve here because the sheet is heavy — it arrives and settles rather
@@ -349,21 +367,97 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
               </View>
             </Field>
 
-            {/* Price (optional) */}
-            <Field label={t('itemSheet.priceLabel')}>
+            {/* How many packs. The count the model never had — see migration
+                0036. A stepper rather than a keypad: the answer is almost always
+                one to six, and two taps beat opening a numeric keyboard, which
+                on this sheet also shoves the price field under it. */}
+            <Field label={t('itemSheet.packsLabel')}>
+              <View style={styles.packsRow}>
+                <Pressable
+                  onPress={() => {
+                    haptics.tick();
+                    patch({ packs: Math.max(1, itemObj.packs - 1) });
+                  }}
+                  disabled={itemObj.packs <= 1}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('itemSheet.packsFewer')}
+                  style={[
+                    styles.packsBtn,
+                    { borderColor: colors.line },
+                    itemObj.packs <= 1 && styles.packsBtnOff,
+                  ]}
+                >
+                  <Ionicons name="remove" size={18} color={colors.ink} />
+                </Pressable>
+                <Text style={[type.body, styles.packsValue, { color: colors.ink }]}>
+                  {itemObj.packs}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    haptics.tick();
+                    // 999 is the database's ceiling (0036); stopping here means a
+                    // long press cannot produce a write the row will reject.
+                    patch({ packs: Math.min(999, itemObj.packs + 1) });
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('itemSheet.packsMore')}
+                  style={[styles.packsBtn, { borderColor: colors.line }]}
+                >
+                  <Ionicons name="add" size={18} color={colors.ink} />
+                </Pressable>
+                {/* What was actually bought, spelled out, because "250 ml" and
+                    "4" sitting in separate fields do not add themselves up in
+                    the reader's head — which is the complaint this answers. */}
+                {itemObj.quantity != null && itemObj.unit && itemObj.packs > 1 && (
+                  <Text style={[type.sub, styles.packsTotal, { color: colors.muted }]}>
+                    {t('itemSheet.packsTotal', {
+                      total: round2(itemObj.quantity * itemObj.packs),
+                      unit: itemObj.unit,
+                    })}
+                  </Text>
+                )}
+              </View>
+            </Field>
+
+            {/* Price PER PACK (optional). The shelf label and the receipt line
+                are both per pack, so that is what is asked for; the total is
+                computed and shown, never typed. Storage keeps the total, which
+                is what price_cents has always meant. */}
+            <Field
+              label={
+                itemObj.packs > 1
+                  ? t('itemSheet.priceEachLabel')
+                  : t('itemSheet.priceLabel')
+              }
+            >
               <View style={[styles.input, styles.priceRow, inputColors(colors)]}>
                 <Text style={[type.body, { color: colors.muted }]}>{currencySymbolFor(currency)}</Text>
                 <TextInput
                   value={priceText}
                   onChangeText={(t) => {
                     setPriceText(t);
-                    patch({ priceCents: parsePriceToCents(t) });
+                    const each = parsePriceToCents(t);
+                    patch({
+                      priceCents: each == null ? null : totalCents(each, itemObj.packs),
+                    });
                   }}
                   placeholder="0.00"
                   placeholderTextColor={colors.muted}
                   keyboardType="decimal-pad"
                   style={[styles.priceInput, { color: colors.ink }]}
                 />
+                {/* Only once there is a multiplication to show. At one pack the
+                    per-pack price IS the total and repeating it would read as a
+                    second, different number. */}
+                {itemObj.packs > 1 && itemObj.priceCents != null && (
+                  <Text style={[type.sub, { color: colors.muted }]}>
+                    {t('itemSheet.priceTotal', {
+                      total: money(itemObj.priceCents),
+                    })}
+                  </Text>
+                )}
               </View>
             </Field>
 
@@ -581,6 +675,20 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '700' },
   qtyRow: { gap: spacing.md },
   qtyInput: { width: 100 },
+  packsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  packsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Dimmed rather than hidden at one pack: a control that disappears moves the
+  // ones beside it, and the row would jump every time the count crossed 1.
+  packsBtnOff: { opacity: 0.35 },
+  packsValue: { minWidth: 24, textAlign: 'center' },
+  packsTotal: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   priceInput: { flex: 1, fontSize: 16, paddingVertical: spacing.md },
   storeRow: { gap: spacing.sm, paddingRight: spacing.lg },

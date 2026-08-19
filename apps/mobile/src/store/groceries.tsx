@@ -45,9 +45,21 @@ export interface Item {
   id: string;
   name: string;
   category: ItemCategory;
+  /** The size of ONE pack — the number on the label. */
   quantity: number | null;
   unit: string | null;
-  /** null = user chose not to log a price (pricing is always optional). */
+  /**
+   * How many packs. Always at least 1: "how many did you buy" has no unknown
+   * state, and a nullable count would need the same `?? 1` at every read site.
+   * See migration 0036 — the total amount bought is quantity × packs.
+   */
+  packs: number;
+  /**
+   * The TOTAL paid across every pack, or null when the user chose not to log a
+   * price (pricing is always optional). The sheet asks for the per-pack price
+   * and multiplies, because the shelf label is per pack and doing that sum in
+   * your head at the shelf is what this is meant to remove.
+   */
   priceCents: number | null;
   /** Supermarket id (see lib/supermarkets) or a custom store name; optional. */
   store: string | null;
@@ -91,7 +103,7 @@ export interface Item {
  * is inside it.
  */
 export type ItemPatch = Partial<
-  Pick<Item, 'category' | 'quantity' | 'unit' | 'priceCents' | 'store' | 'bio'>
+  Pick<Item, 'category' | 'quantity' | 'unit' | 'packs' | 'priceCents' | 'store' | 'bio'>
 >;
 
 /**
@@ -224,6 +236,7 @@ const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {})
   category,
   quantity: null,
   unit: null,
+  packs: 1,
   priceCents: null,
   store: null,
   checked: false,
@@ -297,7 +310,7 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       .then((raw) => {
         if (raw) {
           const parsed = JSON.parse(raw) as List[];
-          if (Array.isArray(parsed)) setLists(parsed);
+          if (Array.isArray(parsed)) setLists(withPacks(parsed));
         }
       })
       .catch(() => {})
@@ -570,12 +583,42 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
 // CLOUD backend (Supabase, household-scoped) — optimistic + realtime refetch.
 // ---------------------------------------------------------------------------
 
+/**
+ * Repair lists coming out of the device cache.
+ *
+ * `packs` arrived with migration 0036, so a cache written by the previous build
+ * holds items without it. The Item type says `number`, and an undefined there
+ * would travel straight into the sheet and into a DB patch as undefined rather
+ * than as 1 — so it is filled once on the way in, at both hydration points,
+ * instead of being defended against at every read.
+ *
+ * Zero is treated as missing too: it can only come from a corrupt cache, and it
+ * is the one value that would make quantity × packs zero and turn a unit price
+ * into a division by nothing.
+ */
+function withPacks(lists: List[]): List[] {
+  // A declaration rather than a const: both call sites sit above this in the
+  // file, and a hoisted function cannot grow a temporal-dead-zone problem if one
+  // of them ever moves out of a callback.
+  return lists.map((l) => ({
+    ...l,
+    items: l.items.map((i) => (i.packs ? i : { ...i, packs: 1 })),
+  }));
+}
+
 interface DbItem {
   id: string;
   name: string;
   category: ItemCategory;
   quantity: number | null;
   unit: string | null;
+  /**
+   * Optional on the row type, not on the column: the database has it NOT NULL
+   * DEFAULT 1 (migration 0036), but a client running against a project where
+   * that migration has not been pushed yet simply gets no field, and `?? 1`
+   * below turns that into the same answer rather than an undefined.
+   */
+  packs?: number | null;
   price_cents: number | null;
   store: string | null;
   checked: boolean;
@@ -599,6 +642,10 @@ const mapItem = (r: DbItem): Item => ({
   category: r.category,
   quantity: r.quantity,
   unit: r.unit,
+  // Rows written before 0036 have no column at all on an older client; `?? 1`
+  // is the same default the database applies, kept here so a stale cache cannot
+  // produce a zero and divide the unit price by nothing.
+  packs: r.packs ?? 1,
   priceCents: r.price_cents,
   store: r.store,
   checked: r.checked,
@@ -723,6 +770,11 @@ async function migrateLocalLists(householdId: string, userId: string | null): Pr
         category: it.category,
         quantity: it.quantity,
         unit: it.unit,
+        // Carried, not left to the column default: a guest who recorded four
+        // packs before signing in would otherwise have it silently reset to one
+        // by the very act of joining a household — and the price, which is the
+        // total for four, would then read as the price of one.
+        packs: it.packs,
         price_cents: it.priceCents,
         bio: it.bio,
         store: it.store,
@@ -794,7 +846,7 @@ function CloudGroceriesProvider({
        * check-list-sweep now compares this string against mapItem.
        */
       .select(
-        'id, name, store, position, list_items(id, name, category, quantity, unit, price_cents, store, checked, checked_at, created_at, claimed_by, claimed_at, bio)',
+        'id, name, store, position, list_items(id, name, category, quantity, unit, packs, price_cents, store, checked, checked_at, created_at, claimed_by, claimed_at, bio)',
       )
       .eq('household_id', householdId)
       .eq('archived', false)
@@ -846,7 +898,7 @@ function CloudGroceriesProvider({
     let alive = true;
     AsyncStorage.getItem(cacheKey)
       .then((raw) => {
-        if (alive && raw) setLists(JSON.parse(raw) as List[]);
+        if (alive && raw) setLists(withPacks(JSON.parse(raw) as List[]));
       })
       .catch(() => {})
       .finally(() => {
@@ -1022,6 +1074,7 @@ function CloudGroceriesProvider({
       if (patch.category !== undefined) db.category = patch.category;
       if (patch.quantity !== undefined) db.quantity = patch.quantity;
       if (patch.unit !== undefined) db.unit = patch.unit;
+      if (patch.packs !== undefined) db.packs = patch.packs;
       if (patch.priceCents !== undefined) db.price_cents = patch.priceCents;
       if (patch.bio !== undefined) db.bio = patch.bio;
       if (patch.store !== undefined) db.store = patch.store;
