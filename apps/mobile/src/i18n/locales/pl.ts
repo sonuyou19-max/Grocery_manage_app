@@ -725,7 +725,6 @@ const pl = {
     finish: 'Zakończ zakupy',
   },
   itemSheet: {
-    addedTo: 'Dodano do %{category}',
     editItem: 'Edytuj produkt',
     renameDup: '„%{name}” jest już na tej liście, więc ten produkt nie może mieć takiej nazwy.',
     renameDupCart: '„%{name}” jest już w Twoim koszyku, więc ten produkt nie może mieć takiej nazwy.',

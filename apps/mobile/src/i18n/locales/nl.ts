@@ -626,7 +626,6 @@ const nl = {
     finish: 'Klaar met winkelen',
   },
   itemSheet: {
-    addedTo: 'Toegevoegd aan %{category}',
     editItem: 'Item bewerken',
     renameDup: '“%{name}” staat al op deze lijst, dus dit item kan die naam niet krijgen.',
     renameDupCart: '“%{name}” zit al in je mandje, dus dit item kan die naam niet krijgen.',

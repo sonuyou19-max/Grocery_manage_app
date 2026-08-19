@@ -629,7 +629,6 @@ const de = {
     finish: 'Einkauf beenden',
   },
   itemSheet: {
-    addedTo: 'Hinzugefügt zu %{category}',
     editItem: 'Artikel bearbeiten',
     renameDup: '„%{name}“ steht schon auf dieser Liste, dieser Artikel kann also nicht so heißen.',
     renameDupCart: '„%{name}“ liegt schon in deinem Wagen, dieser Artikel kann also nicht so heißen.',

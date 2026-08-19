@@ -627,7 +627,6 @@ const it = {
     finish: 'Termina la spesa',
   },
   itemSheet: {
-    addedTo: 'Aggiunto a %{category}',
     editItem: 'Modifica articolo',
     renameDup: '“%{name}” è già in questa lista, quindi questo articolo non può avere quel nome.',
     renameDupCart: '“%{name}” è già nel tuo carrello, quindi questo articolo non può avere quel nome.',

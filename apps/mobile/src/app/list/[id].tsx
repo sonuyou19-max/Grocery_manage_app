@@ -105,7 +105,6 @@ export default function ListDetailScreen() {
   /** The cart section is a footer, not the list — closed until asked for. */
   const [cartOpen, setCartOpen] = useState(false);
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
-  const [sheetMode, setSheetMode] = useState<"added" | "edit">("added");
   const [quickAdd, setQuickAdd] = useState(false);
 
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
@@ -356,16 +355,26 @@ export default function ListDetailScreen() {
   // Adds/updates the store right away (instant feedback), then waits for the
   // keyboard to actually finish closing before opening the sheet — see
   // dismissKeyboardAndWait above for why the wait matters.
-  const openSheet = async (id: string, mode: "added" | "edit") => {
+  const openSheet = async (id: string) => {
     await dismissKeyboardAndWait();
-    setSheetMode(mode);
     setSheetItemId(id);
   };
 
+  /*
+   * Add and get out of the way.
+   *
+   * This used to open the detail sheet on every add, so putting six things on a
+   * list meant six sheets to dismiss — and the sheet asks for quantity, price,
+   * store and organic, none of which anyone knows while typing "milk" at the
+   * kitchen table. The information it wanted is the information you have at the
+   * SHELF, which is a different moment.
+   *
+   * The item appearing in its category, plus the glyph that flies to the basket,
+   * is the confirmation. Details are on demand now: tap the row.
+   */
   const doAdd = (name: string) => {
-    const newId = addItem(list.id, name);
+    addItem(list.id, name);
     setDraft("");
-    void openSheet(newId, "added");
   };
 
   const submit = () => {
@@ -414,7 +423,7 @@ export default function ListDetailScreen() {
   };
 
   const openEdit = (item: Item) => {
-    void openSheet(item.id, "edit");
+    void openSheet(item.id);
   };
 
   const onImport = () => {
@@ -764,7 +773,6 @@ export default function ListDetailScreen() {
       <ItemSheet
         listId={list.id}
         itemId={sheetItemId}
-        mode={sheetMode}
         onClose={() => setSheetItemId(null)}
       />
       <QuickAddSheet

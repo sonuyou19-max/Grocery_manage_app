@@ -627,7 +627,6 @@ const fr = {
     finish: 'Terminer les courses',
   },
   itemSheet: {
-    addedTo: 'Ajouté à %{category}',
     editItem: 'Modifier l’article',
     renameDup: '« %{name} » est déjà dans cette liste, cet article ne peut donc pas porter ce nom.',
     renameDupCart: '« %{name} » est déjà dans ton panier, cet article ne peut donc pas porter ce nom.',

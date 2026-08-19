@@ -627,7 +627,6 @@ const es = {
     finish: 'Terminar la compra',
   },
   itemSheet: {
-    addedTo: 'Añadido a %{category}',
     editItem: 'Editar artículo',
     renameDup: '«%{name}» ya está en esta lista, así que este artículo no puede llamarse así.',
     renameDupCart: '«%{name}» ya está en tu carrito, así que este artículo no puede llamarse así.',

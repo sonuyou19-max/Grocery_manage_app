@@ -638,7 +638,6 @@ const en = {
     finish: 'Finish shopping',
   },
   itemSheet: {
-    addedTo: 'Added to %{category}',
     editItem: 'Edit item',
     renameDup: '“%{name}” is already on this list, so this item can’t take that name.',
     renameDupCart: '“%{name}” is already in your cart, so this item can’t take that name.',

@@ -49,7 +49,6 @@ const UNIT_OPTIONS: (string | null)[] = [null, ...UNITS];
 interface ItemSheetProps {
   listId: string;
   itemId: string | null;
-  mode: 'added' | 'edit';
   onClose: () => void;
 }
 
@@ -70,7 +69,7 @@ const parseQuantity = (text: string): number | null => {
  * again when tapping an item to edit it. Everything below the category is
  * optional — quantity, price and the supermarket to buy it from.
  */
-export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
+export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
@@ -258,18 +257,13 @@ export function ItemSheet({ listId, itemId, mode, onClose }: ItemSheetProps) {
             <View collapsable={false}>
               <View style={[styles.grab, { backgroundColor: colors.line }]} />
               <View style={[styles.header, styles.headerZone]}>
-                {mode === 'added' ? (
-                  <>
-                    <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-                    <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
-                      {t('itemSheet.addedTo', { category: categoryLabel(itemObj.category, t) })}
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
-                    {t('itemSheet.editItem')}
-                  </Text>
-                )}
+                {/* One title now. The sheet used to double as an
+                    "Added to Dairy" confirmation because adding opened it
+                    automatically; it no longer does, so every opening is an
+                    edit and the header can say so plainly. */}
+                <Text style={[type.h2, { color: colors.ink, flex: 1 }]}>
+                  {t('itemSheet.editItem')}
+                </Text>
                 <Pressable onPress={() => requestClose()} hitSlop={10}>
                   <Ionicons name="close" size={24} color={colors.muted} />
                 </Pressable>
