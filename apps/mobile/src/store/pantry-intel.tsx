@@ -67,8 +67,16 @@ import { useHousehold } from '@/store/household';
 export interface PurchaseDetail {
   priceCents?: number | null;
   store?: string | null;
+  /** The size of ONE pack. */
   quantity?: number | null;
   unit?: string | null;
+  /**
+   * How many packs (migration 0036). Without this the count is lost at exactly
+   * the moment the purchase becomes history, which is where every per-unit
+   * comparison is computed from — four pots of cream would enter the price log
+   * as one, at four times the real price per ml.
+   */
+  packs?: number | null;
   /** The shopper's organic/local flag, carried from the list item. */
   bio?: boolean | null;
 }
@@ -186,6 +194,7 @@ function toPurchase(
     priceCents,
     at: now,
     quantity: detail?.quantity ?? null,
+    packs: detail?.packs ?? 1,
     unit: detail?.unit ?? null,
     bio: detail?.bio === true,
     // Recorded at purchase time rather than looked up later: the log is what
@@ -451,6 +460,7 @@ interface DbPriceRow {
   price_cents: number | null;
   bio: boolean | null;
   quantity: number | null;
+  packs: number;
   unit: string | null;
   category: ItemCategory | null;
   recorded_at: string;
@@ -465,6 +475,8 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   bio: r.bio ?? false,
   at: Date.parse(r.recorded_at),
   quantity: r.quantity == null ? null : Number(r.quantity),
+  // Rows predate 0036 or arrive from a client that has not been updated.
+  packs: r.packs == null ? 1 : Number(r.packs),
   unit: r.unit,
   category: r.category,
 });
@@ -510,7 +522,7 @@ async function migrateLocalPurchases(
     const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, bio, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .limit(LOCAL_PURCHASE_CAP);
@@ -533,6 +545,7 @@ async function migrateLocalPurchases(
           price_cents: p.priceCents,
           bio: p.bio,
           quantity: p.quantity,
+          packs: p.packs,
           unit: p.unit,
           category: p.category,
           recorded_at: new Date(p.at).toISOString(),
@@ -702,7 +715,7 @@ function CloudPantryIntelProvider({
     const since = new Date(cutoffRef.current ?? Date.now() - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, unit, category, bio, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .order('recorded_at', { ascending: false })
@@ -852,6 +865,7 @@ function CloudPantryIntelProvider({
           price_cents: entry.priceCents,
           bio: entry.bio,
           quantity: entry.quantity,
+          packs: entry.packs,
           unit: entry.unit,
           category: entry.category,
         };

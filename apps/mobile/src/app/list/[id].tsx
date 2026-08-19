@@ -327,6 +327,7 @@ export default function ListDetailScreen() {
         priceCents: item.priceCents,
         store: item.store ?? list.store ?? null,
         quantity: item.quantity,
+        packs: item.packs,
         unit: item.unit,
         bio: item.bio,
       };
@@ -918,20 +919,15 @@ function SwipeableItemRow({
             rowStyle,
           ]}
         >
-          <Pressable onPress={guard(onToggle)} hitSlop={8}>
-            <View
-              style={[
-                styles.tick,
-                { borderColor: it.checked ? colors.accent : colors.muted },
-                it.checked && { backgroundColor: colors.accent },
-              ]}
-            >
-              {it.checked && (
-                <Ionicons name="checkmark" size={14} color={colors.accentInk} />
-              )}
-            </View>
-          </Pressable>
+          {/* No tick circle, and no strikethrough.
+              Ticking lives in Start Shopping now, which is the moment it means
+              something — you are standing in the shop with the trolley. Here the
+              list is a document you are writing, so a row is a row: tapping it
+              opens its details rather than crossing it out.
 
+              `checked` still dims the row. A ticked item is not invisible on
+              this screen, it is just visibly already handled, and hiding that
+              entirely would make the count in the header unexplainable. */}
           <Pressable style={styles.grow} onPress={guard(onEdit)}>
             <View style={styles.nameRow}>
               <ItemEmoji
@@ -944,7 +940,6 @@ function SwipeableItemRow({
                   type.body,
                   styles.grow,
                   { color: it.checked ? colors.muted : colors.ink },
-                  it.checked && styles.struck,
                 ]}
               >
                 {it.name}

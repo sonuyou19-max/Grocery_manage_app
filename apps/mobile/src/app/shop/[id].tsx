@@ -85,6 +85,7 @@ export default function ShoppingModeScreen() {
         priceCents: item.priceCents,
         store: item.store ?? list.store ?? null,
         quantity: item.quantity,
+        packs: item.packs,
         unit: item.unit,
         bio: item.bio,
       });

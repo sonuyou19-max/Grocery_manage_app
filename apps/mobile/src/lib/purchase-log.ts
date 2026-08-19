@@ -53,8 +53,14 @@ export interface Purchase {
   priceCents: number | null;
   /** Epoch ms. */
   at: number;
-  /** Amount bought, when known — needed to compare like with like. */
+  /** The size of ONE pack, when known — needed to compare like with like. */
   quantity: number | null;
+  /**
+   * How many packs were bought (migration 0036). Defaults to 1 for every row
+   * written before it existed, which is what makes those rows' unit prices
+   * identical under the new formula — see unitPrice below.
+   */
+  packs: number;
   unit: string | null;
   /**
    * The item's category at the time of purchase.
