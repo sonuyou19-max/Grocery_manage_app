@@ -109,6 +109,25 @@ check('a modifier before a known word still matches', mod.emojiFor('Whole milk',
 check('a modifier after a known word still matches', mod.emojiFor('Milk semi-skimmed', 'dairy_eggs'), '🥛');
 check('brand noise around a known word still matches', mod.emojiFor('Alpro almond milk', 'dairy_eggs'), '🥛');
 
+/* ----------------------------------------- a nut is a flavour, not the thing */
+
+// Adding the individual nuts to the table broke "Alpro almond milk" above: the
+// word scan reached "almond" first and served a peanut for a carton of milk.
+// The fix lets a leading nut stand aside for the product it flavours, and these
+// pin both halves of it — the deferral, and the cases where the nut IS the
+// item and must win.
+check('"almond milk" is a milk', mod.emojiFor('Almond milk', 'dairy_eggs'), '🥛');
+check('"hazelnut milk" is a milk', mod.emojiFor('Hazelnut milk', 'dairy_eggs'), '🥛');
+check('"almond flour" is a flour', mod.emojiFor('Almond flour', 'pantry'), '🌾');
+check('"almond oil" is an oil', mod.emojiFor('Almond oil', 'pantry'), '🫒');
+check('"peanut butter" stays a nut', mod.emojiFor('Peanut butter', 'pantry'), '🥜');
+check('"almonds" alone is a nut', mod.emojiFor('Almonds', 'pantry'), '🥜');
+check('"walnuts" alone is a nut', mod.emojiFor('Walnuts', 'pantry'), '🌰');
+// Head-first languages never needed the rule — they stop at the head word —
+// but they must not be disturbed by it either.
+check('"latte di mandorla" is a milk', mod.emojiFor('Latte di mandorla', 'dairy_eggs'), '🥛');
+check('"leche de almendras" is a milk', mod.emojiFor('Leche de almendras', 'dairy_eggs'), '🥛');
+
 /* --------------------------------------------- stemming must not over-reach */
 
 // "sale" (Italian salt) must not be stemmed to "sal"→ nothing weird, and short

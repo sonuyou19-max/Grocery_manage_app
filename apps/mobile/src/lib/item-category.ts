@@ -227,6 +227,45 @@ const ITEM_CATEGORY: Record<string, ItemCategory> = (() => {
  * throughout — a French shopper types "crème", not "creme", and the table is
  * keyed on the folded form.
  */
+/*
+ * Words that mean "this is not the food that word usually names".
+ *
+ * The word-by-word scan below is what makes this table work at all — "organic
+ * beef mince" finds beef — and it is also how "water colour" became a drink.
+ * The scan has no idea that `colour` changes what `water` refers to.
+ *
+ * This is the fourth item of the same shape after butter beans (a legume read as
+ * dairy), beef stock cubes (a flavouring read as a joint) and cocoa powder. What
+ * they share is a qualifier that outranks the noun, so it is checked BEFORE the
+ * scan and wins outright.
+ *
+ * Deliberately narrow: only words whose presence makes a food reading wrong in
+ * every context I can think of. "Paint" is never a drink; "cleaner" is never a
+ * food. A word that is merely usually non-food does not belong here — this rule
+ * is strong enough to be worth being sure about.
+ */
+const NON_FOOD_QUALIFIERS = new Set<string>([
+  // en
+  'colour', 'color', 'paint', 'paints', 'crayon', 'crayons', 'brush',
+  'cleaner', 'detergent', 'bleach', 'polish', 'varnish', 'glue',
+  /*
+   * de / nl. The compounds are spelled out because German and Dutch write them
+   * as ONE word — "Wasserfarben" contains no separate `farben` for a word scan
+   * to find, so the qualifier never fires unless the compound is itself a key.
+   * Same reason rindfleisch and kakaopulver are listed elsewhere in the app.
+   */
+  'farbe', 'farben', 'malfarbe', 'malfarben', 'wasserfarbe', 'wasserfarben',
+  'pinsel', 'reiniger', 'waschmittel', 'putzmittel', 'spulmittel',
+  'verf', 'waterverf', 'kwast', 'schoonmaak', 'wasmiddel', 'afwasmiddel',
+  // fr
+  'peinture', 'peintures', 'pinceau', 'nettoyant', 'lessive',
+  // es / it
+  'pintura', 'pinturas', 'pincel', 'limpiador', 'detergente',
+  'pittura', 'pennello', 'detersivo',
+  // pl
+  'farba', 'farby', 'pedzel', 'plyn', 'proszek',
+]);
+
 export function categoryFromTables(name: string): ItemCategory | null {
   const folded = fold(name);
   if (!folded) return null;
@@ -234,7 +273,11 @@ export function categoryFromTables(name: string): ItemCategory | null {
   const whole = ITEM_CATEGORY[folded] ?? ITEM_CATEGORY[folded.replace(/\s+/g, '')];
   if (whole) return whole;
 
-  for (const word of folded.split(/[\s,./-]+/)) {
+  const words = folded.split(/[\s,./-]+/);
+  // Before the noun scan, never after. See NON_FOOD_QUALIFIERS.
+  if (words.some((w) => NON_FOOD_QUALIFIERS.has(w))) return 'household';
+
+  for (const word of words) {
     if (ITEM_CATEGORY[word]) return ITEM_CATEGORY[word];
   }
   return null;

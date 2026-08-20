@@ -45,7 +45,6 @@ import { ItemSheet } from "@/components/item-sheet";
 import { ListPantryStrip } from "@/components/list-pantry-strip";
 import { MeshBackground } from "@/components/mesh-background";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
-import { SupermarketBadge } from "@/components/supermarket-badge";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { useCoachMark } from "@/lib/coach-marks";
 import { findDuplicate } from "@/lib/item-dup";
@@ -1134,19 +1133,14 @@ function SwipeableItemRow({
                 />
               )}
             </View>
-            {(it.quantity != null || it.store != null) && (
-              <View style={styles.meta}>
-                {it.store != null && (
-                  <SupermarketBadge store={it.store} size={16} />
-                )}
-                {it.quantity != null && (
-                  <Text style={[type.sub, { color: colors.muted }]}>
-                    {it.quantity}
-                    {it.unit ? ` ${it.unit}` : ""}
-                  </Text>
-                )}
-              </View>
-            )}
+            {/* No amount and no store badge here.
+                Both belong to the shop, not to the writing of the list: the
+                quantity is what you check against the shelf and the store is
+                where you are standing, so Shopping Mode shows them and this
+                screen does not. It also made the rows two heights — one line for
+                most items and two for the few with details — which is what a
+                list of names should never be. Everything is still one tap away
+                in the row's own sheet. */}
           </Pressable>
 
           {/* Claiming: only once a second person is around, and never on
@@ -1419,21 +1413,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
   },
-  meta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginTop: 2,
-  },
-  tick: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  struck: { textDecorationLine: "line-through" },
   bagBadge: {
     position: "absolute",
     top: -6,

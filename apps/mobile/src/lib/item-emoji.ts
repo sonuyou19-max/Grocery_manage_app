@@ -47,6 +47,11 @@ const ITEM_EMOJI: Record<string, string> = {
   milk: '🥛', milch: '🥛', lait: '🥛', melk: '🥛', leche: '🥛', latte: '🥛', mleko: '🥛',
   cheese: '🧀', kase: '🧀', fromage: '🧀', kaas: '🧀', queso: '🧀', formaggio: '🧀', ser: '🧀',
   gouda: '🧀', cheddar: '🧀', mozzarella: '🧀', parmesan: '🧀', feta: '🧀',
+  // Fresh cheeses. Paneer showed the dairy category's milk glass, which is the
+  // fallback for anything this table does not know — it is a cheese, and 🧀 is
+  // right there.
+  paneer: '🧀', ricotta: '🧀', halloumi: '🧀', quark: '🧀', mascarpone: '🧀',
+  brie: '🧀', camembert: '🧀', burrata: '🧀', 'goat cheese': '🧀', chevre: '🧀',
   butter: '🧈', beurre: '🧈', boter: '🧈', mantequilla: '🧈', burro: '🧈', maslo: '🧈',
   egg: '🥚', eggs: '🥚', ei: '🥚', eier: '🥚', oeuf: '🥚', oeufs: '🥚', eieren: '🥚',
   huevo: '🥚', huevos: '🥚', uovo: '🥚', uova: '🥚', jajka: '🥚', jajko: '🥚',
@@ -70,6 +75,13 @@ const ITEM_EMOJI: Record<string, string> = {
   ciliegie: '🍒', wisnie: '🍒', czeresnie: '🍒',
   pineapple: '🍍', ananas: '🍍', pina: '🍍',
   kiwi: '🥝', mango: '🥭', avocado: '🥑', avocat: '🥑', aguacate: '🥑', awokado: '🥑',
+  // Tropical fruit Unicode has no glyph for. The mango stands in: it is the
+  // table's only tropical fruit and reads as one, which is a great deal closer
+  // than the head of lettuce these were getting from the fruit_veg fallback.
+  guava: '🥭', guayaba: '🥭', gojave: '🥭', goiaba: '🥭', guawa: '🥭',
+  papaya: '🥭', papaja: '🥭', lychee: '🥭', litchi: '🥭', passionfruit: '🥭',
+  maracuja: '🥭', granatapfel: '🥭', pomegranate: '🥭', granada: '🥭',
+  melograno: '🥭', granat: '🥭',
   blueberries: '🫐', heidelbeeren: '🫐', myrtilles: '🫐', bosbessen: '🫐', arandanos: '🫐',
   mirtilli: '🫐', borowki: '🫐',
   coconut: '🥥', kokosnuss: '🥥', noix: '🌰', kokos: '🥥',
@@ -141,6 +153,19 @@ const ITEM_EMOJI: Record<string, string> = {
   jam: '🍓', marmelade: '🍓', confiture: '🍓', mermelada: '🍓',
   marmellata: '🍓', dzem: '🍓',
   peanut: '🥜', nuts: '🥜', nusse: '🥜', noten: '🥜', nueces: '🥜', noci: '🥜', orzechy: '🥜',
+  // The individual nuts, which were all landing on the pantry can. Singular and
+  // plural both, because this table matches words rather than stems and an
+  // English shopper writes "almonds" as often as "almond".
+  almond: '🥜', almonds: '🥜', mandel: '🥜', mandeln: '🥜', amande: '🥜',
+  amandes: '🥜', amandel: '🥜', amandelen: '🥜', almendra: '🥜', almendras: '🥜',
+  mandorla: '🥜', mandorle: '🥜', migdal: '🥜', migdaly: '🥜',
+  cashew: '🥜', cashews: '🥜', anacardi: '🥜', anacardos: '🥜', nerkowce: '🥜',
+  pistachio: '🥜', pistachios: '🥜', pistazien: '🥜', pistaches: '🥜',
+  pistacchi: '🥜', pistacje: '🥜',
+  walnut: '🌰', walnuts: '🌰', walnuss: '🌰', walnusse: '🌰', walnoten: '🌰',
+  chestnut: '🌰', maroni: '🌰', chataignes: '🌰', castagne: '🌰', kasztany: '🌰',
+  hazelnut: '🌰', hazelnuts: '🌰', haselnusse: '🌰', noisettes: '🌰',
+  hazelnoten: '🌰', avellanas: '🌰', nocciole: '🌰', 'orzechy laskowe': '🌰',
   chocolate: '🍫', schokolade: '🍫', chocolat: '🍫', chocolade: '🍫', cioccolato: '🍫', czekolada: '🍫',
   beans: '🫘', bohnen: '🫘', haricots: '🫘', bonen: '🫘', frijoles: '🫘', fagioli: '🫘', fasola: '🫘',
   soup: '🥫', suppe: '🥫', soupe: '🥫', soep: '🥫', sopa: '🥫', zuppa: '🥫', zupa: '🥫',
@@ -292,6 +317,30 @@ function lookupWord(word: string): string | undefined {
 }
 
 /**
+ * A nut in a two-word name is usually the FLAVOUR, not the thing.
+ *
+ * "Almond milk" is a milk. "Alpro almond milk" is a milk. So is "lait
+ * d'amande" — and that last one is why this cannot be a rule about word order.
+ * English builds these compounds head-last and the Romance languages build
+ * them head-first, so "take the last word" would fix German and break French.
+ * What the two share is the shape of the pair: one word names a plant, the
+ * other names a product made with it, and the product is what went in the
+ * trolley.
+ *
+ * The sets are derived from the table rather than written out again, so a nut
+ * added in an eighth language is covered the day it lands and cannot drift
+ * from the list it is supposed to mirror. `NUT` is exactly the two nut glyphs.
+ * `NUT_YIELDS_TO` is the small set of products a nut is routinely a flavour
+ * of — milk and cream (🥛), flour (🌾), oil (🫒), yoghurt and cereal (🥣).
+ *
+ * Butter is deliberately NOT in that set: peanut butter is a nut product and
+ * has always shown 🥜, almond butter is the same kind of thing, and a butter
+ * dish for both would be a worse answer than the one this replaces.
+ */
+const NUT = new Set(['🥜', '🌰']);
+const NUT_YIELDS_TO = new Set(['🥛', '🌾', '🫒', '🥣']);
+
+/**
  * The emoji for an item. Never empty.
  *
  * Order matters: the whole name first (so "olive oil" beats "oil", and
@@ -314,10 +363,22 @@ export function emojiFor(name: string, category: ItemCategory = 'other'): string
   const learned = lexicon(folded);
   if (learned) return learned;
 
-  // 3. Curated table, word by word.
+  // 3. Curated table, word by word. First hit wins, with the one exception
+  //    above: a leading nut steps aside for a product it is a flavour of.
+  //    Only a LEADING nut, because a name whose first hit is anything else has
+  //    already answered — "lait d'amande" stops at "lait" without help.
+  const hits: string[] = [];
   for (const word of folded.split(/[\s,./-]+/)) {
     const hit = lookupWord(word);
-    if (hit) return hit;
+    if (hit) hits.push(hit);
+  }
+  if (hits.length > 0) {
+    const first = hits[0]!;
+    if (NUT.has(first)) {
+      const product = hits.find((hit) => NUT_YIELDS_TO.has(hit));
+      if (product) return product;
+    }
+    return first;
   }
 
   // 4. The category, which always has an answer.
