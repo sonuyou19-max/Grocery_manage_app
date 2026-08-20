@@ -18,6 +18,8 @@ import {
 } from "react-native-keyboard-controller";
 import Animated, {
   FadeInDown,
+  SlideInDown,
+  SlideOutDown,
   Extrapolation,
   interpolate,
   runOnJS,
@@ -390,7 +392,7 @@ export default function ListDetailScreen() {
    * The item appearing in its category, plus the glyph that flies to the basket,
    * is the confirmation. Details are on demand now: tap the row.
    */
-  const doAdd = (name: string) => {
+  const doAdd = (name: string, close = false) => {
     /*
      * One configureNext covers the whole insertion: the category's rows shift
      * down to make room and, when the item opens a category that was not on the
@@ -415,9 +417,28 @@ export default function ListDetailScreen() {
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
     setJustAdded(id);
     highlightTimer.current = setTimeout(() => setJustAdded(null), 1400);
+
+    /*
+     * The + finishes; the return key does not.
+     *
+     * Two ways to submit, because they are two intentions. Return means "and the
+     * next one" — the field keeps focus and six items stay six types and six
+     * returns, which is the fastest path on this screen. The + button means
+     * done: the bar slides away and the keyboard goes with it, so the list is
+     * fully visible at the moment the row lands in it.
+     *
+     * Closed HERE rather than in the button's handler, so it happens only when
+     * an item was really added. A duplicate that stops at an alert leaves the
+     * bar open with the text still in it, rather than dismissing the keyboard
+     * and throwing away what was typed.
+     */
+    if (close) {
+      setAdding(false);
+      KeyboardController.dismiss();
+    }
   };
 
-  const submit = () => {
+  const submit = (close = false) => {
     const name = draft.trim();
     if (!name) return;
 
@@ -434,7 +455,7 @@ export default function ListDetailScreen() {
      */
     const duplicate = findDuplicate(list.items, name);
     if (!duplicate) {
-      doAdd(name);
+      doAdd(name, close);
       return;
     }
     /*
@@ -448,7 +469,7 @@ export default function ListDetailScreen() {
         t("listDetail.dupHereCart", { name: duplicate.name }),
         [
           { text: t("common.cancel"), style: "cancel" },
-          { text: t("listDetail.addAnyway"), onPress: () => doAdd(name) },
+          { text: t("listDetail.addAnyway"), onPress: () => doAdd(name, close) },
         ],
       );
       return;
@@ -778,7 +799,16 @@ export default function ListDetailScreen() {
           >
             <SafeAreaView edges={["bottom"]}>
               {adding && (
-                <View style={styles.addBar}>
+                /* Slides in from below and leaves the same way, so the field
+                   arrives from the keyboard's direction and departs with it
+                   rather than blinking out of existence. Mount and unmount are
+                   the animation's own triggers — no extra state to keep in
+                   step with `adding`. */
+                <Animated.View
+                  entering={SlideInDown.duration(200)}
+                  exiting={SlideOutDown.duration(180)}
+                  style={styles.addBar}
+                >
                   <TextInput
                     value={draft}
                     onChangeText={setDraft}
@@ -797,10 +827,10 @@ export default function ListDetailScreen() {
                     /* Submits without dismissing, so the next item is one more
                        line of typing rather than another tap on the button. */
                     blurOnSubmit={false}
-                    onSubmitEditing={submit}
+                    onSubmitEditing={() => submit()}
                   />
-                  <Pressable
-                    onPress={submit}
+                  <PressScale
+                    onPress={() => submit(true)}
                     accessibilityRole="button"
                     accessibilityLabel={t("listDetail.addItem")}
                     style={[
@@ -812,7 +842,7 @@ export default function ListDetailScreen() {
                     ]}
                   >
                     <Ionicons name="add" size={24} color={colors.accentInk} />
-                  </Pressable>
+                  </PressScale>
                   <Pressable
                     onPress={() => {
                       setAdding(false);
@@ -824,7 +854,7 @@ export default function ListDetailScreen() {
                   >
                     <Ionicons name="close" size={22} color={colors.muted} />
                   </Pressable>
-                </View>
+                </Animated.View>
               )}
 
               {/* The three ways in, hidden while one of them is open. Leaving
