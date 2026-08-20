@@ -41,10 +41,12 @@ import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
-// Every unit stays one flick away, including "none". A unit suggested on add
-// (lib/item-unit.ts) is only ever a prefill — this picker is the override, and
+// The real units only. "none" was a segment of its own and earned nothing: an
+// item with no quantity shows no amount whatever the unit says, so the empty
+// number field beside this already means "not measured". A unit suggested on add
+// (lib/item-unit.ts) is only ever a prefill — this strip is the override, and
 // whatever is chosen here is remembered per item and wins on every later add.
-const UNIT_OPTIONS: (string | null)[] = [null, ...UNITS];
+const UNIT_OPTIONS: string[] = [...UNITS];
 
 
 
@@ -53,6 +55,18 @@ interface ItemSheetProps {
   itemId: string | null;
   onClose: () => void;
 }
+
+/**
+ * The total, from what is typed in the unit-price field and the pack count.
+ *
+ * The single direction the sheet's arithmetic runs in. Everything that can
+ * change the total — editing the price, stepping the count — goes through here,
+ * so there is one expression to be right rather than three that must agree.
+ */
+const totalFor = (priceText: string, packs: number): number | null => {
+  const each = parsePriceToCents(priceText);
+  return each == null ? null : totalCents(each, packs);
+};
 
 const parseQuantity = (text: string): number | null => {
   const value = Number.parseFloat(text.replace(',', '.'));
@@ -290,18 +304,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
 
             {/* Category */}
             <Field label={t('itemSheet.categoryLabel')}>
-              {/* One row that scrolls, not three that wrap.
-                  Eleven categories wrapped to three rows and were the tallest
-                  thing on the sheet — for a field whose answer is already correct
-                  almost every time, since the item was categorised when it was
-                  added. A horizontal strip costs one row, keeps every option one
-                  swipe away, and the chosen chip is scrolled into view so the
-                  current answer is never the one you have to hunt for. */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chips}
-              >
+              <View style={styles.chips}>
                 {CATEGORY_ORDER.map((cat) => {
                   const active = itemObj.category === cat;
                   return (
@@ -325,19 +328,11 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                     </Pressable>
                   );
                 })}
-              </ScrollView>
+              </View>
             </Field>
 
-            {/* Amount and price, as one block.
-                Four labelled sections — quantity, unit, how many, price — was
-                most of the sheet, and they are not four questions. They are one:
-                what did you buy and what did it cost. So they share a heading and
-                sit in two tight rows, with the arithmetic underneath.
-
-                The wheels that were briefly here are gone. A three-row drum is
-                TALLER than the chips it replaced, which was the opposite of the
-                point, and two of them side by side dominated the sheet. */}
-            <Field label={t('itemSheet.amountLabel')}>
+            {/* Quantity: how much is in one pack. */}
+            <Field label={t('itemSheet.quantityLabel')}>
               <View style={styles.amountRow}>
                 <TextInput
                   value={qtyText}
@@ -350,20 +345,18 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                   keyboardType="decimal-pad"
                   style={[styles.input, styles.qtyInput, inputColors(colors)]}
                 />
-                {/* A segmented control, not chips: one connected strip reads as
-                    "pick exactly one of these" and costs a single row. "none" is
-                    an em dash, because spelling it out was the widest label here
-                    and it means the same thing as the empty quantity beside it. */}
+                {/* A connected strip rather than loose chips: it reads as
+                    "exactly one of these" and costs a single row. */}
                 <View style={[styles.segment, { borderColor: colors.line }]}>
                   {UNIT_OPTIONS.map((u, i) => {
-                    const active = (itemObj.unit ?? null) === u;
+                    const active = itemObj.unit === u;
                     return (
                       <Pressable
-                        key={u ?? 'none'}
+                        key={u}
                         onPress={() => patch({ unit: u })}
                         accessibilityRole="button"
                         accessibilityState={{ selected: active }}
-                        accessibilityLabel={u ?? t('itemSheet.unitNone')}
+                        accessibilityLabel={u}
                         style={[
                           styles.segmentCell,
                           i > 0 && { borderLeftWidth: 1, borderLeftColor: colors.line },
@@ -377,48 +370,29 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                             { color: active ? colors.accent : colors.muted },
                           ]}
                         >
-                          {u ?? '—'}
+                          {u}
                         </Text>
                       </Pressable>
                     );
                   })}
                 </View>
               </View>
+            </Field>
 
-              <View style={styles.amountRow}>
-                {/* The pack count, back as a stepper — the control it should have
-                    stayed. One to six covers nearly every real answer and a tap
-                    is faster than a flick for those. */}
-                <View style={[styles.stepper, { borderColor: colors.line }]}>
-                  <Pressable
-                    onPress={() => {
-                      haptics.tick();
-                      patch({ packs: Math.max(1, itemObj.packs - 1) });
-                    }}
-                    disabled={itemObj.packs <= 1}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('itemSheet.packsFewer')}
-                    style={[styles.stepBtn, itemObj.packs <= 1 && styles.stepOff]}
-                  >
-                    <Ionicons name="remove" size={18} color={colors.ink} />
-                  </Pressable>
-                  <Text style={[type.body, styles.stepValue, { color: colors.ink }]}>
-                    ×{itemObj.packs}
-                  </Text>
-                  <Pressable
-                    onPress={() => {
-                      haptics.tick();
-                      patch({ packs: Math.min(999, itemObj.packs + 1) });
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('itemSheet.packsMore')}
-                    style={styles.stepBtn}
-                  >
-                    <Ionicons name="add" size={18} color={colors.ink} />
-                  </Pressable>
-                </View>
+            {/* Price: the sum, written out as a sum.
+                unit price × packs = total, left to right, with the total as the
+                only thing that is not an input. That direction is the whole
+                rule — the two boxes are causes and the total is their effect,
+                so it can never disagree with them.
 
-                <View style={[styles.input, styles.priceRow, inputColors(colors)]}>
+                It used to run the other way. The stored value is the TOTAL, the
+                field showed total ÷ packs, and the line under it read
+                "3 × €0.33 = €1.00" — which is not true, and was on screen. The
+                total shown here is computed from what is IN the field, so the
+                arithmetic on the row is always the arithmetic it displays. */}
+            <Field label={t('itemSheet.priceLabel')}>
+              <View style={styles.priceMathRow}>
+                <View style={[styles.input, styles.priceRow, styles.priceCell, inputColors(colors)]}>
                   <Text style={[type.body, { color: colors.muted }]}>
                     {currencySymbolFor(currency)}
                   </Text>
@@ -437,23 +411,58 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                     style={[styles.priceInput, { color: colors.ink }]}
                   />
                 </View>
-              </View>
 
-              {/* The arithmetic, on its own line and only when there is any.
-                  Right-aligned under the price it belongs to, and showing its
-                  working, so a shopper who typed 2.50 and sees 10.00 can see why
-                  without reconstructing it. */}
-              {itemObj.priceCents != null && (
-                <Text style={[type.sub, styles.total, { color: colors.muted }]}>
-                  {itemObj.packs > 1
-                    ? t('itemSheet.totalWorking', {
-                        packs: itemObj.packs,
-                        each: money(Math.round(itemObj.priceCents / itemObj.packs)),
-                        total: money(itemObj.priceCents),
-                      })
-                    : t('itemSheet.totalOnly', { total: money(itemObj.priceCents) })}
-                </Text>
-              )}
+                <Text style={[styles.mathOp, { color: colors.muted }]}>×</Text>
+
+                <View style={[styles.stepper, { borderColor: colors.line }]}>
+                  <Pressable
+                    onPress={() => {
+                      haptics.tick();
+                      const next = Math.max(1, itemObj.packs - 1);
+                      // Recomputed from the FIELD, not from the stored total:
+                      // changing the count must not change the unit price.
+                      patch({ packs: next, priceCents: totalFor(priceText, next) });
+                    }}
+                    disabled={itemObj.packs <= 1}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('itemSheet.packsFewer')}
+                    style={[styles.stepBtn, itemObj.packs <= 1 && styles.stepOff]}
+                  >
+                    <Ionicons name="remove" size={16} color={colors.ink} />
+                  </Pressable>
+                  <Text style={[type.body, styles.stepValue, { color: colors.ink }]}>
+                    {itemObj.packs}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      haptics.tick();
+                      const next = Math.min(999, itemObj.packs + 1);
+                      patch({ packs: next, priceCents: totalFor(priceText, next) });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('itemSheet.packsMore')}
+                    style={styles.stepBtn}
+                  >
+                    <Ionicons name="add" size={16} color={colors.ink} />
+                  </Pressable>
+                </View>
+
+                <Text style={[styles.mathOp, { color: colors.muted }]}>=</Text>
+
+                {/* Derived, and deliberately not a field. Nothing here takes
+                    focus or a keyboard, because a total you can type is a total
+                    that can contradict the numbers beside it. */}
+                <View style={[styles.totalCell, { borderColor: colors.line }]}>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    style={[type.body, styles.totalText, { color: colors.ink }]}
+                  >
+                    {money(totalFor(priceText, itemObj.packs) ?? 0)}
+                  </Text>
+                </View>
+              </View>
             </Field>
 
             {/* Organic / local (optional).
@@ -660,8 +669,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     fontSize: 16,
   },
-  // A single running row now. No wrap: the strip scrolls instead.
-  chips: { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     borderWidth: 1.5,
     borderRadius: radii.pill,
@@ -693,6 +701,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentText: { fontSize: 13, fontWeight: '700' },
+  /*
+   * The sum row, and every part of it shrinks.
+   *
+   * The last version put a fixed-width stepper next to a growing price field and
+   * a total, which added up to more than the sheet on a 360pt phone — the price
+   * box ran off the right edge. Nothing here has a hard width now: the two boxes
+   * share what is left after the operators and the stepper, and the stepper
+   * itself is built from the narrowest controls that still take a finger.
+   */
+  priceMathRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  priceCell: { flexBasis: 0, flexGrow: 1.2, flexShrink: 1, minWidth: 0 },
+  mathOp: { fontSize: 15, fontWeight: '700' },
+  totalCell: {
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    height: 44,
+    borderWidth: 1,
+    // Dashed, so it reads as an output rather than something to tap. A solid box
+    // identical to the two inputs beside it is an invitation to type in it.
+    borderStyle: 'dashed',
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  totalText: { fontWeight: '700' },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -701,12 +737,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     overflow: 'hidden',
   },
-  stepBtn: { width: 38, height: 44, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: 30, height: 44, alignItems: 'center', justifyContent: 'center' },
   // Dimmed rather than removed at one pack: a control that vanishes shifts the
   // ones beside it, and the row would jump every time the count crossed 1.
   stepOff: { opacity: 0.3 },
-  stepValue: { minWidth: 34, textAlign: 'center' },
-  total: { textAlign: 'right' },
+  stepValue: { minWidth: 18, textAlign: 'center' },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   priceInput: { flex: 1, fontSize: 16, paddingVertical: spacing.md },
   storeRow: { gap: spacing.sm, paddingRight: spacing.lg },
