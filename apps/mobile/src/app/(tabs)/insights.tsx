@@ -32,7 +32,6 @@ import { SpendTrendChart } from "@/components/spend-trend-chart";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { haptics } from "@/lib/haptics";
 import {
-  CARBON_COLORS,
   heaviestStaple,
   weeklyEco,
   type EcoScore,
@@ -1073,9 +1072,11 @@ function SeasonCard({ now }: { now: number }) {
         <View key={row.join("|")} style={styles.seasonRow}>
           {row.map((key) => (
             <View key={key} style={styles.seasonCell}>
-              <View
-                style={[styles.seasonDot, { backgroundColor: CARBON_COLORS.low }]}
-              />
+              {/* No impact dot. Every item here is seasonal produce, so a green
+                  dot on all six marked nothing — it distinguished them from
+                  nothing else on the card. The emoji already says what each one
+                  is. (The Climate page keeps its dots because there the colour
+                  varies and therefore means something.) */}
               <ItemEmoji
                 name={key}
                 category="fruit_veg"
@@ -1281,7 +1282,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
-  seasonDot: { width: 8, height: 8, borderRadius: 4 },
   // Mirrors the dashboard's status row: wraps rather than squeezing the
   // subtitle, which is what broke the greeting into three lines last time.
   statusRow: {
