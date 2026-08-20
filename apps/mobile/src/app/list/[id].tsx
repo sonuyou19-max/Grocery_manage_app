@@ -476,8 +476,12 @@ export default function ListDetailScreen() {
                 <Text style={[type.h1, { color: colors.ink }]} numberOfLines={2}>
                   {list.name}
                 </Text>
+                {/* "Any store" is not information — it is the absence of it,
+                    dressed as a value and given the most prominent line under the
+                    title. A named store is worth saying; the default is worth
+                    nothing, so it says nothing. */}
                 <Text style={[type.sub, { color: colors.muted }]}>
-                  {list.store ?? t("listDetail.anyStore")} ·{" "}
+                  {list.store ? `${list.store} · ` : ""}
                   {t("listDetail.inCartCount", {
                     checked: checkedCount,
                     total: list.items.length,
