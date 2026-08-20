@@ -31,12 +31,15 @@ export function buildWeeklySuggestions(
       key: c.key,
       display: c.display,
       category: c.category,
-      quantity: usual?.quantity ?? null,
+      // No quantity and no store. A suggestion is a reminder that you are due
+      // something, not a claim about how much of it you buy or where — and both
+      // used to arrive prefilled from the last purchase.
+      quantity: null,
       // Your own choice first, then the suggestion — same precedence as the
       // add paths in the groceries store, so an item suggested here and an
       // item typed by hand arrive with the same unit.
       unit: asUnit(usual?.unit) ?? unitFor(c.display, c.category),
-      store: usual?.store ?? null,
+      store: null,
     };
   });
 }

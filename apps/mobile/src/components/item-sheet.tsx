@@ -165,16 +165,16 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
     );
   };
 
-  // On close, snapshot the item's final quantity/unit/store into per-item
-  // memory (#3) so the next add of the same item prefills them. One capture
-  // point covers every close path — the X, the backdrop, and pull-to-dismiss.
+  // On close, remember the UNIT this item is measured in, so the next add of the
+  // same name starts with kilos rather than nothing. One capture point covers
+  // every close path — the X, the backdrop, and pull-to-dismiss.
+  //
+  // Only the unit. The quantity, the price, the pack count and the store are
+  // facts about one shopping trip, not about the item, and prefilling them put
+  // numbers on a new row that nobody had entered.
   const rememberUsuals = () => {
     if (!itemObj) return;
-    rememberItemDetails(itemObj.name, {
-      quantity: itemObj.quantity,
-      unit: itemObj.unit,
-      store: itemObj.store,
-    });
+    rememberItemDetails(itemObj.name, { unit: itemObj.unit });
   };
 
   /**

@@ -417,11 +417,14 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
       // The AI sets quantity/unit from the sentence; fall back to remembered
       // usuals for anything it left blank, and always prefill the usual store
       // (which the AI never parses).
+      // The unit is remembered; the amount and the shop are not. A quantity the
+      // parser actually heard ("two litres of milk") is kept — that came from
+      // the user this time — but nothing is invented from last week's trip.
       const usual = recallItemDetails(p.name);
       const opts = {
-        quantity: p.quantity ?? usual?.quantity ?? null,
+        quantity: p.quantity ?? null,
         unit: seedUnit(p.name, p.category, p.unit, usual?.unit),
-        store: usual?.store ?? null,
+        store: null,
       };
       const id = uuidv4();
       setLists((prev) =>
@@ -488,14 +491,16 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         const id = uuidv4();
         if (!clean) return id;
         const category = categorizeSync(clean);
-        // Prefill the quantity/unit/store last used for this item (see #3),
-        // falling back to the suggested unit when there's no history.
+        // The unit only. Quantity, price, pack count and store are facts about
+        // one trip rather than about the item — 0.9 kg of potatoes once is not a
+        // standing order for 0.9 kg — and an amount nobody typed ends up in the
+        // price history as though they had.
         const usual = recallItemDetails(clean);
         const unit = seedUnit(clean, category, null, usual?.unit);
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
-              ? { ...l, items: [...l.items, { ...newItem(clean, category, usual ?? {}), id, unit }] }
+              ? { ...l, items: [...l.items, { ...newItem(clean, category), id, unit }] }
               : l,
           ),
         );
@@ -1087,12 +1092,14 @@ function CloudGroceriesProvider({
      */
     const insertParsed = (listId: string, p: ParsedItem) => {
       const id = uuidv4();
-      // AI sets quantity/unit; fall back to remembered usuals for blanks and
-      // always prefill the usual store (the AI never parses it).
+      // The AI sets quantity and unit; the remembered UNIT fills a blank one.
+      // A quantity it actually heard ("two litres of milk") is kept, because
+      // that came from the user this time — but nothing is carried over from
+      // last week's trip, and the store is never prefilled at all.
       const usual = recallItemDetails(p.name);
-      const quantity = p.quantity ?? usual?.quantity ?? null;
+      const quantity = p.quantity ?? null;
       const unit = seedUnit(p.name, p.category, p.unit, usual?.unit);
-      const store = usual?.store ?? null;
+      const store = null;
       setLists((prev) =>
         prev.map((l) =>
           l.id === listId
@@ -1193,7 +1200,7 @@ function CloudGroceriesProvider({
         setLists((prev) =>
           prev.map((l) =>
             l.id === listId
-              ? { ...l, items: [...l.items, { ...newItem(clean, category, usual ?? {}), id, unit }] }
+              ? { ...l, items: [...l.items, { ...newItem(clean, category), id, unit }] }
               : l,
           ),
         );
@@ -1204,9 +1211,9 @@ function CloudGroceriesProvider({
             list_id: listId,
             name: clean,
             category,
-            quantity: usual?.quantity ?? null,
+            quantity: null,
             unit,
-            store: usual?.store ?? null,
+            store: null,
             added_by: user?.id ?? null,
           })
           .then(({ error }) => {
