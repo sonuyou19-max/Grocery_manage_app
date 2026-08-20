@@ -17,6 +17,7 @@ import {
   KeyboardController,
 } from "react-native-keyboard-controller";
 import Animated, {
+  FadeInDown,
   Extrapolation,
   interpolate,
   runOnJS,
@@ -112,6 +113,16 @@ export default function ListDetailScreen() {
    * buttons read as three choices rather than as decoration around an input.
    */
   const [adding, setAdding] = useState(false);
+
+  /** The row just added, tinted so the eye can find where it landed. */
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
 
   // Pending purchase logs, keyed by item id. Checking an item schedules a log a
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
@@ -380,8 +391,30 @@ export default function ListDetailScreen() {
    * is the confirmation. Details are on demand now: tap the row.
    */
   const doAdd = (name: string) => {
-    addItem(list.id, name);
+    /*
+     * One configureNext covers the whole insertion: the category's rows shift
+     * down to make room and, when the item opens a category that was not on the
+     * list before, the heading arrives with them. Without it the list simply
+     * changes shape between frames and the eye has nothing to follow.
+     */
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const id = addItem(list.id, name);
     setDraft("");
+
+    /*
+     * Which row is new, so it can say so.
+     *
+     * The list is grouped by category and sorted, so a typed item does not
+     * appear where it was typed — "kheera" lands under Fruit & Veg, possibly
+     * several sections up. The row fades in and holds a tint for a moment,
+     * which is the only thing on screen that answers "where did that go".
+     *
+     * Cleared on a timer rather than on the next add, so adding six things in a
+     * row highlights six rows rather than leaving a trail of them lit.
+     */
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    setJustAdded(id);
+    highlightTimer.current = setTimeout(() => setJustAdded(null), 1400);
   };
 
   const submit = () => {
@@ -606,6 +639,7 @@ export default function ListDetailScreen() {
                   <SwipeableItemRow
                     key={it.id}
                     item={it}
+                    justAdded={it.id === justAdded}
                     rowRef={(v) => {
                       if (v) rowRefs.current.set(it.id, v);
                       else rowRefs.current.delete(it.id);
@@ -704,6 +738,7 @@ export default function ListDetailScreen() {
                     <SwipeableItemRow
                       key={it.id}
                       item={it}
+                    justAdded={it.id === justAdded}
                       onToggle={() => handleToggle(it)}
                       onEdit={() => openEdit(it)}
                       onDelete={() => deleteItem(list.id, it.id)}
@@ -792,7 +827,12 @@ export default function ListDetailScreen() {
                 </View>
               )}
 
-              <View style={styles.actionsBar}>
+              {/* The three ways in, hidden while one of them is open. Leaving
+                  them under the field made the bar two rows of controls for a
+                  single act of typing, and "Add item" sat there highlighted as
+                  though it were still something to press. */}
+              {!adding && (
+                <View style={styles.actionsBar}>
                 <PressScale
                   onPress={() => {
                     haptics.tick();
@@ -846,7 +886,8 @@ export default function ListDetailScreen() {
                     {t("listDetail.addItemBtn")}
                   </Text>
                 </PressScale>
-              </View>
+                </View>
+              )}
             </SafeAreaView>
           </View>
         </SafeAreaView>
@@ -895,10 +936,13 @@ function SwipeableItemRow({
   onToggleClaim,
   onEdit,
   onDelete,
+  justAdded = false,
 }: {
   /** Registered so a check-off can measure where this row currently sits. */
   rowRef?: (v: View | null) => void;
   item: Item;
+  /** True for a moment after this row was typed, so it can announce itself. */
+  justAdded?: boolean;
   onToggle: () => void;
   claimable: boolean;
   claimedByName: string | null;
@@ -999,7 +1043,20 @@ function SwipeableItemRow({
        an ancestor. The coach mark measured that ancestor and spotlit the whole
        category group, starting at its header. The pantry row already had this;
        this one did not, which is exactly why only this screen stayed wrong. */
-    <View ref={rowRef} collapsable={false} style={styles.swipeWrap}>
+    <Animated.View
+      ref={rowRef}
+      collapsable={false}
+      /* Only a row that has just mounted plays this, which is exactly the new
+         one — every other row is already on screen and re-renders in place. */
+      entering={FadeInDown.duration(220)}
+      style={[
+        styles.swipeWrap,
+        // Held, then dropped by the parent's timer. A tint that fades on its own
+        // schedule would need a second animation racing the first; letting the
+        // prop go false and animating the layout is one moving part.
+        justAdded && { backgroundColor: colors.accentSoft },
+      ]}
+    >
       <GestureDetector gesture={pan}>
         <Animated.View
           style={[
@@ -1103,7 +1160,7 @@ function SwipeableItemRow({
           <Text style={styles.deleteText}>{t("listDetail.delete")}</Text>
         </Pressable>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 
