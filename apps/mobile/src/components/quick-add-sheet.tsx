@@ -34,7 +34,7 @@ import type { ParsedItem } from "@korb/shared";
 import { Frosted } from "@/components/frosted";
 import { categoryLabel } from "@/lib/categorize";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
-import { dedupeByName, findDuplicate } from "@/lib/item-dup";
+import { dedupeByName, findEquivalent } from "@/lib/item-dup";
 import { parseQuickAdd } from "@/lib/quick-add";
 import { useGroceries, useList } from "@/store/groceries";
 import { useT } from "@/store/locale";
@@ -68,7 +68,7 @@ export function QuickAddSheet({
    * What is already on this list, so quick-add doesn't silently add a second
    * "Milk".
    *
-   * Matched with findDuplicate, not a local trim-and-lowercase. Item identity is
+   * Matched with findEquivalent, not a local trim-and-lowercase. Item identity is
    * decided in exactly one place in this app, and the database enforces the same
    * rule as a generated column — so a check that normalises differently here
    * does not merely miss a duplicate, it lets through an insert Postgres will
@@ -173,7 +173,7 @@ export function QuickAddSheet({
     setItems(parsed);
     // Pre-tick everything except items already on the list — those default to
     // skipped so you don't add duplicates without meaning to.
-    setSelected(parsed.map((p) => findDuplicate(listItems, p.name) == null));
+    setSelected(parsed.map((p) => findEquivalent(listItems, p.name) == null));
     setPhase("review");
   };
 
@@ -261,7 +261,7 @@ export function QuickAddSheet({
               </Text>
               {items.map((item, i) => {
                 const on = selected[i];
-                const dup = findDuplicate(listItems, item.name) != null;
+                const dup = findEquivalent(listItems, item.name) != null;
                 return (
                   <Pressable
                     key={`${item.name}-${i}`}

@@ -1,3 +1,4 @@
+import { singularKey } from '@/lib/item-plural';
 import { normalizeKey } from '@/lib/pantry-intel';
 
 /**
@@ -73,6 +74,44 @@ export function findDuplicate<T extends DuplicateCandidate>(
 }
 
 /**
+ * The row that is the same ITEM as `name`, allowing for plural form.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is a second function and not a change to findDuplicate
+ * ---------------------------------------------------------------------------
+ *
+ * The two are answering different questions and only one of them is the
+ * database's. findDuplicate models the unique index exactly, which is what
+ * makes it safe to decide whether an insert can succeed. This one models the
+ * shopper: "Potatoes" typed onto a list that already says "Potato" is one
+ * vegetable written twice, and Postgres will happily store both.
+ *
+ * That asymmetry decides where each is used. Anywhere the answer stops a write
+ * — every add path — may use this one, because being loose here means an
+ * insert that does not happen, and an insert that does not happen cannot fail.
+ * The RENAME path must not: the constraint would allow "Potato" → "Potatoes",
+ * so refusing it would be the app inventing a rule the database does not have
+ * and blocking an edit the user is entitled to make.
+ *
+ * Exact matches are found first and returned first. A list holding both
+ * "Potato" and "Potatoes" (which earlier versions allowed, and which existing
+ * lists still contain) therefore still resolves "Potatoes" to the exact row
+ * rather than to whichever came earlier in the array.
+ */
+export function findEquivalent<T extends DuplicateCandidate>(
+  items: readonly T[],
+  name: string,
+  exceptId?: string,
+): T | null {
+  const exact = findDuplicate(items, name, exceptId);
+  if (exact) return exact;
+
+  const key = singularKey(name);
+  if (!key) return null;
+  return items.find((it) => it.id !== exceptId && singularKey(it.name) === key) ?? null;
+}
+
+/**
  * Collapse a batch of about-to-be-added items to one per name, keeping the
  * first.
  *
@@ -87,11 +126,18 @@ export function findDuplicate<T extends DuplicateCandidate>(
  *
  * First wins rather than last, so the item keeps the spelling nearest the top
  * of the review sheet — the one the user's eye settled on.
+ *
+ * Keyed on singularKey rather than normalizeKey, for the same reason
+ * findEquivalent exists: a model asked for a recipe's ingredients has no
+ * obligation to say "tomato" the same way twice, and "2 tomatoes" beside "1
+ * tomato" is one ingredient listed twice, not two. Collapsing more here can
+ * only ever mean fewer inserts, so it cannot create the 23505 this function was
+ * written to avoid.
  */
 export function dedupeByName<T>(items: readonly T[], nameOf: (item: T) => string): T[] {
   const seen = new Set<string>();
   return items.filter((it) => {
-    const key = normalizeKey(nameOf(it));
+    const key = singularKey(nameOf(it));
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

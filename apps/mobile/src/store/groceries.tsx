@@ -15,7 +15,7 @@ import type { ItemCategory, ParsedItem } from '@korb/shared';
 import { categorizeSync, isKnown, learnCategory, resolveCategoryAsync } from '@/lib/categorize';
 import { unitFor } from '@/lib/item-unit';
 import { forgetHomeList, rememberItemList } from '@/lib/item-home-list';
-import { findDuplicate } from '@/lib/item-dup';
+import { findDuplicate, findEquivalent } from '@/lib/item-dup';
 import { recallItemDetails } from '@/lib/item-memory';
 import { reportWriteFailure } from '@/lib/monitoring';
 import { supabase } from '@/lib/supabase';
@@ -518,7 +518,11 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
          * fresh row, which is what "add it back to the list" means once
          * yesterday's shop has left.
          */
-        const existing = findDuplicate(
+        // findEquivalent, not findDuplicate: an add that finds a match declines
+        // to insert, so matching a plural here costs a row that was never
+        // wanted rather than one the database refuses. The rename path below
+        // keeps the strict check — see lib/item-dup.
+        const existing = findEquivalent(
           visibleLists.find((l) => l.id === listId)?.items ?? [],
           p.name,
         );
@@ -1233,7 +1237,11 @@ function CloudGroceriesProvider({
          * fresh row, which is what "add it back to the list" means once
          * yesterday's shop has left.
          */
-        const existing = findDuplicate(
+        // findEquivalent, not findDuplicate: an add that finds a match declines
+        // to insert, so matching a plural here costs a row that was never
+        // wanted rather than one the database refuses. The rename path below
+        // keeps the strict check — see lib/item-dup.
+        const existing = findEquivalent(
           visibleLists.find((l) => l.id === listId)?.items ?? [],
           p.name,
         );

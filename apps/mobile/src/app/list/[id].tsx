@@ -47,7 +47,7 @@ import { MeshBackground } from "@/components/mesh-background";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { useCoachMark } from "@/lib/coach-marks";
-import { findDuplicate } from "@/lib/item-dup";
+import { findEquivalent } from "@/lib/item-dup";
 import { emojiFor } from "@/lib/item-emoji";
 import { haptics } from "@/lib/haptics";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
@@ -442,7 +442,7 @@ export default function ListDetailScreen() {
     if (!name) return;
 
     /*
-     * findDuplicate, not a local trim-and-lowercase.
+     * A shared duplicate check, not a local trim-and-lowercase.
      *
      * The database decides this too — `item_key` is a generated column and a
      * unique index over the unticked rows (migration 0018) — and it collapses
@@ -451,8 +451,13 @@ export default function ListDetailScreen() {
      * simply never appeared: the insert is optimistic, so the failure showed up
      * as the row quietly vanishing. One rule, one implementation, or the two
      * disagree exactly where nobody is looking. See lib/item-dup.
+     *
+     * findEquivalent rather than findDuplicate, because this check only ever
+     * PREVENTS a write. "Potatoes" typed onto a list that already says
+     * "Potato" is the same vegetable, and the two rows the screenshot showed
+     * are what happens when only the database's opinion is consulted.
      */
-    const duplicate = findDuplicate(list.items, name);
+    const duplicate = findEquivalent(list.items, name);
     if (!duplicate) {
       doAdd(name, close);
       return;

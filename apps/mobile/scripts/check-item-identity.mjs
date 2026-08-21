@@ -354,9 +354,17 @@ if (unsafe.length) {
 
 /* ...and quick-add specifically still labels and adds by the shared rules. */
 if (quick) {
-  if (!/addOrReviveItem\(/.test(quick.src) || !/findDuplicate\(/.test(quick.src)) {
+  // Either shared matcher satisfies this: what is being checked is that the
+  // labelling comes from lib/item-dup at all rather than a local
+  // trim-and-lowercase. findEquivalent is the right one HERE — the label
+  // decides whether a row is offered for insert, so matching a plural means an
+  // insert that does not happen — while the rename paths keep findDuplicate.
+  // check-item-plural enforces that split; this only enforces that one of them
+  // is used.
+  if (!/addOrReviveItem\(/.test(quick.src) || !/find(?:Duplicate|Equivalent)\(/.test(quick.src)) {
     fail('quick-add no longer routes adds through the shared rules', [
-      'It needs addOrReviveItem to write and findDuplicate to label.',
+      'It needs addOrReviveItem to write, and findDuplicate or findEquivalent',
+      'to label — not a local trim-and-lowercase.',
     ]);
   } else if (!/dedupeByName\(/.test(quick.src)) {
     fail('quick-add adds a batch without deduping it', [
