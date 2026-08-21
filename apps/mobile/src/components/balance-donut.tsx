@@ -147,6 +147,49 @@ export function arcDash(
   };
 }
 
+/**
+ * The patch that fixes the wrap, and why it cannot just be the slice again.
+ *
+ * Every adjacent pair wants the earlier slice on top — including the pair that
+ * wraps twelve o'clock, where the LAST slice has to sit above the first. That
+ * is a cycle (A above B above C above A) and no painting order satisfies it, so
+ * one seam always needs a patch. This is that patch.
+ *
+ * Redrawing the whole last slice on top is the obvious version and is wrong for
+ * the same reason the reversal exists: it would put that slice's own faded
+ * leading cap over its neighbour's saturated end, moving the mud from one seam
+ * to another rather than removing it. So only the TAIL is redrawn — a stub
+ * whose painted extent ends exactly where the slice's does, sampling the
+ * gradient where it is fully saturated.
+ *
+ * Clamped to the slice's own dash, because a group of one item has a dash of a
+ * single pixel: an unclamped stub would be wider than the slice it belongs to
+ * and would spill its colour backwards over the neighbour.
+ */
+export function seamCap(slice: {
+  dash: number;
+  offset: number;
+}): { dash: number; gap: number; offset: number } {
+  /*
+   * Positioned from the slice's OWN dash and offset rather than recomputed
+   * from its end fraction, which is not the same thing once the dash has been
+   * floored. A group of one item wants a dash of -7px and gets 1px, so it
+   * paints a little past where its fraction ends — deliberately, as a visible
+   * dot. A stub placed at the theoretical end would then sit several pixels
+   * short of the dot it is meant to cap, and the seam would show a step.
+   *
+   * check-donut caught exactly that; the first version of this function took
+   * an end fraction.
+   */
+  const sliceEnd = -slice.offset + slice.dash + STROKE / 2;
+  const dash = Math.min(OVERLAP, slice.dash);
+  return {
+    dash,
+    gap: Math.max(0, CIRCUMFERENCE - dash),
+    offset: -(sliceEnd - dash - STROKE / 2),
+  };
+}
+
 /** Test seams: check-donut re-derives the painted extent from these. */
 export const __DONUT = { SIZE, STROKE, R, CIRCUMFERENCE, OVERLAP, FADE };
 
@@ -223,16 +266,33 @@ export function BalanceDonut({
               fill="none"
             />
             {/*
-              The first slice again, LAST, so the wrap at twelve o'clock joins
-              the same way every other boundary does. Only when there is more
-              than one — a single slice overlapping itself would put a cap in
-              the middle of a solid ring.
+              REVERSED, so the saturated end of each slice lands on top of the
+              faded start of the next one.
+
+              Painted forwards — the obvious order — every join is the other way
+              round: the next slice's leading cap is a translucent wash, and it
+              goes over the previous slice's fully saturated end. Two things go
+              wrong at once and they look like one. The dark end stops reading
+              as opaque, because something see-through is sitting on it; and the
+              overlap muddies, because a 45%-opacity brown over a solid grey is
+              neither colour. The ring looked dirty at every boundary.
+
+              Reversed, the only thing ever painted over another slice is a cap
+              at full opacity, and the translucent starts have nothing under
+              them but the track. The wash still reads as a wash; the joins read
+              as one colour ending on top of another.
+
+              The wrap then needs the LAST slice redrawn on top rather than the
+              first: painting backwards puts the first slice highest, so twelve
+              o'clock would be the one seam facing the wrong way. Only when
+              there is more than one slice — a single one overlapping itself
+              would put a cap in the middle of a solid ring.
             */}
-            {[...arcs, ...(arcs.length > 1 ? [arcs[0]] : [])].map((a, i) => {
+            {[...arcs].reverse().map((a) => {
               const { dash, gap, offset } = arcDash(a.start, a.end - a.start);
               return (
                 <Circle
-                  key={`${a.group}-${i}`}
+                  key={a.group}
                   cx={SIZE / 2}
                   cy={SIZE / 2}
                   r={R}
@@ -245,6 +305,30 @@ export function BalanceDonut({
                 />
               );
             })}
+            {/*
+              The wrap seam, last of all. See seamCap: with the slices painted
+              backwards the first one sits highest, so twelve o'clock is the one
+              boundary where the earlier slice would otherwise be underneath.
+            */}
+            {arcs.length > 1
+              ? (() => {
+                  const last = arcs[arcs.length - 1];
+                  const cap = seamCap(arcDash(last.start, last.end - last.start));
+                  return (
+                    <Circle
+                      cx={SIZE / 2}
+                      cy={SIZE / 2}
+                      r={R}
+                      stroke={`url(#slice-${last.group})`}
+                      strokeWidth={STROKE}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeDasharray={`${cap.dash} ${cap.gap}`}
+                      strokeDashoffset={cap.offset}
+                    />
+                  );
+                })()
+              : null}
           </G>
         </Svg>
         {/* Absolutely centred rather than laid out inside the SVG: RN's SVG

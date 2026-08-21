@@ -56,7 +56,11 @@ const wanted = [
   /^const R = .*$/m,
   /^const CIRCUMFERENCE = .*$/m,
   /^const OVERLAP = .*$/m,
-  /^export function arcDash\([\s\S]*?\n\}/m,
+  // `\n}$` and not `\n}`: seamCap's parameter is an inline object type, so its
+  // closing `}): {` also starts a line — the looser pattern truncated the
+  // function at its own signature and the import came back undefined.
+  /^export function arcDash\([\s\S]*?\n\}$/m,
+  /^export function seamCap\([\s\S]*?\n\}$/m,
 ];
 const parts = wanted.map((re) => src.match(re));
 if (parts.some((p) => !p)) {
@@ -68,7 +72,7 @@ const { outputText } = ts.transpileModule(parts.map((p) => p[0]).join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { arcDash } = mod;
+const { arcDash, seamCap } = mod;
 
 // Re-read the constants from the source rather than restating them here, so a
 // change to the stroke or the overlap is tested rather than silently diverged
@@ -144,17 +148,56 @@ check('the ring draws round caps', /strokeLinecap="round"/.test(src), true);
 check('and arcDash still subtracts the stroke', /length - STROKE \+ OVERLAP/.test(src), true);
 check('the renderer asks arcDash rather than doing its own maths', /arcDash\(a\.start/.test(src), true);
 
+/* ------------------------- the saturated end is the one on top ------------ */
+
 /*
- * The wrap. Without redrawing the first slice, the seam at twelve o'clock is
- * the one join where the earlier slice sits on top — every other boundary
- * overlaps the other way, and one reversed seam is what makes an intentional
- * style look like a mistake.
+ * The first version painted forwards, and it was wrong in a way that showed:
+ * each slice's leading cap is a translucent wash, so every join put 45% of one
+ * colour over 100% of another. The dark end stopped reading as opaque and the
+ * boundaries muddied.
+ *
+ * Reversed, the only thing painted over another slice is a cap at full
+ * opacity, and the washes have nothing under them but the track. This is a
+ * property of ORDER, not of geometry, so it is checked structurally — there is
+ * nothing numeric to assert.
  */
+check('the slices paint back to front', /\[\.\.\.arcs\]\.reverse\(\)\.map/.test(src), true);
 check(
-  'the first slice is redrawn last to fix the wrap seam',
-  /\[\.\.\.arcs, \.\.\.\(arcs\.length > 1 \? \[arcs\[0\]\] : \[\]\)\]/.test(src),
+  '...so the LAST slice patches the wrap, not the first',
+  /const last = arcs\[arcs\.length - 1\];/.test(src) && /seamCap\(arcDash\(/.test(src),
   true,
 );
+check(
+  '...and the patch is a stub, not the whole slice redrawn',
+  /cap\.dash/.test(src) && !/\[\.\.\.arcs, /.test(src),
+  true,
+);
+
+/*
+ * The stub has to end exactly where the slice it belongs to ends, or the seam
+ * shows a step. And it must never be wider than that slice: a group of one item
+ * has a dash of a single pixel, and an unclamped stub would spill its colour
+ * backwards over the neighbour.
+ */
+{
+  const slice = arcDash(0.7, 0.3);
+  const cap = seamCap(slice);
+  const capEnd = -cap.offset + cap.dash + STROKE / 2;
+  check('the wrap stub ends where its slice ends', capEnd, painted(0.7, 0.3).to);
+  check('...and is no longer than the overlap', cap.dash <= OVERLAP, true);
+
+  /*
+   * The floored case, which is where the first version of seamCap was wrong: a
+   * one-item group paints a little past its fraction on purpose, so a stub
+   * positioned from the fraction lands short of the dot it is capping.
+   */
+  const tiny = arcDash(0.99, 0.01);
+  const tinyCap = seamCap(tiny);
+  check('a one-pixel slice gets a one-pixel stub', tinyCap.dash, tiny.dash);
+  const tinyCapEnd = -tinyCap.offset + tinyCap.dash + STROKE / 2;
+  check('...still ending where the slice actually paints', tinyCapEnd, painted(0.99, 0.01).to);
+  check('...and never past it', tinyCapEnd <= painted(0.99, 0.01).to, true);
+}
 
 /* ------------------------------------------------- gradients, not flat fill */
 
