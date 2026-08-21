@@ -154,6 +154,11 @@ const de = {
     emptyTitle: 'Nichts im Korb',
     emptyBody: 'Leg Lebensmittel auf eine Einkaufsliste, dann erscheint der Mix hier — nach Art gruppiert.',
   },
+  pantryMix: {
+    seeAll: 'Ansehen, was drin ist',
+    emptyTitle: 'Noch nichts erfasst',
+    emptyBody: 'Hake ein paar Sachen auf einer Einkaufsliste ab, dann erscheint dein Vorratsmix hier – nach Art gruppiert.',
+  },
   cards: {
     title: 'Kundenkarten',
     subtitle: 'Deine Kundenkarten, auf diesem Handy',
@@ -564,6 +569,7 @@ const de = {
     basketTitle: 'In deinem Korb',
     basketHint: { one: '%{count} Lebensmittel', other: '%{count} Lebensmittel' },
     basketNote: 'Nur ein grober Anhaltspunkt pro Artikel — kein Ernährungstracker.',
+    pantryMixNote: 'Was dein Haushalt vorrätig hält.',
     pantryMixTitle: 'Dein Vorratsmix',
     pantryMixHint: '%{count} erfasst',
     mixTotal: 'Artikel gesamt',

@@ -153,6 +153,11 @@ const nl = {
     emptyTitle: 'Niets in de mand',
     emptyBody: 'Zet eten op een boodschappenlijst en de mix verschijnt hier, gegroepeerd per soort.',
   },
+  pantryMix: {
+    seeAll: 'Bekijk wat erin zit',
+    emptyTitle: 'Nog niets gevolgd',
+    emptyBody: 'Vink een paar dingen af op een lijst en je voorraadmix verschijnt hier, gegroepeerd per soort.',
+  },
   cards: {
     title: 'Klantenkaarten',
     subtitle: 'Je klantenkaarten, op dit toestel',
@@ -562,6 +567,7 @@ const nl = {
     basketTitle: 'In je mandje',
     basketHint: { one: '%{count} voedingsmiddel', other: '%{count} voedingsmiddelen' },
     basketNote: 'Een ruwe indicatie per item — geen voedingstracker.',
+    pantryMixNote: 'Wat je huishouden op voorraad houdt.',
     pantryMixTitle: 'Je voorraadmix',
     pantryMixHint: '%{count} bijgehouden',
     mixTotal: 'items totaal',

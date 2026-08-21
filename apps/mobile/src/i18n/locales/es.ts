@@ -153,6 +153,11 @@ const es = {
     emptyTitle: 'Cesta vacía',
     emptyBody: 'Añade comida a una lista de la compra y la mezcla aparece aquí, agrupada por tipo.',
   },
+  pantryMix: {
+    seeAll: 'Ver lo que hay',
+    emptyTitle: 'Nada registrado aún',
+    emptyBody: 'Marca algunos artículos de una lista y tu mezcla de despensa aparece aquí, agrupada por tipo.',
+  },
   cards: {
     title: 'Tarjetas de fidelidad',
     subtitle: 'Tus tarjetas de fidelidad, en este teléfono',
@@ -563,6 +568,7 @@ const es = {
     basketTitle: 'En tu cesta',
     basketHint: { one: '%{count} alimento', other: '%{count} alimentos' },
     basketNote: 'Una guía aproximada por artículo — no es un contador nutricional.',
+    pantryMixNote: 'Lo que tu hogar tiene en casa.',
     pantryMixTitle: 'La mezcla de tu despensa',
     pantryMixHint: '%{count} controlados',
     mixTotal: 'artículos en total',

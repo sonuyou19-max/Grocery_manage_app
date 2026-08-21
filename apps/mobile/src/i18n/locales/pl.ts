@@ -180,6 +180,11 @@ const pl = {
     emptyTitle: 'Koszyk jest pusty',
     emptyBody: 'Dodaj jedzenie do listy zakupów, a mieszanka pojawi się tutaj, pogrupowana według rodzaju.',
   },
+  pantryMix: {
+    seeAll: 'Zobacz, co w niej jest',
+    emptyTitle: 'Nic jeszcze nie śledzone',
+    emptyBody: 'Odhacz kilka rzeczy z listy zakupów, a Twoja spiżarnia pojawi się tutaj, pogrupowana według rodzaju.',
+  },
   cards: {
     title: 'Karty sklepowe',
     subtitle: 'Twoje karty lojalnościowe, na tym telefonie',
@@ -656,6 +661,7 @@ const pl = {
       other: '%{count} produktów spożywczych',
     },
     basketNote: 'Orientacyjna wskazówka dla produktu — to nie licznik wartości odżywczych.',
+    pantryMixNote: 'Co Twój dom trzyma w zapasie.',
     pantryMixTitle: 'Skład Twojej spiżarni',
     pantryMixHint: '%{count} śledzonych',
     mixTotal: 'produktów łącznie',

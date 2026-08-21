@@ -154,6 +154,11 @@ const fr = {
     emptyTitle: 'Panier vide',
     emptyBody: 'Ajoute des aliments à une liste de courses et le mélange apparaît ici, groupé par type.',
   },
+  pantryMix: {
+    seeAll: 'Voir ce qu’il y a dedans',
+    emptyTitle: 'Rien de suivi pour l’instant',
+    emptyBody: 'Coche quelques articles sur une liste et ton mix de placard apparaît ici, groupé par type.',
+  },
   cards: {
     title: 'Cartes de fidélité',
     subtitle: 'Tes cartes de fidélité, sur ce téléphone',
@@ -563,6 +568,7 @@ const fr = {
     basketTitle: 'Dans ton panier',
     basketHint: { one: '%{count} aliment', other: '%{count} aliments' },
     basketNote: 'Un aperçu indicatif par article — pas un suivi nutritionnel.',
+    pantryMixNote: 'Ce que ton foyer garde en stock.',
     pantryMixTitle: 'Ton profil de garde-manger',
     pantryMixHint: '%{count} suivis',
     mixTotal: 'articles au total',

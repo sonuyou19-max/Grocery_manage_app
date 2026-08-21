@@ -153,6 +153,11 @@ const it = {
     emptyTitle: 'Carrello vuoto',
     emptyBody: 'Aggiungi alimenti a una lista della spesa e il mix compare qui, raggruppato per tipo.',
   },
+  pantryMix: {
+    seeAll: 'Vedi cosa c’è',
+    emptyTitle: 'Ancora niente tracciato',
+    emptyBody: 'Spunta qualche articolo da una lista e la tua dispensa appare qui, raggruppata per tipo.',
+  },
   cards: {
     title: 'Carte fedeltà',
     subtitle: 'Le tue carte fedeltà, su questo telefono',
@@ -563,6 +568,7 @@ const it = {
     basketTitle: 'Nel tuo carrello',
     basketHint: { one: '%{count} alimento', other: '%{count} alimenti' },
     basketNote: 'Un’indicazione di massima per articolo — non un contatore nutrizionale.',
+    pantryMixNote: 'Cosa tiene in casa la tua famiglia.',
     pantryMixTitle: 'Il mix della tua dispensa',
     pantryMixHint: '%{count} monitorati',
     mixTotal: 'articoli in totale',

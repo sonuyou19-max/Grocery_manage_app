@@ -162,6 +162,11 @@ const en = {
     emptyTitle: 'Nothing in the basket',
     emptyBody: 'Add food to a shopping list and the mix appears here, grouped by kind.',
   },
+  pantryMix: {
+    seeAll: 'See what’s in it',
+    emptyTitle: 'Nothing tracked yet',
+    emptyBody: 'Check a few items off a shopping list and your pantry mix appears here, grouped by kind.',
+  },
   cards: {
     // The wallet
     title: 'Store cards',
@@ -574,6 +579,7 @@ const en = {
     basketTitle: 'In your basket',
     basketHint: { one: '%{count} food item', other: '%{count} food items' },
     basketNote: 'A rough guide by item — not a nutrition tracker.',
+    pantryMixNote: 'What your household keeps in stock.',
     pantryMixTitle: 'Your pantry mix',
     pantryMixHint: '%{count} tracked',
     mixTotal: 'total items',

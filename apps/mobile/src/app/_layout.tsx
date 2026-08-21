@@ -142,6 +142,7 @@ export default function RootLayout() {
                     options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
                   />
                   <Stack.Screen name="basket" />
+                  <Stack.Screen name="pantry-mix" />
                   <Stack.Screen name="climate" />
                   <Stack.Screen name="cards/index" />
                   <Stack.Screen name="cards/add" />

@@ -492,6 +492,25 @@ function SignedInInsights() {
             title={t("insights.pantryMixTitle")}
           />
           <BalanceDonut slices={pantry.slices} total={pantry.total} />
+          {/* The same footer the basket card carries, to the same kind of
+              page — see app/pantry-mix.tsx. Whole footer is the target, not
+              just the chevron. */}
+          <Pressable
+            onPress={() => {
+              haptics.tick();
+              router.push("/pantry-mix");
+            }}
+            accessibilityRole="button"
+            style={styles.basketMore}
+          >
+            <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
+              {t("insights.pantryMixNote")}
+            </Text>
+            <Text style={[type.sub, { color: colors.accent }]}>
+              {t("pantryMix.seeAll")}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+          </Pressable>
         </Card>
       )}
 
