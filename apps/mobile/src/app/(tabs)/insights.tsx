@@ -41,7 +41,7 @@ import {
 import { ItemEmoji } from "@/components/item-emoji";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { basketBalance, basketItems } from "@/lib/nutrition";
-import { isResting } from "@/lib/pantry-intel";
+import { hasStopped } from "@/lib/pantry-intel";
 import { bandForRegion, inSeason, PRODUCE_EMOJI } from "@/lib/seasonal";
 import {
   cheaperStoreHints,
@@ -218,10 +218,10 @@ function SignedInInsights() {
       ),
     [lists],
   );
-  // Resting items are out of every reading here: they're history Korb keeps but
+  // Stopped items are out of every reading here: they're history Korb keeps but
   // no longer tracks, so counting them would describe a pantry you don't have.
   const tracked = useMemo(
-    () => Object.values(stats).filter((s) => !isResting(s)),
+    () => Object.values(stats).filter((s) => !hasStopped(s)),
     [stats],
   );
 

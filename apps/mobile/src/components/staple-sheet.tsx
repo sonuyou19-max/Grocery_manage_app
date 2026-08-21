@@ -50,8 +50,11 @@ interface StapleSheetProps {
     keepStocked?: boolean;
     cadenceDays?: number | null;
   }) => void;
-  /** Retire the item from prediction. The caller closes the sheet. */
-  onRest: () => void;
+  /**
+   * "I have stopped buying this" — it leaves every forward-looking reading
+   * while keeping its history. The caller closes the sheet.
+   */
+  onStopBuying: () => void;
   /**
    * Erase the item and its whole history. The caller confirms first and closes
    * the sheet — this component only offers the control, because the warning
@@ -76,7 +79,7 @@ export function StapleSheet({
   item: openItem,
   onClose,
   onChange,
-  onRest,
+  onStopBuying,
   onDelete,
   purchases,
   onOpenHistory,
@@ -127,8 +130,8 @@ export function StapleSheet({
    * still asking its children. purchase-ledger hit this first and wrote it up;
    * the symptom there and here is the same, a card laid out against a
    * degenerate constraint with its last rows clipped away by GlassView's
-   * overflow: hidden. On this sheet that took "Let it rest" and Done with it,
-   * which is the way out of the sheet.
+   * overflow: hidden. On this sheet that took Done with it, which is the way
+   * out of the sheet.
    */
   const cardCap = Math.round(windowHeight * 0.85);
 
@@ -197,14 +200,31 @@ export function StapleSheet({
             </Text>
             </View>
 
-            {/* Opposite the name, and deliberately NOT down beside "Let it
-                rest". Those two are the opposite kinds of action: rest is
-                reversible and belongs with the settings it changes, this ends
-                the item. A destructive control at the foot of a list of
-                settings is one that gets hit by somebody working down the
-                sheet. Muted, not red — the confirmation is where the weight
-                belongs, and a red button up here would shout on a screen the
-                user opened to change a cadence. */}
+            {/* The two ways an item leaves the pantry, side by side and in
+                that order: stop buying it, or delete it.
+
+                They used to be at opposite ends of the sheet, on the reasoning
+                that one is reversible and the other ends the item, so a
+                destructive control should not sit at the foot of a list of
+                settings where somebody working downwards will hit it. That
+                second half still holds and is why neither is down there any
+                more — but keeping them apart also hid the reversible one at the
+                bottom of a scroll, which made delete the obvious answer to "I
+                do not buy this any more" when it is the wrong one.
+
+                Adjacent, they read as a choice. Both muted rather than red: the
+                weight belongs in delete's confirmation, and a red button up
+                here would shout on a screen opened to change a cadence. */}
+            <Pressable
+              onPress={onStopBuying}
+              accessibilityRole="button"
+              accessibilityLabel={t("stopped.action")}
+              accessibilityHint={t("stopped.hint")}
+              hitSlop={12}
+              style={styles.trash}
+            >
+              <Ionicons name="bag-remove-outline" size={22} color={colors.muted} />
+            </Pressable>
             <Pressable
               onPress={onDelete}
               accessibilityRole="button"
@@ -292,26 +312,6 @@ export function StapleSheet({
             </Pressable>
           )}
 
-          {/* Let it rest — the way out that isn't a delete. Placed last and
-                  in muted tones because it's the rarest choice on this sheet;
-                  it should be findable, not inviting. */}
-          <Pressable
-            onPress={onRest}
-            accessibilityRole="button"
-            accessibilityHint={t("rest.hint")}
-            style={[styles.row, styles.restRow, { borderColor: colors.line }]}
-          >
-            <Ionicons name="moon-outline" size={22} color={colors.muted} />
-            <View style={styles.grow}>
-              <Text style={[type.body, { color: colors.ink }]}>
-                {t("rest.action")}
-              </Text>
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {t("rest.hint")}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-          </Pressable>
         </ScrollView>
 
         {/* Outside the ScrollView, like the list's item sheet: the way out of a
@@ -419,7 +419,6 @@ const styles = StyleSheet.create({
   },
   // Shares the bordered `row` layout but drops the top rule, so it reads as the
   // sheet's closing action rather than another setting in the stack.
-  restRow: { borderTopWidth: 0 },
   grow: { flex: 1, minWidth: 0 },
   // Wraps, because translated cadence labels ("alle 14 Tage") run much longer
   // than the English.

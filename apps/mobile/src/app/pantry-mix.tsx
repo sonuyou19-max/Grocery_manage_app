@@ -18,7 +18,7 @@ import {
   groupLabel,
   type DisplayGroup,
 } from "@/lib/nutrition";
-import { isResting, lastBoughtLabel, type ItemStat } from "@/lib/pantry-intel";
+import { hasStopped, lastBoughtLabel, type ItemStat } from "@/lib/pantry-intel";
 import { useLocale } from "@/store/locale";
 import { usePantryIntel } from "@/store/pantry-intel";
 import { spacing, type, useTheme } from "@/theme";
@@ -39,9 +39,9 @@ import { spacing, type, useTheme } from "@/theme";
  *
  * The SOURCE. The basket is rows on lists; this is the pantry model, which is
  * one entry per thing the household buys rather than one per shopping row. So
- * resting items are excluded — they are history Korb keeps but no longer
- * tracks, and counting them would describe a pantry you do not have. Same
- * filter the Insights card applies, for the same reason.
+ * items the user has stopped buying are excluded — Korb keeps their history
+ * but leaves them out of everything forward-looking, and counting them would
+ * describe a pantry you do not have. Same filter the Insights card applies.
  *
  * The RING rather than the bar. The basket card shows a bar and its page shows
  * a bar; this card shows a donut, so its page shows a donut. Continuity with
@@ -70,7 +70,7 @@ export default function PantryMixScreen() {
    * paywall reached by surprise is worse than not arriving.
    */
   const items = useMemo(
-    () => Object.values(stats).filter((s) => !isResting(s)),
+    () => Object.values(stats).filter((s) => !hasStopped(s)),
     [stats],
   );
 

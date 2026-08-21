@@ -184,8 +184,8 @@ check('recordPurchase keeps cadenceDays', after.milk.cadenceDays, 5);
 // an item would otherwise surface — an item asleep for a year is the exact case
 // the feature exists for, so an overdue check must not wake it.
 const asleep = stat({ lastPurchasedAt: now - 365 * DAY, archivedAt: now - 30 * DAY });
-check('isResting reads the timestamp', mod.isResting(asleep), true);
-check('an active item is not resting', mod.isResting(stat()), false);
+check('hasStopped reads the timestamp', mod.hasStopped(asleep), true);
+check('an active item is not resting', mod.hasStopped(stat()), false);
 check('a wildly overdue resting item is never due', mod.isDue(asleep, now), false);
 check(
   'resting items stay out of the deck',
@@ -203,20 +203,20 @@ check(
   0,
 );
 
-const rested = mod.applyResting({ milk: stat() }, 'milk', true, now);
+const rested = mod.applyStopped({ milk: stat() }, 'milk', true, now);
 check('resting stamps the moment', rested.milk.archivedAt, now);
 check('resting keeps the learned rate', rested.milk.intervalDays, stat().intervalDays);
 
 // Waking restarts the countdown rather than resuming an ancient one, so a
 // long-asleep item doesn't shout on the first Vibe Check after it comes back.
-const woken = mod.applyResting({ milk: asleep }, 'milk', false, now);
+const woken = mod.applyStopped({ milk: asleep }, 'milk', false, now);
 check('waking clears the timestamp', woken.milk.archivedAt, null);
 check('waking restarts the clock', woken.milk.lastPurchasedAt, now);
 check('waking clears any snooze', woken.milk.snoozeUntil, null);
 check('a woken item is not immediately due', mod.isDue(woken.milk, now), false);
 check('waking keeps the learned rate', woken.milk.intervalDays, asleep.intervalDays);
 check('waking keeps the sample count', woken.milk.sampleCount, asleep.sampleCount);
-check('resting an unknown key is a no-op', mod.applyResting({}, 'nope', true, now), {});
+check('resting an unknown key is a no-op', mod.applyStopped({}, 'nope', true, now), {});
 
 /* ============ the two thresholds, and the line that used to conflate them === */
 
@@ -520,6 +520,103 @@ check(
   /s\.homeList \?\? recallItemList\(/.test(strip),
   true,
 );
+
+/* -------------------- buying it again is how a stop is undone ------------- */
+
+/*
+ * "I've stopped buying this" is a statement about intent, and buying the thing
+ * contradicts it — so the flag clears itself rather than waiting for a tap
+ * nobody will think to make.
+ *
+ * The half that would go wrong quietly is the GAP. An item stopped in March and
+ * bought again in December produces a nine-month interval, and blending that
+ * into the burn rate teaches the app you buy this once a year — from a single
+ * purchase, permanently, with nothing on screen explaining why the milk stopped
+ * being predicted. applyStopped's resume path has refused that gap since it was
+ * written; the automatic return has to refuse it too, or the two doors into one
+ * state behave differently.
+ */
+{
+  const DAY = 86_400_000;
+  const now = Date.UTC(2026, 0, 1);
+  const stopped = {
+    milk: {
+      key: 'milk',
+      display: 'Milk',
+      category: 'dairy_eggs',
+      // Bought weekly for a while, then stopped nine months ago.
+      lastPurchasedAt: now - 270 * DAY,
+      intervalDays: 7,
+      sampleCount: 6,
+      snoozeUntil: null,
+      archivedAt: now - 269 * DAY,
+    },
+  };
+
+  const back = mod.recordPurchase(stopped, 'Milk', 'dairy_eggs', now).milk;
+  check('buying it again clears the stop', back.archivedAt, null);
+  check('...and does not learn the long gap', back.intervalDays, 7);
+  check('...nor counts it as a sample', back.sampleCount, 6);
+  check('...and the clock starts from this purchase', back.lastPurchasedAt, now);
+
+  /*
+   * The mirror: an ordinary repeat purchase must still learn from its gap, or
+   * the guard above would be satisfied by a recordPurchase that never learns
+   * anything at all.
+   */
+  const active = {
+    milk: { ...stopped.milk, archivedAt: null, lastPurchasedAt: now - 10 * DAY },
+  };
+  const again = mod.recordPurchase(active, 'Milk', 'dairy_eggs', now).milk;
+  check('a normal repeat still learns its gap', again.sampleCount, 7);
+  check('...and moves the interval toward it', again.intervalDays > 7, true);
+
+  /*
+   * And the settings a purchase must never wipe. recordPurchase spreads the
+   * previous row first for this reason; clearing archivedAt is the one field
+   * that is deliberately overwritten, and it would be easy to "tidy" that into
+   * rebuilding the whole stat.
+   */
+  const pinned = {
+    milk: { ...stopped.milk, keepStocked: true, cadenceDays: 14 },
+  };
+  const kept = mod.recordPurchase(pinned, 'Milk', 'dairy_eggs', now).milk;
+  check('the staple flag survives the return', kept.keepStocked, true);
+  check('a pinned cadence survives the return', kept.cadenceDays, 14);
+}
+
+/* --------------------------- the two doors agree ------------------------- */
+
+/*
+ * applyStopped's resume path and recordPurchase's automatic one must leave the
+ * item in the same shape, or "buying it again" and "tapping Buying again" would
+ * predict differently for the same item.
+ */
+{
+  const DAY = 86_400_000;
+  const now = Date.UTC(2026, 0, 1);
+  const stats = {
+    rice: {
+      key: 'rice',
+      display: 'Rice',
+      category: 'pantry',
+      lastPurchasedAt: now - 200 * DAY,
+      intervalDays: 30,
+      sampleCount: 4,
+      snoozeUntil: null,
+      archivedAt: now - 199 * DAY,
+    },
+  };
+  const tapped = mod.applyStopped(stats, 'rice', false, now).rice;
+  const bought = mod.recordPurchase(stats, 'Rice', 'pantry', now).rice;
+  check('both doors clear the flag', [tapped.archivedAt, bought.archivedAt], [null, null]);
+  check('both restart the clock', [tapped.lastPurchasedAt, bought.lastPurchasedAt], [now, now]);
+  check(
+    'both keep the learned rate',
+    [tapped.intervalDays, bought.intervalDays, tapped.sampleCount, bought.sampleCount],
+    [30, 30, 4, 4],
+  );
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

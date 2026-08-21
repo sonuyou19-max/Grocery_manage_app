@@ -38,7 +38,7 @@ import {
 import { CARBON_COLORS, heavyHitters } from "@/lib/eco";
 import { haptics } from "@/lib/haptics";
 import { ecoScoreFor } from "@/lib/item-carbon";
-import { isResting } from "@/lib/pantry-intel";
+import { hasStopped } from "@/lib/pantry-intel";
 import {
   cachedSwaps,
   fetchSwaps,
@@ -127,7 +127,7 @@ export default function ClimateScreen() {
   const now = useMemo(() => hour * 3_600_000, [hour]);
 
   const tracked = useMemo(
-    () => Object.values(stats).filter((s) => !isResting(s)),
+    () => Object.values(stats).filter((s) => !hasStopped(s)),
     [stats],
   );
 

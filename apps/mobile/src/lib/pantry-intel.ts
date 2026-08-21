@@ -66,7 +66,13 @@ export interface ItemStat {
    */
   cadenceDays?: number | null;
   /**
-   * Resting since this moment, or null/undefined while actively tracked.
+   * When the user said they had stopped buying this, or null while it is
+   * tracked normally.
+   *
+   * The FIELD is still called archivedAt because it is a database column
+   * (pantry_items.archived_at) and renaming it would be a migration for a word.
+   * The concept it carries is "Stopped buying" everywhere the user can see it;
+   * `hasStopped` is the predicate to read it through.
    *
    * A resting item keeps all of its history but is not predicted: it's out of
    * the Vibe Check deck, out of Running low and In stock, and out of the weekly
@@ -87,7 +93,7 @@ export interface ItemStat {
 }
 
 /** Retired from prediction — see `archivedAt`. */
-export function isResting(stat: ItemStat): boolean {
+export function hasStopped(stat: ItemStat): boolean {
   return stat.archivedAt != null;
 }
 
@@ -185,24 +191,28 @@ export function applyStaple(
 }
 
 /**
- * Put an item to rest, or bring it back.
+ * "I've stopped buying this", and the way back from it.
  *
- * Bringing it back restarts the clock (`lastPurchasedAt = now`, snooze cleared)
- * instead of resuming the old one. An item asleep for six months would
- * otherwise wake up wildly overdue and shout on the very first Vibe Check —
- * the opposite of what "bring it back" sounds like. The learned interval and
- * sample count survive untouched, so the rate it had is the rate it resumes
- * with; only the countdown starts fresh.
+ * Resuming restarts the clock (`lastPurchasedAt = now`, snooze cleared) instead
+ * of picking up the old one. An item stopped six months ago would otherwise
+ * come back wildly overdue and shout on the very first Vibe Check — the
+ * opposite of what resuming sounds like. The learned interval and sample count
+ * survive untouched, so the rate it had is the rate it resumes with; only the
+ * countdown starts fresh.
+ *
+ * This is the manual door. The other one is recordPurchase, which clears the
+ * flag on its own when the item is bought again — and refuses the long gap for
+ * exactly the reason above. Two doors, one behaviour.
  */
-export function applyResting(
+export function applyStopped(
   stats: StatMap,
   key: string,
-  resting: boolean,
+  stopped: boolean,
   now: number = Date.now(),
 ): StatMap {
   const s = stats[key];
   if (!s) return stats;
-  if (resting) return { ...stats, [key]: { ...s, archivedAt: now } };
+  if (stopped) return { ...stats, [key]: { ...s, archivedAt: now } };
   return { ...stats, [key]: { ...s, archivedAt: null, lastPurchasedAt: now, snoozeUntil: null } };
 }
 
@@ -215,7 +225,7 @@ export function dueAt(stat: ItemStat): number {
 export function isDue(stat: ItemStat, now: number): boolean {
   // Resting items never come due — that is the whole point of resting, and
   // enforcing it here means every caller inherits it for free.
-  if (isResting(stat)) return false;
+  if (hasStopped(stat)) return false;
   return stat.lastPurchasedAt > 0 && now >= dueAt(stat);
 }
 
@@ -269,7 +279,7 @@ export function pantryCounts(
   queued: Set<string>,
   now: number,
 ): { tracked: number; low: number } {
-  const active = Object.values(stats).filter((s) => !isResting(s));
+  const active = Object.values(stats).filter((s) => !hasStopped(s));
   return {
     tracked: active.length,
     low: active.filter((s) => isLowStat(s, queued, now)).length,
@@ -506,7 +516,28 @@ export function recordPurchase(
   let intervalDays = prev?.intervalDays ?? 0;
   let sampleCount = prev?.sampleCount ?? 0;
 
-  if (prev?.lastPurchasedAt) {
+  /*
+   * Buying it again is how a stopped item comes back.
+   *
+   * "I've stopped buying this" is a statement about intent, and the purchase
+   * contradicts it — so there is nothing to ask and nothing to tap. The flag is
+   * cleared below, on the same write that records the purchase.
+   *
+   * The gap is deliberately NOT learned, which is the half that would go wrong
+   * silently. An item stopped in March and bought again in December produces a
+   * nine-month gap, and blending that into the burn rate would tell the app you
+   * buy this once a year — from one purchase, permanently, with no way for the
+   * user to see why their milk stopped being predicted. applyStopped's wake
+   * path has refused that gap since it was written, for exactly this reason;
+   * the automatic return has to refuse it too or the two doors into the same
+   * state behave differently.
+   *
+   * What survives is the rate it had before it stopped, which is the best
+   * available guess and the one a user who resumes an old staple would expect.
+   */
+  const returning = prev?.archivedAt != null;
+
+  if (!returning && prev?.lastPurchasedAt) {
     const gapDays = (now - prev.lastPurchasedAt) / DAY;
     if (gapDays >= 1) {
       if (sampleCount === 0) {
@@ -534,6 +565,10 @@ export function recordPurchase(
       intervalDays,
       sampleCount,
       snoozeUntil: null,
+      // Unconditional, not `returning ? null : prev.archivedAt`: the spread
+      // above carries the old value forward, and this is the one line that
+      // brings the item back into every count it was hidden from.
+      archivedAt: null,
     },
   };
 }

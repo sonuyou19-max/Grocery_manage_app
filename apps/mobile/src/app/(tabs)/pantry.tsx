@@ -41,7 +41,7 @@ import {
   dueAt,
   hasUserCadence,
   isLowStat,
-  isResting,
+  hasStopped,
   lastBoughtLabel,
   lifeRemaining,
   listsHolding,
@@ -99,7 +99,7 @@ function SignedInPantry() {
     markAlmostOut,
     markStillGood,
     setStaple,
-    setResting,
+    setStopped,
     forgetItem,
   } = usePantryIntel();
   const { addToHomeList, addToChosenList } = useHomeListAdd();
@@ -120,14 +120,14 @@ function SignedInPantry() {
   const whenSheetClosed = useDeferUntilClosed(stapleKey != null);
 
   const now = Date.now();
-  // Resting items are split off before anything else: every count, section and
+  // Stopped items are split off before anything else: every count, section and
   // prediction on this screen is about what Korb is actively tracking.
-  const { items, resting } = useMemo(() => {
+  const { items, stopped } = useMemo(() => {
     const all = Object.values(stats);
     return {
-      items: all.filter((s) => !isResting(s)).sort((a, b) => dueAt(a) - dueAt(b)),
-      resting: all
-        .filter(isResting)
+      items: all.filter((s) => !hasStopped(s)).sort((a, b) => dueAt(a) - dueAt(b)),
+      stopped: all
+        .filter(hasStopped)
         .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
     };
   }, [stats]);
@@ -167,9 +167,9 @@ function SignedInPantry() {
     return { low, stocked };
   }, [items, q, isLow]);
 
-  const restingMatches = useMemo(
-    () => (q ? resting.filter((s) => s.display.toLowerCase().includes(q)) : resting),
-    [resting, q],
+  const stoppedMatches = useMemo(
+    () => (q ? stopped.filter((s) => s.display.toLowerCase().includes(q)) : stopped),
+    [stopped, q],
   );
 
   // While searching, force every section open so a match is never hidden —
@@ -188,11 +188,11 @@ function SignedInPantry() {
   };
 
   // Let it rest: retire the item from every prediction, keeping its history.
-  const onRest = (item: ItemStat) => {
+  const onStopBuying = (item: ItemStat) => {
     setStapleKey(null);
-    setResting(item.key, true);
+    setStopped(item.key, true);
     haptics.success();
-    showToast(t('rest.toastResting', { item: item.display }));
+    showToast(t('stopped.toastStopped', { item: item.display }));
   };
 
   /*
@@ -235,9 +235,9 @@ function SignedInPantry() {
 
   const onWake = (item: ItemStat) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setResting(item.key, false);
+    setStopped(item.key, false);
     haptics.success();
-    showToast(t('rest.toastAwake', { item: item.display }));
+    showToast(t('stopped.toastResumed', { item: item.display }));
   };
 
   // Swipe right: the item's fine — teach the model to wait longer (no delete).
@@ -348,7 +348,7 @@ function SignedInPantry() {
         }
         hasFab
       >
-        {items.length === 0 && resting.length === 0 ? (
+        {items.length === 0 && stopped.length === 0 ? (
           <EmptyState
             icon="file-tray-full-outline"
             title={t('pantry.emptyTitle')}
@@ -377,7 +377,7 @@ function SignedInPantry() {
 
             {!searching && <SwipeLegend colors={colors} />}
 
-            {searching && low.length === 0 && stocked.length === 0 && restingMatches.length === 0 ? (
+            {searching && low.length === 0 && stocked.length === 0 && stoppedMatches.length === 0 ? (
               <EmptyState
                 icon="search-outline"
                 title={t('pantry.noMatchesTitle')}
@@ -389,9 +389,9 @@ function SignedInPantry() {
                     sections above a shelf the user can actually act on. */}
                 {items.length === 0 && !searching && (
                   <EmptyState
-                    icon="moon-outline"
-                    title={t('rest.allRestingTitle')}
-                    body={t('rest.allRestingBody')}
+                    icon="bag-remove-outline"
+                    title={t('stopped.allStoppedTitle')}
+                    body={t('stopped.allStoppedBody')}
                   />
                 )}
 
@@ -439,21 +439,21 @@ function SignedInPantry() {
 
                 {/* Resting — the quiet shelf. Only appears once something is on
                     it, so it never adds noise for people who don't use it. */}
-                {restingMatches.length > 0 && (
+                {stoppedMatches.length > 0 && (
                   <View style={styles.section}>
                     <SectionHeader
-                      title={t('rest.section')}
+                      title={t('stopped.section')}
                       tone={colors.muted}
-                      count={restingMatches.length}
+                      count={stoppedMatches.length}
                       expanded={restExpanded}
                       onPress={() => toggle('rest')}
                     />
                     {restExpanded && (
                       <View style={styles.rowStack}>
                         <Text style={[type.sub, { color: colors.muted }]}>
-                          {t('rest.sectionHint')}
+                          {t('stopped.sectionHint')}
                         </Text>
-                        {restingMatches.map((item) => (
+                        {stoppedMatches.map((item) => (
                           <RestingRow
                             key={item.key}
                             item={item}
@@ -511,9 +511,9 @@ function SignedInPantry() {
         onChange={(patch) => {
           if (stapleKey) setStaple(stapleKey, patch);
         }}
-        onRest={() => {
+        onStopBuying={() => {
           const item = stapleKey ? stats[stapleKey] : null;
-          if (item) onRest(item);
+          if (item) onStopBuying(item);
         }}
         onDelete={() => {
           const item = stapleKey ? stats[stapleKey] : null;
@@ -597,7 +597,7 @@ function SwipeLegend({ colors }: { colors: Colors }) {
 }
 
 /**
- * A row on the Resting shelf. Deliberately not a swipe row: a resting item has
+ * A row on the Resting shelf. Deliberately not a swipe row: a stopped item has
  * no prediction to correct and no reason to be added to a list, so the two
  * swipe actions would both be lies. It has exactly one control — bring it back
  * — and it's a plain, visible button rather than a hidden gesture, because this
@@ -619,7 +619,7 @@ function RestingRow({
   const t = useT();
   return (
     <View style={[styles.restRow, { backgroundColor: colors.surface }]}>
-      <Ionicons name="moon-outline" size={18} color={colors.muted} />
+      <Ionicons name="bag-remove-outline" size={18} color={colors.muted} />
       <ItemEmoji name={item.display} category={item.category} size={15} dim />
       <View style={styles.grow}>
         <Text style={[type.body, { color: colors.muted }]} numberOfLines={1}>
@@ -633,11 +633,11 @@ function RestingRow({
         onPress={onWake}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={t('rest.wakeFor', { item: item.display })}
+        accessibilityLabel={t('stopped.resumeFor', { item: item.display })}
         style={[styles.wakeBtn, { borderColor: colors.accent }]}
       >
         <Text style={[type.sub, { color: colors.accent, fontWeight: '700' }]}>
-          {t('rest.wake')}
+          {t('stopped.resume')}
         </Text>
       </Pressable>
     </View>

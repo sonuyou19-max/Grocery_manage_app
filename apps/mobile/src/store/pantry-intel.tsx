@@ -20,7 +20,7 @@ import { uuidv4 } from '@/lib/uuid';
 import { useAppActive } from '@/lib/use-app-active';
 import {
   applyAlmostOut,
-  applyResting,
+  applyStopped,
   applyStaple,
   applyStillGood,
   buildDeck,
@@ -111,14 +111,14 @@ interface PantryIntelContext {
   /**
    * Retire an item from prediction, or bring it back. Resting keeps the item's
    * whole history; it just stops being asked about. Bringing it back restarts
-   * its countdown (see applyResting).
+   * its countdown (see applyStopped).
    */
-  setResting: (key: string, resting: boolean) => void;
+  setStopped: (key: string, resting: boolean) => void;
   /**
    * Erase an item from the household entirely: the pantry row AND every
    * purchase ever logged against it.
    *
-   * The hard counterpart to `setResting`, and the difference is the whole
+   * The hard counterpart to `setStopped`, and the difference is the whole
    * reason both exist. Resting keeps the history and stops the questions —
    * it is for something you have stopped buying but might buy again, and it
    * is reversible. This is for a row that should never have been there: a
@@ -396,7 +396,7 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       markAlmostOut: () => {},
       markStillGood: () => {},
       setStaple: () => {},
-      setResting: () => {},
+      setStopped: () => {},
       forgetItem: () => {},
       seedDemo: () => {},
     }),
@@ -954,8 +954,8 @@ function CloudPantryIntelProvider({
         apply(next);
         upsert([key], next);
       },
-      setResting: (key, resting) => {
-        const next = applyResting(statsRef.current, key, resting);
+      setStopped: (key, resting) => {
+        const next = applyStopped(statsRef.current, key, resting);
         apply(next);
         upsert([key], next);
       },

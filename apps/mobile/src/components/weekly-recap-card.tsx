@@ -8,7 +8,7 @@ import { Card } from '@/components/card';
 import { categoryLabel } from '@/lib/categorize';
 import { ecoScoreFor } from '@/lib/item-carbon';
 import { basketBalance, basketItems } from '@/lib/nutrition';
-import { dueAt, isResting } from '@/lib/pantry-intel';
+import { dueAt, hasStopped } from '@/lib/pantry-intel';
 import { bandForRegion, inSeason } from '@/lib/seasonal';
 import { recapRuns } from '@/lib/recap-markup';
 import { supabase } from '@/lib/supabase';
@@ -76,10 +76,10 @@ export function WeeklyRecapCard() {
       .slice(0, 3)
       .map(([c, count]) => ({ label: categoryLabel(c as ItemCategory, t), count }));
 
-    // Resting items are excluded throughout: the recap describes what the
+    // Stopped items are excluded throughout: the recap describes what the
     // household actually shops for, and a retired item is neither a staple nor
     // something anyone is running low on.
-    const active = Object.values(stats).filter((s) => !isResting(s));
+    const active = Object.values(stats).filter((s) => !hasStopped(s));
 
     const staples = active
       .filter((s) => s.sampleCount >= 1)
