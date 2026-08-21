@@ -7,7 +7,7 @@ import type { ItemCategory } from '@korb/shared';
 import { Card } from '@/components/card';
 import { categoryLabel } from '@/lib/categorize';
 import { ecoScoreFor } from '@/lib/item-carbon';
-import { basketBalance } from '@/lib/nutrition';
+import { basketBalance, basketItems } from '@/lib/nutrition';
 import { dueAt, isResting } from '@/lib/pantry-intel';
 import { bandForRegion, inSeason } from '@/lib/seasonal';
 import { recapRuns } from '@/lib/recap-markup';
@@ -43,17 +43,32 @@ export function WeeklyRecapCard() {
   const { t, language, region } = useLocale();
   const appActive = useAppActive();
   const { lists } = useGroceries();
-  const { stats } = usePantryIntel();
+  const { stats, purchases } = usePantryIntel();
   const { household, members } = useHousehold();
 
   const scope = household?.id ?? 'local';
 
   const payload = useMemo<RecapPayload>(() => {
-    const items = lists.flatMap((l) => l.items);
-    const balance = basketBalance(items.map((it) => ({ name: it.name, category: it.category })));
+    const now = Date.now();
+
+    /*
+     * Two sets, kept apart, each matching the card that shows it.
+     *
+     * The old version flattened every row on every list into one `items` array
+     * and derived the whole payload from it — count, balance, categories,
+     * spend, climate. That array is ticked and unticked together, which is a
+     * quantity nothing else in the app reports, so the recap disagreed with the
+     * two cards printed directly beneath it. See RecapPayload.
+     */
+    const basket = basketItems(lists);
+    // The same 7-day window the recap itself covers, from the same log the
+    // Climate Mix card counts.
+    const bought = purchases.filter((p) => p.at >= now - 7 * DAY);
+
+    const balance = basketBalance(basket.map((it) => ({ name: it.name, category: it.category })));
 
     const catCount = new Map<string, number>();
-    for (const it of items) catCount.set(it.category, (catCount.get(it.category) ?? 0) + 1);
+    for (const it of basket) catCount.set(it.category, (catCount.get(it.category) ?? 0) + 1);
     // Localized labels, so the model writes the recap using the same category
     // wording the user sees elsewhere in the app.
     const topCategories = [...catCount.entries()]
@@ -72,42 +87,67 @@ export function WeeklyRecapCard() {
       .slice(0, 4)
       .map((s) => s.display);
 
-    const now = Date.now();
     const lowItems = active
       .filter((s) => s.lastPurchasedAt > 0 && dueAt(s) - now < 5 * DAY)
       .sort((a, b) => dueAt(a) - dueAt(b))
       .slice(0, 4)
       .map((s) => s.display);
 
-    const priced = items.filter((it) => it.priceCents != null);
-    const spendCents = priced.reduce((sum, it) => sum + (it.priceCents ?? 0), 0);
+    /*
+     * Spend is what was PAID, not what was typed onto a list.
+     *
+     * This used to sum priceCents across list rows, so a price entered against
+     * something still sitting in the basket counted as money spent — and the
+     * same row counted again, from the purchase log, on the spend card below.
+     */
+    const pricedBought = bought.filter((p) => p.priceCents != null);
+    const spendCents = pricedBought.reduce((sum, p) => sum + (p.priceCents ?? 0), 0);
 
-    // Scored from the LISTS, not the purchase log, because that is what the
-    // rest of this payload describes — the recap is about the week's shopping
-    // as the household sees it, and mixing two sources would let the prose and
-    // the Insights card disagree about the same week.
-    const eco = ecoScoreFor(items.map((it) => ({ name: it.name, category: it.category, bio: it.bio })));
+    // Scored over the week's purchases, which is what the Climate Mix card
+    // scores. Scoring the lists instead answered a different question — "how
+    // heavy is what I am about to buy" — under a heading about the week just
+    // gone.
+    const eco = ecoScoreFor(
+      bought.map((p) => ({
+        name: p.name,
+        category: p.category ?? ('other' as ItemCategory),
+        bio: p.bio,
+      })),
+    );
 
     return {
-      itemCount: items.length,
+      boughtCount: bought.length,
+      basketCount: basket.length,
       listCount: lists.length,
       balance: balance.slices.map((s) => ({ group: s.group, pct: Math.round(s.fraction * 100) })),
       topCategories,
       staples,
       lowItems,
       spendEuros: Math.round(spendCents) / 100,
-      pricedCount: priced.length,
+      pricedCount: pricedBought.length,
       members: members.length,
       ecoScore: eco.score,
       ecoLowPercent: eco.score == null ? null : Math.round(eco.shares.low * 100),
       // Translated here rather than in the function: the edge function has no
       // locale files, and a produce name is exactly the kind of word a model
       // will translate loosely if asked to.
-      inSeason: inSeason(new Date(), bandForRegion(region)).map((k) => t(`eco.season.${k}`)),
+      seasonalSuggestions: inSeason(new Date(), bandForRegion(region)).map((k) =>
+        t(`eco.season.${k}`),
+      ),
     };
-  }, [lists, stats, members, region, t]);
+  }, [lists, purchases, stats, members, region, t]);
 
-  const enoughData = payload.itemCount > 0 || payload.staples.length > 0;
+  /*
+   * Enough to say something about.
+   *
+   * Either half counts. A week where nothing was bought but the basket is full
+   * is a real week with something to report — "15 waiting on your list" — and
+   * suppressing the card there would hide it exactly when somebody has just
+   * finished planning a shop. The reverse holds too: bought the lot and ticked
+   * it all off leaves an empty basket and a week worth describing.
+   */
+  const enoughData =
+    payload.boughtCount > 0 || payload.basketCount > 0 || payload.staples.length > 0;
 
   const [phase, setPhase] = useState<Phase>(enoughData ? 'loading' : 'empty');
   const [text, setText] = useState<string | null>(null);

@@ -52,7 +52,12 @@ const LOCAL_DATA_KEYS = [
   // next person to sign in on this device has no business being switched into.
   'korb.activeHousehold.v1',
   // A cached paragraph of prose ABOUT the household's shopping week.
+  // Both versions: sign-out must not leave the previous account's recap behind,
+  // and a device that has not yet been through a v2 write still holds the v1
+  // key. Listing only the current one would strip the wipe of everything it was
+  // for on exactly the devices most likely to have it.
   'korb.weeklyRecap.v1',
+  'korb.weeklyRecap.v2',
 ];
 
 /**
