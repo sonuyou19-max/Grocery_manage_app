@@ -495,6 +495,9 @@ const en = {
   },
   household: {
     defaultName: '%{name}’s home',
+    nudgeTitle: 'Your shopping isn’t backed up',
+    nudgeBody: 'You’re signed in, but there’s no household yet — everything is saved on this phone only. Tap to fix it.',
+    nudgeDone: 'Backed up — your shopping now syncs.',
     nowShoppingIn: 'Now shopping in %{name}',
     nowShoppingJoined: 'You’re in your new household now',
   },

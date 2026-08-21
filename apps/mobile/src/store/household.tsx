@@ -76,6 +76,22 @@ interface HouseholdContext {
   /** The user's display name. One name, identical in every household. */
   myName: string | null;
   loading: boolean;
+  /**
+   * Signed in, the roster has been fetched for THIS user, and it is empty.
+   *
+   * Nothing in Korb is stored in the cloud except inside a household, so this
+   * is the state where the app looks signed in and quietly syncs nothing. It is
+   * meant to be unreachable — sign-up creates one immediately — but that write
+   * is deliberately non-fatal, so a network blip at exactly the wrong moment
+   * lands here and nothing says so.
+   *
+   * False while the fetch is in flight, and that is the whole reason it is
+   * derived here rather than as `households.length === 0` at each call site:
+   * `households` is empty for a moment on EVERY launch, so the naive version
+   * flashes "your shopping isn't backed up" at people whose shopping is
+   * perfectly well backed up.
+   */
+  needsHousehold: boolean;
   refresh: () => Promise<void>;
   /** Creates and switches to it. */
   createHousehold: (name: string, displayName: string) => Promise<{ error?: string }>;
@@ -349,6 +365,10 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     };
   }, [user, refresh]);
 
+  // See the field's own note for why this is gated on `settledFor` rather than
+  // written as `households.length === 0` wherever it is needed.
+  const needsHousehold = user != null && settledFor === user.id && households.length === 0;
+
   const value = useMemo<HouseholdContext>(
     () => ({
       households,
@@ -360,6 +380,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       membersOf: (householdId) => byHousehold[householdId] ?? [],
       myName,
       loading,
+      needsHousehold,
       refresh,
       createHousehold: async (name, displayName) => {
         if (!user) return { error: t('householdError.signInFirst') };
@@ -461,6 +482,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       myName,
       rememberName,
       loading,
+      needsHousehold,
       refresh,
       user,
       t,

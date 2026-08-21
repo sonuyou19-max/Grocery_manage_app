@@ -16,6 +16,7 @@ import { HouseholdSwitcher } from "@/components/household-switcher";
 import { MemberAvatars, type AvatarMember } from "@/components/member-avatars";
 import { usePlusGate } from "@/lib/plus-gate";
 import { PlusBadge } from "@/components/plus-badge";
+import { HouseholdNudge } from "@/components/household-nudge";
 import { TrialNudge } from "@/components/trial-nudge";
 import { WeeklyListSheet } from "@/components/weekly-list-sheet";
 import { dedupeByName } from "@/lib/item-dup";
@@ -264,6 +265,11 @@ export default function ListsScreen() {
           </View>
         }
       >
+        {/* Above the trial nudge deliberately: "your shopping is not being
+            backed up" outranks "your free month is ending", and both render
+            nothing at all in the ordinary case. See the components. */}
+        <HouseholdNudge />
+
         {/* Renders nothing at all unless a free month is genuinely days from
             ending on an account that could act on it. See the component. */}
         <TrialNudge />

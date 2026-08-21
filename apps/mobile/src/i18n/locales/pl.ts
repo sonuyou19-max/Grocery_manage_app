@@ -547,6 +547,9 @@ const pl = {
   },
   household: {
     defaultName: 'Dom – %{name}',
+    nudgeTitle: 'Twoje zakupy nie są zapisywane w chmurze',
+    nudgeBody: 'Jesteś zalogowany, ale nie masz jeszcze domu — wszystko zapisuje się tylko na tym telefonie. Dotknij, aby to naprawić.',
+    nudgeDone: 'Zapisano — Twoje zakupy są już synchronizowane.',
     nowShoppingIn: 'Kupujesz teraz w %{name}',
     nowShoppingJoined: 'Jesteś teraz w nowym gospodarstwie',
   },

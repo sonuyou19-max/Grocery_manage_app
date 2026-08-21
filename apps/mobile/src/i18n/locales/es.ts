@@ -483,6 +483,9 @@ const es = {
   },
   household: {
     defaultName: 'Casa de %{name}',
+    nudgeTitle: 'Tu compra no se está guardando',
+    nudgeBody: 'Has iniciado sesión, pero aún no hay hogar — todo se guarda solo en este teléfono. Toca para solucionarlo.',
+    nudgeDone: 'Guardado — tu compra ya se sincroniza.',
     nowShoppingIn: 'Ahora compras en %{name}',
     nowShoppingJoined: 'Ya estás en tu nuevo hogar',
   },

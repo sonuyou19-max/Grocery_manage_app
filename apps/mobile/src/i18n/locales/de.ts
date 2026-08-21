@@ -484,6 +484,9 @@ const de = {
   },
   household: {
     defaultName: 'Zuhause von %{name}',
+    nudgeTitle: 'Dein Einkauf wird nicht gesichert',
+    nudgeBody: 'Du bist angemeldet, aber es gibt noch keinen Haushalt — alles liegt nur auf diesem Handy. Zum Beheben tippen.',
+    nudgeDone: 'Gesichert — dein Einkauf wird jetzt synchronisiert.',
     nowShoppingIn: 'Du kaufst jetzt in %{name} ein',
     nowShoppingJoined: 'Du bist jetzt in deinem neuen Haushalt',
   },

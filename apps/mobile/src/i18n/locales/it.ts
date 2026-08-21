@@ -483,6 +483,9 @@ const it = {
   },
   household: {
     defaultName: 'Casa di %{name}',
+    nudgeTitle: 'La tua spesa non è salvata',
+    nudgeBody: 'Hai effettuato l’accesso, ma non c’è ancora una famiglia — tutto è salvato solo su questo telefono. Tocca per risolvere.',
+    nudgeDone: 'Salvato — la tua spesa ora si sincronizza.',
     nowShoppingIn: 'Ora fai la spesa in %{name}',
     nowShoppingJoined: 'Ora sei nella tua nuova casa',
   },

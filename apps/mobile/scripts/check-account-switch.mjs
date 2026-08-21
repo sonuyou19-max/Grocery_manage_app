@@ -145,5 +145,57 @@ check(
   true,
 );
 
+/* ------------------------- signed in with no household is reported --------- */
+
+/*
+ * The residual the fix above does not cover. createHousehold at sign-up is
+ * deliberately non-fatal — being signed in with no household beats being unable
+ * to finish signing in — so a network blip at that moment still lands a user in
+ * a session where the app looks signed in and syncs nothing. HouseholdNudge is
+ * the only thing anywhere that says so.
+ *
+ * Two ways it could silently stop working, and neither would fail anything
+ * else: it could be gated on the wrong condition and never appear, or it could
+ * be gated on the naive one and appear for everybody, briefly, on every launch.
+ */
+const nudge = readFileSync(join(SRC, 'components', 'household-nudge.tsx'), 'utf8');
+
+check(
+  'the nudge asks the store, not the raw roster length',
+  /needsHousehold/.test(nudge) && !/households\.length/.test(nudge),
+  true,
+);
+
+// The derivation itself. `settledFor === user.id` is the whole guard: without
+// it the banner renders on every cold start before the fetch answers, telling
+// people with a household that their shopping is not backed up.
+const derivation = householdSrc.match(/const needsHousehold = [^;]*;/);
+check('needsHousehold is gated on the fetch having settled', /settledFor === user\.id/.test(derivation?.[0] ?? ''), true);
+check('...and on the roster actually being empty', /households\.length === 0/.test(derivation?.[0] ?? ''), true);
+check('...and on there being a signed-in user at all', /user != null/.test(derivation?.[0] ?? ''), true);
+
+/*
+ * And that the tap finishes the job rather than handing the user a form. That
+ * screen asks them to name a household, which is the jargon sign-up exists to
+ * avoid — and worse here, because it arrives as the price of fixing a problem
+ * the app caused. The form stays only as the branch for when the name is gone
+ * too.
+ */
+check(
+  'tapping it creates the same default household sign-up would',
+  /createHousehold\(t\('household\.defaultName'/.test(nudge),
+  true,
+);
+check(
+  'the form is the fallback, not the first answer',
+  nudge.indexOf("router.push('/auth/household')") > nudge.indexOf('const name = myName'),
+  true,
+);
+check(
+  'a failed retry keeps the card rather than hiding the problem',
+  /setError\(result\.error\);\s*\n\s*return;/.test(nudge),
+  true,
+);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

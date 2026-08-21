@@ -483,6 +483,9 @@ const nl = {
   },
   household: {
     defaultName: 'Huis van %{name}',
+    nudgeTitle: 'Je boodschappen worden niet geback-upt',
+    nudgeBody: 'Je bent ingelogd, maar er is nog geen huishouden — alles staat alleen op deze telefoon. Tik om dit op te lossen.',
+    nudgeDone: 'Geback-upt — je boodschappen synchroniseren nu.',
     nowShoppingIn: 'Je winkelt nu in %{name}',
     nowShoppingJoined: 'Je zit nu in je nieuwe huishouden',
   },

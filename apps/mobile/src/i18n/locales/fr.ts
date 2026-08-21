@@ -484,6 +484,9 @@ const fr = {
   },
   household: {
     defaultName: 'Chez %{name}',
+    nudgeTitle: 'Tes courses ne sont pas sauvegardées',
+    nudgeBody: 'Tu es connecté, mais il n’y a pas encore de foyer — tout est enregistré sur ce téléphone uniquement. Appuie pour corriger.',
+    nudgeDone: 'Sauvegardé — tes courses se synchronisent désormais.',
     nowShoppingIn: 'Tu fais tes courses dans %{name}',
     nowShoppingJoined: 'Tu es maintenant dans ton nouveau foyer',
   },
