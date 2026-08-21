@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  asCarbonTier,
   asFoodGroup,
   asUnit,
   type FoodGroup,
@@ -125,8 +126,32 @@ const KEYWORDS: Record<string, ItemCategory> = {
  * Learned categories — words the AI (or the user) has already resolved. This
  * cache is why we don't re-ask the model for the same item and burn tokens.
  * Hydrated from AsyncStorage at startup, kept in memory for sync lookups.
+ *
+ * ---------------------------------------------------------------------------
+ * Why v2: the cache outlived the bug it recorded
+ * ---------------------------------------------------------------------------
+ *
+ * Between the lexicon shipping and fe4d3ba, the categorize prompt's example
+ * object named only two of the five keys the handler reads, so the model
+ * answered with those two and `emoji` came back missing on every single call.
+ * That commit fixed the prompt — but it could not undo what this cache had
+ * already written.
+ *
+ * The two caches are not symmetrical, and that asymmetry is the whole problem.
+ * A call in that window taught the CATEGORY cache the item's aisle and taught
+ * the LEXICON nothing, because there was no emoji to teach it. From then on
+ * `isKnown` answers true, `resolveIfUnknown` returns before it asks, and the
+ * one call that could ever supply the glyph never runs again on that device.
+ * The item is stuck on its category fallback permanently — which is exactly
+ * what a paneer showing the dairy milk glass was.
+ *
+ * So the entries have to go, once. Bumping the key drops them and the next add
+ * re-asks against the fixed prompt. The cost is a handful of re-resolutions for
+ * items the curated table doesn't cover — cheap, one-off, and bounded by how
+ * many such items one household actually types. The alternative, leaving them,
+ * is a device that can never recover on its own.
  */
-const CACHE_KEY = 'korb.categoryCache.v1';
+const CACHE_KEY = 'korb.categoryCache.v2';
 let learned: Record<string, ItemCategory> = {};
 
 /**
@@ -272,6 +297,7 @@ export async function resolveCategoryAsync(
       group?: FoodGroup | null;
       emoji?: string | null;
       unit?: string | null;
+      carbon?: string | null;
     };
     if (!data.category) return null;
     // A function deployed before units existed simply omits the field, which
@@ -283,13 +309,21 @@ export async function resolveCategoryAsync(
     // (migration 0019), so without this the person who asked FIRST would see
     // their own item mis-grouped until two strangers happened to type it too.
     const group = asFoodGroup(data.group);
+    // The climate band the same call already answered and this function used to
+    // throw away — it passed a hardcoded null below while the response carried a
+    // real tier. The band therefore reached the device only once the term had
+    // been published to the shared lexicon, which needs three unrelated
+    // households to type it (migration 0019); until then the person who paid for
+    // the answer was scored off lib/eco's food-group default instead of the one
+    // they had just bought. Same reasoning as `group` above, one field over.
+    const carbon = asCarbonTier(data.carbon);
     // Structural sanity only. The allowlist check that actually matters ran
     // server-side before this value was allowed anywhere near the shared table
     // (functions/_shared/emoji-allowlist.ts); re-listing 200 glyphs here would
     // just be a second copy to drift out of step. This guards against a
     // malformed response, not against a hostile one.
     if (typeof data.emoji === 'string' && data.emoji.length > 0 && data.emoji.length <= 8) {
-      learnLexiconEntry(fold(name), data.emoji, data.category, unit, null, group);
+      learnLexiconEntry(fold(name), data.emoji, data.category, unit, carbon, group);
     }
     return { category: data.category, group, unit };
   } catch {
