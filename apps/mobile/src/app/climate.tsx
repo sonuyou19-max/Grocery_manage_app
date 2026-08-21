@@ -4,6 +4,7 @@ import type { ItemCategory } from "@korb/shared";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   LayoutAnimation,
   Pressable,
   SectionList,
@@ -26,6 +27,7 @@ import { EcoBar } from "@/components/eco-bar";
 import { EmptyState } from "@/components/empty-state";
 import { Frosted } from "@/components/frosted";
 import { ItemEmoji } from "@/components/item-emoji";
+import { ListPickerSheet } from "@/components/list-picker-sheet";
 import { MeshBackground } from "@/components/mesh-background";
 import {
   RangePicker,
@@ -47,6 +49,9 @@ import {
   type SwapRung,
 } from "@/lib/swaps";
 import { useHomeListAdd } from "@/lib/use-home-list-add";
+import { useSwapItem } from "@/lib/use-swap-item";
+import { useToast } from "@/components/toast";
+import { useHousehold } from "@/store/household";
 import { useLocale } from "@/store/locale";
 import { usePantryIntel } from "@/store/pantry-intel";
 import { radii, spacing, type, useTheme } from "@/theme";
@@ -106,7 +111,10 @@ export default function ClimateScreen() {
   const { t, language, region } = useLocale();
   const { stats, purchases } = usePantryIntel();
   const insets = useSafeAreaInsets();
-  const { addToHomeList } = useHomeListAdd();
+  const { addToHomeList, addToChosenList } = useHomeListAdd();
+  const { planSwap, applySwap, undoSwap } = useSwapItem();
+  const { showToast } = useToast();
+  const { members } = useHousehold();
 
   useEffect(() => {
     void hydrateSwaps();
@@ -177,6 +185,101 @@ export default function ClimateScreen() {
   // Same array the score reads, so a heavy hitter is always one of the
   // purchases the number above it was computed from.
   const heavy = useMemo(() => heavyHitters(ecoPurchases), [ecoPurchases]);
+
+  /*
+   * The (+) on a rung: use this INSTEAD OF the heavy item, not as well as it.
+   *
+   * Two shapes, and which one you get is decided by the data rather than by a
+   * setting. See lib/use-swap-item for why the second is the common one.
+   */
+  const onSwap = (from: string, alt: SwapRung) => {
+    haptics.success();
+    // The rung's real category, so the item lands classified and does NOT
+    // trigger a categorize call — resolveIfUnknown fires precisely on "unknown
+    // name, category other", which is what this used to pass.
+    const category = alt.category ?? ("other" as ItemCategory);
+    const plan = planSwap(from, alt.name, category);
+
+    /*
+     * Nothing open to replace — the ordinary case, because heavy hitters come
+     * from the purchase log rather than from any list.
+     *
+     * One tap, no confirmation. Tapping (+) already said "I want this"; asking
+     * again would be the app doubting an intent it just received. What the user
+     * does NOT know is why nothing was replaced, so the toast says it: the
+     * sentence carries the information the confirmation would have carried,
+     * without costing a decision.
+     */
+    if (plan.targets.length === 0) {
+      if (!addToHomeList(alt.name, category)) {
+        // No usable home list. Rare, and the picker is the honest answer —
+        // there is genuinely nowhere for this to go without asking.
+        setPendingAdd({ name: alt.name, category });
+        return;
+      }
+      showToast(t("climate.swapNotOpen", { from, to: alt.name }));
+      return;
+    }
+
+    const listNames = [...new Set(plan.targets.map((target) => target.listName))];
+    /*
+     * Named, not counted. "Replace it on 2 lists" is a number the user has to
+     * take on trust; "on Weekly shop and Aldi run" is something they can check
+     * against what they remember before saying yes.
+     */
+    const body = t("climate.swapConfirmBody", {
+      from,
+      to: alt.name,
+      lists: listNames.join(", "),
+    });
+    /*
+     * A claim is somebody else's trip. Editing a row they have said they are
+     * getting is not forbidden — households are cooperative, not locked — but it
+     * is the kind of thing you want to be told before you do it, not after.
+     */
+    const claimed = plan.claimedByOthers[0];
+    const warning = claimed
+      ? `\n\n${t("climate.swapClaimed", { who: nameFor(claimed.item.claimedBy) })}`
+      : "";
+
+    Alert.alert(t("climate.swapConfirmTitle", { to: alt.name }), `${body}${warning}`, [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("climate.swapConfirm"),
+        style: "destructive",
+        onPress: () => {
+          const undo = applySwap(plan);
+          haptics.success();
+          showToast(
+            t("climate.swapDone", { from, to: alt.name, lists: listNames.join(", ") }),
+            { label: t("common.undo"), onPress: () => undoSwap(undo) },
+          );
+        },
+      },
+    ]);
+  };
+
+  // A claim stores a user id; the household roster is the only place a name for
+  // it exists. Same fallback as the list screen, for the member who has since
+  // left.
+  const nameFor = (userId: string | null): string =>
+    (userId ? members.find((m) => m.user_id === userId)?.display_name?.trim() : "") ||
+    t("claim.someone");
+
+  /*
+   * The list picker, reached only when the replacement has nowhere to go.
+   *
+   * Deliberately not the default path. This is a browsing screen, and a modal
+   * asking "which list?" on every tap would interrupt the reading it exists
+   * for — so the alternative goes to its home list without asking, and this
+   * opens only when there is no usable home: a brand-new item on a device whose
+   * lists were all deleted, or a first sign-in where the local ids no longer
+   * resolve.
+   */
+  const [pendingAdd, setPendingAdd] = useState<{
+    name: string;
+    category: ItemCategory;
+  } | null>(null);
 
   /** The one open row, by name. Null when everything is closed. */
   const [openName, setOpenName] = useState<string | null>(null);
@@ -294,25 +397,26 @@ export default function ClimateScreen() {
                   open={openName === item[0]}
                   swaps={swaps[item[0]]}
                   onToggle={() => toggle(item[0])}
-                  onAdd={(alt) => {
-                    haptics.success();
-                    // The rung's real category, so the item lands classified and
-                    // does NOT trigger a categorize call — resolveIfUnknown fires
-                    // precisely on "unknown name, category other", which is what
-                    // this used to pass.
-                    //
-                    // No list picker fallback on purpose: this is a browsing
-                    // screen, and a modal asking "which list?" would interrupt
-                    // the reading it exists for. addToHomeList returns false only
-                    // when there is no list at all, which the Insights tab cannot
-                    // be reached without.
-                    addToHomeList(alt.name, alt.category ?? "other");
-                  }}
+                  onAdd={(alt) => onSwap(item[0], alt)}
                 />
             )}
           />
         )}
       </SafeAreaView>
+
+      <ListPickerSheet
+        visible={pendingAdd != null}
+        title={pendingAdd ? t("climate.addAlt", { item: pendingAdd.name }) : undefined}
+        onCancel={() => setPendingAdd(null)}
+        onPick={(listId, listName) => {
+          const pick = pendingAdd;
+          setPendingAdd(null);
+          if (!pick) return;
+          // addToChosenList, not addToHomeList: the user has just told us where
+          // this goes, and that answer becomes the item's home for next time.
+          addToChosenList(listId, listName, pick.name, pick.category);
+        }}
+      />
     </View>
   );
 }
