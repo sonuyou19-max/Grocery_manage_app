@@ -199,6 +199,26 @@ const BEHAVIOUR = [
   ['2 litres de lait', 'dairy_eggs'],
   // Unknown stays unknown: a wrong guess is worse than asking the AI.
   ['zzzz', null],
+  /*
+   * The collisions. Every one of these is a word scan stopping on a word that
+   * QUALIFIES the item rather than naming it, and every one used to be fixed in
+   * whichever of the two scans happened to be in front of me. They are pinned
+   * here as aisles and in check-item-emoji as glyphs, because the point of
+   * resolving both from one match is that they can no longer disagree.
+   */
+  ['almond milk', 'dairy_eggs'],      // not the nut's aisle
+  ['Alpro almond milk', 'dairy_eggs'],
+  ['almond flour', 'pantry'],
+  ['butter beans', 'pantry'],         // a legume, not dairy
+  ['water colour', 'household'],      // not a drink
+  ['Wasserfarben', 'household'],      // ...in one word, as German writes it
+  ['waterverf', 'household'],
+  // And the words those fixes could plausibly have damaged.
+  ['butter', 'dairy_eggs'],
+  ['water', 'drinks'],
+  ['sparkling water', 'drinks'],
+  ['almonds', 'pantry'],
+  ['peanut butter', 'pantry'],
 ];
 
 const wrong = BEHAVIOUR.map(([name, want]) => [name, want, categoryMod.categoryFromTables(name)])
@@ -210,6 +230,33 @@ if (wrong.length) {
   );
 } else {
   console.log(`ok   ${BEHAVIOUR.length} resolver cases across all seven languages`);
+}
+
+/* ------------------------------- one resolution, not two ----------------- */
+
+/*
+ * The structural half of the same point. categoryFromTables must not grow its
+ * own scan back: the moment it re-implements "whole name, then word by word" it
+ * can be taught something lib/item-emoji has not been, and the two answers
+ * about one item drift. That is exactly how "almond milk" came to show a carton
+ * of milk filed under Pantry.
+ */
+const categorySrc = readFileSync(join(LIB, 'item-category.ts'), 'utf8');
+const resolver = categorySrc.slice(categorySrc.indexOf('export function categoryFromTables'));
+
+if (!/curatedWhole\(/.test(resolver) || !/curatedWord\(/.test(resolver)) {
+  fail('categoryFromTables no longer resolves through lib/item-emoji', [
+    'It must ask curatedWhole/curatedWord for the MATCH and only compute the',
+    'aisle itself. A second scan here can be taught something the emoji scan',
+    'has not been, and then one item has two answers.',
+  ]);
+} else if (/for \(const word of/.test(resolver)) {
+  fail('categoryFromTables has grown its own word scan again', [
+    'The loop is the drift. Whatever it needs to know belongs in the shared',
+    'resolver, where the emoji path sees it too.',
+  ]);
+} else {
+  console.log('ok   the aisle and the glyph come from one match');
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

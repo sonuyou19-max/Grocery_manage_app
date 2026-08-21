@@ -1,6 +1,6 @@
 import type { ItemCategory } from '@korb/shared';
 
-import { fold, __ITEM_EMOJI } from '@/lib/item-emoji';
+import { curatedWhole, curatedWord, fold, __ITEM_EMOJI } from '@/lib/item-emoji';
 
 /**
  * Which aisle an item belongs to, in every language Korb ships.
@@ -145,6 +145,7 @@ const EMOJI_CATEGORY: Record<string, ItemCategory> = {
   '💐': 'household',
   '🐱': 'household',
   '🐶': 'household',
+  '🎨': 'household', // paint, crayons — the aisle a school-supplies run lands in
 
   // Personal care
   '🧴': 'personal_care', // shampoo, deodorant — but vinegar shares the bottle
@@ -219,14 +220,6 @@ const ITEM_CATEGORY: Record<string, ItemCategory> = (() => {
   return out;
 })();
 
-/**
- * The aisle for a name, from the curated tables alone. Null when unknown.
- *
- * Same resolution order as emojiFor: the whole name first so "olive oil" is
- * pantry before "olive" is consulted, then word by word. Accent-folded
- * throughout — a French shopper types "crème", not "creme", and the table is
- * keyed on the folded form.
- */
 /*
  * Words that mean "this is not the food that word usually names".
  *
@@ -266,21 +259,48 @@ const NON_FOOD_QUALIFIERS = new Set<string>([
   'farba', 'farby', 'pedzel', 'plyn', 'proszek',
 ]);
 
+/**
+ * The aisle for a name, from the curated tables alone. Null when unknown.
+ *
+ * ---------------------------------------------------------------------------
+ * One scan, two questions
+ * ---------------------------------------------------------------------------
+ *
+ * This used to run its own copy of emojiFor's resolution — whole name first,
+ * then word by word — over ITEM_CATEGORY. Two scans over the same words in the
+ * same order, which is fine until one of them learns something the other has
+ * not. It did: the nut rule taught the emoji scan that "almond milk" is a milk,
+ * and this one went on stopping at `almond`, so the row showed 🥛 and filed
+ * itself under Pantry.
+ *
+ * So the MATCH comes from lib/item-emoji now, and only the ANSWER is computed
+ * here. Both files see the same term, and any future precedence rule lands in
+ * one place instead of needing to be remembered in two.
+ *
+ * The term, not the emoji, is what comes back — because the emoji is not always
+ * enough to answer with. 🍓 is strawberry and jam; 🧴 is shampoo and vinegar.
+ * ITEM_CATEGORY is keyed by term precisely so TERM_CATEGORY can overrule the
+ * glyph, and that only works if the caller knows which word matched.
+ */
 export function categoryFromTables(name: string): ItemCategory | null {
   const folded = fold(name);
   if (!folded) return null;
 
-  const whole = ITEM_CATEGORY[folded] ?? ITEM_CATEGORY[folded.replace(/\s+/g, '')];
-  if (whole) return whole;
-
-  const words = folded.split(/[\s,./-]+/);
-  // Before the noun scan, never after. See NON_FOOD_QUALIFIERS.
-  if (words.some((w) => NON_FOOD_QUALIFIERS.has(w))) return 'household';
-
-  for (const word of words) {
-    if (ITEM_CATEGORY[word]) return ITEM_CATEGORY[word];
+  const whole = curatedWhole(folded);
+  if (whole) {
+    const known = ITEM_CATEGORY[whole.term];
+    if (known) return known;
   }
-  return null;
+
+  // Before the word scan, never after. See NON_FOOD_QUALIFIERS.
+  if (folded.split(/[\s,./-]+/).some((w) => NON_FOOD_QUALIFIERS.has(w))) return 'household';
+
+  const word = curatedWord(folded);
+  // A term whose emoji has no aisle reads as "we don't know" and falls through
+  // to the AI, exactly as it did when this scanned ITEM_CATEGORY directly.
+  // check-item-category fails the build on an emoji without one, so the state
+  // is a guard failure rather than a silent miscategorisation.
+  return (word && ITEM_CATEGORY[word.term]) ?? null;
 }
 
 /** Test seams: the check script asserts coverage against these. */

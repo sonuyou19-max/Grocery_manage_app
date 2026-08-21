@@ -168,6 +168,12 @@ const ITEM_EMOJI: Record<string, string> = {
   hazelnoten: '🌰', avellanas: '🌰', nocciole: '🌰', 'orzechy laskowe': '🌰',
   chocolate: '🍫', schokolade: '🍫', chocolat: '🍫', chocolade: '🍫', cioccolato: '🍫', czekolada: '🍫',
   beans: '🫘', bohnen: '🫘', haricots: '🫘', bonen: '🫘', frijoles: '🫘', fagioli: '🫘', fasola: '🫘',
+  // Whole names, because the word scan finds `butter` first and files a legume
+  // under dairy. lib/eco has carried the same three entries since butter beans
+  // were first scored as a high-carbon animal product; now that the aisle and
+  // the glyph come from one match, listing them here fixes both at once instead
+  // of needing a third copy in lib/item-category.
+  'butter beans': '🫘', 'butter bean': '🫘', butterbeans: '🫘',
   soup: '🥫', suppe: '🥫', soupe: '🥫', soep: '🥫', sopa: '🥫', zuppa: '🥫', zupa: '🥫',
   sauce: '🥫', sos: '🥫', salsa: '🥫', saus: '🥫',
   ketchup: '🍅', mayonnaise: '🥫', mayo: '🥫', mosterd: '🥫', mustard: '🥫',
@@ -201,6 +207,15 @@ const ITEM_EMOJI: Record<string, string> = {
 
   // --- personal care --------------------------------------------------------
   shampoo: '🧴', champu: '🧴', szampon: '🧴',
+  // Art supplies. Added as a CONCEPT rather than as another qualifier rule: the
+  // reason "water colour" showed a droplet is that the table had no word for
+  // paint at all, so the scan had nothing better to find than `water`.
+  paint: '🎨', paints: '🎨', 'water colour': '🎨', 'water color': '🎨',
+  watercolour: '🎨', watercolor: '🎨', crayon: '🎨', crayons: '🎨',
+  farbe: '🎨', farben: '🎨', malfarbe: '🎨', malfarben: '🎨',
+  wasserfarbe: '🎨', wasserfarben: '🎨', buntstifte: '🎨',
+  verf: '🎨', waterverf: '🎨', peinture: '🎨', peintures: '🎨',
+  pintura: '🎨', pinturas: '🎨', pittura: '🎨', farba: '🎨', farby: '🎨',
   toothpaste: '🪥', zahnpasta: '🪥', dentifrice: '🪥', tandpasta: '🪥', dentifricio: '🪥',
   'pasta de dientes': '🪥', 'pasta do zebow': '🪥',
   toothbrush: '🪥', zahnburste: '🪥', tandenborstel: '🪥',
@@ -303,14 +318,22 @@ export function setEmojiLexicon(resolver: LexiconResolver): void {
  */
 const STEM_SUFFIXES = ['en', 'es', 's', 'i', 'e', 'y', 'a'];
 
-function lookupWord(word: string): string | undefined {
+/**
+ * The table KEY a word resolves to, not the emoji it carries.
+ *
+ * The key is the more useful of the two because the emoji can be recovered from
+ * it and the reverse is not true: 🍓 is both strawberry and jam, and lib/
+ * item-category has to tell them apart to file one under produce and the other
+ * under pantry. Returning the key is what lets a second caller ask a different
+ * question about the same match.
+ */
+function lookupTerm(word: string): string | undefined {
   if (!word) return undefined;
-  const direct = ITEM_EMOJI[word];
-  if (direct) return direct;
+  if (ITEM_EMOJI[word]) return word;
   for (const suffix of STEM_SUFFIXES) {
     if (word.length > suffix.length + 2 && word.endsWith(suffix)) {
       const stem = word.slice(0, -suffix.length);
-      if (ITEM_EMOJI[stem]) return ITEM_EMOJI[stem];
+      if (ITEM_EMOJI[stem]) return stem;
     }
   }
   return undefined;
@@ -341,6 +364,89 @@ const NUT = new Set(['🥜', '🌰']);
 const NUT_YIELDS_TO = new Set(['🥛', '🌾', '🫒', '🥣']);
 
 /**
+ * Glyphs that win a word scan outright, wherever in the name they appear.
+ *
+ * "Water colour" is the case. `water` comes first and is a real word for a real
+ * product, so no amount of ordering helps — the only thing that separates the
+ * two readings is that one of them is not food. A name containing a word for
+ * paint is about paint, whatever else it also contains.
+ *
+ * This is the same judgement lib/item-category's NON_FOOD_QUALIFIERS makes, and
+ * it stays a very short list for the same reason: it is strong enough that a
+ * word only belongs here when its presence settles the question in every
+ * context. Paint qualifies. "Fresh" or "organic" would not.
+ */
+const SETTLES_IT = new Set(['🎨']);
+
+/**
+ * What the curated table matched, and on which term.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is exported rather than kept inside emojiFor
+ * ---------------------------------------------------------------------------
+ *
+ * lib/item-category used to run its own copy of this resolution — whole name
+ * first, then word by word — over a table derived from this one. Two scans over
+ * the same words, which is fine right up to the moment one of them learns
+ * something the other has not.
+ *
+ * That moment arrived with the nut rule below. "Almond milk" resolved to 🥛
+ * here and to Pantry there, because the aisle scan still stopped at `almond`.
+ * The row showed a carton of milk filed under tinned goods, and no amount of
+ * care in either file would have caught it — the bug is the duplication, not
+ * the code.
+ *
+ * It is also the fourth of its kind. Butter beans read as dairy, beef stock
+ * cubes as a joint, water colour as a drink, almond milk as a nut: every one a
+ * word scan stopping on a word that qualifies the item rather than naming it,
+ * and every one fixed in whichever file happened to be in front of me. Sharing
+ * the resolution is what makes the fifth fix land in both places at once.
+ *
+ * Two functions rather than one because the tiers are not adjacent: emojiFor
+ * puts the learned lexicon BETWEEN them (an exact match on the full string
+ * beats a partial match on one word, whichever source it came from), while the
+ * category path deliberately consults the lexicon later still, through
+ * lib/categorize. Handing out one combined resolver would force one of those
+ * orders onto the other.
+ *
+ * Both take an ALREADY-FOLDED name — every caller has folded it to get here.
+ */
+export interface CuratedHit {
+  /** The table key that matched, which may be a stem of the word given. */
+  term: string;
+  emoji: string;
+}
+
+/** An exact match on the whole name, joined-up spelling included. */
+export function curatedWhole(folded: string): CuratedHit | null {
+  const term = lookupTerm(folded) ?? lookupTerm(folded.replace(/\s+/g, ''));
+  return term ? { term, emoji: ITEM_EMOJI[term]! } : null;
+}
+
+/** The word-by-word scan, including the nut precedence rule below. */
+export function curatedWord(folded: string): CuratedHit | null {
+  const hits: CuratedHit[] = [];
+  for (const word of folded.split(/[\s,./-]+/)) {
+    const term = lookupTerm(word);
+    if (term) hits.push({ term, emoji: ITEM_EMOJI[term]! });
+  }
+  if (hits.length === 0) return null;
+
+  // Checked across every hit, not just the first: `water` precedes `colour` and
+  // is what made the droplet win.
+  const settled = hits.find((hit) => SETTLES_IT.has(hit.emoji));
+  if (settled) return settled;
+
+  const first = hits[0]!;
+  if (NUT.has(first.emoji)) {
+    const product = hits.find((hit) => NUT_YIELDS_TO.has(hit.emoji));
+    if (product) return product;
+  }
+  return first;
+}
+
+
+/**
  * The emoji for an item. Never empty.
  *
  * Order matters: the whole name first (so "olive oil" beats "oil", and
@@ -353,8 +459,8 @@ export function emojiFor(name: string, category: ItemCategory = 'other'): string
   if (!folded) return CATEGORY_EMOJI[category] ?? CATEGORY_EMOJI.other;
 
   // 1. Curated table, whole name — "ice cream" / "icecream" both spellings.
-  const whole = lookupWord(folded) ?? lookupWord(folded.replace(/\s+/g, ''));
-  if (whole) return whole;
+  const whole = curatedWhole(folded);
+  if (whole) return whole.emoji;
 
   // 2. Shared lexicon, whole term. Ordered above the word scan deliberately:
   //    an exact match on the full string is more specific than a partial match
@@ -363,23 +469,10 @@ export function emojiFor(name: string, category: ItemCategory = 'other'): string
   const learned = lexicon(folded);
   if (learned) return learned;
 
-  // 3. Curated table, word by word. First hit wins, with the one exception
-  //    above: a leading nut steps aside for a product it is a flavour of.
-  //    Only a LEADING nut, because a name whose first hit is anything else has
-  //    already answered — "lait d'amande" stops at "lait" without help.
-  const hits: string[] = [];
-  for (const word of folded.split(/[\s,./-]+/)) {
-    const hit = lookupWord(word);
-    if (hit) hits.push(hit);
-  }
-  if (hits.length > 0) {
-    const first = hits[0]!;
-    if (NUT.has(first)) {
-      const product = hits.find((hit) => NUT_YIELDS_TO.has(hit));
-      if (product) return product;
-    }
-    return first;
-  }
+  // 3. Curated table, word by word — including the nut rule, which lib/
+  //    item-category now inherits rather than having to be told about.
+  const word = curatedWord(folded);
+  if (word) return word.emoji;
 
   // 4. The category, which always has an answer.
   return CATEGORY_EMOJI[category] ?? CATEGORY_EMOJI.other;

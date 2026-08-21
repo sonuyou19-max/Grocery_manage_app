@@ -128,6 +128,21 @@ check('"walnuts" alone is a nut', mod.emojiFor('Walnuts', 'pantry'), '🌰');
 check('"latte di mandorla" is a milk', mod.emojiFor('Latte di mandorla', 'dairy_eggs'), '🥛');
 check('"leche de almendras" is a milk', mod.emojiFor('Leche de almendras', 'dairy_eggs'), '🥛');
 
+/* ------------------------------- a qualifier is not the item ------------- */
+
+// The collision family, pinned as glyphs here and as aisles in
+// check-item-category. Both answers come from one match now, so a fix to either
+// has to keep both true.
+check('"butter beans" is a legume', mod.emojiFor('Butter beans', 'pantry'), '🫘');
+check('"butterbeans" joined also works', mod.emojiFor('Butterbeans', 'pantry'), '🫘');
+check('"butter" alone is still butter', mod.emojiFor('Butter', 'dairy_eggs'), '🧈');
+check('"water colour" is paint', mod.emojiFor('Water colour', 'other'), '🎨');
+check('...spelled the American way', mod.emojiFor('Water color', 'other'), '🎨');
+check('...and as one German word', mod.emojiFor('Wasserfarben', 'other'), '🎨');
+check('...and in Dutch', mod.emojiFor('Waterverf', 'other'), '🎨');
+check('"water" alone is still water', mod.emojiFor('Water', 'drinks'), '💧');
+check('"sparkling water" is still water', mod.emojiFor('Sparkling water', 'drinks'), '💧');
+
 /* --------------------------------------------- stemming must not over-reach */
 
 // "sale" (Italian salt) must not be stemmed to "sal"→ nothing weird, and short
