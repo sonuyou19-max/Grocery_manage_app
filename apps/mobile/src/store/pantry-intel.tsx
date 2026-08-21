@@ -113,7 +113,17 @@ interface PantryIntelContext {
    * whole history; it just stops being asked about. Bringing it back restarts
    * its countdown (see applyStopped).
    */
-  setStopped: (key: string, resting: boolean) => void;
+  /**
+   * Stop buying an item, or start again.
+   *
+   * `restartClock: false` is the toast's Undo and nothing else — see
+   * applyStopped for why an accidental tap must not move lastPurchasedAt.
+   */
+  setStopped: (
+    key: string,
+    stopped: boolean,
+    options?: { restartClock?: boolean },
+  ) => void;
   /**
    * Erase an item from the household entirely: the pantry row AND every
    * purchase ever logged against it.
@@ -954,8 +964,8 @@ function CloudPantryIntelProvider({
         apply(next);
         upsert([key], next);
       },
-      setStopped: (key, resting) => {
-        const next = applyStopped(statsRef.current, key, resting);
+      setStopped: (key, stopped, options) => {
+        const next = applyStopped(statsRef.current, key, stopped, Date.now(), options);
         apply(next);
         upsert([key], next);
       },

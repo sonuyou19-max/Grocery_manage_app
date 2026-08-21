@@ -187,12 +187,30 @@ function SignedInPantry() {
     else setRestOpen((v) => !v);
   };
 
-  // Let it rest: retire the item from every prediction, keeping its history.
+  // "I've stopped buying this": out of every forward-looking reading, history
+  // kept. Reversible in one tap from the toast, and in one tap from the section
+  // it lands in after that.
   const onStopBuying = (item: ItemStat) => {
     setStapleKey(null);
     setStopped(item.key, true);
     haptics.success();
-    showToast(t('stopped.toastStopped', { item: item.display }));
+    /*
+     * Undo, not "Buying again" — the two are different operations and the
+     * difference matters exactly here.
+     *
+     * Resuming restarts the countdown, which is right when you have decided to
+     * buy something again. Undo means the tap should never have happened, so
+     * the item goes back to precisely what it was: same last-bought date, same
+     * snooze. Restarting the clock on the button somebody reached for to
+     * prevent a change would destroy the one field the stop was preserving.
+     */
+    showToast(t('stopped.toastStopped', { item: item.display }), {
+      label: t('common.undo'),
+      onPress: () => {
+        setStopped(item.key, false, { restartClock: false });
+        haptics.tick();
+      },
+    });
   };
 
   /*

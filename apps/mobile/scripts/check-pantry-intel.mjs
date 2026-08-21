@@ -618,5 +618,93 @@ check(
   );
 }
 
+/* ---------------------- undo is not the same as buying again ------------- */
+
+/*
+ * Both clear the flag, and there the resemblance stops.
+ *
+ * "Buying again" is a decision, so the countdown restarts from now. Undo means
+ * the tap should never have happened, so the item goes back to exactly what it
+ * was — and restarting the clock there would destroy the one field the stop
+ * existed to preserve, on the button somebody pressed to prevent any change at
+ * all. The failure is silent: the item reappears, looks right, and has quietly
+ * forgotten when it was last bought.
+ */
+{
+  const DAY = 86_400_000;
+  const now = Date.UTC(2026, 0, 1);
+  const bought = now - 40 * DAY;
+  const snooze = now + 3 * DAY;
+  const stats = {
+    olives: {
+      key: 'olives',
+      display: 'Olives',
+      category: 'pantry',
+      lastPurchasedAt: bought,
+      intervalDays: 30,
+      sampleCount: 3,
+      snoozeUntil: snooze,
+      archivedAt: now,
+    },
+  };
+
+  const undone = mod.applyStopped(stats, 'olives', false, now, { restartClock: false }).olives;
+  check('undo clears the flag', undone.archivedAt, null);
+  check('...and leaves last-bought exactly where it was', undone.lastPurchasedAt, bought);
+  check('...and does not silently cancel a snooze', undone.snoozeUntil, snooze);
+
+  const resumed = mod.applyStopped(stats, 'olives', false, now).olives;
+  check('buying again clears the flag too', resumed.archivedAt, null);
+  check('...but restarts the countdown, which is the point of it', resumed.lastPurchasedAt, now);
+  check('...and clears the snooze with it', resumed.snoozeUntil, null);
+
+  // The default has to stay the deliberate one: every caller except the toast
+  // means "buying again", and an inverted default would make the common path
+  // the surprising one.
+  const byDefault = mod.applyStopped(stats, 'olives', false, now, {}).olives;
+  check('an empty options object still restarts', byDefault.lastPurchasedAt, now);
+
+  // Stopping is unchanged by any of this.
+  const stoppedAgain = mod.applyStopped(
+    { olives: { ...stats.olives, archivedAt: null } },
+    'olives',
+    true,
+    now,
+  ).olives;
+  check('stopping stamps the moment', stoppedAgain.archivedAt, now);
+  check('...and touches nothing else', stoppedAgain.lastPurchasedAt, bought);
+}
+
+/* ------------------------- the toast offers the undo --------------------- */
+
+/*
+ * A reversible destructive-feeling action with no way back in the moment sends
+ * the user hunting for a section they have not been told about yet. The toast
+ * is the only place that way back exists at the time it is wanted.
+ */
+{
+  const pantry = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8');
+  const handler = pantry.slice(
+    pantry.indexOf('const onStopBuying = ('),
+    pantry.indexOf('const onDelete'),
+  );
+  /*
+   * Matched as an ARGUMENT to showToast, not merely as text somewhere in the
+   * handler. The looser version passed a mutation that kept the label but
+   * stopped passing it — which is exactly the shape a careless refactor takes,
+   * and the one where the toast still says the right thing and does nothing.
+   */
+  check(
+    'stopping offers an undo on the toast',
+    /showToast\([\s\S]*?,\s*\{[\s\S]*?label: t\('common\.undo'\)/.test(handler),
+    true,
+  );
+  check(
+    '...and the undo does not restart the clock',
+    /setStopped\(item\.key, false, \{ restartClock: false \}\)/.test(handler),
+    true,
+  );
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

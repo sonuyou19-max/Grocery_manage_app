@@ -203,16 +203,32 @@ export function applyStaple(
  * This is the manual door. The other one is recordPurchase, which clears the
  * flag on its own when the item is bought again — and refuses the long gap for
  * exactly the reason above. Two doors, one behaviour.
+ *
+ * ---------------------------------------------------------------------------
+ * `restartClock: false` is for undo, and it is not the same as resuming
+ * ---------------------------------------------------------------------------
+ *
+ * Resuming is a decision: you are buying this again, so the countdown should
+ * start from now. Undo is the opposite — you did not mean to press the button,
+ * and the item should go back to exactly what it was a second ago. Restarting
+ * the clock there would quietly destroy the one thing the stop was supposed to
+ * preserve, which is when you last bought it, and it would do so on the tap the
+ * user reached for to prevent any change at all.
+ *
+ * So the toast's Undo passes false and nothing else does. The default is the
+ * decision, because that is what every deliberate caller means.
  */
 export function applyStopped(
   stats: StatMap,
   key: string,
   stopped: boolean,
   now: number = Date.now(),
+  options: { restartClock?: boolean } = {},
 ): StatMap {
   const s = stats[key];
   if (!s) return stats;
   if (stopped) return { ...stats, [key]: { ...s, archivedAt: now } };
+  if (options.restartClock === false) return { ...stats, [key]: { ...s, archivedAt: null } };
   return { ...stats, [key]: { ...s, archivedAt: null, lastPurchasedAt: now, snoozeUntil: null } };
 }
 

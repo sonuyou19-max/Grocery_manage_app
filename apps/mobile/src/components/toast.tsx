@@ -50,9 +50,19 @@ import { radii, spacing, type, useTheme } from '@/theme';
  *    together and a tap can never reach the previous toast's callback.
  */
 
-const VISIBLE_MS = 2000;
-/** Long enough to read the sentence, decide, and reach the button. */
-const ACTION_MS = 6000;
+/*
+ * Two seconds was right for a toast that only confirms — "filed on Weekly
+ * shop", read in passing while your thumb is already moving. It was too short
+ * for the ones that name something you might want to check, which is most of
+ * them once the sentence carries an item name and a destination.
+ */
+const VISIBLE_MS = 3200;
+/**
+ * With an action there is a whole decision in the way: read the sentence,
+ * notice there is a button, decide, and reach it. Six seconds covered the first
+ * three and rushed the fourth.
+ */
+const ACTION_MS = 8000;
 const FADE_MS = 180;
 
 export interface ToastAction {
