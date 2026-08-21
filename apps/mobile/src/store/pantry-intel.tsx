@@ -13,6 +13,7 @@ import {
 import type { ItemCategory } from '@korb/shared';
 
 import { categorizeSync } from '@/lib/categorize';
+import { recallItemList } from '@/lib/item-home-list';
 import { reportWriteFailure } from '@/lib/monitoring';
 import { supabase } from '@/lib/supabase';
 import { uuidv4 } from '@/lib/uuid';
@@ -421,6 +422,7 @@ interface DbPantryRow {
   keep_stocked: boolean | null;
   cadence_days: number | null;
   archived_at: string | null;
+  home_list_id: string | null;
 }
 
 const mapRow = (r: DbPantryRow): ItemStat => ({
@@ -434,6 +436,7 @@ const mapRow = (r: DbPantryRow): ItemStat => ({
   keepStocked: r.keep_stocked ?? false,
   cadenceDays: r.cadence_days ?? null,
   archivedAt: r.archived_at ? Date.parse(r.archived_at) : null,
+  homeList: r.home_list_id ?? null,
 });
 
 const toRow = (householdId: string, s: ItemStat) => ({
@@ -450,6 +453,21 @@ const toRow = (householdId: string, s: ItemStat) => ({
   keep_stocked: s.keepStocked ?? false,
   cadence_days: s.cadenceDays ?? null,
   archived_at: s.archivedAt ? new Date(s.archivedAt).toISOString() : null,
+  /*
+   * The stat's own value first, the device's memory only as a seed.
+   *
+   * This runs on every check-off, and the stat it is given was built by
+   * spreading the row that came back from the server — so the household's
+   * answer is what is normally written straight back, and one member checking
+   * something off cannot blank the home list another member set.
+   *
+   * recallItemList fills the gap that leaves: an item bought for the first time
+   * has no server row to carry a value, and rememberItemList's own update (see
+   * lib/item-home-list) found no row to write to for exactly the same reason.
+   * This is the moment the row comes into existence, and the device that just
+   * added the item is the one that knows where it went.
+   */
+  home_list_id: s.homeList ?? recallItemList(s.display) ?? null,
 });
 
 interface DbPriceRow {
@@ -682,7 +700,7 @@ function CloudPantryIntelProvider({
     const { data, error } = await supabase
       .from('pantry_items')
       .select(
-        'item_key, name, display_name, category, last_purchased_at, avg_purchase_interval_days, sample_count, snooze_until, keep_stocked, cadence_days, archived_at',
+        'item_key, name, display_name, category, last_purchased_at, avg_purchase_interval_days, sample_count, snooze_until, keep_stocked, cadence_days, archived_at, home_list_id',
       )
       .eq('household_id', householdId);
     if (!error && data) {

@@ -461,5 +461,65 @@ checkDeep(
 );
 checkDeep('an untracked item has no tags', named([{ name: 'Check 1', items: [I('Zout')] }], 'melk'), []);
 
+/* ------------------ the home list is household state, not device state ---- */
+
+/*
+ * "You usually buy" filters a list's chips by which list each item is homed to.
+ * That mapping used to live only in AsyncStorage, so the strip appeared on
+ * whichever handset had done the adding and was simply absent on the other —
+ * reported as an iOS feature missing from Android, when it was a feature of one
+ * phone. Migration 0037 moved it to pantry_items.home_list_id.
+ *
+ * Three halves have to stay joined for that to keep working, and none of them
+ * fails loudly on its own: the write-through, the seed on row creation, and the
+ * read preferring the shared answer. A device-local regression here looks
+ * exactly like "no items are due", which is also what a correct empty state
+ * looks like.
+ */
+const read = (...parts) => readFileSync(join(here, '..', 'src', ...parts), 'utf8');
+
+const homeLib = read('lib', 'item-home-list.ts');
+const remember = homeLib.slice(
+  homeLib.indexOf('export function rememberItemList'),
+  homeLib.indexOf('export function recallItemList'),
+);
+check(
+  'rememberItemList writes the home list through to the household',
+  /home_list_id/.test(remember) && /from\('pantry_items'\)/.test(remember),
+  true,
+);
+check(
+  'the shared write is an update, never an upsert',
+  /\.update\(/.test(remember) && !/\.upsert\(/.test(remember),
+  true,
+);
+check(
+  'and is skipped when there is no household to share with',
+  /scope === 'local'/.test(remember),
+  true,
+);
+
+const store = read('store', 'pantry-intel.tsx');
+// The select list is matched as a whole rather than sliced out of the file:
+// several queries hit pantry_items, and anchoring on the one that reads the
+// columns is what makes this assert the fetch and not, say, the seed insert.
+// display_name is what identifies the PANTRY fetch: the price_entries selects
+// also carry item_key, and matching those would assert the wrong query.
+const selects = [...store.matchAll(/\.select\(\s*'([^']*display_name[^']*)'/g)].map((m) => m[1]);
+check('the pantry fetch selects the shared home list', selects.length > 0 && selects.every((sel) => sel.includes('home_list_id')), true);
+
+check(
+  'a check-off seeds home_list_id rather than blanking it',
+  /home_list_id: s\.homeList \?\? recallItemList\(/.test(store),
+  true,
+);
+
+const strip = read('components', 'list-pantry-strip.tsx');
+check(
+  'the strip prefers the household answer over the device memory',
+  /s\.homeList \?\? recallItemList\(/.test(strip),
+  true,
+);
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

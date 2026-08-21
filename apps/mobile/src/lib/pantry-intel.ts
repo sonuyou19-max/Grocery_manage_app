@@ -74,6 +74,16 @@ export interface ItemStat {
    * "Resting since …", which is what tells you whether to bring it back.
    */
   archivedAt?: number | null;
+  /**
+   * The list this item belongs on, shared across the household (migration
+   * 0037), or null when nobody has homed it yet.
+   *
+   * Undefined and null mean the same thing to every reader — "ask" — but they
+   * arrive differently: undefined is a stat built by a client that predates the
+   * column, null is the database saying it does not know. Neither is worth
+   * distinguishing at a call site, so both fall back to lib/item-home-list.
+   */
+  homeList?: string | null;
 }
 
 /** Retired from prediction — see `archivedAt`. */

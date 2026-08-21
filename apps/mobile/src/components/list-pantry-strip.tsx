@@ -40,11 +40,23 @@ export function ListPantryStrip({ list }: { list: List }) {
     const queued = new Set(
       list.items.filter((it) => !it.checked).map((it) => normalizeKey(it.name)),
     );
+    /*
+     * The household's answer first, this device's memory only as a fallback.
+     *
+     * These chips were invisible on a second phone, and it read as a platform
+     * bug — present on iOS, missing on Android. It was neither: the home list
+     * lived only in AsyncStorage, so the strip worked on whichever handset had
+     * done the adding. Since migration 0037 the mapping is a column on
+     * pantry_items, shared by every member and synced live.
+     *
+     * recallItemList stays underneath it for the three cases the column cannot
+     * answer: signed out, a household that has not synced yet, and an item
+     * bought for the first time moments ago whose row exists but was created
+     * before this device wrote the home list to it.
+     */
+    const homeOf = (s: ItemStat) => s.homeList ?? recallItemList(s.display);
     return Object.values(stats)
-      .filter(
-        (s) =>
-          isDue(s, now) && !queued.has(s.key) && recallItemList(s.display) === list.id,
-      )
+      .filter((s) => isDue(s, now) && !queued.has(s.key) && homeOf(s) === list.id)
       .sort((a, b) => dueAt(a) - dueAt(b))
       .slice(0, MAX_CHIPS);
   }, [stats, list.items, list.id]);

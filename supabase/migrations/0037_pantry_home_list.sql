@@ -1,0 +1,48 @@
+-- ---------------------------------------------------------------------------
+-- Which list an item belongs on, as household state rather than device state.
+--
+-- The "You usually buy" strip inside a list shows the pantry items that are due
+-- AND homed to that list. Homing was device-local (lib/item-home-list, an
+-- AsyncStorage map), which meant the strip worked on whichever phone had done
+-- the adding and showed nothing on the other one — reported as the feature
+-- existing on iOS and not on Android, when in truth it existed only on the
+-- handset that had been used for the shopping.
+--
+-- Device-local was the right first call and stopped being right when the same
+-- data got a second reader. Two people in one household are looking at the same
+-- list; "milk goes on the weekly shop" is a fact about the household, not about
+-- a handset, and there is no sensible answer to "whose phone is authoritative".
+--
+-- ---------------------------------------------------------------------------
+-- Why a column on pantry_items and not a table of its own
+-- ---------------------------------------------------------------------------
+--
+-- pantry_items already holds exactly one row per item per household, keyed by
+-- the same normalised item_key the client homes by, already carries the RLS
+-- policy that says members manage their household's pantry, and is already
+-- published to supabase_realtime (0006). A separate table would need all three
+-- written again, and would then have to be kept in step with the row it
+-- describes. As a column it inherits every one of them and syncs to the other
+-- member's phone live, with nothing further to do here.
+--
+-- It also means the home list can only exist for an item the household has
+-- actually bought — which is precisely the set the strip can draw from, since
+-- an item with no purchase history is never due.
+-- ---------------------------------------------------------------------------
+
+alter table pantry_items
+  add column if not exists home_list_id uuid references lists(id) on delete set null;
+
+-- `on delete set null` is the whole of the cleanup story. The client has a
+-- forgetHomeList() that walks its local map when a list is deleted, because
+-- AsyncStorage cannot express a foreign key; here the database does it, and a
+-- deleted list cannot leave items pointing at an id that no longer resolves.
+--
+-- Nullable with no default, because "we don't know where this goes" is the
+-- honest state for every existing row and for every item added from the Pantry
+-- tab before it has ever been put on a list. The client treats null as "ask",
+-- exactly as it treats a missing local entry.
+
+-- No index. home_list_id is never a lookup key: the client fetches a
+-- household's pantry rows in one query and filters in memory, so an index here
+-- would cost writes on every check-off and be read by nothing.

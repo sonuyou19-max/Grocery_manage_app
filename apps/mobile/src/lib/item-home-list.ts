@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { reportWriteFailure } from '@/lib/monitoring';
 import { normalizeKey } from '@/lib/pantry-intel';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Per-item "home list" memory — which list an item belongs on.
@@ -16,11 +18,36 @@ import { normalizeKey } from '@/lib/pantry-intel';
  * Keyed by the same normalized name as the pantry and item-memory caches, so
  * "Milk", "milk " and "milk" are one item everywhere.
  *
- * On-device only, matching the categoriser and item-memory precedent — it's a
- * friction-saving hint, not shared household state. That also means the stored
- * id can go stale (the list was deleted, or you signed in and moved from local
- * to household lists, which is a different id space). Callers must treat a
- * recalled id as a *suggestion* and check it still resolves to a live list.
+ * ---------------------------------------------------------------------------
+ * On-device, and — since migration 0037 — also on the server
+ * ---------------------------------------------------------------------------
+ *
+ * This started as a device-local hint, matching the categoriser and
+ * item-memory. That was right while one person shopped from one phone and
+ * stopped being right the moment two did: "You usually buy" filters a list's
+ * chips by home list, so the strip appeared on whichever handset had done the
+ * adding and was simply absent on the other. Reported as an iOS feature missing
+ * from Android; in truth it was a feature of one phone.
+ *
+ * "Milk goes on the weekly shop" is a fact about the household, not about a
+ * handset, and there is no sensible answer to which phone should win. So the
+ * home list now lives on pantry_items.home_list_id, and this cache becomes the
+ * local half of a two-sided store: written through on every remember, read as
+ * the fallback when the server has no answer (signed out, offline, or an item
+ * bought for the first time on this device a moment ago).
+ *
+ * The server write is an UPDATE rather than an upsert, deliberately. An item
+ * with no pantry row has never been bought, and an item that has never been
+ * bought is never due — so it can never appear in the strip this feeds, and
+ * conjuring a row for it would put a history-less entry in everyone's pantry to
+ * no purpose. The row's first appearance is handled where it actually happens:
+ * pantry-intel's toRow seeds home_list_id from this cache when a check-off
+ * creates it.
+ *
+ * The stored id can still go stale — the list was deleted, or you signed in and
+ * moved from local to household lists, which is a different id space. Callers
+ * must treat a recalled id as a *suggestion* and check it still resolves to a
+ * live list.
  *
  * Entries are namespaced per household. Without that, "milk" homed to a list at
  * home would resolve to nothing at the office, and picking an office list there
@@ -59,6 +86,20 @@ export function rememberItemList(name: string, listId: string): void {
   AsyncStorage.setItem(CACHE_KEY, JSON.stringify(homes)).catch(() => {
     // best-effort persistence
   });
+
+  // Signed out, there is no household to share with and `scope` says so.
+  if (scope === 'local') return;
+  supabase
+    .from('pantry_items')
+    .update({ home_list_id: listId })
+    .eq('household_id', scope)
+    .eq('item_key', key)
+    .then(({ error }) => {
+      // Reported, not retried, and never surfaced: the local write above has
+      // already made this device behave correctly, so a failure here costs the
+      // OTHER member's chips until the next add — not this user's.
+      reportWriteFailure('pantry_items.homeList', error);
+    });
 }
 
 /**
