@@ -30,8 +30,11 @@
 -- an item with no purchase history is never due.
 -- ---------------------------------------------------------------------------
 
+-- `shopping_lists`, which is the table's name — `lists` is only what the client
+-- calls the concept. list_items.list_id has referenced shopping_lists(id) since
+-- 0001; this points at the same place.
 alter table pantry_items
-  add column if not exists home_list_id uuid references lists(id) on delete set null;
+  add column if not exists home_list_id uuid references shopping_lists(id) on delete set null;
 
 -- `on delete set null` is the whole of the cleanup story. The client has a
 -- forgetHomeList() that walks its local map when a list is deleted, because
