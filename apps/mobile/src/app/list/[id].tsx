@@ -650,70 +650,20 @@ export default function ListDetailScreen() {
               {/* Items */}
             </View>
 
-            {grouped.map((group) => (
-              <View key={group.category}>
-                <View style={styles.catRow}>
-                  <Text style={[type.label, { color: colors.accent }]}>
-                    {categoryLabel(group.category, t)}
-                  </Text>
-                  <View
-                    style={[styles.catLine, { backgroundColor: colors.line }]}
-                  />
-                </View>
-                {group.items.map((it) => (
-                  <SwipeableItemRow
-                    key={it.id}
-                    item={it}
-                    justAdded={it.id === justAdded}
-                    rowRef={(v) => {
-                      if (v) rowRefs.current.set(it.id, v);
-                      else rowRefs.current.delete(it.id);
-                      // The same view the fly-to-cart animation measures also
-                      // serves as the coach mark's target, for the first row.
-                      if (it.id === firstOpenId) coachRef.current = v;
-                    }}
-                    onToggle={() => handleToggle(it)}
-                    onEdit={() => openEdit(it)}
-                    onDelete={() => deleteItem(list.id, it.id)}
-                    // Only offer claiming when it can matter: someone else is
-                    // online, or the item is already claimed. Solo shoppers see the
-                    // row exactly as before.
-                    claimable={
-                      shoppersOnline.length > 0 || it.claimedBy != null
-                    }
-                    claimedByName={it.claimedBy ? nameFor(it.claimedBy) : null}
-                    claimMine={
-                      it.claimedBy != null && it.claimedBy === user?.id
-                    }
-                    onToggleClaim={() => {
-                      haptics.tick();
-                      setClaim(list.id, it.id, it.claimedBy == null);
-                    }}
-                  />
-                ))}
-              </View>
-            ))}
-            {list.items.length === 0 && (
-              <Text
-                style={[
-                  type.sub,
-                  {
-                    color: colors.muted,
-                    textAlign: "center",
-                    marginTop: spacing.xl,
-                  },
-                ]}
-              >
-                {t("listDetail.emptyItems")}
-              </Text>
-            )}
-
             {/* Where the shop ends up.
-            Collapsed by default and sitting after everything else, so the list
-            proper is what's still to buy. It exists at all because unticking has
-            to stay reachable: a mistap must be correctable here, not only from
-            another screen — and unticking a row here returns it to its category
-            group above, which is what makes it the undo for a whole trip.
+            Collapsed by default, and above the list rather than below it. Both
+            halves of that matter and they pull against each other: this is the
+            part of the screen you are DONE with, so it must not compete with
+            what is still to buy — but at the bottom of a long shop it was
+            reachable only by scrolling past everything, which is the wrong
+            trade for the one control that undoes a mistap. Collapsed, it costs
+            a single row; open, it is exactly where you are already looking when
+            you notice you ticked the wrong thing.
+
+            It exists at all because unticking has to stay reachable: a mistap
+            must be correctable here, not only from another screen — and
+            unticking a row here returns it to its category group below, which
+            is what makes it the undo for a whole trip.
 
             It says "added to pantry" rather than "in cart" because it outlives
             the trip. A trolley you are no longer pushing is not a trolley, and
@@ -775,6 +725,66 @@ export default function ListDetailScreen() {
                   ))}
               </View>
             )}
+
+            {grouped.map((group) => (
+              <View key={group.category}>
+                <View style={styles.catRow}>
+                  <Text style={[type.label, { color: colors.accent }]}>
+                    {categoryLabel(group.category, t)}
+                  </Text>
+                  <View
+                    style={[styles.catLine, { backgroundColor: colors.line }]}
+                  />
+                </View>
+                {group.items.map((it) => (
+                  <SwipeableItemRow
+                    key={it.id}
+                    item={it}
+                    justAdded={it.id === justAdded}
+                    rowRef={(v) => {
+                      if (v) rowRefs.current.set(it.id, v);
+                      else rowRefs.current.delete(it.id);
+                      // The same view the fly-to-cart animation measures also
+                      // serves as the coach mark's target, for the first row.
+                      if (it.id === firstOpenId) coachRef.current = v;
+                    }}
+                    onToggle={() => handleToggle(it)}
+                    onEdit={() => openEdit(it)}
+                    onDelete={() => deleteItem(list.id, it.id)}
+                    // Only offer claiming when it can matter: someone else is
+                    // online, or the item is already claimed. Solo shoppers see the
+                    // row exactly as before.
+                    claimable={
+                      shoppersOnline.length > 0 || it.claimedBy != null
+                    }
+                    claimedByName={it.claimedBy ? nameFor(it.claimedBy) : null}
+                    claimMine={
+                      it.claimedBy != null && it.claimedBy === user?.id
+                    }
+                    onToggleClaim={() => {
+                      haptics.tick();
+                      setClaim(list.id, it.id, it.claimedBy == null);
+                    }}
+                  />
+                ))}
+              </View>
+            ))}
+            {list.items.length === 0 && (
+              <Text
+                style={[
+                  type.sub,
+                  {
+                    color: colors.muted,
+                    textAlign: "center",
+                    marginTop: spacing.xl,
+                  },
+                ]}
+              >
+                {t("listDetail.emptyItems")}
+              </Text>
+            )}
+
+
           </Animated.ScrollView>
 
           {/* Flight layer. Outside the ScrollView so an arc is never clipped by it,
@@ -1430,7 +1440,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   bagBadgeText: { fontSize: 10, fontWeight: "800" },
-  cartSection: { marginTop: spacing.lg },
+  // Was marginTop alone, when this hung off the end of the groups. At the top it
+  // needs to separate itself from the summary above AND from the first category
+  // heading below, which used to have the whole list between them.
+  cartSection: { marginTop: spacing.sm, marginBottom: spacing.md },
   nameRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   eco: {
     marginHorizontal: spacing.lg,
