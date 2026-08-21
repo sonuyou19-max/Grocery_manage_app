@@ -109,6 +109,52 @@ const friendlyError = (message: string, t: TFn): string => {
 /** Which household is selected. Persisted so a relaunch reopens the same one. */
 const ACTIVE_KEY = 'korb.activeHousehold.v1';
 
+/**
+ * Which household the app should be looking at.
+ *
+ * ---------------------------------------------------------------------------
+ * The bug this is extracted from
+ * ---------------------------------------------------------------------------
+ *
+ * The selected id was restored from storage into React state once, at mount,
+ * and after that only ever SET. Signing out removed the storage key but left
+ * the state — and the provider does not remount on sign-out, so the id survived
+ * into the next person's session.
+ *
+ * Everything downstream then behaved exactly as designed, which is what made it
+ * hard to see. GroceriesProvider reads `activeId ?? household?.id`, deliberately
+ * preferring the stored id so a returning user gets the cloud backend on the
+ * first render instead of mounting the whole app twice. That preference assumes
+ * a stale id is CORRECTABLE — "in which case `household` resolves to something
+ * else and the key changes". It is, for a user who has a household of their own.
+ * It is not for a brand-new account, where `households` is empty and there is
+ * nothing to correct it with. So the new user got the cloud backend pointed at
+ * the previous user's household, every read came back empty through RLS, and
+ * every write was refused — including the one that creates a list, which
+ * appeared optimistically and then vanished as "This list no longer exists".
+ *
+ * ---------------------------------------------------------------------------
+ * Why `settled` is a parameter and not an assumption
+ * ---------------------------------------------------------------------------
+ *
+ * "The id is not in the list" means two opposite things depending on whether
+ * the list has been fetched yet. Before the first fetch it means nothing at all
+ * — `households` is empty on every launch for a moment — and acting on it would
+ * throw away the stored id every cold start, which is the entire optimisation
+ * this id exists for. After the fetch it is conclusive: the user is not in that
+ * household, whether because they left it, it was deleted, or they are somebody
+ * else.
+ */
+export function resolveActiveId(
+  stored: string | null,
+  households: readonly { id: string }[],
+  settled: boolean,
+): string | null {
+  if (!settled) return stored;
+  if (stored && households.some((h) => h.id === stored)) return stored;
+  return households[0]?.id ?? null;
+}
+
 export function HouseholdProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const t = useT();
@@ -118,6 +164,16 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   const [byHousehold, setByHousehold] = useState<Record<string, Member[]>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /**
+   * The user id the current `households` answer belongs to, or undefined before
+   * any fetch has finished.
+   *
+   * Not a boolean, because "we have fetched" is the wrong question after a
+   * sign-in: the households in state are the PREVIOUS user's until this says
+   * otherwise, and acting on them is how the default household came to be
+   * skipped for a brand-new account.
+   */
+  const [settledFor, setSettledFor] = useState<string | null | undefined>(undefined);
   // Signature of the last-applied data, so background polling only re-renders
   // when something actually changed.
   const sigRef = useRef<string>('');
@@ -152,6 +208,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       sigRef.current = '';
       setHouseholds([]);
       setByHousehold({});
+      setSettledFor(null);
       return;
     }
     setLoading(true);
@@ -191,6 +248,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       }
     } finally {
       setLoading(false);
+      setSettledFor(user.id);
     }
   }, [user]);
 
@@ -208,11 +266,28 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     [households, activeId],
   );
 
-  // Write the fallback back to storage so the choice is stable from here on.
+  /*
+   * Correct the selection once the fetch has answered for THIS user.
+   *
+   * The old version of this only wrote the fallback back to storage, and it was
+   * gated on `household` being non-null — so it could tidy up a stale id when
+   * there was another household to fall back to, and did nothing at all when
+   * there was not. That gap is the whole bug: a new account has no households,
+   * so nothing corrected the previous user's id and GroceriesProvider went on
+   * preferring it. See resolveActiveId.
+   *
+   * Now the null case is handled too, and the storage key is removed rather
+   * than left pointing somewhere the user cannot go.
+   */
   useEffect(() => {
-    if (!restoredRef.current || !household || household.id === activeId) return;
-    setActiveHousehold(household.id);
-  }, [household, activeId, setActiveHousehold]);
+    if (!restoredRef.current) return;
+    const settled = settledFor === (user?.id ?? null);
+    const next = resolveActiveId(activeId, households, settled);
+    if (next === activeId) return;
+    setActiveId(next);
+    if (next) AsyncStorage.setItem(ACTIVE_KEY, next).catch(() => {});
+    else AsyncStorage.removeItem(ACTIVE_KEY).catch(() => {});
+  }, [activeId, households, settledFor, user?.id]);
 
   // Point the per-item home-list cache at the active household, so routing an
   // item back to "its" list never reaches across into another household.
