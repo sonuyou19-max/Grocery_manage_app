@@ -103,6 +103,18 @@ export function verdict(totals: Totals, caps: Caps): Verdict {
  */
 export const FN_CALL_CAPS: Record<string, number> = {
   categorize: 400,
+  /*
+   * The most expensive call in the app by a wide margin, and the only one that
+   * sends images: four sections of a long receipt is roughly 6,400 input tokens
+   * EACH before the prompt, against recipe-import's whole-page text.
+   *
+   * Twenty is a number a person can understand — "twenty receipts a day" — and
+   * a household that shops daily uses one. It is deliberately below
+   * recipe-import's forty despite both being bounded by the same spend cap,
+   * because a refusal here should arrive as a count rather than as a budget
+   * figure that moves with how many photographs somebody took.
+   */
+  'receipt-scan': 20,
   'quick-add-parse': 120,
   'weekly-recap': 60,
   // The most expensive call in the app — up to 1400 output tokens against

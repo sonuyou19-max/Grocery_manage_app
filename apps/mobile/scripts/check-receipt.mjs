@@ -52,6 +52,7 @@ const SHARED = join(here, '..', '..', '..', 'supabase', 'functions', '_shared');
 
 let failures = 0;
 const ok = (what) => console.log(`ok   ${what}`);
+const check_ = (what, cond) => (cond ? ok(what) : fail(what));
 const fail = (what, detail = []) => {
   failures += 1;
   console.log(`FAIL ${what}`);
@@ -328,6 +329,102 @@ cls(12, 'pcs', 'count');
   if (a !== c) ok('...and a different total is a different receipt');
   else fail('two different totals fingerprint the same');
 }
+
+/* ------------------------- the extract function's contract --------------- */
+
+/*
+ * The receipt is read by a model, and the fields it returns are the ONLY thing
+ * the reconciler above can act on. A field the prompt never explains gets
+ * narrated from its name — which is how a count of every list row once became
+ * "you grabbed 17 items this week", and how `multiplierDp` would quietly become
+ * "however many decimals seem right" rather than "however many were printed".
+ *
+ * Same assertion as check-recap-payload, for the same reason and against a far
+ * more expensive call.
+ */
+const fn = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', 'receipt-scan', 'index.ts'), 'utf8');
+
+{
+  const schema = fn.match(/const lineSchema = z\.object\(\{[\s\S]*?\n\}\);/);
+  const receipt = fn.match(/const receiptSchema = z\.object\(\{[\s\S]*?\n\}\);/);
+  if (!schema || !receipt) {
+    fail('the receipt schemas are gone or renamed', ['This check cannot verify anything without them.']);
+  } else {
+    const fields = [
+      ...[...schema[0].matchAll(/^  (\w+):/gm)].map((m) => m[1]),
+      ...[...receipt[0].matchAll(/^  (\w+):/gm)].map((m) => m[1]),
+    ].filter((f) => f !== 'lines');
+
+    const prompt = fn.slice(fn.indexOf('const SYSTEM_PROMPT'));
+    const text = prompt.slice(0, prompt.indexOf('`;'));
+    const defs = text.slice(text.indexOf('WHAT EVERY FIELD MEANS'), text.indexOf('\nRULES.'));
+
+    // Introduced under the definitions, as `- name:` or `- a / b:`. A mention
+    // in a later rule is not a definition — check-recap-payload learned that
+    // one the hard way, by passing a deliberately broken prompt.
+    const undef = fields.filter((f) => !new RegExp(`\\b${f}\\b\\s*(?::|/)`).test(defs));
+    if (undef.length) {
+      fail(`${undef.length} extracted field(s) the prompt never explains`, [
+        ...undef.map((f) => `  ${f}`),
+        '',
+        'The model answers from the field NAME when nothing defines it.',
+      ]);
+    } else {
+      ok(`all ${fields.length} extracted fields are defined in the prompt`);
+    }
+
+    // And the example object, which is what a model actually copies. The
+    // categorize function shipped for weeks answering with two of its five keys
+    // because the example named two.
+    const example = text.slice(text.indexOf('{"store"'), text.indexOf('WHAT EVERY FIELD MEANS'));
+    const missing = fields.filter((f) => !example.includes(`"${f}"`));
+    if (missing.length) {
+      fail(`${missing.length} field(s) missing from the prompt's example object`, [
+        ...missing.map((f) => `  ${f}`),
+        '',
+        'A model handed an example answers with that example. See fe4d3ba.',
+      ]);
+    } else {
+      ok('...and every one appears in the example object');
+    }
+  }
+}
+
+/*
+ * Three structural rules the arithmetic cannot enforce, each of which would
+ * silently disable a check above.
+ */
+check_(
+  'the function reconciles server-side rather than trusting the parse',
+  /reconcile\(lines, \{/.test(fn),
+);
+check_(
+  'a failed reconciliation retries once on a stronger model',
+  /MODEL_CAREFUL/.test(fn) && /better\.problems\.length < result\.problems\.length/.test(fn),
+);
+check_(
+  '...and only once — no loop',
+  (fn.match(/await ask\(/g) ?? []).length === 2,
+);
+/*
+ * The lexicon offer has to carry an EMOJI. offerToLexicon drops any candidate
+ * without one, so an offer built from the expansion alone would be a silent
+ * no-op — the compounding this feature depends on, quietly doing nothing.
+ */
+check_(
+  'lexicon offers carry the glyph the matcher actually compares',
+  /emoji: l\.emoji as string/.test(fn) && /l\.emoji\)/.test(fn),
+);
+check_(
+  '...filed under the RAW printed line, not the expansion',
+  /term: l\.raw/.test(fn),
+);
+/* Images are the cost. An unbounded one is somebody else's budget. */
+check_('image size and count are bounded', /MAX_IMAGE_CHARS/.test(fn) && /MAX_IMAGES/.test(fn));
+check_(
+  'the budget reservation counts the images, not just the prompt',
+  /images\.length \* 6_400/.test(fn),
+);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
