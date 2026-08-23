@@ -141,6 +141,14 @@ export default function RootLayout() {
                     name="shop/[id]"
                     options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
                   />
+                  {/* Full-bleed camera, and no swipe-back: the gesture starts
+                      at the screen edge, which is exactly where a hand holding
+                      a phone steady over a receipt already is. */}
+                  <Stack.Screen
+                    name="receipt/capture"
+                    options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }}
+                  />
+                  <Stack.Screen name="receipt/review" />
                   <Stack.Screen name="basket" />
                   <Stack.Screen name="pantry-mix" />
                   <Stack.Screen name="climate" />

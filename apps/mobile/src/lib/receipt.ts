@@ -240,8 +240,8 @@ function glyph(name: string, category: ItemCategory = 'other'): string | null {
  * model decide rather than picking whichever sorted first.
  */
 export function matchPurchases(
-  purchases: ReceiptPurchase[],
-  list: ListCandidate[],
+  purchases: readonly ReceiptPurchase[],
+  list: readonly ListCandidate[],
 ): Map<string, MatchOutcome> {
   const out = new Map<string, MatchOutcome>();
   /*
