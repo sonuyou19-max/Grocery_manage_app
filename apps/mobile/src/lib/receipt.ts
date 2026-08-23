@@ -322,6 +322,64 @@ export function residue(
   return purchases.filter((p) => matches.get(p.key)?.kind !== 'matched');
 }
 
+/* ------------------------------------------------- the model's answers ---- */
+
+export interface AiMatch {
+  key: string;
+  itemId: string | null;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Fold the model's answers into the offline result.
+ *
+ * ---------------------------------------------------------------------------
+ * Every rule here refuses something, and that is the design
+ * ---------------------------------------------------------------------------
+ *
+ * The function already drops ids it never sent and second claims on ids it did.
+ * This does the same again, on the device, and the repetition is deliberate: a
+ * mismatched line is invisible. A price on the wrong row of a list looks
+ * exactly like a price on the right one, and it goes on poisoning that item's
+ * comparisons for as long as the history is kept. An UNMATCHED line, by
+ * contrast, is a row in the review sheet somebody corrects in a second.
+ *
+ * So the asymmetry is priced in: refusing a good match costs one tap, accepting
+ * a bad one costs a number nobody will ever question.
+ *
+ * The offline rungs win outright over the model. They are deterministic, they
+ * were free, and — for exact and plural matches — they are not judgement calls
+ * at all. A model disagreeing with `normalizeKey` equality is a model that is
+ * wrong.
+ */
+export function applyAiMatches(
+  matches: Map<string, MatchOutcome>,
+  answers: readonly AiMatch[],
+  list: readonly ListCandidate[],
+): Map<string, MatchOutcome> {
+  const out = new Map(matches);
+  const known = new Set(list.map((l) => l.id));
+  // Seeded with whatever the offline rungs already took, so the model cannot
+  // hand a second line an item that is spoken for.
+  const claimed = new Set(
+    [...matches.values()].flatMap((m) => (m.kind === 'matched' ? [m.itemId] : [])),
+  );
+
+  for (const a of answers) {
+    const current = out.get(a.key);
+    if (!current) continue;
+    if (current.kind === 'matched') continue;
+    if (a.itemId == null) continue;
+    if (!known.has(a.itemId)) continue;
+    if (claimed.has(a.itemId)) continue;
+
+    claimed.add(a.itemId);
+    out.set(a.key, { kind: 'matched', itemId: a.itemId, how: `ai ${a.confidence}` });
+  }
+
+  return out;
+}
+
 /* ---------------------------------------------------------------- wire ---- */
 
 /**
@@ -347,4 +405,57 @@ export async function scanReceipt(
   } catch {
     return null;
   }
+}
+
+/**
+ * Ask the model about whatever the free rungs could not settle.
+ *
+ * Returns an empty list on any failure, so a matcher that is down or refused by
+ * the rate cap leaves every line unmatched rather than failing the import. The
+ * review sheet shows them as new items and the shopper fixes the two that
+ * matter.
+ */
+export async function matchResidue(
+  purchases: readonly ReceiptPurchase[],
+  list: readonly ListCandidate[],
+  claimed: ReadonlySet<string>,
+  language: string,
+): Promise<AiMatch[]> {
+  // Nothing to ask about, or nothing to choose from. Both are ordinary — a
+  // receipt where every line matched, or a list already fully spoken for.
+  const free = list.filter((l) => !claimed.has(l.id));
+  if (purchases.length === 0 || free.length === 0) return [];
+
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/receipt-match`, {
+      method: 'POST',
+      headers: await aiFunctionHeaders(),
+      body: JSON.stringify({
+        language,
+        // Only what the matcher needs. The prices are not sent: they are
+        // nothing to do with which item a line is, and a payload carrying a
+        // household's spending to answer a naming question is a worse trade
+        // than a slightly less informed model.
+        lines: purchases.map((p) => ({
+          key: p.key,
+          raw: p.raw[0] ?? p.name,
+          expanded: p.expanded,
+          translated: p.translated,
+          brand: p.brand,
+          section: p.section,
+        })),
+        candidates: free.map((l) => ({ id: l.id, name: l.name })),
+      }),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { matches?: AiMatch[] };
+    return Array.isArray(data.matches) ? data.matches : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The list rows the offline rungs have already taken. */
+export function claimedIds(matches: Map<string, MatchOutcome>): Set<string> {
+  return new Set([...matches.values()].flatMap((m) => (m.kind === 'matched' ? [m.itemId] : [])));
 }

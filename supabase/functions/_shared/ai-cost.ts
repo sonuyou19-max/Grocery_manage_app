@@ -115,6 +115,14 @@ export const FN_CALL_CAPS: Record<string, number> = {
    * figure that moves with how many photographs somebody took.
    */
   'receipt-scan': 20,
+  /*
+   * Text only, and small — a few dozen short names against a shopping list, so
+   * it costs a fraction of the scan that precedes it. Capped at twice that
+   * scan's twenty rather than loosely, because it is also the endpoint a
+   * re-match would call: editing the list and asking again is a reasonable
+   * thing to do twice per receipt and not forty times.
+   */
+  'receipt-match': 40,
   'quick-add-parse': 120,
   'weekly-recap': 60,
   // The most expensive call in the app — up to 1400 output tokens against

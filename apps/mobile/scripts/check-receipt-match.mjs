@@ -71,7 +71,8 @@ if (!pgSpace || !normalize) {
 // The fetch at the bottom of lib/receipt is the only impure part; without
 // @/lib/supabase it would not resolve, so it goes.
 const receiptSrc = strip('receipt.ts', '@/lib/item-emoji', '@/lib/item-plural', '@/lib/pantry-intel', '@/lib/supabase')
-  .replace(/export async function scanReceipt[\s\S]*$/, '');
+  .replace(/export async function scanReceipt[\s\S]*?\n\}/, '')
+  .replace(/export async function matchResidue[\s\S]*?\n\}/, '');
 
 const source = [
   strip('item-emoji.ts'),
@@ -85,7 +86,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { groupLines, matchPurchases, residue } = mod;
+const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds } = mod;
 
 /* --------------------------------------------------------------- helpers -- */
 
@@ -312,6 +313,124 @@ eq(
   const m = matchPurchases(ps, LIST);
   const got = m.get(ps[0].key);
   eq('an unrelated meat does not land on a dairy row', got.kind, 'unmatched');
+}
+
+/* -------------------------------------------- the model's answers, folded -- */
+
+/*
+ * Every rule below refuses something, and the asymmetry is the reason.
+ *
+ * An UNMATCHED line is a row in the review sheet that somebody fixes in a
+ * second. A MISMATCHED one is invisible: a price on the wrong row of a list
+ * looks exactly like a price on the right one, and it goes on poisoning that
+ * item's comparisons for as long as the history is kept. So refusing a good
+ * match costs one tap; accepting a bad one costs a number nobody questions.
+ */
+const aiCase = () => {
+  const ps = groupLines([
+    line('DELIO CHICKY SAMOU', { totalCents: 359 }),
+    line('PROU PROT WB', { totalCents: 495 }),
+  ]);
+  return { ps, base: matchPurchases(ps, LIST) };
+};
+
+{
+  const { ps, base } = aiCase();
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'cheese', confidence: 'high' }], LIST);
+  eq('a sound answer is taken', got.get(ps[0].key).itemId, 'cheese');
+  eq("...and labelled as the model's, not an offline rung", got.get(ps[0].key).how, 'ai high');
+}
+
+{
+  const { ps, base } = aiCase();
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'not-a-real-id', confidence: 'high' }], LIST);
+  eq('an invented id is dropped, not corrected', got.get(ps[0].key).kind, 'unmatched');
+}
+
+{
+  const { ps, base } = aiCase();
+  const got = applyAiMatches(
+    base,
+    [
+      { key: ps[0].key, itemId: 'cheese', confidence: 'high' },
+      { key: ps[1].key, itemId: 'cheese', confidence: 'high' },
+    ],
+    LIST,
+  );
+  eq('one list row, one claim — the first answer wins', got.get(ps[0].key).itemId, 'cheese');
+  eq('...and the second is left unmatched', got.get(ps[1].key).kind, 'unmatched');
+}
+
+/*
+ * The offline rungs win outright. An exact-name match is not a judgement call,
+ * and a model disagreeing with normalizeKey equality is a model that is wrong.
+ */
+{
+  const ps = groupLines([
+    line('Avocado', { totalCents: 119 }),
+    line('DELIO CHICKY SAMOU', { totalCents: 359 }),
+  ]);
+  const base = matchPurchases(ps, LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'milk', confidence: 'high' }], LIST);
+  eq('the model cannot overturn an exact match', got.get(ps[0].key).itemId, 'avocado');
+}
+
+/*
+ * And it cannot take a row an offline rung already took, even one it was never
+ * offered — the claimed set is seeded from the existing matches, not rebuilt.
+ */
+{
+  const ps = groupLines([
+    line('Avocado', { totalCents: 119 }),
+    line('DELIO CHICKY SAMOU', { totalCents: 359 }),
+  ]);
+  const base = matchPurchases(ps, LIST);
+  const got = applyAiMatches(base, [{ key: ps[1].key, itemId: 'avocado', confidence: 'high' }], LIST);
+  eq('a row already claimed offline stays claimed', got.get(ps[1].key).kind, 'unmatched');
+}
+
+{
+  const { base } = aiCase();
+  const got = applyAiMatches(base, [{ key: 'a-key-never-sent', itemId: 'cheese', confidence: 'high' }], LIST);
+  /*
+   * Asserted on the map's SHAPE, not on some other line still being unmatched.
+   * The first version checked the latter and passed a mutation that happily
+   * invented a row for a key nobody sent — which would put a purchase in the
+   * review sheet that no receipt line produced.
+   */
+  eq('an answer about an unknown line adds no row', got.has('a-key-never-sent'), false);
+  eq('...and leaves the map exactly as it was', got.size, base.size);
+}
+
+{
+  const { ps, base } = aiCase();
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: null, confidence: 'low' }], LIST);
+  eq('a null answer is a real answer, and leaves the line alone', got.get(ps[0].key).kind, 'unmatched');
+}
+
+/*
+ * An ambiguity the glyph rung refused to settle IS the model's to settle — that
+ * is the whole reason it returns `ambiguous` rather than picking.
+ */
+{
+  const ps = groupLines([line('paneer nvf', { emoji: '🧀', totalCents: 437 })]);
+  const base = matchPurchases(ps, LIST);
+  eq('the glyph rung leaves it open', base.get(ps[0].key).kind, 'ambiguous');
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'paneer', confidence: 'high' }], LIST);
+  eq('...and the model resolves it', got.get(ps[0].key).itemId, 'paneer');
+}
+
+/* claimedIds is what decides which rows the model is even offered. */
+{
+  const ps = groupLines([line('Avocado', { totalCents: 119 })]);
+  eq('claimed rows are not offered to the model', [...claimedIds(matchPurchases(ps, LIST))], ['avocado']);
+}
+
+/* Folding must not mutate the map it was handed. */
+{
+  const { ps, base } = aiCase();
+  applyAiMatches(base, [{ key: ps[0].key, itemId: 'cheese', confidence: 'high' }], LIST);
+  eq('the offline result is left untouched', base.get(ps[0].key).kind, 'unmatched');
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
