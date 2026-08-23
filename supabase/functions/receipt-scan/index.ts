@@ -10,7 +10,7 @@ import { z } from 'npm:zod@3.24.1';
 
 import { clientIp, reserveBudget } from '../_shared/rate-limit.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
-import { reconcile, type ReceiptLine } from '../_shared/receipt-reconcile.ts';
+import { fingerprint, reconcile, type ReceiptLine } from '../_shared/receipt-reconcile.ts';
 
 /**
  * ---------------------------------------------------------------------------
@@ -386,6 +386,14 @@ Deno.serve(async (req) => {
 
   return Response.json({
     ...parsed,
+    /*
+     * Computed here rather than on the device, so there is one implementation.
+     * A client mirror would be a second thing to keep in step, and the one
+     * thing this value must never do is differ between two scans of the same
+     * paper — which is exactly what a drifting copy would cause, on the
+     * re-scan it exists to catch.
+     */
+    fingerprint: fingerprint(parsed.store, result.paidCents, parsed.purchasedAt),
     model,
     reconciled: result.ok,
     problems: result.problems,
