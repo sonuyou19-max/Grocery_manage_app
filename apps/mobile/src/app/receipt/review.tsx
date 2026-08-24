@@ -1,165 +1,558 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import {
+  Pressable,
+  SectionList,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card } from '@/components/card';
-import { Screen } from '@/components/screen';
+import { Frosted } from '@/components/frosted';
+import { MeshBackground } from '@/components/mesh-background';
+import { PressScale } from '@/components/press-scale';
+import { Sheet } from '@/components/sheet';
+import { currencySymbolFor } from '@/i18n';
+import { haptics } from '@/lib/haptics';
+import { parsePriceToCents } from '@/lib/money';
+import type { ListCandidate, ReceiptPurchase } from '@/lib/receipt';
+import {
+  assign,
+  groupPurchases,
+  includedCount,
+  includedTotal,
+  initialDecisions,
+  setInclude,
+  setPrice,
+  pickerOptions,
+  unclaimed,
+  type Decisions,
+} from '@/lib/receipt-review';
 import { takeRun, type ScanRun } from '@/lib/receipt-run';
+import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
-import { spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
- * What the scan read — the landing pad, not yet the review sheet.
+ * Check what the scan read, then import it.
  *
  * ---------------------------------------------------------------------------
- * Deliberately read-only
+ * Three groups, and why they are these three
  * ---------------------------------------------------------------------------
  *
- * The real sheet — three groups, editable amounts, the reconciliation banner,
- * and an Import button that writes prices and purchases — is the next piece of
- * work. This is what stands in the meantime, and it stands because a capture
- * screen with nowhere to land cannot be tested against a real receipt at all.
+ * A receipt and a shopping list overlap; they are not the same set. Every row
+ * on this screen is in exactly one of three states, and each wants a different
+ * thing from the person reading it:
  *
- * It shows every number the scan produced and changes nothing. That is the
- * whole point: the open question about this feature is not whether the UI is
- * pleasant, it is whether the extractor reads a real photograph of a real
- * receipt correctly — and this answers that question without any of the risk
- * that comes with a half-wired path that writes money.
+ *   ON THE LIST     — a line the matcher landed on one of your rows. Check the
+ *                     price, check it landed on the right row. Most will be
+ *                     fine; the ones that are not are the reason for the raw
+ *                     printed line sitting under every name.
  *
- * When the sheet lands, this file's contents are replaced. The route is not.
+ *   ALSO BOUGHT     — a line that is not on the list. Not a failure: most of a
+ *                     real shop was never written down, and capturing it is the
+ *                     entire point of scanning a receipt rather than ticking
+ *                     boxes. In by default.
+ *
+ *   NOT ON THE      — a list row nothing claimed. Two different situations
+ *   RECEIPT           wearing one face — you didn't buy it, or the scan missed
+ *                     it — and nothing here can tell them apart, so it doesn't
+ *                     guess. It shows them, and they are the rows the picker
+ *                     offers when a line is pointed somewhere new.
+ *
+ * The third group takes no action of its own. An "unbought" list row is not
+ * something this screen has any business changing: the list is still the list,
+ * and a receipt that didn't mention the milk is not evidence you don't want it.
+ *
+ * ---------------------------------------------------------------------------
+ * The printed line is always visible
+ * ---------------------------------------------------------------------------
+ *
+ * `CAR EIREN X30` under "Eggs", every row, never collapsed. It is the only
+ * thing on the screen that is not an interpretation — the name, the emoji, the
+ * category and the match are all things a model decided — so it is the only
+ * thing anyone can check an interpretation against. Hiding it behind a tap
+ * would make the check optional, and a check nobody performs is decoration.
+ *
+ * ---------------------------------------------------------------------------
+ * Brand sits beside the name and never inside it
+ * ---------------------------------------------------------------------------
+ *
+ * "Alpro" is drawn as its own muted chip, not folded into "Alpro almond milk".
+ * The moment a brand becomes part of a name it becomes part of the item's
+ * identity: item_key is generated from the name, so `Alpro almond milk` and
+ * `almond milk` would be two different things forever, with two price
+ * histories, neither of which is the price history of almond milk.
  */
 
+/** How the row's amount is displayed while it is not being edited. */
+type Editing = { key: string; text: string } | null;
+
 export default function ReceiptReviewScreen() {
-  const { t, money } = useLocale();
+  const { t, money, currency } = useLocale();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { lists } = useGroceries();
 
   /*
    * Read once, in state, because takeRun() CONSUMES the stash — calling it in
-   * render would hand the first paint a scan and every re-render nothing.
+   * the render body would hand the first paint a scan and every render after
+   * it nothing, so the screen would blank on the first keystroke.
    */
   const [run] = useState<ScanRun | null>(() => takeRun());
+  const [decisions, setDecisions] = useState<Decisions>(() =>
+    run ? initialDecisions(run.purchases, run.matches) : new Map(),
+  );
+  const [editing, setEditing] = useState<Editing>(null);
+  const [picking, setPicking] = useState<string | null>(null);
+
+  const list = lists.find((l) => l.id === id);
+  const candidates: ListCandidate[] = useMemo(
+    () => (list?.items ?? []).map((it) => ({ id: it.id, name: it.name, category: it.category })),
+    [list],
+  );
+
+  const byId = useMemo(() => new Map(candidates.map((c) => [c.id, c])), [candidates]);
+
+  const purchases = run?.purchases ?? [];
+  const { matched, extra } = useMemo(
+    () => groupPurchases(purchases, decisions),
+    [purchases, decisions],
+  );
+  const missing = useMemo(() => unclaimed(candidates, decisions), [candidates, decisions]);
+
+  const total = includedTotal(purchases, decisions);
+  const count = includedCount(purchases, decisions);
 
   if (!run) {
     // No stash: arrived by a back gesture after the run was consumed, or by a
-    // deep link. Nothing to show and nothing recoverable.
+    // deep link. Nothing to show and nothing recoverable — the photographs are
+    // gone with the capture screen.
     return (
-      <Screen title={t('receipt.reviewTitle')}>
-        <Card>
-          <Text style={[type.sub, { color: colors.muted }]}>{t('receipt.nothingToReview')}</Text>
-        </Card>
-        <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={8}>
-          <Text style={[type.sub, { color: colors.accent }]}>{t('common.back')}</Text>
-        </Pressable>
-      </Screen>
+      <View style={styles.root}>
+        <MeshBackground />
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          <Header title={t('receipt.reviewTitle')} subtitle={null} />
+          <Text style={[type.sub, styles.empty, { color: colors.muted }]}>
+            {t('receipt.nothingToReview')}
+          </Text>
+        </SafeAreaView>
+      </View>
     );
   }
 
-  const { receipt, purchases, matches } = run;
-  const matched = [...matches.values()].filter((m) => m.kind === 'matched').length;
+  const { receipt } = run;
 
-  return (
-    <Screen
-      title={t('receipt.reviewTitle')}
-      subtitle={receipt.store ?? t('receipt.unknownStore')}
-    >
-      {/* The banner the shopper was promised: when the parse does not agree
-          with the totals the receipt prints about itself, that is said first
-          and plainly, rather than buried under a page of confident numbers. */}
-      {!receipt.reconciled && (
-        <Card>
-          <View style={styles.row}>
-            <Ionicons name="warning-outline" size={20} color={colors.warn} />
-            <View style={styles.grow}>
-              <Text style={[type.body, { color: colors.ink }]}>
-                {t('receipt.notReconciled')}
-              </Text>
-              {receipt.problems.map((p) => (
-                <Text key={p} style={[type.sub, { color: colors.muted }]}>
-                  {p}
-                </Text>
-              ))}
-            </View>
-          </View>
-        </Card>
-      )}
+  const sections = [
+    { key: 'matched' as const, title: t('receipt.groupMatched'), data: matched },
+    { key: 'extra' as const, title: t('receipt.groupExtra'), data: extra },
+  ].filter((s) => s.data.length > 0);
 
-      <Card>
-        <Line label={t('receipt.paid')} value={money(receipt.paidCents)} />
-        <Line label={t('receipt.goods')} value={money(receipt.goodsCents)} />
-        {receipt.depositCents !== 0 && (
-          <Line label={t('receipt.deposit')} value={money(receipt.depositCents)} />
-        )}
-        {receipt.discountCents !== 0 && (
-          <Line label={t('receipt.discount')} value={money(receipt.discountCents)} />
-        )}
-        <Line
-          label={t('receipt.matchedCount')}
-          value={`${matched} / ${purchases.length}`}
-        />
-      </Card>
+  /** Commit the field that is open, if any. Called on blur and on submit. */
+  const commitEdit = () => {
+    if (!editing) return;
+    const cents = parsePriceToCents(editing.text);
+    // An unparseable field leaves the amount alone rather than zeroing it: a
+    // half-typed price is a price mid-thought, not a decision to pay nothing.
+    if (cents != null) setDecisions((d) => setPrice(d, editing.key, cents));
+    setEditing(null);
+  };
 
-      {purchases.map((p) => {
-        const outcome = matches.get(p.key);
-        return (
-          <Card key={p.key}>
-            <View style={styles.row}>
-              <Text style={type.body}>{p.emoji ?? '🧾'}</Text>
-              <View style={styles.grow}>
-                <Text style={[type.body, { color: colors.ink }]}>{p.name}</Text>
-                {/* The printed line, always. It is the only thing on this
-                    screen that is not an interpretation, so it is the only
-                    thing a shopper can check an interpretation against. */}
-                {p.raw.map((raw) => (
-                  <Text key={raw} style={[type.sub, { color: colors.muted }]}>
-                    {raw}
-                  </Text>
-                ))}
-                <Text
-                  style={[
-                    type.sub,
-                    { color: outcome?.kind === 'matched' ? colors.accent : colors.muted },
-                  ]}
-                >
-                  {outcome?.kind === 'matched'
-                    ? t('receipt.matchedHow', { how: outcome.how })
-                    : outcome?.kind === 'ambiguous'
-                      ? t('receipt.ambiguous')
-                      : t('receipt.unmatched')}
+  const renderRow = (p: ReceiptPurchase, order: number) => {
+    const d = decisions.get(p.key);
+    if (!d) return null;
+    const target = d.itemId != null ? byId.get(d.itemId) : null;
+    const isEditing = editing?.key === p.key;
+
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(Math.min(order, 12) * 28).duration(240)}
+        style={[styles.row, { borderColor: colors.line }, !d.include && styles.excluded]}
+      >
+        <Pressable
+          onPress={() => {
+            haptics.tick();
+            setDecisions((prev) => setInclude(prev, p.key, !d.include));
+          }}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: d.include }}
+          accessibilityLabel={p.name}
+        >
+          <Ionicons
+            name={d.include ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={d.include ? colors.accent : colors.muted}
+          />
+        </Pressable>
+
+        <View style={styles.grow}>
+          <View style={styles.nameRow}>
+            <Text style={type.body}>{p.emoji ?? '🧾'}</Text>
+            <Text style={[type.body, { color: colors.ink }]} numberOfLines={2}>
+              {p.name}
+            </Text>
+            {/* Its own chip. Never part of the name — see the header. */}
+            {p.brand && (
+              <View style={[styles.brand, { borderColor: colors.line }]}>
+                <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+                  {p.brand}
                 </Text>
               </View>
-              <Text style={[type.body, { color: colors.ink }]}>{money(p.priceCents)}</Text>
-            </View>
-          </Card>
-        );
-      })}
+            )}
+          </View>
 
-      <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={8}>
-        <Text style={[type.sub, { color: colors.accent }]}>{t('common.done')}</Text>
-      </Pressable>
-    </Screen>
+          {/* The till's own words, always. */}
+          {p.raw.map((raw) => (
+            <Text key={raw} style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+              {raw}
+            </Text>
+          ))}
+
+          <Pressable
+            onPress={() => {
+              haptics.tick();
+              setPicking(p.key);
+            }}
+            hitSlop={6}
+            accessibilityRole="button"
+          >
+            <Text style={[type.label, { color: target ? colors.accent : colors.muted }]}>
+              {target
+                ? t('receipt.onList', { name: target.name })
+                : t('receipt.notOnList')}
+              {'  '}
+              <Ionicons name="chevron-down" size={11} />
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Editable, because the one number worth correcting is this one. A
+            weighed line the model read as 1,67 when the paper says 16,7 is
+            invisible in the name and obvious in the amount. */}
+        {isEditing ? (
+          <View style={[styles.amountBox, { borderColor: colors.accent }]}>
+            <Text style={[type.label, { color: colors.muted }]}>
+              {currencySymbolFor(currency)}
+            </Text>
+            <TextInput
+              value={editing.text}
+              onChangeText={(text) => setEditing({ key: p.key, text })}
+              onBlur={commitEdit}
+              onSubmitEditing={commitEdit}
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              autoFocus
+              selectTextOnFocus
+              style={[styles.amountInput, { color: colors.ink }]}
+            />
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => {
+              haptics.tick();
+              setEditing({ key: p.key, text: (d.priceCents / 100).toFixed(2) });
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('receipt.editAmount')}
+          >
+            <Text style={[type.body, { color: colors.ink }]}>{money(d.priceCents)}</Text>
+          </Pressable>
+        )}
+      </Animated.View>
+    );
+  };
+
+  return (
+    <View style={styles.root}>
+      <MeshBackground />
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <Header
+          title={t('receipt.reviewTitle')}
+          subtitle={[receipt.store ?? t('receipt.unknownStore'), receipt.purchasedAt ?? '']
+            .filter(Boolean)
+            .join(' · ')}
+        />
+
+        <SectionList
+          sections={sections}
+          keyExtractor={(p) => p.key}
+          stickySectionHeadersEnabled
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.list, { paddingBottom: spacing.xxl }]}
+          ListHeaderComponent={
+            <View style={styles.head}>
+              {/*
+                The banner, first and plainly.
+
+                It says one specific thing: the lines we read do not add up to
+                the total the receipt prints about itself. That is not the same
+                as "something is wrong with your shopping" and it is not the
+                same as a failed scan — it means at least one number on this
+                screen is not the number on the paper, and there is no way to
+                know which. Hence: check before trusting, with the receipt's own
+                complaints listed underneath.
+              */}
+              {!receipt.reconciled && (
+                <View style={[styles.banner, { borderColor: colors.warn }]}>
+                  <Ionicons name="warning-outline" size={20} color={colors.warn} />
+                  <View style={styles.grow}>
+                    <Text style={[type.body, { color: colors.ink }]}>
+                      {t('receipt.notReconciled')}
+                    </Text>
+                    {receipt.problems.map((p) => (
+                      <Text key={p} style={[type.label, { color: colors.muted }]}>
+                        {p}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.totals}>
+                <Total label={t('receipt.paid')} value={money(receipt.paidCents)} />
+                {receipt.depositCents !== 0 && (
+                  <Total label={t('receipt.deposit')} value={money(receipt.depositCents)} />
+                )}
+                {receipt.discountCents !== 0 && (
+                  <Total label={t('receipt.discount')} value={money(receipt.discountCents)} />
+                )}
+              </View>
+            </View>
+          }
+          renderSectionHeader={({ section }) => (
+            <Frosted over="mesh" style={styles.sectionHead}>
+              <Text style={[type.label, { color: colors.ink }]}>{section.title}</Text>
+              <Text style={[type.label, { color: colors.muted }]}>
+                {'·'} {section.data.length}
+              </Text>
+            </Frosted>
+          )}
+          renderItem={({ item, index, section }) =>
+            renderRow(item, section.key === 'matched' ? index : matched.length + index)
+          }
+          ListFooterComponent={
+            missing.length > 0 ? (
+              <View style={styles.missing}>
+                <Text style={[type.label, { color: colors.muted }]}>
+                  {t('receipt.groupMissing')}
+                </Text>
+                <Text style={[type.sub, { color: colors.muted }]}>
+                  {t('receipt.groupMissingBody')}
+                </Text>
+                <View style={styles.missingRows}>
+                  {missing.map((c) => (
+                    <View key={c.id} style={[styles.chip, { borderColor: colors.line }]}>
+                      <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                        {c.name}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null
+          }
+        />
+
+        {/*
+          What the import comes to, and nothing about whether it "should".
+
+          Deliberately not compared with the receipt's own total to raise an
+          alarm: unticking a line is a legitimate thing to do and would trip any
+          such check on the first tap. Whether the SCAN agrees with the paper is
+          a different question and has the banner above.
+        */}
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <Frosted over="content" style={styles.footerInner}>
+            <View style={styles.grow}>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t('receipt.importing', { count })}
+              </Text>
+              <Text style={[type.h2, { color: colors.ink }]}>{money(total)}</Text>
+            </View>
+            {/* Not wired: the import is the next piece of work. Disabled rather
+                than absent, so the shape of the screen is the shape it will
+                have — and a button that looks live and writes nothing is a bug,
+                not a preview. */}
+            <PressScale
+              disabled
+              accessibilityRole="button"
+              accessibilityState={{ disabled: true }}
+              style={[styles.importBtn, { borderColor: colors.accent }, styles.importOff]}
+            >
+              <Text style={[type.body, { color: colors.accent }]}>{t('receipt.import')}</Text>
+            </PressScale>
+          </Frosted>
+        </View>
+      </SafeAreaView>
+
+      {/*
+        The picker. Offers the rows nothing has claimed, plus whatever this line
+        already holds — without that second part, re-opening the picker on a
+        matched line would show every option EXCEPT the one currently chosen.
+      */}
+      <Sheet visible={picking != null} onClose={() => setPicking(null)} align="end" scrim>
+        <Text style={[type.h2, { color: colors.ink }]}>{t('receipt.pickTitle')}</Text>
+        <Pressable
+          onPress={() => {
+            if (picking) setDecisions((d) => assign(d, picking, null));
+            setPicking(null);
+          }}
+          style={[styles.pickRow, { borderColor: colors.line }]}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={colors.muted} />
+          <Text style={[type.body, { color: colors.ink }]}>{t('receipt.notOnList')}</Text>
+        </Pressable>
+        {pickerOptions(candidates, decisions, picking).map((c) => (
+          <Pressable
+            key={c.id}
+            onPress={() => {
+              haptics.tick();
+              if (picking) setDecisions((d) => assign(d, picking, c.id));
+              setPicking(null);
+            }}
+            style={[styles.pickRow, { borderColor: colors.line }]}
+          >
+            <Ionicons name="cart-outline" size={20} color={colors.accent} />
+            <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+              {c.name}
+            </Text>
+          </Pressable>
+        ))}
+      </Sheet>
+    </View>
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function Header({ title, subtitle }: { title: string; subtitle: string | null }) {
+  const { colors } = useTheme();
+  const t = useLocale().t;
+  return (
+    <View style={styles.header}>
+      <Pressable
+        onPress={() => router.back()}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back')}
+      >
+        <Ionicons name="chevron-back" size={26} color={colors.ink} />
+      </Pressable>
+      <View style={styles.grow}>
+        <Text style={[type.h2, { color: colors.ink }]}>{title}</Text>
+        {subtitle ? (
+          <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function Total({ label, value }: { label: string; value: string }) {
   const { colors } = useTheme();
   return (
-    <View style={styles.line}>
-      <Text style={[type.sub, { color: colors.muted }]}>{label}</Text>
+    <View style={styles.total}>
+      <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
       <Text style={[type.body, { color: colors.ink }]}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  root: { flex: 1 },
+  safe: { flex: 1 },
   grow: { flex: 1, minWidth: 0 },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backRow: {
+  empty: { padding: spacing.xl, textAlign: 'center' },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  list: { paddingHorizontal: spacing.lg },
+  head: { gap: spacing.md, paddingBottom: spacing.md },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  totals: { flexDirection: 'row', gap: spacing.lg },
+  total: { gap: 2 },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
     paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  // Dimmed, not removed: a row that vanishes when you untick it takes its own
+  // untick button with it.
+  excluded: { opacity: 0.45 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  brand: {
+    borderWidth: 1,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+    maxWidth: 110,
+  },
+  amountBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderWidth: 1,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm,
+    minWidth: 84,
+  },
+  amountInput: { flex: 1, fontSize: 16, paddingVertical: spacing.sm },
+  missing: { gap: spacing.sm, paddingTop: spacing.lg },
+  missingRows: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chip: {
+    borderWidth: 1,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    maxWidth: '100%',
+  },
+  footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  footerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+  },
+  importBtn: {
+    borderWidth: 1,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  importOff: { opacity: 0.4 },
+  pickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });
