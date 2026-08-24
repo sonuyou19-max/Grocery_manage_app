@@ -53,6 +53,7 @@ const de = {
     alreadyImported: 'Dieser Bon wurde bereits übernommen.',
     importFailed: 'Das konnten wir nicht speichern. Prüf deine Verbindung und versuch es nochmal.',
     needHousehold: 'Melde dich an, um einen Bon zu übernehmen.',
+    dateSubstituted: 'Auf dem Bon steht %{printed}, das kann nicht stimmen. Wird unter %{used} verbucht.',
   },
   coach: {
     gotIt: 'Alles klar',

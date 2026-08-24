@@ -53,6 +53,7 @@ const it = {
     alreadyImported: 'Questo scontrino è già stato importato.',
     importFailed: 'Non siamo riusciti a salvare. Controlla la connessione e riprova.',
     needHousehold: 'Accedi per importare uno scontrino.',
+    dateSubstituted: 'Lo scontrino riporta %{printed}, che non può essere giusto. Registrato al %{used}.',
   },
   coach: {
     gotIt: 'Capito',

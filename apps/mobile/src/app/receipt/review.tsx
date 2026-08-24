@@ -21,7 +21,7 @@ import { Sheet } from '@/components/sheet';
 import { currencySymbolFor } from '@/i18n';
 import { haptics } from '@/lib/haptics';
 import { parsePriceToCents } from '@/lib/money';
-import type { ListCandidate, ReceiptPurchase } from '@/lib/receipt';
+import { displayName, type ListCandidate, type ReceiptPurchase } from '@/lib/receipt';
 import {
   assign,
   groupPurchases,
@@ -34,7 +34,7 @@ import {
   unclaimed,
   type Decisions,
 } from '@/lib/receipt-review';
-import { claimReceipt, planCommit, type ListRow } from '@/lib/receipt-commit';
+import { claimReceipt, planCommit, purchaseInstant, type ListRow } from '@/lib/receipt-commit';
 import { takeRun, type ScanRun } from '@/lib/receipt-run';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
@@ -167,6 +167,34 @@ export default function ReceiptReviewScreen() {
 
   const { receipt } = run;
 
+  /*
+   * WHEN this shopping happened, as the import will actually record it.
+   *
+   * Two bugs in one line before this. It printed the raw ISO string —
+   * `2028-07-30T19:55:00` — which is a machine's spelling of a date, in front of
+   * somebody checking their groceries.
+   *
+   * And it printed the value off the PAPER while the import used a different
+   * one. purchaseInstant rejects a date more than a year out and falls back to
+   * now, which is right: a receipt read as 2028 must not file a purchase two
+   * years into a history that cannot show it. But the header went on displaying
+   * 2028, so the screen and the write disagreed and nothing said so. Now the
+   * header shows the instant that will be used, and says when the printed one
+   * was not believed.
+   */
+  const chosen = purchaseInstant(receipt.purchasedAt, Date.now());
+  const printed = receipt.purchasedAt ? Date.parse(receipt.purchasedAt) : NaN;
+  const when = {
+    label: new Date(chosen).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }),
+    // Only when the paper gave a date AND we declined to use it. A receipt with
+    // no legible date at all is ordinary and needs no explaining.
+    substituted: Number.isFinite(printed) && printed !== chosen,
+  };
+
   const sections = [
     { key: 'matched' as const, title: t('receipt.groupMatched'), data: matched },
     { key: 'extra' as const, title: t('receipt.groupExtra'), data: extra },
@@ -274,8 +302,10 @@ export default function ReceiptReviewScreen() {
         <Text style={styles.emoji}>{p.emoji ?? '🧾'}</Text>
 
         <View style={styles.grow}>
+          {/* The expansion, not the till's abbreviations — those are the two
+              lines underneath. See displayName. */}
           <Text style={[type.body, { color: colors.ink }]} numberOfLines={2}>
-            {p.name}
+            {displayName(p)}
           </Text>
 
           {/* The till's own words, always. */}
@@ -379,9 +409,7 @@ export default function ReceiptReviewScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <Header
           title={t('receipt.reviewTitle')}
-          subtitle={[receipt.store ?? t('receipt.unknownStore'), receipt.purchasedAt ?? '']
-            .filter(Boolean)
-            .join(' · ')}
+          subtitle={`${receipt.store ?? t('receipt.unknownStore')} · ${when.label}`}
         />
 
         <SectionList
@@ -417,6 +445,22 @@ export default function ReceiptReviewScreen() {
                       </Text>
                     ))}
                   </View>
+                </View>
+              )}
+
+              {when.substituted && (
+                <View style={[styles.banner, { borderColor: colors.line }]}>
+                  <Ionicons name="calendar-outline" size={20} color={colors.muted} />
+                  <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
+                    {t('receipt.dateSubstituted', {
+                      printed: new Date(printed).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      }),
+                      used: when.label,
+                    })}
+                  </Text>
                 </View>
               )}
 

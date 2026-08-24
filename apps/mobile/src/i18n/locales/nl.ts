@@ -53,6 +53,7 @@ const nl = {
     alreadyImported: 'Dit bonnetje is al geïmporteerd.',
     importFailed: 'Dat konden we niet opslaan. Controleer je verbinding en probeer het opnieuw.',
     needHousehold: 'Log in om een bonnetje te importeren.',
+    dateSubstituted: 'Op het bonnetje staat %{printed}, dat kan niet kloppen. Wordt geboekt op %{used}.',
   },
   coach: {
     gotIt: 'Duidelijk',

@@ -1,6 +1,6 @@
 import type { ItemCategory } from '@korb/shared';
 
-import type { ReceiptPurchase, ScannedReceipt } from '@/lib/receipt';
+import { displayName, type ReceiptPurchase, type ScannedReceipt } from '@/lib/receipt';
 import { storeIdFor } from '@/lib/supermarkets';
 import { supabase } from '@/lib/supabase';
 import type { Decisions } from '@/lib/receipt-review';
@@ -151,9 +151,13 @@ export function planCommit(
      * The list's own word is the only spelling stable across both.
      *
      * An unmatched line has no list spelling to borrow, so it uses the model's
-     * expansion — which is why the extractor is asked for one at all.
+     * EXPANSION — which is why the extractor is asked for one at all, and why
+     * this is displayName rather than `p.name`. `p.name` is the printing:
+     * filing a new pantry item under `DOUNE EGBERTS opiosk, dessert glas 200g`
+     * would put a till's abbreviations and its OCR slips into an item name the
+     * shopper then has to live with, and match nothing ever again.
      */
-    const name = row?.name ?? p.name;
+    const name = row?.name ?? displayName(p);
     const category = row?.category ?? p.category ?? 'other';
 
     planned.push({

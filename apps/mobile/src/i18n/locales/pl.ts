@@ -63,6 +63,7 @@ const pl = {
     alreadyImported: 'Ten paragon został już zaimportowany.',
     importFailed: 'Nie udało się tego zapisać. Sprawdź połączenie i spróbuj ponownie.',
     needHousehold: 'Zaloguj się, aby zaimportować paragon.',
+    dateSubstituted: 'Na paragonie widnieje %{printed}, co nie może być prawdą. Zapisujemy pod datą %{used}.',
   },
   coach: {
     gotIt: 'Jasne',

@@ -426,5 +426,40 @@ check_(
   /images\.length \* 6_400/.test(fn),
 );
 
+/*
+ * The model has no clock. Without today's date it cannot distinguish a receipt
+ * dated in the future from one it misread — and it does misread them: a Colruyt
+ * receipt printed 30/07/2026 came back as 2028, on two separate scans.
+ *
+ * The device catches an impossible date and substitutes now(), so nothing bad
+ * lands either way. But a substituted date is a worse answer than a correct
+ * one, and the fix costs one line of context.
+ */
+if (/Today is \$\{new Date\(\)\.toISOString\(\)/.test(fn)) {
+  ok("today's date is sent with the images");
+} else {
+  fail("today's date is sent with the images", [
+    'The prompt tells the model a receipt cannot be dated after today, which',
+    'is only checkable if it is told what today is.',
+  ]);
+}
+
+check_('...and the prompt says a future date is a misreading', /A receipt cannot be dated in the future/.test(fn));
+
+/*
+ * The expansion is what the app SHOWS and what an unmatched line becomes in the
+ * pantry, so what the prompt asks for there is load-bearing. Two things:
+ * the brand must stay out of it (it has its own field, and a brand inside a
+ * product name fragments that item's history), and the model is expected to
+ * correct the camera's slips rather than pass DOUNE through as a product word.
+ */
+{
+  const promptText = fn.slice(fn.indexOf('const SYSTEM_PROMPT'));
+  const defs = promptText.slice(promptText.indexOf('- expanded:'), promptText.indexOf('- translated:'));
+  check_('the expansion is asked for WITHOUT the brand', /WITHOUT the brand/.test(defs));
+  check_('...and is where scanning slips get corrected', /FIX what the camera got wrong/i.test(defs));
+  check_('...but never a number', /never a number/.test(defs));
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

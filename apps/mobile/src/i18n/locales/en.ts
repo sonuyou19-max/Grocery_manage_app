@@ -62,6 +62,7 @@ const en = {
     alreadyImported: 'This receipt has already been imported.',
     importFailed: 'We could not save that. Check your connection and try again.',
     needHousehold: 'Sign in to import a receipt.',
+    dateSubstituted: 'The receipt reads %{printed}, which cannot be right. Filing this under %{used}.',
   },
   coach: {
     gotIt: 'Got it',

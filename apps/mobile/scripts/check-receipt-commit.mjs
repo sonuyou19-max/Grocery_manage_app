@@ -49,8 +49,28 @@ const assert = (cond, what, detail) => (cond ? ok(what) : fail(what, detail ? [d
 const supermarkets = readFileSync(join(SRC, 'lib', 'supermarkets.ts'), 'utf8');
 const commit = readFileSync(join(SRC, 'lib', 'receipt-commit.ts'), 'utf8');
 
+/*
+ * displayName is lifted out of lib/receipt rather than imported: that module
+ * reaches the supabase client and the whole emoji table, none of which this
+ * needs. Lifted, not re-declared — a second copy of the fallback ORDER here
+ * would let the real one change without a single assertion noticing, which is
+ * the exact bug the two-implementation checks elsewhere exist to prevent.
+ */
+const receiptLib = readFileSync(join(SRC, 'lib', 'receipt.ts'), 'utf8');
+const lifted = receiptLib.match(/export function displayName[\s\S]*?\n\}/);
+if (!lifted) {
+  fail('displayName could not be lifted out of lib/receipt', [
+    'It has moved or been renamed; this check cannot verify the name a',
+    'purchase is filed under without it.',
+  ]);
+}
+
 const source = [
   supermarkets,
+  (lifted?.[0] ?? '').replace(
+    /: Pick<ReceiptPurchase, [^>]*>/,
+    '',
+  ).replace(/\): string \{/, ') {'),
   commit
     .replace(/^import .*$/gm, '')
     .replace(/export async function claimReceipt[\s\S]*?\n\}/, ''),
@@ -82,7 +102,12 @@ const RECEIPT = {
 
 const PURCHASES = [
   buy('a', 'eieren', 299, { brand: 'Boni' }),
-  buy('b', 'bin bags', 249, { packs: 2, quantity: 20, unit: 'st' }),
+  // The real shape: a garbled printing with a clean expansion beside it. If the
+  // planner reached for `name` this would enter the pantry as
+  // `DOUNE BINBAGZ 20st`.
+  buy('b', 'DOUNE BINBAGZ 20st', 249, {
+    packs: 2, quantity: 20, unit: 'st', expanded: 'bin bags',
+  }),
 ];
 
 // The shopper's own spellings, and one row already ticked off in the aisle.
@@ -127,6 +152,10 @@ console.log('\nthe name a purchase is filed under');
 
   const bags = plan.purchases.find((p) => p.key === 'b');
   eq('an unmatched line uses the model’s expansion', bags.name, 'bin bags');
+  if (bags.name === 'bin bags') {
+    console.log('       (it becomes a PANTRY ITEM — filed under the printing it would');
+    console.log('        carry the till\'s abbreviations and its OCR slips forever)');
+  }
   eq('and its own category', bags.category, 'other');
 }
 

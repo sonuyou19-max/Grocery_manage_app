@@ -142,12 +142,23 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   item.
 - name: the product as printed, with the till's abbreviations left alone.
 - expanded: the same product with abbreviations opened out, in the receipt's OWN
-  language. "CAR EIREN X30" -> "Carrefour eieren 30 stuks". Use the shop and the
-  language from the header to decide. If you cannot tell, leave it null rather
-  than inventing one — a wrong expansion cannot be detected by any check here.
+  language, WITHOUT the brand and without the pack size. "CAR EIREN X30" ->
+  "eieren". "DOUWE EGBERTS oplosk. dessert glas 200g" -> "oploskoffie". The
+  brand has its own field and the size has two of its own; repeating them here
+  puts them into the product's identity, and "milk" then stops being the same
+  item as "Alpro milk 1L".
+  This is also where you FIX what the camera got wrong. Till printing is small
+  and receipts crease, so the raw line will contain scanning slips — DOUNE for
+  DOUWE, opiosk for oplosk., rn for m. You know what real products are called;
+  the raw field keeps the mistake for the reader to check against, and this
+  field is the corrected reading. Correct only what you are confident about: a
+  well-known brand or a common product word, never a number.
+  If you cannot tell what the product is, leave it null rather than inventing
+  one — a wrong expansion cannot be detected by any check here.
 - translated: expanded, rendered in the target language given in the request.
-- brand: the manufacturer, where the line names one. Own-brand counts (BONI,
-  EVERYDAY, CAR). Null for loose produce.
+- brand: the manufacturer, where the line names one, spelled correctly rather
+  than as the camera read it — "DOUNE EGBERTS" is Douwe Egberts. Own-brand
+  counts (BONI, EVERYDAY, CAR). Null for loose produce.
 - section: the printed aisle heading this line sits under, if the receipt has
   them ("Obst&Gemüse", "SB - Fleisch", "GEWICHTSARTIKELEN"). Null otherwise.
 - multiplier: how many, or how much. The number the line total is the unit price
@@ -173,6 +184,10 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
 - purchasedAt: the date and time PRINTED on the receipt, as ISO 8601. Not today.
   This is what decides which of the shopper's purchases the receipt amends, so a
   receipt scanned the next morning still lands on yesterday's shop.
+  A receipt cannot be dated in the future, and today's date is given to you in
+  the request. If what you read comes out later than today, you have misread a
+  digit — 2026 scanned as 2028 is the common one — so look again. If it is still
+  unreadable, answer null; a missing date is handled, a wrong one is not.
 - currency: the ISO code the receipt is denominated in, "EUR" for these.
 - language: the language the receipt is PRINTED in, as a two-letter code. Not
   the target language, and not the country's main language — a Leuven receipt
@@ -279,6 +294,21 @@ Deno.serve(async (req) => {
           content: [
             ...content,
             { type: 'text', text: `Target language for "translated": ${language}` },
+            /*
+             * The model has no clock, so without this it cannot tell a receipt
+             * dated in the future from one it misread — and it does misread
+             * them: a Colruyt receipt printed 30/07/2026 came back as 2028,
+             * twice. purchaseInstant catches an impossible date on the device
+             * and falls back to now, but catching it HERE means the right date
+             * lands rather than a substituted one.
+             *
+             * Server time, not the device's: it is the one clock in this
+             * exchange that a wrong phone setting cannot move.
+             */
+            {
+              type: 'text',
+              text: `Today is ${new Date().toISOString().slice(0, 10)}. A receipt cannot be dated after this.`,
+            },
           ],
         },
       ],

@@ -86,7 +86,38 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds } = mod;
+const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds, displayName } = mod;
+
+/* ------------------------------------------------------------ displayName -- */
+
+/*
+ * Which of the three renderings a person sees.
+ *
+ * The sheet showed `name` — the product "as printed, with the till's
+ * abbreviations left alone" — directly above the raw printed line, so a real
+ * Colruyt receipt rendered as
+ *
+ *     DOUNE EGBERTS opiosk, dessert glas 200g
+ *     DOUNE EGBERTS OPIOSK, DESSERT GLAS 200G
+ *
+ * the same garbled string twice. The expansion was requested from the model,
+ * paid for on every scan, and read by nothing but the AI matcher.
+ *
+ * The order matters as much as the fallback: an empty string is not an answer,
+ * and `??` would have accepted one.
+ */
+{
+  const p = (over) => ({ name: 'DOUNE EGBERTS opiosk', expanded: null, translated: null, ...over });
+
+  eq('the reader’s language wins', displayName(p({ expanded: 'oploskoffie', translated: 'instant coffee' })), 'instant coffee');
+  eq('...then the receipt’s own', displayName(p({ expanded: 'oploskoffie' })), 'oploskoffie');
+  eq('...and the printing is the last resort', displayName(p()), 'DOUNE EGBERTS opiosk');
+  eq(
+    'an EMPTY expansion falls through rather than blanking the row',
+    displayName(p({ expanded: '   ', translated: '' })),
+    'DOUNE EGBERTS opiosk',
+  );
+}
 
 /* --------------------------------------------------------------- helpers -- */
 

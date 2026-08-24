@@ -53,6 +53,7 @@ const es = {
     alreadyImported: 'Este tique ya se ha importado.',
     importFailed: 'No hemos podido guardarlo. Comprueba tu conexión e inténtalo otra vez.',
     needHousehold: 'Inicia sesión para importar un tique.',
+    dateSubstituted: 'El tique pone %{printed}, lo cual no puede ser. Se registra con fecha %{used}.',
   },
   coach: {
     gotIt: 'Entendido',

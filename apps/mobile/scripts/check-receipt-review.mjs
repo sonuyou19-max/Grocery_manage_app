@@ -355,6 +355,28 @@ assert(
 }
 
 assert(
+  /\{displayName\(p\)\}/.test(sheet),
+  'the row shows the expansion, not the till’s abbreviations',
+  'the raw line is already rendered underneath as evidence — showing `p.name` above it printed the same garbled string twice and wasted the expansion the scan paid for',
+);
+
+assert(
+  /purchaseInstant\(receipt\.purchasedAt, Date\.now\(\)\)/.test(sheet),
+  'the header shows the instant the IMPORT will use',
+  'showing receipt.purchasedAt instead lets the screen say 2028 while the write files under today, with nothing saying so',
+);
+
+assert(
+  /toLocaleDateString\(/.test(sheet) && !/\{receipt\.purchasedAt\}/.test(sheet),
+  'the date is formatted, never the raw ISO string',
+);
+
+assert(
+  /when\.substituted && \(/.test(sheet),
+  'a rejected date is explained rather than silently replaced',
+);
+
+assert(
   /disabled=\{committing \|\| count === 0\}/.test(sheet),
   'the Import button is held while a commit is in flight, and when nothing is ticked',
   'a second tap mid-write is the case the receipt fingerprint exists to survive; catching it here saves a round trip and a confusing "already imported" for the user\'s own tap',

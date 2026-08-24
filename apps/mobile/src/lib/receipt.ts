@@ -92,6 +92,34 @@ export interface ReceiptPurchase {
   confidence: 'high' | 'medium' | 'low';
 }
 
+/**
+ * The name to put in front of a person.
+ *
+ * ---------------------------------------------------------------------------
+ * Why `name` is the LAST choice
+ * ---------------------------------------------------------------------------
+ *
+ * The extractor returns three renderings of every line and this app was showing
+ * the wrong one. `name` is the product "as printed, with the till's
+ * abbreviations left alone" — so the review sheet read
+ *
+ *     DOUNE EGBERTS opiosk, dessert glas 200g
+ *     DOUNE EGBERTS OPIOSK, DESSERT GLAS 200G
+ *
+ * which is the same garbled string twice: once pretending to be a product name,
+ * once as the printed evidence underneath it. The expansion was requested, paid
+ * for, and then never read by anything except the AI matcher.
+ *
+ * So: the reader's own language first, the receipt's language next, and the
+ * till's abbreviations only when the model could not do better. The raw line
+ * still appears underneath — it is the evidence, and its whole job is to look
+ * exactly like the paper.
+ */
+export function displayName(p: Pick<ReceiptPurchase, 'name' | 'expanded' | 'translated'>): string {
+  const best = p.translated?.trim() || p.expanded?.trim() || p.name.trim();
+  return best || p.name;
+}
+
 const isMeasure = (l: ScannedLine): boolean =>
   l.unit != null || (l.multiplier != null && !Number.isInteger(l.multiplier));
 
