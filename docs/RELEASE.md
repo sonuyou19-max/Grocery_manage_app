@@ -5,26 +5,60 @@ Work top to bottom; the backend section must be done before the first build.
 
 ## 1. Backend cutover (Supabase)
 
-Apply these migrations to the **production** project (`vtgmvamwspqnrmdliqhh`), in
-order, if not already applied:
+### The CLI
 
-- `0006_pantry_intel.sql` ✅ (applied)
-- `0007_household_recaps.sql` ✅ (applied)
-- `0008_tighten_membership_insert.sql` ✅ (applied) — RLS hardening (self-join fix)
-- `0009_delete_account.sql` ✅ (applied) — account-deletion RPC
-- `0010_ai_rate_limit.sql` ✅ (applied) — AI usage counter + `bump_ai_usage`
-
-Deploy / redeploy the edge functions (they import `_shared/rate-limit.ts`).
-If the `supabase` command isn't found, prefix with `npx`:
+There is no global install — Supabase blocks `npm i -g supabase` on purpose, so
+`command not found` is the normal state of a fresh machine. Either prefix
+everything with `npx`, or install the real binary:
 
 ```
-npx supabase functions deploy categorize      --project-ref vtgmvamwspqnrmdliqhh
-npx supabase functions deploy quick-add-parse  --project-ref vtgmvamwspqnrmdliqhh
-npx supabase functions deploy weekly-recap     --project-ref vtgmvamwspqnrmdliqhh
+brew install supabase/tap/supabase     # macOS / Linux
+scoop install supabase                 # Windows
 ```
 
-✅ Deployed and verified via curl (all three return JSON; `ai_usage` rows confirm
-the rate limiter records calls).
+Link once and every later command needs no flags. It asks for the database
+password and remembers it:
+
+```
+npx supabase login
+npx supabase link --project-ref vtgmvamwspqnrmdliqhh
+```
+
+### Migrations
+
+```
+npx supabase db push
+```
+
+Applies whatever the project has not seen, in order. Run it BEFORE deploying
+functions — a function that writes a column the database does not have yet fails
+at the first real request rather than at deploy time, which is a much worse place
+to find out.
+
+Do not maintain a hand-written list of which migrations are applied here. One
+used to live in this file, and it was wrong: it stopped at `0010` while the repo
+had reached `0038`, so anyone reading it would have believed twenty-eight
+migrations were somebody else's problem. `npx supabase migration list` answers
+the question against the actual database, which is the only answer worth having.
+
+### Edge functions
+
+All six, and `--project-ref` is unnecessary once linked:
+
+```
+npx supabase functions deploy categorize
+npx supabase functions deploy suggest-swaps
+npx supabase functions deploy quick-add-parse
+npx supabase functions deploy weekly-recap
+npx supabase functions deploy receipt-scan
+npx supabase functions deploy receipt-match
+```
+
+`billing-webhook` is deployed separately with `--no-verify-jwt` — see §3a.
+
+**Order matters for `weekly-recap`.** Its payload is versioned, and an old
+function paired with a new client produces a recap that is confidently wrong
+rather than absent. Deploy it before shipping the app update, never after.
 
 Confirm secrets/config:
 - `ANTHROPIC_API_KEY` set ✅
