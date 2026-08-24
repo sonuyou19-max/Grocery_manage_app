@@ -698,6 +698,8 @@ const nl = {
     customStoreTitle: 'Eigen winkel',
     customStorePlaceholder: 'bijv. Lokale boerderijwinkel',
     customStoreConfirm: 'Instellen',
+    lastBought: 'Laatst gekocht %{when}',
+    each: 'per stuk',
   },
   quickAdd: {
     title: 'Snel toevoegen met AI',

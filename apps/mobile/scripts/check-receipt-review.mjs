@@ -377,6 +377,18 @@ assert(
 );
 
 assert(
+  /for \(const \{ itemId, patch \} of plan\.patches\) updateItem\(list\.id, itemId, patch\);/.test(sheet),
+  'the import patches the list rows, not only the purchase log',
+  'without this a €6,49 shop imports cleanly and the list still reads €0.00 with an empty quantity — the numbers land in the one place nobody opens',
+);
+
+assert(
+  sheet.indexOf('updateItem(list.id') < sheet.indexOf('toggleItem(list.id'),
+  'rows are patched BEFORE they are ticked',
+  'ticking starts the sweep that can take a row off the list, and it should carry its price when it goes',
+);
+
+assert(
   /disabled=\{committing \|\| count === 0\}/.test(sheet),
   'the Import button is held while a commit is in flight, and when nothing is ticked',
   'a second tap mid-write is the case the receipt fingerprint exists to survive; catching it here saves a round trip and a confusing "already imported" for the user\'s own tap',

@@ -58,6 +58,8 @@ export interface PlannedPurchase {
     unit: string | null;
     packs: number;
     brand: string | null;
+    /** What the receipt called it — see migration 0039. */
+    description: string | null;
     at: number;
   };
 }
@@ -80,8 +82,31 @@ export interface CommitPlan {
   purchases: PlannedPurchase[];
   /** List rows to tick off — matched, included, and not already ticked. */
   tick: string[];
+  /**
+   * What the receipt taught each matched list row.
+   *
+   * The import used to write the purchase log and leave the list row exactly as
+   * it was, so a shop worth €6,49 imported cleanly and the list still read
+   * "€0.00" with an empty quantity — the numbers were in the history and
+   * nowhere a person would look for them.
+   *
+   * The receipt WINS over what was typed. A price entered before shopping is an
+   * estimate; the receipt is what the till charged, which is the entire reason
+   * for scanning it. `bio` is never touched — that is the shopper's own claim
+   * about a product and no receipt knows it.
+   */
+  patches: { itemId: string; patch: ItemRowPatch }[];
   /** The instant every purchase is filed under. */
   at: number;
+}
+
+/** The subset of a list row a receipt is evidence about. */
+export interface ItemRowPatch {
+  quantity: number | null;
+  unit: string | null;
+  packs: number;
+  priceCents: number;
+  store: string | null;
 }
 
 /** What the planner needs to know about one row of the list. */
@@ -129,6 +154,7 @@ export function planCommit(
 
   const planned: PlannedPurchase[] = [];
   const tick: string[] = [];
+  const patches: { itemId: string; patch: ItemRowPatch }[] = [];
 
   for (const p of purchases) {
     const d = decisions.get(p.key);
@@ -171,18 +197,35 @@ export function planCommit(
         unit: p.unit,
         packs: p.packs,
         brand: p.brand,
+        // Only when it differs from the name we are filing under. For an
+        // unmatched line those are the same string, and storing it twice would
+        // put a description on every row that says nothing.
+        description: displayName(p) === name ? null : displayName(p),
         at,
       },
     });
 
-    // Only rows that are not already ticked. `toggleItem` toggles, so calling
-    // it on a ticked row would UNtick it — an import that unbuys your shopping.
-    if (row && !row.checked) tick.push(row.id);
+    if (row) {
+      patches.push({
+        itemId: row.id,
+        patch: {
+          quantity: p.quantity,
+          unit: p.unit,
+          packs: p.packs,
+          priceCents: d.priceCents,
+          store: receipt.store,
+        },
+      });
+      // Only rows that are not already ticked. `toggleItem` toggles, so calling
+      // it on a ticked row would UNtick it — an import that unbuys the shopping.
+      if (!row.checked) tick.push(row.id);
+    }
   }
 
   return {
     at,
     tick,
+    patches,
     purchases: planned,
     receipt: {
       fingerprint: receipt.fingerprint,

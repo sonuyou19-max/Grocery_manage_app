@@ -699,6 +699,8 @@ const fr = {
     customStoreTitle: 'Magasin personnalisé',
     customStorePlaceholder: 'ex. Ferme locale',
     customStoreConfirm: 'Définir',
+    lastBought: 'Dernier achat le %{when}',
+    each: 'pièce',
   },
   quickAdd: {
     title: 'Ajout rapide avec l’IA',

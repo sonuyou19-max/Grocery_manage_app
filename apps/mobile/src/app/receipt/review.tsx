@@ -102,7 +102,7 @@ export default function ReceiptReviewScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { lists, toggleItem } = useGroceries();
+  const { lists, toggleItem, updateItem } = useGroceries();
   const { logPurchase } = usePantryIntel();
   const { activeId } = useHousehold();
   const { showToast } = useToast();
@@ -254,12 +254,23 @@ export default function ReceiptReviewScreen() {
     for (const p of plan.purchases) {
       logPurchase(p.name, p.category, { ...p.detail, receiptId: claim.receiptId });
     }
-    // After the purchases, and only for rows that were not already ticked —
-    // toggleItem TOGGLES, so a ticked row would come back off the shopping.
-    // `tick` is empty unless a row matched, which cannot happen without a list;
-    // the check is here so a list deleted mid-review cannot throw over a write
-    // that has already succeeded.
-    if (list) for (const itemId of plan.tick) toggleItem(list.id, itemId);
+    /*
+     * Then the list rows themselves.
+     *
+     * Without this the import wrote a perfect purchase log and left the list
+     * saying €0.00 with an empty quantity — the receipt's numbers existed, in
+     * the one place nobody opens. Patch before tick: a ticked row starts the
+     * sweep that can take it off the list, and it should carry its price when
+     * it goes.
+     *
+     * `patches` and `tick` are both empty unless a row matched, which cannot
+     * happen without a list; the check is here so a list deleted mid-review
+     * cannot throw over writes that have already succeeded.
+     */
+    if (list) {
+      for (const { itemId, patch } of plan.patches) updateItem(list.id, itemId, patch);
+      for (const itemId of plan.tick) toggleItem(list.id, itemId);
+    }
 
     haptics.success();
     showToast(t('receipt.imported', { count: plan.purchases.length }));

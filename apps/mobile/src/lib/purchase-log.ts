@@ -92,6 +92,15 @@ export interface Purchase {
    */
   brand?: string | null;
   /**
+   * What the receipt called it, expanded (migration 0039). Null on anything
+   * logged by hand.
+   *
+   * The purchase is filed under the shopper's own word — "Coffee" — so this is
+   * the only surviving record that the coffee was a 200g dessert glass. Beside
+   * `brand`, and out of the name for the same reason.
+   */
+  description?: string | null;
+  /**
    * When this record was last written to, as opposed to when the purchase
    * happened. Absent on anything loaded from the server or from an older
    * cache; callers fall back to `at`.

@@ -699,6 +699,8 @@ const it = {
     customStoreTitle: 'Negozio personalizzato',
     customStorePlaceholder: 'es. Bottega locale',
     customStoreConfirm: 'Imposta',
+    lastBought: 'Ultimo acquisto %{when}',
+    each: 'cad.',
   },
   quickAdd: {
     title: 'Aggiunta rapida con IA',

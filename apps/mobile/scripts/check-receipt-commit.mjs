@@ -181,7 +181,7 @@ console.log('\nwhat gets planned');
 
   eq('packs and amount survive', plan.purchases[1].detail, {
     priceCents: 249, store: 'CARREFOUR MARKET', quantity: 20, unit: 'st',
-    packs: 2, brand: null, at: Date.parse(LAST_NIGHT),
+    packs: 2, brand: null, description: null, at: Date.parse(LAST_NIGHT),
   });
 }
 
@@ -239,6 +239,101 @@ console.log('\nticking the list');
     NOW,
   );
   eq('an excluded line ticks nothing', plan.tick, []);
+}
+
+/* ------------------------------------------------ what the list row learns */
+
+console.log('\nthe list row');
+
+/*
+ * The import used to write a perfect purchase log and leave the list row
+ * untouched, so a €6,49 shop imported cleanly and the list still said €0.00
+ * with an empty quantity. The numbers existed, in the one place nobody opens.
+ */
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+  eq('a matched row is patched', plan.patches.map((x) => x.itemId), ['i1']);
+  eq('with everything the receipt is evidence about', plan.patches[0].patch, {
+    quantity: null, unit: null, packs: 1, priceCents: 299, store: 'CARREFOUR MARKET',
+  });
+  eq(
+    'an unmatched line patches nothing',
+    plan.patches.filter((x) => x.itemId === 'i2').length,
+    0,
+  );
+}
+
+{
+  const plan = planCommit(
+    RECEIPT,
+    PURCHASES,
+    decide({ a: { include: true, priceCents: 1670, itemId: 'i1' } }),
+    ROWS,
+    NOW,
+  );
+  eq('the CORRECTED price reaches the row too', plan.patches[0].patch.priceCents, 1670);
+}
+
+{
+  const plan = planCommit(
+    RECEIPT,
+    PURCHASES,
+    decide({ a: { include: false, priceCents: 299, itemId: 'i1' } }),
+    ROWS,
+    NOW,
+  );
+  eq('an excluded line patches nothing', plan.patches, []);
+}
+
+{
+  // A row already ticked still gets its numbers — it was ticked in the aisle
+  // with no price, which is exactly the row the receipt has most to say about.
+  const ticked = [{ ...ROWS[0], checked: true }, ROWS[1]];
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ticked, NOW);
+  eq('a row already ticked is still patched', plan.patches.map((x) => x.itemId), ['i1']);
+  eq('...but not toggled', plan.tick, []);
+}
+
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+  eq(
+    'bio is never in the patch',
+    Object.keys(plan.patches[0].patch).includes('bio'),
+    false,
+  );
+  if (!Object.keys(plan.patches[0].patch).includes('bio')) {
+    console.log('       (organic is the shopper\'s own claim about a product — no receipt');
+    console.log('        knows it, so no receipt may overwrite it)');
+  }
+}
+
+/* -------------------------------------------------------- the description */
+
+console.log('\nthe description');
+
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+  const eggs = plan.purchases.find((p) => p.key === 'a');
+  eq(
+    'a MATCHED line keeps what the receipt called it',
+    eggs.detail.description,
+    'eieren',
+  );
+  if (eggs.detail.description === 'eieren') {
+    console.log('       (filed under "Eggs", so this is the only surviving record of');
+    console.log('        what was actually in the trolley)');
+  }
+
+  const bags = plan.purchases.find((p) => p.key === 'b');
+  eq(
+    'an unmatched line stores no description',
+    bags.detail.description,
+    null,
+  );
+  if (bags.detail.description === null) {
+    console.log('       (it is already filed under the expansion — the same string twice');
+    console.log('        is a description that says nothing)');
+  }
 }
 
 /* --------------------------------------------------------- the receipt -- */
@@ -353,9 +448,25 @@ assert(
   );
 }
 
+{
+  const select = /\.select\('([^']*recorded_at)'\)/.exec(intel)?.[1] ?? '';
+  for (const col of ['brand', 'description']) {
+    assert(
+      new RegExp(`\\b${col}\\b`).test(select),
+      `${col} is read back, so an optimistic row and a refetched one agree`,
+      'written but not selected, it exists on the server and is null on every device that did not write it',
+    );
+  }
+}
+
 assert(
-  /select\('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, recorded_at'\)/.test(intel),
-  'brand is read back, so an optimistic row and a refetched one agree',
+  /description: entry\.description \?\? null,/.test(intel),
+  'the description is written',
+);
+
+assert(
+  /description: r\.description \?\? null,/.test(intel),
+  '...and mapped back onto the Purchase',
 );
 
 /* -------------------------------------------------------- the entry point */

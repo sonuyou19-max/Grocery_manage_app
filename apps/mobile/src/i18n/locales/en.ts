@@ -710,6 +710,8 @@ const en = {
     customStoreTitle: 'Custom store',
     customStorePlaceholder: 'e.g. Local farm shop',
     customStoreConfirm: 'Set',
+    lastBought: 'Last bought %{when}',
+    each: 'each',
   },
   quickAdd: {
     title: 'Quick add with AI',

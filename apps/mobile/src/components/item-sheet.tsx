@@ -28,6 +28,7 @@ import { UNITS } from '@korb/shared';
 
 import { Frosted } from '@/components/frosted';
 import { SupermarketBadge } from '@/components/supermarket-badge';
+import { supermarketLabel } from '@/lib/supermarkets';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { currencySymbolFor } from '@/i18n';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
@@ -35,10 +36,11 @@ import { haptics } from '@/lib/haptics';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
 import { parsePriceToCents } from '@/lib/money';
-import { totalCents } from '@/lib/purchase-log';
+import { historyFor, totalCents, unitPrice } from '@/lib/purchase-log';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
+import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 // The real units only. "none" was a segment of its own and earned nothing: an
@@ -501,6 +503,10 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
               />
             </Pressable>
 
+            {/* What the receipt said, when one was scanned. Read-only: it is
+                evidence about a trip that already happened, not a field. */}
+            <LastBought name={itemObj.name} />
+
             {/* Supermarket (optional) */}
             <Field label={t('itemSheet.buyAtLabel')}>
               <ScrollView
@@ -624,7 +630,85 @@ const inputColors = (colors: ReturnType<typeof useTheme>['colors']) => ({
   borderColor: colors.line,
 });
 
+/**
+ * The last time this was actually bought, as the receipt recorded it.
+ *
+ * ---------------------------------------------------------------------------
+ * Why any of this needs showing
+ * ---------------------------------------------------------------------------
+ *
+ * A matched purchase is filed under the shopper's own word — "Coffee" — which
+ * is what keeps one item's history in one thread. The receipt knew rather more:
+ * the brand, the product's full description, the pack size, what was paid. All
+ * of it went into the purchase log, and the item sheet went on showing an empty
+ * quantity and €0.00, so the honest summary was that scanning a receipt changed
+ * nothing you could see.
+ *
+ * The editable fields above now carry the receipt's numbers too. This is the
+ * part that CANNOT be a field: brand and description are facts about one trip
+ * to one shop. Written into the name they would fragment the item's history;
+ * written onto the row they would go stale the next time a different coffee is
+ * bought. So they are shown from the log, where they are true, and shown as a
+ * record rather than as something to fill in.
+ *
+ * Renders nothing at all when there is no priced history — which is most items,
+ * most of the time, and a heading over an empty space is worse than silence.
+ */
+function LastBought({ name }: { name: string }) {
+  const { colors } = useTheme();
+  const { t, money } = useLocale();
+  const { purchases } = usePantryIntel();
+
+  const last = historyFor(purchases, name).find((p) => p.priceCents != null);
+  if (!last) return null;
+
+  const each = unitPrice(last);
+  const when = new Date(last.at).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  });
+
+  return (
+    <View style={[styles.lastBought, { borderColor: colors.line }]}>
+      <View style={styles.lastHead}>
+        <Ionicons name="receipt-outline" size={14} color={colors.muted} />
+        <Text style={[type.label, { color: colors.muted }]}>
+          {t('itemSheet.lastBought', { when })}
+          {last.store ? ` · ${supermarketLabel(last.store) ?? last.store}` : ''}
+        </Text>
+      </View>
+
+      {/* Brand and description, each only when the receipt named one. Most
+          hand-logged purchases have neither. */}
+      {(last.brand || last.description) && (
+        <Text style={[type.body, { color: colors.ink }]}>
+          {last.brand ? <Text style={styles.lastBrand}>{last.brand}</Text> : null}
+          {last.brand && last.description ? ' · ' : ''}
+          {last.description ?? ''}
+        </Text>
+      )}
+
+      <Text style={[type.sub, { color: colors.muted }]}>
+        {last.packs > 1 ? `${last.packs} × ` : ''}
+        {last.quantity != null ? `${last.quantity}${last.unit ?? ''} · ` : ''}
+        {money(last.priceCents ?? 0)}
+        {/* Per-unit only when it is a different number from the total —
+            otherwise it reads as the same price printed twice. */}
+        {each != null && last.packs > 1 ? ` · ${money(Math.round(each))} ${t('itemSheet.each')}` : ''}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  lastBought: {
+    gap: 2,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  lastHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  lastBrand: { fontWeight: '600' },
   bioGrow: { flex: 1, minWidth: 0 },
   bioRow: {
     flexDirection: 'row',

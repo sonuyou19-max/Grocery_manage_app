@@ -92,6 +92,14 @@ export interface PurchaseDetail {
   /** The scanned receipt this was read from, or null when logged by hand. */
   receiptId?: string | null;
   /**
+   * What the receipt called this, expanded (migration 0039).
+   *
+   * "Coffee" is filed under the shopper's word, which is right and which loses
+   * the fact that it was Douwe Egberts oploskoffie dessert glas 200g. This is
+   * where that goes — beside brand, on the purchase, never in the name.
+   */
+  description?: string | null;
+  /**
    * WHEN the purchase happened, when that is not now.
    *
    * Only a receipt passes this. It is what lets last night's shop, scanned this
@@ -232,6 +240,7 @@ function toPurchase(
     unit: detail?.unit ?? null,
     bio: detail?.bio === true,
     brand: detail?.brand ?? null,
+    description: detail?.description ?? null,
     // Recorded at purchase time rather than looked up later: the log is what
     // the pantry is rebuilt from, and a category the user corrected by hand
     // must survive that rebuild. See migration 0023.
@@ -516,6 +525,7 @@ interface DbPriceRow {
   unit: string | null;
   category: ItemCategory | null;
   brand: string | null;
+  description: string | null;
   recorded_at: string;
 }
 
@@ -533,6 +543,7 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   unit: r.unit,
   category: r.category,
   brand: r.brand ?? null,
+  description: r.description ?? null,
 });
 
 /** Marks this device's orphaned local log as re-homed. Device-wide, not
@@ -576,7 +587,7 @@ async function migrateLocalPurchases(
     const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, description, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .limit(LOCAL_PURCHASE_CAP);
@@ -923,6 +934,7 @@ function CloudPantryIntelProvider({
           unit: entry.unit,
           category: entry.category,
           brand: entry.brand ?? null,
+          description: entry.description ?? null,
           // Stamped on the AMENDMENT too, not only on inserts: a row this
           // receipt corrected was read from this receipt, and without it the
           // ledger could not say where the price came from.

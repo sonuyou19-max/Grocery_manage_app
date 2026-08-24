@@ -699,6 +699,8 @@ const es = {
     customStoreTitle: 'Tienda personalizada',
     customStorePlaceholder: 'p. ej. Tienda de la granja',
     customStoreConfirm: 'Definir',
+    lastBought: 'Última compra %{when}',
+    each: 'c/u',
   },
   quickAdd: {
     title: 'Añadir rápido con IA',

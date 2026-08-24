@@ -797,6 +797,8 @@ const pl = {
     customStoreTitle: 'Własny sklep',
     customStorePlaceholder: 'np. Sklep u rolnika',
     customStoreConfirm: 'Ustaw',
+    lastBought: 'Ostatnio kupione %{when}',
+    each: 'za sztukę',
   },
   quickAdd: {
     title: 'Szybkie dodawanie z AI',

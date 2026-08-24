@@ -701,6 +701,8 @@ const de = {
     customStoreTitle: 'Eigenes Geschäft',
     customStorePlaceholder: 'z. B. Hofladen',
     customStoreConfirm: 'Festlegen',
+    lastBought: 'Zuletzt gekauft %{when}',
+    each: 'pro Stück',
   },
   quickAdd: {
     title: 'Schnell hinzufügen mit KI',
