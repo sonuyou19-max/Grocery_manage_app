@@ -248,7 +248,7 @@ export default function ReceiptCaptureScreen() {
           shutter cannot be pressed while a scan is in flight — the `busy` and
           `scanning` flags guard that too, but a live-looking shutter under a
           progress screen is a confusing thing to leave reachable. */}
-      {scanning && <ScanOverlay uri={shots[0]?.uri ?? null} phase={phase} />}
+      {scanning && <ScanOverlay uris={shots.map((s) => s.uri)} phase={phase} />}
 
       <Safe style={styles.overlay}>
         <View style={styles.top}>

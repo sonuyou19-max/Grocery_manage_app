@@ -232,9 +232,26 @@ assert(
 );
 
 assert(
-  /uri=\{shots\[0\]\?\.uri \?\? null\}/.test(screen),
-  'the overlay shows the shopper’s own photograph',
-  'a bundled illustration would say "loading"; their own receipt says "we are reading THAT", and a picture of the sofa is visible four seconds in rather than at an empty review sheet',
+  /uris=\{shots\.map\(\(s\) => s\.uri\)\}/.test(screen),
+  'the overlay shows EVERY shot, not just the first',
+  'a long receipt is up to four photographs; showing shots[0] alone left three quarters of what was being read invisible, and a bad fourth frame hidden until the review sheet',
+);
+
+assert(
+  /setShown\(\(i\) => \(i \+ 1\) % uris\.length\)/.test(overlay),
+  'the preview steps through them',
+);
+
+assert(
+  /if \(uris\.length < 2\) return;/.test(overlay),
+  'a single shot does not cycle',
+  'a timer running against a static image is just a timer',
+);
+
+assert(
+  /uris\[shown % uris\.length\]/.test(overlay),
+  'the index wraps rather than trusting it is in range',
+  'an index past the end blanks the frame, which looks exactly like a failed scan',
 );
 
 const runSrc = read(join(ROOT, 'src/lib/receipt-run.ts'));
