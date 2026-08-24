@@ -3,10 +3,10 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { readProfileName, useProfileName, writeProfileName } from '@/lib/profile-name';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
@@ -146,7 +146,7 @@ export default function SignInScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.rootTransparent} edges={['top', 'bottom']}>
+      <Safe style={styles.rootTransparent} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           behavior="padding"
           style={styles.fill}
@@ -250,7 +250,7 @@ export default function SignInScreen() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

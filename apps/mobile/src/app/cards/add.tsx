@@ -13,12 +13,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
 import { CardCode } from '@/components/card-code';
 import { CardsSignInGate } from '@/components/cards-sign-in-gate';
 import { PrimaryButton } from '@/components/form';
+import { Safe } from '@/components/safe';
 import { Screen } from '@/components/screen';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { useToast } from '@/components/toast';
@@ -623,7 +623,7 @@ function ScanStep({
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={[styles.camFallback, { backgroundColor: colors.bg }]}>
+      <Safe style={[styles.camFallback, { backgroundColor: colors.bg }]}>
         <ScrollView {...scrollIndicator} contentContainerStyle={styles.permWrap}>
           <Ionicons name="camera-outline" size={44} color={colors.muted} />
           <Text style={[type.h2, { color: colors.ink, textAlign: 'center' }]}>
@@ -643,7 +643,7 @@ function ScanStep({
             <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
           </Pressable>
         </ScrollView>
-      </SafeAreaView>
+      </Safe>
     );
   }
 
@@ -658,7 +658,7 @@ function ScanStep({
           onScanned(type, data);
         }}
       />
-      <SafeAreaView style={styles.camOverlay}>
+      <Safe style={styles.camOverlay}>
         <Text style={styles.camHint}>{t('cards.scanHint')}</Text>
         {/* A window to aim through — scanning isn't restricted to it, but it
             tells the user how close to hold the card. */}
@@ -671,7 +671,7 @@ function ScanStep({
             <Text style={styles.camButtonText}>{t('common.cancel')}</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

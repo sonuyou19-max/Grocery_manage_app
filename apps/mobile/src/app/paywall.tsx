@@ -2,10 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
 import { PlusFeatures } from '@/components/plus-features';
+import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import {
   billingAvailable,
@@ -152,7 +152,7 @@ export default function PaywallScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <Safe style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12} disabled={busy}>
             <Ionicons name="close" size={26} color={colors.ink} />
@@ -279,7 +279,7 @@ export default function PaywallScreen() {
             </Pressable>
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

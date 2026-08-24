@@ -3,11 +3,11 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ClaimChip, ShoppersBadge } from '@/components/claim-chip';
 import { ItemEmoji } from '@/components/item-emoji';
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { SupermarketBadge } from '@/components/supermarket-badge';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
@@ -58,14 +58,14 @@ export default function ShoppingModeScreen() {
     return (
       <View style={styles.root}>
         <MeshBackground />
-        <SafeAreaView style={styles.fill}>
+        <Safe style={styles.fill}>
           <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
             {t('listDetail.gone')}
           </Text>
           <Pressable onPress={() => router.back()} style={styles.exitBtn}>
             <Text style={[type.body, { color: colors.accent }]}>{t('common.close')}</Text>
           </Pressable>
-        </SafeAreaView>
+        </Safe>
       </View>
     );
   }
@@ -104,7 +104,7 @@ export default function ShoppingModeScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      <Safe style={styles.fill} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.grow}>
@@ -220,7 +220,7 @@ export default function ShoppingModeScreen() {
             </Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

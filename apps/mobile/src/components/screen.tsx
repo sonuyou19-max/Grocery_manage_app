@@ -7,11 +7,12 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FAB_GAP, FAB_HEIGHT } from '@/components/fab';
 import { TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/floating-tab-bar';
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 interface ScreenProps extends PropsWithChildren {
@@ -112,7 +113,7 @@ export function Screen({ title, eyebrow, subtitle, hasFab, headerAction, childre
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <Safe style={styles.safe} edges={['top']}>
         <Animated.ScrollView
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -151,7 +152,7 @@ export function Screen({ title, eyebrow, subtitle, hasFab, headerAction, childre
           </View>
           {children}
         </Animated.ScrollView>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

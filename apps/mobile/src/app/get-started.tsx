@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { haptics } from '@/lib/haptics';
 import { markGetStartedSeen } from '@/lib/onboarding';
 import { useT } from '@/store/locale';
@@ -58,7 +58,7 @@ export default function GetStartedScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <Safe style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.body}>
           <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>
             <Ionicons name="people-outline" size={30} color={colors.accent} />
@@ -106,7 +106,7 @@ export default function GetStartedScreen() {
             <Text style={[type.body, { color: colors.ink }]}>{t('getStarted.later')}</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

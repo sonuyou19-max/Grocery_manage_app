@@ -18,7 +18,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Safe } from "@/components/safe";
 
 import { Sheet } from "@/components/sheet";
 import { CardCode } from "@/components/card-code";
@@ -140,7 +140,7 @@ export default function CardsScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={["top"]}>
+      <Safe style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
@@ -196,7 +196,7 @@ export default function CardsScreen() {
             />
           ))}
         </Animated.ScrollView>
-      </SafeAreaView>
+      </Safe>
 
       {/* Hidden until there's an account to attach a card to — the gate above
           is the way forward, not a Fab that would only bounce off it. Pushed

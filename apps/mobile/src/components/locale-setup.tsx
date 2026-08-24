@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { flagFor, i18n, LANGUAGES, REGIONS, regionByCode } from '@/i18n';
 import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
@@ -70,7 +70,7 @@ export function LocaleSetup({
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+      <Safe style={styles.fill} edges={['top', 'bottom']}>
         <View style={styles.header}>
           {onCancel ? (
             <Pressable onPress={onCancel} hitSlop={12}>
@@ -170,7 +170,7 @@ export function LocaleSetup({
             </Pressable>
           </Animated.View>
         )}
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

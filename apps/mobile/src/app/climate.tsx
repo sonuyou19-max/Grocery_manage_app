@@ -21,7 +21,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Safe } from "@/components/safe";
 
 import { EcoBar } from "@/components/eco-bar";
 import { EmptyState } from "@/components/empty-state";
@@ -329,7 +330,7 @@ export default function ClimateScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={["top"]}>
+      <Safe style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Pressable
             onPress={() => router.back()}
@@ -402,7 +403,7 @@ export default function ClimateScreen() {
             )}
           />
         )}
-      </SafeAreaView>
+      </Safe>
 
       <ListPickerSheet
         visible={pendingAdd != null}

@@ -11,10 +11,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/form';
 import { PressScale } from '@/components/press-scale';
+import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import { haptics } from '@/lib/haptics';
 import {
@@ -201,7 +201,7 @@ export default function ReceiptCaptureScreen() {
 
   if (!permission.granted || mountFailed) {
     return (
-      <SafeAreaView style={[styles.fallback, { backgroundColor: colors.bg }]}>
+      <Safe style={[styles.fallback, { backgroundColor: colors.bg }]}>
         <ScrollView {...scrollIndicator} contentContainerStyle={styles.permWrap}>
           <Ionicons name="camera-outline" size={44} color={colors.muted} />
           <Text style={[type.h2, { color: colors.ink, textAlign: 'center' }]}>
@@ -222,7 +222,7 @@ export default function ReceiptCaptureScreen() {
             <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
           </Pressable>
         </ScrollView>
-      </SafeAreaView>
+      </Safe>
     );
   }
 
@@ -240,7 +240,7 @@ export default function ReceiptCaptureScreen() {
         onMountError={() => setMountFailed(true)}
       />
 
-      <SafeAreaView style={styles.overlay}>
+      <Safe style={styles.overlay}>
         <View style={styles.top}>
           <Text style={styles.hint}>
             {full ? t('receipt.hintFull') : t('receipt.hint', { max: MAX_SHOTS })}
@@ -317,7 +317,7 @@ export default function ReceiptCaptureScreen() {
             </View>
           </View>
         </View>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

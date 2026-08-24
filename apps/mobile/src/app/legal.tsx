@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { legalDoc } from '@/lib/legal';
 import { useLocale } from '@/store/locale';
 import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
@@ -38,7 +38,7 @@ export default function LegalScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <Safe style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
@@ -82,7 +82,7 @@ export default function LegalScreen() {
           })}
           <View style={styles.footer} />
         </ScrollView>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

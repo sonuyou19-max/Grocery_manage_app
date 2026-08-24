@@ -11,9 +11,10 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Frosted } from '@/components/frosted';
+import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import { MeshBackground } from '@/components/mesh-background';
 import { PressScale } from '@/components/press-scale';
@@ -155,12 +156,12 @@ export default function ReceiptReviewScreen() {
     return (
       <View style={styles.root}>
         <MeshBackground />
-        <SafeAreaView style={styles.safe} edges={['top']}>
+        <Safe style={styles.safe} edges={['top']}>
           <Header title={t('receipt.reviewTitle')} subtitle={null} />
           <Text style={[type.sub, styles.empty, { color: colors.muted }]}>
             {t('receipt.nothingToReview')}
           </Text>
-        </SafeAreaView>
+        </Safe>
       </View>
     );
   }
@@ -417,7 +418,7 @@ export default function ReceiptReviewScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <Safe style={styles.safe} edges={['top']}>
         <Header
           title={t('receipt.reviewTitle')}
           subtitle={`${receipt.store ?? t('receipt.unknownStore')} · ${when.label}`}
@@ -557,7 +558,7 @@ export default function ReceiptReviewScreen() {
             </PressScale>
           </Frosted>
         </View>
-      </SafeAreaView>
+      </Safe>
 
       {/*
         The picker. Offers the rows nothing has claimed, plus whatever this line

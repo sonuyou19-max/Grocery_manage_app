@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Safe } from "@/components/safe";
 
 import { MeshBackground } from "@/components/mesh-background";
 import { RecipeReviewSheet } from "@/components/recipe-review-sheet";
@@ -217,7 +217,7 @@ export default function RecipeImportScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <Safe style={styles.safe} edges={["top", "bottom"]}>
         {/* The whole screen lifts, so the pinned action below clears the
             keyboard. keyboard-controller rather than RN's own: it reads native
             insets instead of guessing, which is what the rest of the app uses. */}
@@ -367,7 +367,7 @@ export default function RecipeImportScreen() {
             </Text>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </Safe>
 
       <RecipeReviewSheet
         recipe={recipe}

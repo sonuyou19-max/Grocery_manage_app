@@ -3,10 +3,10 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import { useProfileName } from '@/lib/profile-name';
 import { useHousehold } from '@/store/household';
@@ -94,7 +94,7 @@ export default function HouseholdSetupScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.rootTransparent} edges={['top', 'bottom']}>
+      <Safe style={styles.rootTransparent} edges={['top', 'bottom']}>
       <KeyboardAvoidingView behavior="padding" style={styles.fill}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
@@ -175,7 +175,7 @@ export default function HouseholdSetupScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
-      </SafeAreaView>
+      </Safe>
     </View>
   );
 }

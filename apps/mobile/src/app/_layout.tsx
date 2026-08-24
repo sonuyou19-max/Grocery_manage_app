@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { BootGate } from '@/components/boot-gate';
@@ -111,6 +112,21 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/*
+        The safe-area provider, which this app went without.
+
+        It worked anyway, because @react-navigation/native-stack quietly wraps
+        every navigator in one — so `useSafeAreaInsets()` found a context and
+        nobody noticed the root was missing. That borrowed provider is scoped to
+        the navigator, and a screen presented as a native modal sits outside the
+        arrangement it assumes.
+
+        `initialMetrics` is the half that matters: it seeds the context from the
+        WINDOW's insets, captured at launch. Those are correct from the first
+        frame and no presentation style can change them, which is precisely what
+        the modal screens were not getting.
+      */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <KeyboardProvider>
       <ErrorBoundary>
       <ThemeProvider value={scheme === 'dark' ? navDark : navLight}>
@@ -186,6 +202,7 @@ export default function RootLayout() {
       </ThemeProvider>
       </ErrorBoundary>
       </KeyboardProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

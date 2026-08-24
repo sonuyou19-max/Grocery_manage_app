@@ -28,7 +28,7 @@ import Animated, {
   withSequence,
   withSpring,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Safe } from "@/components/safe";
 
 import { AnimatedMoney } from "@/components/animated-money";
 import { Frosted } from "@/components/frosted";
@@ -246,11 +246,11 @@ export default function ListDetailScreen() {
     return (
       <View style={styles.root}>
         <MeshBackground />
-        <SafeAreaView style={styles.fillTransparent}>
+        <Safe style={styles.fillTransparent}>
           <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
             {t("listDetail.gone")}
           </Text>
-        </SafeAreaView>
+        </Safe>
       </View>
     );
   }
@@ -502,7 +502,7 @@ export default function ListDetailScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <KeyboardAvoidingView style={styles.fillTransparent} behavior="padding">
-        <SafeAreaView style={styles.fillTransparent} edges={["top"]}>
+        <Safe style={styles.fillTransparent} edges={["top"]}>
           {/* Header. Back stays pinned while everything below it scrolls
               away — the spec has the title and buttons leaving the screen, and a
               page you can scroll into with no way back out is worse than one
@@ -814,7 +814,7 @@ export default function ListDetailScreen() {
               { backgroundColor: colors.bg, borderTopColor: colors.glassBorder },
             ]}
           >
-            <SafeAreaView edges={["bottom"]}>
+            <Safe edges={["bottom"]}>
               {adding && (
                 /* Slides in from below and leaves the same way, so the field
                    arrives from the keyboard's direction and departs with it
@@ -935,9 +935,9 @@ export default function ListDetailScreen() {
                 </PressScale>
                 </View>
               )}
-            </SafeAreaView>
+            </Safe>
           </View>
-        </SafeAreaView>
+        </Safe>
       </KeyboardAvoidingView>
 
       <CoachMark
@@ -1370,8 +1370,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     // Extra beneath, for the home indicator and the Android gesture bar. The
-    // SafeAreaView around this already adds the measured inset; this is the
-    // breathing room on top of it, so the row never sits ON the bar.
+    // <Safe> around this already adds the measured inset — additively, exactly
+    // as SafeAreaView did — so this is the breathing room on top of it and the
+    // row never sits ON the bar.
     paddingBottom: spacing.md,
   },
   actionBtn: {

@@ -2,11 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
 import { MemberAvatars } from '@/components/member-avatars';
 import { MeshBackground } from '@/components/mesh-background';
+import { Safe } from '@/components/safe';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { useAuth } from '@/store/auth';
 import { useHousehold, type Member } from '@/store/household';
@@ -46,7 +46,7 @@ export default function HouseholdScreen() {
     return (
       <View style={styles.root}>
         <MeshBackground />
-        <SafeAreaView style={styles.safe} edges={['top']}>
+        <Safe style={styles.safe} edges={['top']}>
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} hitSlop={12}>
               <Ionicons name="chevron-back" size={26} color={colors.ink} />
@@ -55,7 +55,7 @@ export default function HouseholdScreen() {
           <Text style={[type.sub, styles.gone, { color: colors.muted }]}>
             {t('settings.householdGone')}
           </Text>
-        </SafeAreaView>
+        </Safe>
       </View>
     );
   }
@@ -125,7 +125,7 @@ export default function HouseholdScreen() {
   return (
     <View style={styles.root}>
       <MeshBackground />
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <Safe style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
@@ -222,7 +222,7 @@ export default function HouseholdScreen() {
             </Pressable>
           </Card>
         </ScrollView>
-      </SafeAreaView>
+      </Safe>
 
       <TextPromptModal
         visible={renaming}
