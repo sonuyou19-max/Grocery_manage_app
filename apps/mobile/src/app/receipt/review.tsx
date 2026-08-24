@@ -268,21 +268,15 @@ export default function ReceiptReviewScreen() {
           />
         </Pressable>
 
+        {/* Outside the text column, beside the checkbox. Inside it, the glyph
+            and the name competed for the same flexible width — and an emoji
+            never needs to shrink. */}
+        <Text style={styles.emoji}>{p.emoji ?? '🧾'}</Text>
+
         <View style={styles.grow}>
-          <View style={styles.nameRow}>
-            <Text style={type.body}>{p.emoji ?? '🧾'}</Text>
-            <Text style={[type.body, { color: colors.ink }]} numberOfLines={2}>
-              {p.name}
-            </Text>
-            {/* Its own chip. Never part of the name — see the header. */}
-            {p.brand && (
-              <View style={[styles.brand, { borderColor: colors.line }]}>
-                <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
-                  {p.brand}
-                </Text>
-              </View>
-            )}
-          </View>
+          <Text style={[type.body, { color: colors.ink }]} numberOfLines={2}>
+            {p.name}
+          </Text>
 
           {/* The till's own words, always. */}
           {p.raw.map((raw) => (
@@ -291,57 +285,90 @@ export default function ReceiptReviewScreen() {
             </Text>
           ))}
 
-          <Pressable
-            onPress={() => {
-              haptics.tick();
-              setPicking(p.key);
-            }}
-            hitSlop={6}
-            accessibilityRole="button"
-          >
-            <Text style={[type.label, { color: target ? colors.accent : colors.muted }]}>
-              {target
-                ? t('receipt.onList', { name: target.name })
-                : t('receipt.notOnList')}
-              {'  '}
-              <Ionicons name="chevron-down" size={11} />
-            </Text>
-          </Pressable>
+          {/* Brand and match sit together on a wrapping row UNDER the name.
+              Beside it they were a third claimant on one line of a phone —
+              `DOUWE EGBERTS oploskoffie dessert glas 200g` plus a chip plus a
+              price does not fit, and the chip was the piece that got pushed off
+              the screen edge. */}
+          <View style={styles.metaRow}>
+            {/* Its own chip. Never part of the name — see the header. */}
+            {p.brand && (
+              <View style={[styles.brand, { borderColor: colors.line }]}>
+                <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+                  {p.brand}
+                </Text>
+              </View>
+            )}
+            <Pressable
+              onPress={() => {
+                haptics.tick();
+                setPicking(p.key);
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              style={styles.shrink}
+            >
+              <Text
+                style={[type.label, { color: target ? colors.accent : colors.muted }]}
+                numberOfLines={1}
+              >
+                {target
+                  ? t('receipt.onList', { name: target.name })
+                  : t('receipt.notOnList')}
+                {'  '}
+                <Ionicons name="chevron-down" size={11} />
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Editable, because the one number worth correcting is this one. A
             weighed line the model read as 1,67 when the paper says 16,7 is
             invisible in the name and obvious in the amount. */}
-        {isEditing ? (
-          <View style={[styles.amountBox, { borderColor: colors.accent }]}>
-            <Text style={[type.label, { color: colors.muted }]}>
-              {currencySymbolFor(currency)}
-            </Text>
-            <TextInput
-              value={editing.text}
-              onChangeText={(text) => setEditing({ key: p.key, text })}
-              onBlur={commitEdit}
-              onSubmitEditing={commitEdit}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              autoFocus
-              selectTextOnFocus
-              style={[styles.amountInput, { color: colors.ink }]}
-            />
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => {
-              haptics.tick();
-              setEditing({ key: p.key, text: (d.priceCents / 100).toFixed(2) });
-            }}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('receipt.editAmount')}
-          >
-            <Text style={[type.body, { color: colors.ink }]}>{money(d.priceCents)}</Text>
-          </Pressable>
-        )}
+        {/* A column of its OWN, fixed width, that never shrinks.
+            This is the overlap. The amount used to be a bare sibling of a text
+            column that had nothing stopping it growing, so a long product name
+            ran straight under the price and the two painted on top of each
+            other. Reserving the width means the name has a real boundary to
+            wrap against — and the row does not jump when you tap into the
+            field, because both states are the same size. */}
+        <View style={styles.amountCol}>
+          {isEditing ? (
+            <View style={[styles.amountBox, { borderColor: colors.accent }]}>
+              <Text style={[type.label, { color: colors.muted }]}>
+                {currencySymbolFor(currency)}
+              </Text>
+              <TextInput
+                value={editing.text}
+                onChangeText={(text) => setEditing({ key: p.key, text })}
+                onBlur={commitEdit}
+                onSubmitEditing={commitEdit}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                autoFocus
+                selectTextOnFocus
+                style={[styles.amountInput, { color: colors.ink }]}
+              />
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => {
+                haptics.tick();
+                setEditing({ key: p.key, text: (d.priceCents / 100).toFixed(2) });
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('receipt.editAmount')}
+            >
+              <Text
+                style={[type.body, styles.amountText, { color: colors.ink }]}
+                numberOfLines={1}
+              >
+                {money(d.priceCents)}
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </Animated.View>
     );
   };
@@ -590,14 +617,35 @@ const styles = StyleSheet.create({
   // Dimmed, not removed: a row that vanishes when you untick it takes its own
   // untick button with it.
   excluded: { opacity: 0.45 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  emoji: { fontSize: 17, lineHeight: 22 },
   brand: {
     borderWidth: 1,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
-    maxWidth: 110,
+    // Shrinks before it overflows. A brand long enough to need the whole row
+    // is a brand worth truncating, not one worth pushing off the screen.
+    flexShrink: 1,
+    maxWidth: 130,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    paddingTop: 2,
+  },
+  shrink: { flexShrink: 1, minWidth: 0 },
+  /*
+   * The price column.
+   *
+   * `flexShrink: 0` is the load-bearing half: without it Yoga is free to
+   * squeeze this to nothing when the text column asks for more room, which is
+   * how a name ended up painted across a price. Wide enough for €1 234,56 in
+   * the longest of the seven locales' formats.
+   */
+  amountCol: { width: 96, flexShrink: 0, alignItems: 'flex-end' },
+  amountText: { textAlign: 'right' },
   amountBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -605,9 +653,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radii.sm,
     paddingHorizontal: spacing.sm,
-    minWidth: 84,
+    alignSelf: 'stretch',
   },
-  amountInput: { flex: 1, fontSize: 16, paddingVertical: spacing.sm },
+  amountInput: { flex: 1, fontSize: 16, paddingVertical: spacing.sm, textAlign: 'right' },
   missing: { gap: spacing.sm, paddingTop: spacing.lg },
   missingRows: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {

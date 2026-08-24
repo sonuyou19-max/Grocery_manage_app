@@ -296,6 +296,64 @@ assert(
   'the reconciliation banner is shown when the scan did not reconcile',
 );
 
+/*
+ * ---------------------------------------------------------------------------
+ * The name and the price must not be able to collide
+ * ---------------------------------------------------------------------------
+ *
+ * They did. A long product line — `DOUWE EGBERTS oploskoffie dessert glas 200g`
+ * — was painted straight across €6,49, and the brand chip was pushed off the
+ * screen edge entirely.
+ *
+ * It was three faults compounding, and all three are asserted here because each
+ * on its own is enough to bring it back:
+ *
+ *   1. the text column must be allowed to SHRINK (`flex: 1` with `minWidth: 0`)
+ *      — without the minimum, Yoga sizes a flex child to its content and
+ *      `numberOfLines` never engages, because truncation needs a width to
+ *      truncate against;
+ *   2. the price column must REFUSE to shrink (`flexShrink: 0`), or the text
+ *      column takes its room and the two overlap;
+ *   3. the brand chip must shrink rather than overflow.
+ *
+ * None of this can be caught by typecheck, and on a wide simulator it looks
+ * fine. It shows up on a real phone with a real receipt, which is the worst
+ * place to find it.
+ */
+{
+  const style = (name) => {
+    const m = new RegExp(`\\n  ${name}: \\{[\\s\\S]*?\\n  \\},`).exec(sheet)
+      ?? new RegExp(`\\n  ${name}: \\{[^}]*\\},`).exec(sheet);
+    return m ? m[0] : '';
+  };
+
+  const grow = style('grow');
+  assert(
+    /flex:\s*1/.test(grow) && /minWidth:\s*0/.test(grow),
+    'the text column can shrink below its content',
+    'without minWidth: 0 a flex child is sized to its text, so numberOfLines has no width to truncate against and the name runs under the price',
+  );
+
+  const amount = style('amountCol');
+  assert(
+    /flexShrink:\s*0/.test(amount),
+    'the price column refuses to shrink',
+    'this is the overlap: a price with no reserved width gets squeezed by the name beside it, and the two paint on top of each other',
+  );
+  assert(
+    /width:\s*\d+/.test(amount),
+    'the price column has a fixed width',
+    'so the row does not jump when tapping into the amount field',
+  );
+
+  const brand = style('brand');
+  assert(
+    /flexShrink:\s*1/.test(brand),
+    'the brand chip shrinks rather than overflowing',
+    'a maxWidth alone does not stop a chip being pushed past the screen edge',
+  );
+}
+
 assert(
   /disabled=\{committing \|\| count === 0\}/.test(sheet),
   'the Import button is held while a commit is in flight, and when nothing is ticked',
