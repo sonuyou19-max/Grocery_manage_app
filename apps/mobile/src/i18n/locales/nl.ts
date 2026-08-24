@@ -49,6 +49,10 @@ const nl = {
     importing: { one: '%{count} artikel importeren', other: '%{count} artikelen importeren' },
     import: 'Importeren',
     pickTitle: 'Welk artikel is dit?',
+    imported: { one: 'Bonnetje geïmporteerd · %{count} artikel', other: 'Bonnetje geïmporteerd · %{count} artikelen' },
+    alreadyImported: 'Dit bonnetje is al geïmporteerd.',
+    importFailed: 'Dat konden we niet opslaan. Controleer je verbinding en probeer het opnieuw.',
+    needHousehold: 'Log in om een bonnetje te importeren.',
   },
   coach: {
     gotIt: 'Duidelijk',

@@ -49,6 +49,10 @@ const it = {
     importing: { one: 'Importo %{count} articolo', other: 'Importo %{count} articoli' },
     import: 'Importa',
     pickTitle: 'Di quale articolo si tratta?',
+    imported: { one: 'Scontrino importato · %{count} articolo', other: 'Scontrino importato · %{count} articoli' },
+    alreadyImported: 'Questo scontrino è già stato importato.',
+    importFailed: 'Non siamo riusciti a salvare. Controlla la connessione e riprova.',
+    needHousehold: 'Accedi per importare uno scontrino.',
   },
   coach: {
     gotIt: 'Capito',

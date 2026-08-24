@@ -553,13 +553,7 @@ export default function ListDetailScreen() {
                   Solid green carries the one you came here to do; the receipt is
                   a ghost/outline so it reads as the second option rather than
                   competing with it. Both flexGrow with a zero basis, so they are
-                  exactly half each whatever the labels say in German.
-
-                  Scan receipt is DISABLED and dimmed, because the scanner does
-                  not exist yet — the layout is here to be judged, but a button
-                  that looks live and answers nothing is a bug, not a preview. It
-                  becomes live by deleting `disabled` and pointing onPress at the
-                  scanner. */}
+                  exactly half each whatever the labels say in German. */}
               {list.items.length > 0 && (
                 <View style={styles.actionRow}>
                   <PressScale
@@ -579,15 +573,24 @@ export default function ListDetailScreen() {
                     </Text>
                   </PressScale>
 
+                  {/* Signed out there is nowhere to write a receipt to:
+                      receipts.household_id is not null and RLS answers to
+                      membership. Asking for the camera first and refusing at
+                      the end would waste four photographs and a vision call. */}
                   <PressScale
-                    disabled
+                    onPress={() => {
+                      haptics.tick();
+                      if (!user) {
+                        router.push("/auth/sign-in");
+                        return;
+                      }
+                      router.push({
+                        pathname: "/receipt/capture",
+                        params: { id: list.id },
+                      });
+                    }}
                     accessibilityRole="button"
-                    accessibilityState={{ disabled: true }}
-                    style={[
-                      styles.ghostBtn,
-                      { borderColor: colors.accent },
-                      styles.ghostBtnOff,
-                    ]}
+                    style={[styles.ghostBtn, { borderColor: colors.accent }]}
                   >
                     <Ionicons name="camera-outline" size={18} color={colors.accent} />
                     <Text style={[type.body, styles.btnLabel, { color: colors.accent }]}>
@@ -1348,7 +1351,6 @@ const styles = StyleSheet.create({
   // Dimmed while the scanner does not exist. Opacity rather than a grey palette
   // so the shape stays judgeable — the point of shipping it early is to see the
   // row, not to see a placeholder.
-  ghostBtnOff: { opacity: 0.4 },
   // flexGrow with a zero basis, not `flex`: the two halves share the width
   // rather than one claiming it all.
   primaryBtn: {

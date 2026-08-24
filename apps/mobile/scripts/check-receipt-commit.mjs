@@ -1,0 +1,352 @@
+/**
+ * Turning a reviewed receipt into writes.
+ *
+ * ---------------------------------------------------------------------------
+ * The one that matters most
+ * ---------------------------------------------------------------------------
+ *
+ * A matched purchase is filed under the LIST's spelling, never the receipt's.
+ * The shopper wrote "Eggs"; the till printed "CAR EIREN X30". `item_key` is the
+ * normalised name and the burn-rate model learns from the gaps between
+ * purchases of one key — so filing this under `car eiren x30` starts a second,
+ * parallel history that never joins the first, never comes due, and halves the
+ * observed frequency of eggs. It is also invisible: two pantry entries where
+ * there should be one, each looking perfectly reasonable on its own.
+ *
+ * Every other rule here is the same shape. Nothing on this page can be checked
+ * by looking at a screen, and all of it decides where money lands.
+ *
+ * Run with `pnpm --filter mobile check:receipt-commit`.
+ */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const SRC = join(here, '..', 'src');
+
+let failures = 0;
+const ok = (what) => console.log(`ok   ${what}`);
+const fail = (what, detail = []) => {
+  failures += 1;
+  console.log(`FAIL ${what}`);
+  for (const d of detail) console.log(`  ${d}`);
+};
+const eq = (what, actual, expected) => {
+  if (JSON.stringify(actual) === JSON.stringify(expected)) ok(what);
+  else fail(what, [`expected ${JSON.stringify(expected)}`, `actual   ${JSON.stringify(actual)}`]);
+};
+const assert = (cond, what, detail) => (cond ? ok(what) : fail(what, detail ? [detail] : []));
+
+/*
+ * supermarkets.ts comes along because planCommit resolves the chain through it.
+ * The supabase half of receipt-commit — claimReceipt — is cut: it needs a live
+ * project to prove anything, and what it proves is asserted against the source
+ * further down instead.
+ */
+const supermarkets = readFileSync(join(SRC, 'lib', 'supermarkets.ts'), 'utf8');
+const commit = readFileSync(join(SRC, 'lib', 'receipt-commit.ts'), 'utf8');
+
+const source = [
+  supermarkets,
+  commit
+    .replace(/^import .*$/gm, '')
+    .replace(/export async function claimReceipt[\s\S]*?\n\}/, ''),
+].join('\n');
+
+const { outputText } = ts.transpileModule(source, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+});
+const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
+const { planCommit, purchaseInstant, storeIdFor } = mod;
+
+/* --------------------------------------------------------------- fixtures */
+
+const NOW = Date.parse('2026-08-24T10:00:00Z');
+const LAST_NIGHT = '2026-08-23T18:42:00Z';
+
+const buy = (key, name, priceCents, over = {}) => ({
+  key, name, raw: [name.toUpperCase()], expanded: null, translated: null,
+  brand: null, section: null, packs: 1, quantity: null, unit: null,
+  priceCents, emoji: null, category: 'other', confidence: 'high', ...over,
+});
+
+const RECEIPT = {
+  store: 'CARREFOUR MARKET', purchasedAt: LAST_NIGHT, currency: 'EUR',
+  language: 'nl', fingerprint: 'fp-1', model: 'x', reconciled: true,
+  problems: [], badLines: [], goodsCents: 500, depositCents: 25,
+  discountCents: -100, paidCents: 425, articleCount: 3, lines: [],
+};
+
+const PURCHASES = [
+  buy('a', 'eieren', 299, { brand: 'Boni' }),
+  buy('b', 'bin bags', 249, { packs: 2, quantity: 20, unit: 'st' }),
+];
+
+// The shopper's own spellings, and one row already ticked off in the aisle.
+const ROWS = [
+  { id: 'i1', name: 'Eggs', category: 'dairy', checked: false },
+  { id: 'i2', name: 'Bread', category: 'bakery', checked: true },
+];
+
+const decide = (over = {}) =>
+  new Map([
+    ['a', { include: true, priceCents: 299, itemId: 'i1' }],
+    ['b', { include: true, priceCents: 249, itemId: null }],
+    ...Object.entries(over),
+  ]);
+
+/* --------------------------------------------------------- the instant -- */
+
+console.log('\npurchaseInstant');
+
+eq('the receipt’s own time, not the clock', purchaseInstant(LAST_NIGHT, NOW), Date.parse(LAST_NIGHT));
+eq('no printed date falls back to now', purchaseInstant(null, NOW), NOW);
+eq('an unparseable date falls back to now', purchaseInstant('sometime tuesday', NOW), NOW);
+eq('a receipt from 1970 falls back to now', purchaseInstant('1970-01-04T00:00:00Z', NOW), NOW);
+eq('a receipt from 2087 falls back to now', purchaseInstant('2087-01-01T00:00:00Z', NOW), NOW);
+eq('yesterday is kept', purchaseInstant('2026-08-23T09:00:00Z', NOW), Date.parse('2026-08-23T09:00:00Z'));
+
+/* -------------------------------------------------------------- the name */
+
+console.log('\nthe name a purchase is filed under');
+
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+  const eggs = plan.purchases.find((p) => p.key === 'a');
+
+  eq('a matched line uses the LIST’s spelling', eggs.name, 'Eggs');
+  if (eggs.name === 'Eggs') {
+    console.log('       (filing it under "eieren" would start a second egg history that');
+    console.log('        never joins the first and never comes due)');
+  }
+
+  eq('and the list row’s category', eggs.category, 'dairy');
+
+  const bags = plan.purchases.find((p) => p.key === 'b');
+  eq('an unmatched line uses the model’s expansion', bags.name, 'bin bags');
+  eq('and its own category', bags.category, 'other');
+}
+
+/* -------------------------------------------------------------- the rest */
+
+console.log('\nwhat gets planned');
+
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+
+  eq(
+    'every purchase is stamped with the RECEIPT’s instant',
+    plan.purchases.map((p) => p.detail.at),
+    [Date.parse(LAST_NIGHT), Date.parse(LAST_NIGHT)],
+  );
+  if (plan.purchases[0].detail.at !== NOW) {
+    console.log('       (this is what makes logPurchase amend last night\'s ticks rather');
+    console.log('        than duplicate them — the session window measures from `at`)');
+  }
+
+  eq('brand rides on the purchase', plan.purchases[0].detail.brand, 'Boni');
+  eq('and never on the name', plan.purchases[0].name.includes('Boni'), false);
+
+  eq('packs and amount survive', plan.purchases[1].detail, {
+    priceCents: 249, store: 'CARREFOUR MARKET', quantity: 20, unit: 'st',
+    packs: 2, brand: null, at: Date.parse(LAST_NIGHT),
+  });
+}
+
+{
+  const plan = planCommit(
+    RECEIPT,
+    PURCHASES,
+    decide({ b: { include: false, priceCents: 249, itemId: null } }),
+    ROWS,
+    NOW,
+  );
+  eq('an excluded line is not written', plan.purchases.map((p) => p.key), ['a']);
+}
+
+{
+  const plan = planCommit(
+    RECEIPT,
+    PURCHASES,
+    decide({ a: { include: true, priceCents: 1670, itemId: 'i1' } }),
+    ROWS,
+    NOW,
+  );
+  eq('the CORRECTED price is what is written', plan.purchases[0].detail.priceCents, 1670);
+}
+
+/* ------------------------------------------------------------ the ticks -- */
+
+console.log('\nticking the list');
+
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+  eq('a matched, unticked row is ticked', plan.tick, ['i1']);
+}
+
+{
+  const ticked = [{ ...ROWS[0], checked: true }, ROWS[1]];
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ticked, NOW);
+  eq(
+    'a row ALREADY ticked is left alone',
+    plan.tick,
+    [],
+  );
+  if (plan.tick.length === 0) {
+    console.log('       (toggleItem toggles — an import that touched a ticked row would');
+    console.log('        take it back off the shopping)');
+  }
+}
+
+{
+  const plan = planCommit(
+    RECEIPT,
+    PURCHASES,
+    decide({ a: { include: false, priceCents: 299, itemId: 'i1' } }),
+    ROWS,
+    NOW,
+  );
+  eq('an excluded line ticks nothing', plan.tick, []);
+}
+
+/* --------------------------------------------------------- the receipt -- */
+
+console.log('\nthe receipt row');
+
+{
+  const { receipt } = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+  eq('the chain is resolved', receipt.storeId, 'carrefour');
+  eq('and the printed text kept', receipt.store, 'CARREFOUR MARKET');
+  eq(
+    'total_cents is what the PAPER says was paid',
+    receipt.totalCents,
+    425,
+  );
+  if (receipt.totalCents === 425) {
+    console.log('       (not the sum of the lines — that would make the mismatch');
+    console.log('        unrecoverable, and the mismatch is the thing worth showing)');
+  }
+  eq('deposits and discounts are kept off the items', [receipt.depositCents, receipt.discountCents], [25, -100]);
+  eq('the fingerprint travels', receipt.fingerprint, 'fp-1');
+}
+
+console.log('\nstoreIdFor');
+eq('a chain inside a longer header', storeIdFor('COLRUYT SA 1234'), 'colruyt');
+eq('a two-word chain', storeIdFor('Albert Heijn 1043'), 'albert_heijn');
+eq('accents fold', storeIdFor('INTERMARCHE SUPER'), 'intermarche');
+eq(
+  'a chain named in the MIDDLE of a header',
+  storeIdFor('Uw COLRUYT winkel Gent Zuid'),
+  'colruyt',
+);
+eq(
+  'a chain name INSIDE another word is not a match',
+  storeIdFor('Baldini Delicatessen'),
+  null,
+);
+eq('an unknown shop is null, not a guess', storeIdFor('EVEREST SUPERMARKT'), null);
+
+/* ---------------------------------------------------- the write, in order */
+
+console.log('\nthe write');
+
+const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8');
+const at = (needle) => sheet.indexOf(needle);
+
+assert(
+  at('claimReceipt(') > 0 && at('claimReceipt(') < at('logPurchase('),
+  'the receipt is claimed BEFORE any purchase is written',
+  'purchases first would double a household\'s spend on exactly the retry the fingerprint exists to survive',
+);
+
+assert(
+  /if \(claim\.kind !== 'ok'\) \{[\s\S]{0,240}?return;/.test(sheet),
+  'a refused claim writes nothing at all',
+);
+
+assert(
+  /alreadyImported/.test(sheet),
+  'a duplicate fingerprint is reported as already imported',
+);
+
+assert(
+  /if \(committing \|\| !run\) return;/.test(sheet),
+  'a second tap is refused before it reaches the database',
+);
+
+assert(
+  at('logPurchase(') > 0 && at('logPurchase(') < at('toggleItem('),
+  'purchases are written before the list is ticked',
+);
+
+assert(
+  /receiptId: claim\.receiptId/.test(sheet),
+  'every purchase carries the receipt it came from',
+);
+
+assert(
+  !/from\('price_entries'\)/.test(sheet),
+  'the sheet does not write price_entries itself',
+  'it goes through logPurchase, so the amendment window and the burn-rate update are the ones the app already has — a second copy for receipts is how two windows drift apart',
+);
+
+/* ------------------------------------------- the columns actually written */
+
+console.log('\npantry-intel carries the new fields');
+
+const intel = readFileSync(join(SRC, 'store', 'pantry-intel.tsx'), 'utf8');
+
+assert(
+  /at: detail\?\.at \?\? now,/.test(intel),
+  'a purchase is stamped with detail.at when one is given',
+  'without it the receipt files last night\'s shop under this morning, and amends nothing',
+);
+
+assert(
+  /recordPurchase\(statsRef\.current, name, category, detail\?\.at \?\? Date\.now\(\)\)/.test(intel),
+  'the burn-rate model gets the same instant as the log',
+  'otherwise a backdated receipt teaches the pantry the shopping happened today',
+);
+
+{
+  // One row object serves both the insert and the update, which is what makes
+  // an amended purchase carry the same columns as a fresh one.
+  const row = /const row = \{[\s\S]*?\n        \};/.exec(intel);
+  assert(row != null && /brand: entry\.brand/.test(row[0]), 'brand is on the written row');
+  assert(row != null && /receipt_id: detail\?\.receiptId/.test(row[0]), 'receipt_id is on the written row');
+  assert(
+    row != null && intel.indexOf('.update(row)') > intel.indexOf(row[0]),
+    'the same row is used for the amendment',
+    'a brand written only on inserts would be missing from every purchase a receipt corrected — which is most of them',
+  );
+}
+
+assert(
+  /select\('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, recorded_at'\)/.test(intel),
+  'brand is read back, so an optimistic row and a refetched one agree',
+);
+
+/* -------------------------------------------------------- the entry point */
+
+console.log('\nthe entry point');
+
+const listScreen = readFileSync(join(SRC, 'app', 'list', '[id].tsx'), 'utf8');
+
+assert(
+  /pathname: "\/receipt\/capture"/.test(listScreen),
+  'Scan receipt opens the capture screen',
+);
+
+assert(
+  /if \(!user\) \{\s*router\.push\("\/auth\/sign-in"\);/.test(listScreen),
+  'a signed-out visitor is sent to sign in first',
+  'receipts.household_id is not null; asking for four photographs and a vision call before refusing would be worse',
+);
+
+/* ------------------------------------------------------------------------ */
+
+console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
+process.exit(failures === 0 ? 0 : 1);

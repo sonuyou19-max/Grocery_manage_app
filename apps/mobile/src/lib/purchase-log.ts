@@ -83,6 +83,15 @@ export interface Purchase {
    */
   bio: boolean;
   /**
+   * The manufacturer, when a receipt named one (migration 0038). Null on
+   * everything logged by hand, which is nearly all of it.
+   *
+   * Kept on the purchase and deliberately out of `key`. See the column comment:
+   * a brand inside item identity fragments one item's history into one per
+   * brand, and a brand switch silently resets the burn rate.
+   */
+  brand?: string | null;
+  /**
    * When this record was last written to, as opposed to when the purchase
    * happened. Absent on anything loaded from the server or from an older
    * cache; callers fall back to `at`.

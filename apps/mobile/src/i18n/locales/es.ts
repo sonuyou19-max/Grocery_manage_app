@@ -49,6 +49,10 @@ const es = {
     importing: { one: 'Importando %{count} artículo', other: 'Importando %{count} artículos' },
     import: 'Importar',
     pickTitle: '¿Qué artículo es este?',
+    imported: { one: 'Tique importado · %{count} artículo', other: 'Tique importado · %{count} artículos' },
+    alreadyImported: 'Este tique ya se ha importado.',
+    importFailed: 'No hemos podido guardarlo. Comprueba tu conexión e inténtalo otra vez.',
+    needHousehold: 'Inicia sesión para importar un tique.',
   },
   coach: {
     gotIt: 'Entendido',

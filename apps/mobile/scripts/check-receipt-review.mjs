@@ -297,9 +297,9 @@ assert(
 );
 
 assert(
-  /<PressScale\s+disabled\b/.test(sheet),
-  'the Import button is still disabled',
-  'remove this assertion in the same commit that wires the import — not before',
+  /disabled=\{committing \|\| count === 0\}/.test(sheet),
+  'the Import button is held while a commit is in flight, and when nothing is ticked',
+  'a second tap mid-write is the case the receipt fingerprint exists to survive; catching it here saves a round trip and a confusing "already imported" for the user\'s own tap',
 );
 
 /* ------------------------------------------------------------------------ */

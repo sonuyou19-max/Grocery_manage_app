@@ -65,6 +65,49 @@ export function supermarketLabel(store: string | null | undefined): string | nul
   return getSupermarket(store)?.name ?? store;
 }
 
+/**
+ * Which chain a receipt's printed header is, or null for a shop we don't know.
+ *
+ * Tills print "CARREFOUR MARKET", "COLRUYT SA", "ALDI SUISSE" — the chain name
+ * plus whatever the legal entity is called. So this looks for the catalogue
+ * name as a whole WORD SEQUENCE inside the printed text, folded for case and
+ * accents, and takes the longest match when more than one fits.
+ *
+ * That tiebreak is defensive and, as the catalogue stands, unreachable: no
+ * chain's name contains another's. It is here for the entry that eventually
+ * breaks that — a "Carrefour Express" beside "Carrefour" — because the
+ * alternative is whichever happens to be listed first.
+ *
+ * Word-bounded rather than a plain substring test, because the short ids are
+ * the dangerous ones: a bare `includes` would find "aldi" inside "Baldini" and
+ * file an Italian deli's receipts under a German discounter forever.
+ *
+ * Null is an ordinary answer. `store` keeps the printed text either way, so an
+ * unrecognised chain loses a badge and nothing else — which is why this is
+ * allowed to be conservative and never has to guess.
+ */
+export function storeIdFor(printed: string | null | undefined): string | null {
+  if (!printed) return null;
+  const fold = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  const hay = fold(printed);
+
+  let best: { id: string; length: number } | null = null;
+  for (const s of SUPERMARKETS) {
+    const needle = fold(s.name);
+    // \b would not fire against an accented or hyphenated neighbour, so the
+    // boundary is spelt out: start-or-non-letter, then the name, then
+    // end-or-non-letter.
+    const re = new RegExp(`(^|[^\\p{L}])${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`, 'u');
+    if (!re.test(hay)) continue;
+    if (!best || needle.length > best.length) best = { id: s.id, length: needle.length };
+  }
+  return best?.id ?? null;
+}
+
 /** Monogram for a custom (unknown) store name. */
 export function customInitials(name: string): string {
   const words = name.trim().split(/\s+/);

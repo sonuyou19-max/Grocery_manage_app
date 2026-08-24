@@ -1,0 +1,260 @@
+import type { ItemCategory } from '@korb/shared';
+
+import type { ReceiptPurchase, ScannedReceipt } from '@/lib/receipt';
+import { storeIdFor } from '@/lib/supermarkets';
+import { supabase } from '@/lib/supabase';
+import type { Decisions } from '@/lib/receipt-review';
+
+/**
+ * Turning a reviewed receipt into writes.
+ *
+ * ---------------------------------------------------------------------------
+ * A plan, not a write
+ * ---------------------------------------------------------------------------
+ *
+ * Every decision about WHAT lands in the purchase log is taken here, in a pure
+ * function, and the screen only carries it out. The reason is that all of these
+ * decisions fail the same way — invisibly, in somebody's price history, months
+ * later — and none of them can be checked by looking at a screen:
+ *
+ *   * which NAME a purchase is filed under (the one thing that decides whether
+ *     it joins an existing history or starts a lonely new one);
+ *   * WHEN it happened, which decides whether it amends the shop the shopper
+ *     already ticked off or duplicates it;
+ *   * which lines are money rather than shopping.
+ *
+ * ---------------------------------------------------------------------------
+ * The amendment, and why there is no amendment code
+ * ---------------------------------------------------------------------------
+ *
+ * Ticking items off during the shop already writes purchases. Scanning the
+ * receipt afterwards must therefore CORRECT those rows — filling in the price
+ * and pack count nobody was going to type at a till — rather than adding a
+ * second copy of the same shopping.
+ *
+ * That rule already exists and is already right: `logPurchase` looks for the
+ * item's most recent record within SESSION_WINDOW_MS of the purchase's own
+ * timestamp and updates it instead of inserting. So this plan does not
+ * re-implement any of it. It supplies the one thing that makes the existing
+ * rule work for a receipt: `at`, taken from the RECEIPT's printed time rather
+ * than from the clock. Scanning last night's shop this morning then looks for
+ * open records around last night, finds the ticks from that trip, and amends
+ * them. Anchored on now() it would find nothing and duplicate the lot.
+ *
+ * Two implementations of an amendment window is exactly the kind of pair that
+ * drifts, so there is one.
+ */
+
+/** A purchase to write, in the shape `logPurchase` takes. */
+export interface PlannedPurchase {
+  /** Purchase key from the scan, so the caller can report what failed. */
+  key: string;
+  name: string;
+  category: ItemCategory;
+  detail: {
+    priceCents: number;
+    store: string | null;
+    quantity: number | null;
+    unit: string | null;
+    packs: number;
+    brand: string | null;
+    at: number;
+  };
+}
+
+export interface PlannedReceipt {
+  fingerprint: string;
+  store: string | null;
+  /** Matched to the chain catalogue, or null for a shop we do not know. */
+  storeId: string | null;
+  purchasedAt: string | null;
+  totalCents: number | null;
+  currency: string;
+  reconciled: boolean;
+  depositCents: number;
+  discountCents: number;
+}
+
+export interface CommitPlan {
+  receipt: PlannedReceipt;
+  purchases: PlannedPurchase[];
+  /** List rows to tick off — matched, included, and not already ticked. */
+  tick: string[];
+  /** The instant every purchase is filed under. */
+  at: number;
+}
+
+/** What the planner needs to know about one row of the list. */
+export interface ListRow {
+  id: string;
+  name: string;
+  category: ItemCategory;
+  checked: boolean;
+}
+
+/**
+ * When the shopping happened.
+ *
+ * The receipt's own printed time, and the clock only when the paper did not
+ * give one legibly. Falling back rather than refusing is deliberate: a receipt
+ * whose date smudged is still a receipt, and the cost of being a few hours out
+ * is that one shop's purchases may be inserted rather than amended — a
+ * duplicate row the shopper can see and delete. The cost of refusing is a
+ * feature that declines to work for a reason nobody can act on.
+ *
+ * An unparseable or absurd date is treated as no date at all. A receipt claiming
+ * 1970 or 2087 would put a purchase somewhere the history cannot show it, and
+ * silently — which is worse than the smudge.
+ */
+export function purchaseInstant(purchasedAt: string | null, now: number): number {
+  if (!purchasedAt) return now;
+  const parsed = Date.parse(purchasedAt);
+  if (!Number.isFinite(parsed)) return now;
+  // A year either side. Wide enough for any timezone or clock-skew argument,
+  // narrow enough that a misread century cannot land.
+  const YEAR = 365 * 24 * 60 * 60 * 1000;
+  if (parsed > now + YEAR || parsed < now - YEAR) return now;
+  return parsed;
+}
+
+export function planCommit(
+  receipt: ScannedReceipt,
+  purchases: readonly ReceiptPurchase[],
+  decisions: Decisions,
+  list: readonly ListRow[],
+  now: number,
+): CommitPlan {
+  const at = purchaseInstant(receipt.purchasedAt, now);
+  const byId = new Map(list.map((r) => [r.id, r]));
+
+  const planned: PlannedPurchase[] = [];
+  const tick: string[] = [];
+
+  for (const p of purchases) {
+    const d = decisions.get(p.key);
+    if (!d?.include) continue;
+
+    const row = d.itemId != null ? byId.get(d.itemId) : undefined;
+
+    /*
+     * THE NAME. This is the single most consequential line in the file.
+     *
+     * A matched purchase is filed under the LIST's spelling, never the
+     * receipt's. The shopper wrote "Eggs"; the till printed "CAR EIREN X30".
+     * item_key is the normalised name, and the burn-rate model learns from the
+     * gaps between purchases of one key — so filing this under `car eiren x30`
+     * would start a second, parallel history that never joins the first, never
+     * comes due, and quietly halves the observed frequency of eggs.
+     *
+     * It also has to survive the store: `CAR EIREN` at Carrefour and `AH EIEREN`
+     * at Albert Heijn are the same eggs to a person and two keys to a database.
+     * The list's own word is the only spelling stable across both.
+     *
+     * An unmatched line has no list spelling to borrow, so it uses the model's
+     * expansion — which is why the extractor is asked for one at all.
+     */
+    const name = row?.name ?? p.name;
+    const category = row?.category ?? p.category ?? 'other';
+
+    planned.push({
+      key: p.key,
+      name,
+      category,
+      detail: {
+        priceCents: d.priceCents,
+        store: receipt.store,
+        quantity: p.quantity,
+        unit: p.unit,
+        packs: p.packs,
+        brand: p.brand,
+        at,
+      },
+    });
+
+    // Only rows that are not already ticked. `toggleItem` toggles, so calling
+    // it on a ticked row would UNtick it — an import that unbuys your shopping.
+    if (row && !row.checked) tick.push(row.id);
+  }
+
+  return {
+    at,
+    tick,
+    purchases: planned,
+    receipt: {
+      fingerprint: receipt.fingerprint,
+      store: receipt.store,
+      storeId: storeIdFor(receipt.store),
+      purchasedAt: receipt.purchasedAt,
+      /*
+       * What the paper says was paid, kept whether or not the lines agree with
+       * it. It is the number the bank saw. Storing the sum of the lines instead
+       * would make the mismatch unrecoverable — and the mismatch is the thing
+       * worth being able to show.
+       */
+      totalCents: receipt.paidCents,
+      currency: receipt.currency,
+      reconciled: receipt.reconciled,
+      depositCents: receipt.depositCents,
+      discountCents: receipt.discountCents,
+    },
+  };
+}
+
+/* ------------------------------------------------------------- the write -- */
+
+export type CommitOutcome =
+  | { kind: 'ok'; receiptId: string }
+  /** This household has imported this receipt before. */
+  | { kind: 'duplicate' }
+  | { kind: 'failed' };
+
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * Claim the receipt, before a single purchase is written.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this goes first, and what that costs
+ * ---------------------------------------------------------------------------
+ *
+ * `unique (household_id, fingerprint)` is what stops the same paper being
+ * imported twice, and people DO re-scan — because they are not sure the first
+ * one worked, which is precisely the moment a second copy of a week's spending
+ * gets written. So the row is inserted first and the purchases only follow if
+ * it landed. A conflict means somebody already imported this receipt, and the
+ * correct response is to write nothing at all.
+ *
+ * The cost is real and worth stating: if the app dies between this insert and
+ * the last purchase, the receipt is claimed but only partly imported, and a
+ * re-scan will be refused. The other order is worse — purchases first would
+ * double a household's spending on exactly the retry this exists to survive,
+ * and an over-counted price history is invisible, whereas a half-imported
+ * receipt is a short list the shopper can see and finish by hand.
+ */
+export async function claimReceipt(
+  householdId: string,
+  r: PlannedReceipt,
+): Promise<CommitOutcome> {
+  const { data, error } = await supabase
+    .from('receipts')
+    .insert({
+      household_id: householdId,
+      fingerprint: r.fingerprint,
+      store: r.store,
+      store_id: r.storeId,
+      purchased_at: r.purchasedAt,
+      total_cents: r.totalCents,
+      currency: r.currency,
+      reconciled: r.reconciled,
+      deposit_cents: r.depositCents,
+      discount_cents: r.discountCents,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    return error.code === UNIQUE_VIOLATION ? { kind: 'duplicate' } : { kind: 'failed' };
+  }
+  return { kind: 'ok', receiptId: (data as { id: string }).id };
+}

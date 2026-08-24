@@ -49,6 +49,10 @@ const de = {
     importing: { one: '%{count} Artikel wird übernommen', other: '%{count} Artikel werden übernommen' },
     import: 'Übernehmen',
     pickTitle: 'Welcher Artikel ist das?',
+    imported: { one: 'Bon übernommen · %{count} Artikel', other: 'Bon übernommen · %{count} Artikel' },
+    alreadyImported: 'Dieser Bon wurde bereits übernommen.',
+    importFailed: 'Das konnten wir nicht speichern. Prüf deine Verbindung und versuch es nochmal.',
+    needHousehold: 'Melde dich an, um einen Bon zu übernehmen.',
   },
   coach: {
     gotIt: 'Alles klar',

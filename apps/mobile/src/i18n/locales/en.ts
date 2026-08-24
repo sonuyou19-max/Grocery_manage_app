@@ -58,6 +58,10 @@ const en = {
     importing: { one: 'Importing %{count} item', other: 'Importing %{count} items' },
     import: 'Import',
     pickTitle: 'Which item is this?',
+    imported: { one: 'Receipt imported · %{count} item', other: 'Receipt imported · %{count} items' },
+    alreadyImported: 'This receipt has already been imported.',
+    importFailed: 'We could not save that. Check your connection and try again.',
+    needHousehold: 'Sign in to import a receipt.',
   },
   coach: {
     gotIt: 'Got it',

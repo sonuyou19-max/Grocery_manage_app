@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   SectionList,
   StyleSheet,
@@ -13,6 +14,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Frosted } from '@/components/frosted';
+import { useToast } from '@/components/toast';
 import { MeshBackground } from '@/components/mesh-background';
 import { PressScale } from '@/components/press-scale';
 import { Sheet } from '@/components/sheet';
@@ -32,9 +34,12 @@ import {
   unclaimed,
   type Decisions,
 } from '@/lib/receipt-review';
+import { claimReceipt, planCommit, type ListRow } from '@/lib/receipt-commit';
 import { takeRun, type ScanRun } from '@/lib/receipt-run';
 import { useGroceries } from '@/store/groceries';
+import { useHousehold } from '@/store/household';
 import { useLocale } from '@/store/locale';
+import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
@@ -97,7 +102,10 @@ export default function ReceiptReviewScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { lists } = useGroceries();
+  const { lists, toggleItem } = useGroceries();
+  const { logPurchase } = usePantryIntel();
+  const { activeId } = useHousehold();
+  const { showToast } = useToast();
 
   /*
    * Read once, in state, because takeRun() CONSUMES the stash — calling it in
@@ -110,12 +118,23 @@ export default function ReceiptReviewScreen() {
   );
   const [editing, setEditing] = useState<Editing>(null);
   const [picking, setPicking] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
 
   const list = lists.find((l) => l.id === id);
-  const candidates: ListCandidate[] = useMemo(
-    () => (list?.items ?? []).map((it) => ({ id: it.id, name: it.name, category: it.category })),
+  const rows: ListRow[] = useMemo(
+    () =>
+      (list?.items ?? []).map((it) => ({
+        id: it.id,
+        name: it.name,
+        category: it.category,
+        checked: it.checked,
+      })),
     [list],
   );
+  // The matcher's view of the same rows. `checked` is the planner's business
+  // only — which row a receipt line IS has nothing to do with whether the
+  // shopper already ticked it.
+  const candidates: ListCandidate[] = rows;
 
   const byId = useMemo(() => new Map(candidates.map((c) => [c.id, c])), [candidates]);
 
@@ -161,6 +180,64 @@ export default function ReceiptReviewScreen() {
     // half-typed price is a price mid-thought, not a decision to pay nothing.
     if (cents != null) setDecisions((d) => setPrice(d, editing.key, cents));
     setEditing(null);
+  };
+
+  /**
+   * Write it.
+   *
+   * ---------------------------------------------------------------------------
+   * The order is the idempotency
+   * ---------------------------------------------------------------------------
+   *
+   * The receipt row is claimed FIRST, against `unique (household_id,
+   * fingerprint)`. A conflict means this paper has been imported before — by
+   * this device a moment ago, or by a housemate's phone — and the right answer
+   * is to write nothing and say so. People re-scan when they are unsure the
+   * first one worked, which is exactly when a second copy of a week's spend
+   * would otherwise land.
+   *
+   * `committing` guards the double-tap, which the claim would also catch; it is
+   * here because catching it at the database costs a round trip and shows the
+   * shopper a "already imported" message for their own second tap.
+   *
+   * The purchases then go through `logPurchase` — the same function a check-off
+   * uses — so the amendment window, the burn-rate update and the pantry upsert
+   * are the ones the app already has, not a second copy written for receipts.
+   */
+  const commit = async () => {
+    if (committing || !run) return;
+    if (!activeId) {
+      // No household, nowhere to write: receipts.household_id is not null and
+      // RLS answers to membership. Reachable by signing out mid-review.
+      showToast(t('receipt.needHousehold'));
+      return;
+    }
+
+    setCommitting(true);
+    const plan = planCommit(run.receipt, run.purchases, decisions, rows, Date.now());
+    const claim = await claimReceipt(activeId, plan.receipt);
+
+    if (claim.kind !== 'ok') {
+      setCommitting(false);
+      showToast(t(claim.kind === 'duplicate' ? 'receipt.alreadyImported' : 'receipt.importFailed'));
+      return;
+    }
+
+    for (const p of plan.purchases) {
+      logPurchase(p.name, p.category, { ...p.detail, receiptId: claim.receiptId });
+    }
+    // After the purchases, and only for rows that were not already ticked —
+    // toggleItem TOGGLES, so a ticked row would come back off the shopping.
+    // `tick` is empty unless a row matched, which cannot happen without a list;
+    // the check is here so a list deleted mid-review cannot throw over a write
+    // that has already succeeded.
+    if (list) for (const itemId of plan.tick) toggleItem(list.id, itemId);
+
+    haptics.success();
+    showToast(t('receipt.imported', { count: plan.purchases.length }));
+    // back(), not replace: the list is the screen under this one, and it
+    // re-renders from the same store with the rows now ticked.
+    router.back();
   };
 
   const renderRow = (p: ReceiptPurchase, order: number) => {
@@ -377,17 +454,24 @@ export default function ReceiptReviewScreen() {
               </Text>
               <Text style={[type.h2, { color: colors.ink }]}>{money(total)}</Text>
             </View>
-            {/* Not wired: the import is the next piece of work. Disabled rather
-                than absent, so the shape of the screen is the shape it will
-                have — and a button that looks live and writes nothing is a bug,
-                not a preview. */}
+            {/* Nothing to import is a real state — untick every row and the
+                button has no work to do. */}
             <PressScale
-              disabled
+              onPress={() => void commit()}
+              disabled={committing || count === 0}
               accessibilityRole="button"
-              accessibilityState={{ disabled: true }}
-              style={[styles.importBtn, { borderColor: colors.accent }, styles.importOff]}
+              accessibilityState={{ disabled: committing || count === 0 }}
+              style={[
+                styles.importBtn,
+                { backgroundColor: colors.accent },
+                (committing || count === 0) && styles.importOff,
+              ]}
             >
-              <Text style={[type.body, { color: colors.accent }]}>{t('receipt.import')}</Text>
+              {committing ? (
+                <ActivityIndicator color={colors.accentInk} />
+              ) : (
+                <Text style={[type.body, { color: colors.accentInk }]}>{t('receipt.import')}</Text>
+              )}
             </PressScale>
           </Frosted>
         </View>
@@ -542,7 +626,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   importBtn: {
-    borderWidth: 1,
     borderRadius: radii.pill,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,

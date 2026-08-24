@@ -49,6 +49,10 @@ const fr = {
     importing: { one: 'Import de %{count} article', other: 'Import de %{count} articles' },
     import: 'Importer',
     pickTitle: 'De quel article s’agit-il ?',
+    imported: { one: 'Ticket importé · %{count} article', other: 'Ticket importé · %{count} articles' },
+    alreadyImported: 'Ce ticket a déjà été importé.',
+    importFailed: 'Nous n’avons pas pu enregistrer. Vérifie ta connexion et réessaie.',
+    needHousehold: 'Connecte-toi pour importer un ticket.',
   },
   coach: {
     gotIt: 'Compris',

@@ -80,6 +80,27 @@ export interface PurchaseDetail {
   packs?: number | null;
   /** The shopper's organic/local flag, carried from the list item. */
   bio?: boolean | null;
+  /**
+   * The manufacturer, when a receipt named one (migration 0038).
+   *
+   * A fact about this PURCHASE and never about the item. Folded into the name
+   * it would become part of item_key, and "milk every six days" would fragment
+   * into Alpro-milk and own-brand-milk — two histories, half the samples each,
+   * neither ever coming due. Nothing hand-typed sets it.
+   */
+  brand?: string | null;
+  /** The scanned receipt this was read from, or null when logged by hand. */
+  receiptId?: string | null;
+  /**
+   * WHEN the purchase happened, when that is not now.
+   *
+   * Only a receipt passes this. It is what lets last night's shop, scanned this
+   * morning, amend last night's ticks instead of duplicating them: the session
+   * window is measured from the purchase's own instant, so handing it the
+   * receipt's printed time points the whole existing amendment rule at the
+   * right two hours. See lib/receipt-commit.
+   */
+  at?: number;
 }
 
 interface PantryIntelContext {
@@ -203,11 +224,14 @@ function toPurchase(
     name: display,
     store: detail?.store ?? null,
     priceCents,
-    at: now,
+    // `now` unless a receipt said otherwise. Everything downstream — the
+    // session window, the fold, the trim — measures from this one number.
+    at: detail?.at ?? now,
     quantity: detail?.quantity ?? null,
     packs: detail?.packs ?? 1,
     unit: detail?.unit ?? null,
     bio: detail?.bio === true,
+    brand: detail?.brand ?? null,
     // Recorded at purchase time rather than looked up later: the log is what
     // the pantry is rebuilt from, and a category the user corrected by hand
     // must survive that rebuild. See migration 0023.
@@ -491,6 +515,7 @@ interface DbPriceRow {
   packs: number;
   unit: string | null;
   category: ItemCategory | null;
+  brand: string | null;
   recorded_at: string;
 }
 
@@ -507,6 +532,7 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   packs: r.packs == null ? 1 : Number(r.packs),
   unit: r.unit,
   category: r.category,
+  brand: r.brand ?? null,
 });
 
 /** Marks this device's orphaned local log as re-homed. Device-wide, not
@@ -550,7 +576,7 @@ async function migrateLocalPurchases(
     const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .limit(LOCAL_PURCHASE_CAP);
@@ -871,7 +897,7 @@ function CloudPantryIntelProvider({
       stats,
       purchases,
       logPurchase: (name, category, detail) => {
-        const next = recordPurchase(statsRef.current, name, category);
+        const next = recordPurchase(statsRef.current, name, category, detail?.at ?? Date.now());
         apply(next);
         upsert([normalizeKey(name)], next);
 
@@ -896,6 +922,11 @@ function CloudPantryIntelProvider({
           packs: entry.packs,
           unit: entry.unit,
           category: entry.category,
+          brand: entry.brand ?? null,
+          // Stamped on the AMENDMENT too, not only on inserts: a row this
+          // receipt corrected was read from this receipt, and without it the
+          // ledger could not say where the price came from.
+          receipt_id: detail?.receiptId ?? null,
         };
         const write = open
           // Correcting: keep the original row and its recorded_at, so a long

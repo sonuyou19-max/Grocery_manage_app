@@ -59,6 +59,10 @@ const pl = {
     importing: { one: 'Import %{count} pozycji', few: 'Import %{count} pozycji', many: 'Import %{count} pozycji', other: 'Import %{count} pozycji' },
     import: 'Importuj',
     pickTitle: 'Który to produkt?',
+    imported: { one: 'Paragon zaimportowany · %{count} pozycja', few: 'Paragon zaimportowany · %{count} pozycje', many: 'Paragon zaimportowany · %{count} pozycji', other: 'Paragon zaimportowany · %{count} pozycji' },
+    alreadyImported: 'Ten paragon został już zaimportowany.',
+    importFailed: 'Nie udało się tego zapisać. Sprawdź połączenie i spróbuj ponownie.',
+    needHousehold: 'Zaloguj się, aby zaimportować paragon.',
   },
   coach: {
     gotIt: 'Jasne',
