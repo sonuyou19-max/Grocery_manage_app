@@ -52,7 +52,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Korb uses the camera to read the barcode on your loyalty card. The image is never saved or uploaded.",
+          "cameraPermission": "Korb uses the camera to read the barcode on your loyalty card, and to photograph a receipt when you scan one. Loyalty card images are never saved or uploaded; receipt photos are sent once to be read and are not kept.",
           "recordAudioAndroid": false
         }
       ],
