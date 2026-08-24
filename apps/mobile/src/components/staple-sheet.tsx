@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRef } from "react";
+import { useRef, type PropsWithChildren } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,10 +8,12 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Sheet, SheetHandle } from "@/components/sheet";
+import { Sheet, SheetHandle, useSheetDismiss } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { categoryLabel } from "@/lib/categorize";
 import {
@@ -290,9 +292,8 @@ export function StapleSheet({
                   ledger is the evidence behind it, and the place a wrong price
                   or a purchase at the wrong shop becomes visible. */}
           {history.length > 0 && (
-            <Pressable
-              onPress={onOpenHistory}
-              accessibilityRole="button"
+            <HistoryRow
+              onOpenHistory={onOpenHistory}
               style={[styles.row, { borderColor: colors.line }]}
             >
               <Ionicons
@@ -309,7 +310,7 @@ export function StapleSheet({
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-            </Pressable>
+            </HistoryRow>
           )}
 
         </ScrollView>
@@ -361,6 +362,51 @@ function CadenceChip({
       >
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The row that opens the purchase ledger.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is its own component at all
+ * ---------------------------------------------------------------------------
+ *
+ * Only something rendered INSIDE `<Sheet>` can call `useSheetDismiss()`, and
+ * only `useSheetDismiss()` knows when the Modal's native window has actually
+ * gone. StapleSheet cannot: it is the component that renders the Sheet, so it
+ * sits above the context it would need. Exactly the split range-picker made,
+ * for exactly the same reason.
+ *
+ * ---------------------------------------------------------------------------
+ * The bug
+ * ---------------------------------------------------------------------------
+ *
+ * The ledger is a second Modal, opened from inside this one. The Pantry used to
+ * defer it with its own `useDeferUntilClosed(stapleKey != null)` — keyed on
+ * VISIBLE, which goes false a whole exit animation before the window is gone.
+ * So the ledger was presented while this sheet was still on screen.
+ *
+ * Android tolerates that: two Modals are two windows and the second lands on
+ * top. iOS does not. UIKit refuses to present a view controller while one is
+ * already presenting, so the ledger never appeared — and the Pantry was left
+ * with a transparent Modal over it swallowing every touch, which is what "it
+ * doesn't open anything and the tab gets stuck" is.
+ *
+ * `dismiss(action)` closes this sheet and runs the action once `mounted` goes
+ * false, which is the Modal's real visibility rather than the prop that drives
+ * it.
+ */
+function HistoryRow({
+  onOpenHistory,
+  style,
+  children,
+}: PropsWithChildren<{ onOpenHistory: () => void; style: StyleProp<ViewStyle> }>) {
+  const dismiss = useSheetDismiss();
+  return (
+    <Pressable onPress={() => dismiss(onOpenHistory)} accessibilityRole="button" style={style}>
+      {children}
     </Pressable>
   );
 }

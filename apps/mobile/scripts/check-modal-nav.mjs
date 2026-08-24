@@ -391,5 +391,66 @@ if (/maxHeight:\s*["']\d+%["']/.test(ledger)) {
   console.log('ok   the ledger caps itself with a measured number, not a percentage');
 }
 
+/* ------------- the deferral must key on the WINDOW, not on the prop ------- */
+
+/*
+ * `useDeferUntilClosed(open)` runs its action one frame after `open` goes
+ * false. That is only correct when `open` is the Modal's real visibility.
+ *
+ * With the shared <Sheet>, it is not. The Modal is driven by `mounted`, which
+ * outlives `visible` by a whole exit animation so the fold-away has something
+ * to play on. Key the deferral on `visible` and the action fires ~200ms early,
+ * while the window is still up.
+ *
+ * On Android that was survivable — two Modals are two windows and the second
+ * lands on top. On iOS it is not: UIKit refuses to present a view controller
+ * while one is already presenting, so the second sheet never appears AND the
+ * screen underneath is left with a transparent Modal over it eating every
+ * touch. The Pantry's purchase ledger did exactly this: "it doesn't open
+ * anything and the tab gets stuck".
+ *
+ * range-picker.tsx had already hit this and written the fix down. pantry.tsx
+ * still had the old shape, and nothing here noticed — so the rule is now the
+ * assertion rather than the anecdote: only a file that OWNS a Modal may use the
+ * primitive, and it must pass its own `mounted`. Everything else goes through
+ * `useSheetDismiss()`, which cannot express the wrong timing at all.
+ */
+const DEFER_OWNERS = ['components/sheet.tsx', 'components/recipe-review-sheet.tsx'];
+
+const deferrers = walk(SRC).filter((rel) => {
+  if (rel === OWNER) return false;
+  return /useDeferUntilClosed\s*\(/.test(code(read(rel) ?? ''));
+});
+
+const strangers = deferrers.filter((rel) => !DEFER_OWNERS.includes(rel));
+if (strangers.length) {
+  fail(`${strangers.length} file(s) defer on their own instead of the Sheet's dismiss`, [
+    ...strangers.map((f) => `  ${f}`),
+    '',
+    'Only a file that owns a <Modal> may use useDeferUntilClosed, because only',
+    'it can see `mounted`. Everyone else must call useSheetDismiss() and pass',
+    'the follow-up to dismiss(action) — the Sheet then runs it once its window',
+    'is really gone.',
+  ]);
+} else {
+  console.log(`ok   only the ${DEFER_OWNERS.length} Modal owners defer for themselves`);
+}
+
+const mistimed = DEFER_OWNERS.filter((rel) => {
+  const text = code(read(rel) ?? '');
+  return !/useDeferUntilClosed\(mounted\)/.test(text);
+});
+if (mistimed.length) {
+  fail(`${mistimed.length} Modal owner(s) no longer key the deferral on \`mounted\``, [
+    ...mistimed.map((f) => `  ${f}`),
+    '',
+    '`visible` goes false a whole exit animation before the window is gone.',
+    'Deferring on it fires the follow-up into a Modal that is still up, which',
+    'on iOS means the next sheet never opens and the screen behind it locks.',
+  ]);
+} else {
+  console.log('ok   ...and both key it on the Modal, not on the prop that drives it');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -34,7 +34,6 @@ import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { coachMarkDue, useCoachMark } from '@/lib/coach-marks';
 import { haptics } from '@/lib/haptics';
 import { rubberBand, springTo } from '@/lib/motion';
-import { useDeferUntilClosed } from '@/lib/modal-nav';
 import { usePlusGate } from '@/lib/plus-gate';
 import {
   LOW_THRESHOLD,
@@ -117,7 +116,6 @@ function SignedInPantry() {
   const [restOpen, setRestOpen] = useState(false);
   const [ledgerFor, setLedgerFor] = useState<{ name: string; category: ItemCategory } | null>(null);
   /** The staple sheet is mounted exactly while `stapleKey` is set. */
-  const whenSheetClosed = useDeferUntilClosed(stapleKey != null);
 
   const now = Date.now();
   // Stopped items are split off before anything else: every count, section and
@@ -549,15 +547,17 @@ function SignedInPantry() {
            branch — so a free account pushed the paywall under a Modal that was
            still up and got a blank screen. Closing is not part of either
            branch; it is what happens before either can run. */
+        /* No deferral here any more, and that is the fix.
+
+           This used to wrap the follow-up in `useDeferUntilClosed(stapleKey !=
+           null)` — keyed on VISIBLE, which goes false a whole exit animation
+           before the Modal's window is gone. StapleSheet's row now goes through
+           the Sheet's own `dismiss`, which keys on `mounted`. See HistoryRow. */
         onOpenHistory={() => {
           const item = stapleKey ? stats[stapleKey] : null;
           if (!item) return;
-          whenSheetClosed(
-            locked
-              ? requirePlus
-              : () => setLedgerFor({ name: item.display, category: item.category }),
-          );
-          setStapleKey(null);
+          if (locked) requirePlus();
+          else setLedgerFor({ name: item.display, category: item.category });
         }}
       />
 
