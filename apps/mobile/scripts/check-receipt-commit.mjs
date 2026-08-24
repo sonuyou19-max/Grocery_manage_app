@@ -180,7 +180,7 @@ console.log('\nwhat gets planned');
   eq('and never on the name', plan.purchases[0].name.includes('Boni'), false);
 
   eq('packs and amount survive', plan.purchases[1].detail, {
-    priceCents: 249, store: 'CARREFOUR MARKET', quantity: 20, unit: 'st',
+    priceCents: 249, store: 'carrefour', quantity: 20, unit: 'st',
     packs: 2, brand: null, description: null, at: Date.parse(LAST_NIGHT),
   });
 }
@@ -254,7 +254,7 @@ console.log('\nthe list row');
   const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
   eq('a matched row is patched', plan.patches.map((x) => x.itemId), ['i1']);
   eq('with everything the receipt is evidence about', plan.patches[0].patch, {
-    quantity: null, unit: null, packs: 1, priceCents: 299, store: 'CARREFOUR MARKET',
+    quantity: null, unit: null, packs: 1, priceCents: 299, store: 'carrefour',
   });
   eq(
     'an unmatched line patches nothing',
@@ -305,6 +305,53 @@ console.log('\nthe list row');
     console.log('       (organic is the shopper\'s own claim about a product — no receipt');
     console.log('        knows it, so no receipt may overwrite it)');
   }
+}
+
+/* -------------------------------------------------------------- the store */
+
+console.log('\nthe store a purchase is filed under');
+
+/*
+ * `receipt.store` is the printed header. Everywhere else in the app a store is
+ * a catalogue id or a name the user typed, and the id is what every comparison
+ * keys on — the BUY AT chip tests `item.store === entry.id`, and price-intel
+ * groups both spend and "cheaper elsewhere" by this exact string.
+ *
+ * Write the header through and a household's stores fragment the same way a
+ * brand inside a name fragments an item: `colruyt` set by hand and `Colruyt
+ * Food Retail N.V.` set by a receipt are two shops that never compare, inside
+ * a feature whose whole job is comparing them.
+ */
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+
+  eq('the purchase gets the chain ID, not the printed header', plan.purchases[0].detail.store, 'carrefour');
+  eq('...and so does the list row', plan.patches[0].patch.store, 'carrefour');
+  if (plan.patches[0].patch.store === 'carrefour') {
+    console.log('       (the BUY AT chip tests item.store === entry.id, so the header');
+    console.log('        would show as a custom shop and match no chip at all)');
+  }
+
+  eq(
+    'the receipt ROW keeps the printed text',
+    [plan.receipt.store, plan.receipt.storeId],
+    ['CARREFOUR MARKET', 'carrefour'],
+  );
+}
+
+{
+  // An independent the catalogue has never heard of. The printed name is all
+  // there is, and it is a perfectly good key — it just is not an id.
+  const indie = { ...RECEIPT, store: 'EVEREST SUPERMARKT' };
+  const plan = planCommit(indie, PURCHASES, decide(), ROWS, NOW);
+  eq('an unknown shop keeps its printed name', plan.purchases[0].detail.store, 'EVEREST SUPERMARKT');
+  eq('...with no id invented for it', plan.receipt.storeId, null);
+}
+
+{
+  const noStore = { ...RECEIPT, store: null };
+  const plan = planCommit(noStore, PURCHASES, decide(), ROWS, NOW);
+  eq('a receipt with no header sets no store', plan.purchases[0].detail.store, null);
 }
 
 /* -------------------------------------------------------- the description */

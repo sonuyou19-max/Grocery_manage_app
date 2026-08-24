@@ -152,6 +152,26 @@ export function planCommit(
   const at = purchaseInstant(receipt.purchasedAt, now);
   const byId = new Map(list.map((r) => [r.id, r]));
 
+  /*
+   * THE STORE, resolved to a chain id wherever we know one.
+   *
+   * `receipt.store` is the printed header — "Colruyt Food Retail N.V.",
+   * "Carrefour Market Heverlee". Everywhere else in this app a store is either
+   * a catalogue id (`colruyt`) or a name the user typed, and the id is what
+   * every comparison keys on: the BUY AT chip tests `item.store === entry.id`,
+   * and price-intel groups spend and "cheaper elsewhere" by this exact string.
+   *
+   * So writing the header through would fragment a household's stores the same
+   * way a brand inside a name fragments an item — `colruyt` set by hand and
+   * `Colruyt Food Retail N.V.` set by a receipt would be two different shops
+   * that never compare, in a feature whose entire job is comparing them.
+   *
+   * The printed text survives on the receipts row, which keeps both: `store`
+   * as printed and `store_id` resolved. That is the place for it — it is
+   * evidence about one piece of paper, not a key.
+   */
+  const store = storeIdFor(receipt.store) ?? receipt.store;
+
   const planned: PlannedPurchase[] = [];
   const tick: string[] = [];
   const patches: { itemId: string; patch: ItemRowPatch }[] = [];
@@ -192,7 +212,7 @@ export function planCommit(
       category,
       detail: {
         priceCents: d.priceCents,
-        store: receipt.store,
+        store,
         quantity: p.quantity,
         unit: p.unit,
         packs: p.packs,
@@ -213,7 +233,7 @@ export function planCommit(
           unit: p.unit,
           packs: p.packs,
           priceCents: d.priceCents,
-          store: receipt.store,
+          store,
         },
       });
       // Only rows that are not already ticked. `toggleItem` toggles, so calling
