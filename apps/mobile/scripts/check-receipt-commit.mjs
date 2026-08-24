@@ -254,8 +254,17 @@ console.log('\nthe list row');
   const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
   eq('a matched row is patched', plan.patches.map((x) => x.itemId), ['i1']);
   eq('with everything the receipt is evidence about', plan.patches[0].patch, {
-    quantity: null, unit: null, packs: 1, priceCents: 299, store: 'carrefour',
+    quantity: null, unit: null, packs: 1, priceCents: 299,
   });
+  eq(
+    'but NOT the store — "buy at" is an intention, not a record',
+    Object.keys(plan.patches[0].patch).includes('store'),
+    false,
+  );
+  if (!Object.keys(plan.patches[0].patch).includes('store')) {
+    console.log('       (pick Carrefour, shop at Colruyt once, and your list should not');
+    console.log('        quietly change its mind about where you buy coffee)');
+  }
   eq(
     'an unmatched line patches nothing',
     plan.patches.filter((x) => x.itemId === 'i2').length,
@@ -326,10 +335,10 @@ console.log('\nthe store a purchase is filed under');
   const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
 
   eq('the purchase gets the chain ID, not the printed header', plan.purchases[0].detail.store, 'carrefour');
-  eq('...and so does the list row', plan.patches[0].patch.store, 'carrefour');
-  if (plan.patches[0].patch.store === 'carrefour') {
-    console.log('       (the BUY AT chip tests item.store === entry.id, so the header');
-    console.log('        would show as a custom shop and match no chip at all)');
+  if (plan.purchases[0].detail.store === 'carrefour') {
+    console.log('       (spend-by-store and "cheaper elsewhere" both group on this exact');
+    console.log('        string, so the header would be a second Carrefour that never');
+    console.log('        compares with the one the BUY AT chips write)');
   }
 
   eq(

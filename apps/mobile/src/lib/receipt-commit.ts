@@ -100,13 +100,36 @@ export interface CommitPlan {
   at: number;
 }
 
-/** The subset of a list row a receipt is evidence about. */
+/**
+ * The subset of a list row a receipt is evidence about.
+ *
+ * ---------------------------------------------------------------------------
+ * Why `store` is NOT in here
+ * ---------------------------------------------------------------------------
+ *
+ * It was, and it was a category error. "Buy at" on a list row is an INTENTION —
+ * where the shopper means to get this next time. A receipt is a RECORD of where
+ * they got it once. Overwriting the first with the second means picking
+ * Carrefour, shopping at Colruyt because you happened to pass it, and finding
+ * your list has quietly changed its mind about where you buy coffee.
+ *
+ * Setting it when the row has none is no better: "no preference" is an answer,
+ * and turning it into "Colruyt" invents an intention from a single trip.
+ *
+ * Nothing is lost by leaving it alone. The PURCHASE carries the store, which is
+ * where it belongs and what every comparison reads — spend-by-store and
+ * "cheaper elsewhere" both group on the purchase log, not on list rows — and
+ * the item sheet shows "Last bought · Colruyt" from that same record.
+ *
+ * The other four fields are facts about the thing itself, which is why they DO
+ * get overwritten: a price typed before shopping is an estimate, and the
+ * receipt is what the till actually charged.
+ */
 export interface ItemRowPatch {
   quantity: number | null;
   unit: string | null;
   packs: number;
   priceCents: number;
-  store: string | null;
 }
 
 /** What the planner needs to know about one row of the list. */
@@ -233,7 +256,6 @@ export function planCommit(
           unit: p.unit,
           packs: p.packs,
           priceCents: d.priceCents,
-          store,
         },
       });
       // Only rows that are not already ticked. `toggleItem` toggles, so calling
