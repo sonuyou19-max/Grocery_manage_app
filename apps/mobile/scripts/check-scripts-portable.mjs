@@ -105,5 +105,89 @@ if (unnormalised.length) {
   console.log('ok   every script that compares relative paths normalises them first');
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Line endings: the same bug wearing different clothes
+ * ---------------------------------------------------------------------------
+ *
+ * Git on Windows checks text out with CRLF unless told otherwise, and a guard
+ * that searches source for a literal containing a newline then finds nothing.
+ * check-account-switch did exactly this: it looked for
+ *
+ *     '  useEffect(() => {\n    if (!restoredRef.current) return;'
+ *
+ * which is simply not present in a file whose newlines are '\r\n'. indexOf
+ * returned -1, slice(-1) handed back one character, and the block it was meant
+ * to examine came out empty. Two assertions went red on a machine where nothing
+ * was wrong — and a third, asserting something was ABSENT, passed against the
+ * empty string. Reporting success for a check that never ran is the worse half.
+ *
+ * The root cause is fixed at the repo level by .gitattributes. This catches the
+ * next script written against a working tree that already has CRLF in it, where
+ * the author would see it pass.
+ *
+ * A leading '\n' is FINE — '\nRULES.' does occur inside '\r\nRULES.'. The
+ * hazard is a newline with literal text before it, which is what splits.
+ */
+const NEWLINE_SEARCH = /\.(?:indexOf|includes|lastIndexOf|split)\(\s*'((?:[^'\\]|\\.)*)'/g;
+
+const crlfBlind = [];
+for (const s of scripts) {
+  const code = s.src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // Any of the usual ways of flattening line endings before matching.
+  const normalises =
+    /replace\(\s*\/\\r\\n\/g/.test(code) ||
+    /replace\(\s*\/\\r\/g/.test(code) ||
+    /split\(\s*\/\\r\?\\n\//.test(code);
+  if (normalises) continue;
+
+  for (const m of code.matchAll(NEWLINE_SEARCH)) {
+    const literal = m[1];
+    const at = literal.indexOf('\\n');
+    // Not present, or present only at the very start: both safe.
+    if (at <= 0) continue;
+    crlfBlind.push(`${s.name}: ${JSON.stringify(m[0].slice(0, 72))}`);
+    break;
+  }
+}
+
+if (crlfBlind.length) {
+  fail(`${crlfBlind.length} script(s) search source across a newline without normalising`, [
+    ...crlfBlind.map((c) => `  ${c}`),
+    'A literal with text before its \\n cannot match a CRLF working tree.',
+    "Read the source through .replace(/\\r\\n/g, '\\n') first, or match with a",
+    "regex using \\r?\\n — and make a miss FAIL rather than slice on -1.",
+  ]);
+} else {
+  console.log('ok   no script matches across a newline without allowing for CRLF');
+}
+
+/*
+ * And the repo-level guarantee those scripts rest on. One line in one file is
+ * what keeps every working tree byte-identical across platforms; losing it
+ * would put the failure above back on a Windows machine, where whoever removed
+ * it would not see it.
+ */
+const attributes = (() => {
+  try {
+    return readFileSync(join(HERE, '..', '..', '..', '.gitattributes'), 'utf8');
+  } catch {
+    return null;
+  }
+})();
+
+if (attributes == null) {
+  fail('.gitattributes is missing', [
+    'Without it Git on Windows checks this repo out with CRLF and the guard',
+    'scripts start failing against code that is perfectly correct.',
+  ]);
+} else if (!/^\*\s+text=auto\s+eol=lf\s*$/m.test(attributes)) {
+  fail('.gitattributes no longer pins LF', [
+    'Expected a line reading exactly: * text=auto eol=lf',
+  ]);
+} else {
+  console.log('ok   .gitattributes pins LF for every text file');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

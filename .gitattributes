@@ -1,0 +1,35 @@
+# Line endings.
+#
+# Every file in this repo is written with LF, and the guard scripts in
+# apps/mobile/scripts read source as text and match against it — several of them
+# on multi-line literals. Without this file, Git on Windows checks the tree out
+# with CRLF (`core.autocrlf=true` is that platform's installer default), the
+# literals stop matching, and `pnpm check:all` fails on a machine where nothing
+# is wrong.
+#
+# That failure is the worst shape a failure can have: invisible on the machine
+# it was written on, fatal on the machine it runs on, and pointing at code that
+# is perfectly correct. apps/mobile/scripts/check-scripts-portable.mjs exists
+# for this whole class of bug — the path-separator version of it cost a build
+# once already.
+#
+# `text=auto eol=lf` means: decide what is text by content, and check every text
+# file out with LF on every platform. Working trees are then byte-identical
+# whatever anyone's Git is configured to do.
+* text=auto eol=lf
+
+# Binaries, so Git never inspects or rewrites them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.pdf binary
+*.keystore binary
+*.jks binary

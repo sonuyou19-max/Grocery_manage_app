@@ -119,14 +119,39 @@ check(
 
 // 2. The correction must not be gated on a household existing again. That gate
 //    is precisely what made the empty case unreachable.
-const effect = householdSrc.slice(
-  householdSrc.indexOf('  useEffect(() => {\n    if (!restoredRef.current) return;'),
-);
-const body = effect.slice(0, effect.indexOf('  }, ['));
+/*
+ * The anchor is matched with `\r?\n`, and a miss FAILS rather than slicing.
+ *
+ * Both halves were bugs, and the second is the dangerous one. A literal '\n'
+ * inside the anchor does not appear in a file checked out with CRLF, so this
+ * returned -1 on Windows; `slice(-1)` then handed back the file's last
+ * character and `body` came out empty. Two of the three assertions below went
+ * red — and the third, which asserts something is ABSENT, passed against the
+ * empty string. A guard that reports success for a check it never performed is
+ * worse than one that is simply wrong.
+ *
+ * The repo now pins LF via .gitattributes, so the CRLF half should not recur.
+ * The tolerant match stays anyway: a working tree that predates that file is
+ * still out there, and this is one regex.
+ */
+const anchor = /^ {2}useEffect\(\(\) => \{\r?\n {4}if \(!restoredRef\.current\) return;/m;
+const at = householdSrc.search(anchor);
+const end = at < 0 ? -1 : householdSrc.indexOf('  }, [', at);
+if (at < 0 || end < 0) {
+  check(
+    'the household-correction effect is still findable',
+    `${at < 0 ? 'start' : 'end'} anchor missing`,
+    'both anchors present',
+  );
+}
+const body = at < 0 || end < 0 ? '' : householdSrc.slice(at, end);
 check('the correction runs through resolveActiveId', /resolveActiveId\(/.test(body), true);
 check(
   'and is not short-circuited on there being a household',
-  /!household\b/.test(body),
+  // `body &&` so this cannot be satisfied by an empty slice. Asserting the
+  // ABSENCE of something is vacuously true of nothing, which is exactly how
+  // this assertion passed while examining no code at all.
+  body ? /!household\b/.test(body) : 'no body to check',
   false,
 );
 check(
