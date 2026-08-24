@@ -54,6 +54,9 @@ const de = {
     importFailed: 'Das konnten wir nicht speichern. Prüf deine Verbindung und versuch es nochmal.',
     needHousehold: 'Melde dich an, um einen Bon zu übernehmen.',
     dateSubstituted: 'Auf dem Bon steht %{printed}, das kann nicht stimmen. Wird unter %{used} verbucht.',
+    phaseReading: 'Wir lesen deinen Bon…',
+    phaseMatching: 'Wird mit deiner Liste abgeglichen…',
+    phaseHint: 'Das dauert ein paar Sekunden. Lass die App offen.',
   },
   coach: {
     gotIt: 'Alles klar',

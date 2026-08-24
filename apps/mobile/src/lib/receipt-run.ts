@@ -30,6 +30,17 @@ import {
  * So the screen owns the camera and this owns the pipeline.
  */
 
+/**
+ * Where a scan has got to, for the screen that is waiting on it.
+ *
+ * Two, and only two, because two is how many round trips there are. It would be
+ * easy to invent five and animate between them on a timer, and it would be a
+ * lie the moment a receipt took twice as long as expected — the caption would
+ * say "almost done" while nothing was happening. These fire when the work
+ * actually moves.
+ */
+export type ScanPhase = 'reading' | 'matching';
+
 export interface ScanRun {
   receipt: ScannedReceipt;
   purchases: ReceiptPurchase[];
@@ -40,7 +51,9 @@ export async function runScan(
   images: { media: string; data: string }[],
   language: string,
   list: readonly ListCandidate[],
+  onPhase?: (phase: ScanPhase) => void,
 ): Promise<ScanRun | null> {
+  onPhase?.('reading');
   const receipt = await scanReceipt(images, language);
   if (!receipt) return null;
 
@@ -58,6 +71,10 @@ export async function runScan(
    * sheet with more rows to correct, not a failed import.
    */
   const left = residue(purchases, offline);
+  // Announced only when there is something to ask about. A receipt the free
+  // rungs settled entirely never enters this phase, and saying it had would be
+  // the same invention the phase list exists to avoid.
+  if (left.length > 0) onPhase?.('matching');
   const answers = await matchResidue(left, list, claimedIds(offline), language);
   const matches = applyAiMatches(offline, answers, list);
 

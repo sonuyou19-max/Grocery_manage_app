@@ -54,6 +54,9 @@ const fr = {
     importFailed: 'Nous n’avons pas pu enregistrer. Vérifie ta connexion et réessaie.',
     needHousehold: 'Connecte-toi pour importer un ticket.',
     dateSubstituted: 'Le ticket indique %{printed}, ce qui est impossible. Enregistré au %{used}.',
+    phaseReading: 'Lecture de ton ticket…',
+    phaseMatching: 'Comparaison avec ta liste…',
+    phaseHint: 'Cela prend quelques secondes. Garde l’app ouverte.',
   },
   coach: {
     gotIt: 'Compris',

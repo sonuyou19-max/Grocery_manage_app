@@ -54,6 +54,9 @@ const nl = {
     importFailed: 'Dat konden we niet opslaan. Controleer je verbinding en probeer het opnieuw.',
     needHousehold: 'Log in om een bonnetje te importeren.',
     dateSubstituted: 'Op het bonnetje staat %{printed}, dat kan niet kloppen. Wordt geboekt op %{used}.',
+    phaseReading: 'We lezen je bonnetje…',
+    phaseMatching: 'Vergelijken met je lijst…',
+    phaseHint: 'Dit duurt een paar seconden. Houd de app open.',
   },
   coach: {
     gotIt: 'Duidelijk',

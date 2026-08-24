@@ -38,6 +38,7 @@ const run = read(join(ROOT, 'src/lib/receipt-run.ts'));
 const screen = read(join(ROOT, 'src/app/receipt/capture.tsx'));
 const review = read(join(ROOT, 'src/app/receipt/review.tsx'));
 const fn = read(join(REPO, 'supabase/functions/receipt-scan/index.ts'));
+const overlay = read(join(ROOT, 'src/components/scan-overlay.tsx'));
 
 let failures = 0;
 const ok = (name) => console.log(`  ✓ ${name}`);
@@ -212,6 +213,65 @@ assert(
   at('applyAiMatches(') > at('matchResidue('),
   'the model’s answers are folded in last, through applyAiMatches',
   'applyAiMatches is what stops a model overruling an exact-key match',
+);
+
+/* ----------------------------------------------- 4. the wait, while it waits */
+
+console.log('\nwhile the scan runs');
+
+/*
+ * A vision call plus a matcher call is several seconds, and it used to be a
+ * spinner inside a button over a live camera preview. The overlay shows the
+ * shopper's OWN photograph with a line travelling down it, which does one thing
+ * a stock animation cannot: it shows them WHAT is being read. The first test
+ * shot of this whole feature was a photograph of a sofa.
+ */
+assert(
+  /\{scanning && <ScanOverlay/.test(screen),
+  'the scan is covered by the overlay for its whole duration',
+);
+
+assert(
+  /uri=\{shots\[0\]\?\.uri \?\? null\}/.test(screen),
+  'the overlay shows the shopper’s own photograph',
+  'a bundled illustration would say "loading"; their own receipt says "we are reading THAT", and a picture of the sofa is visible four seconds in rather than at an empty review sheet',
+);
+
+const runSrc = read(join(ROOT, 'src/lib/receipt-run.ts'));
+
+assert(
+  /onPhase\?\.\('reading'\)/.test(runSrc) && /onPhase\?\.\('matching'\)/.test(runSrc),
+  'both phases are announced by the work itself',
+);
+
+assert(
+  /if \(left\.length > 0\) onPhase\?\.\('matching'\)/.test(runSrc),
+  'the matching phase is claimed ONLY when there is something to match',
+  'a receipt the free rungs settled entirely never enters that phase, and saying it had would be the invented-progress problem the two-phase design exists to avoid',
+);
+
+assert(
+  !/setTimeout|setInterval/.test(runSrc),
+  'no phase is advanced on a timer',
+  'a timed caption reads "almost done" over a request that has not returned — the one thing a progress display must never do',
+);
+
+assert(
+  /useReducedMotion\(\)/.test(overlay) && /reduced\s*\?/.test(overlay),
+  'the sweep honours Reduce Motion',
+  'this is the app’s first animation that never stops on its own, which is exactly what that setting is for',
+);
+
+assert(
+  /cancelAnimation\(travel\)/.test(overlay),
+  'the loop is cancelled when the overlay goes',
+  'withRepeat(-1) with no teardown keeps running after unmount',
+);
+
+assert(
+  !/require\(['"]\.\.\/\.\.\/assets|\.gif['"]/.test(overlay),
+  'no image asset was added for this',
+  'a GIF or Lottie file would be a bundled asset at best and a native dependency at worst — the feature stays shippable over the air',
 );
 
 /* ------------------------------------------------------------------------ */

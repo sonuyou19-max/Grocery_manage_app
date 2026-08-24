@@ -64,6 +64,9 @@ const pl = {
     importFailed: 'Nie udało się tego zapisać. Sprawdź połączenie i spróbuj ponownie.',
     needHousehold: 'Zaloguj się, aby zaimportować paragon.',
     dateSubstituted: 'Na paragonie widnieje %{printed}, co nie może być prawdą. Zapisujemy pod datą %{used}.',
+    phaseReading: 'Czytamy twój paragon…',
+    phaseMatching: 'Porównujemy z twoją listą…',
+    phaseHint: 'To potrwa kilka sekund. Nie zamykaj aplikacji.',
   },
   coach: {
     gotIt: 'Jasne',

@@ -63,6 +63,9 @@ const en = {
     importFailed: 'We could not save that. Check your connection and try again.',
     needHousehold: 'Sign in to import a receipt.',
     dateSubstituted: 'The receipt reads %{printed}, which cannot be right. Filing this under %{used}.',
+    phaseReading: 'Reading your receipt…',
+    phaseMatching: 'Matching it to your list…',
+    phaseHint: 'This takes a few seconds. Keep the app open.',
   },
   coach: {
     gotIt: 'Got it',

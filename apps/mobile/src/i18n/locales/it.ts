@@ -54,6 +54,9 @@ const it = {
     importFailed: 'Non siamo riusciti a salvare. Controlla la connessione e riprova.',
     needHousehold: 'Accedi per importare uno scontrino.',
     dateSubstituted: 'Lo scontrino riporta %{printed}, che non può essere giusto. Registrato al %{used}.',
+    phaseReading: 'Stiamo leggendo lo scontrino…',
+    phaseMatching: 'Confronto con la tua lista…',
+    phaseHint: 'Ci vogliono pochi secondi. Tieni l’app aperta.',
   },
   coach: {
     gotIt: 'Capito',

@@ -54,6 +54,9 @@ const es = {
     importFailed: 'No hemos podido guardarlo. Comprueba tu conexión e inténtalo otra vez.',
     needHousehold: 'Inicia sesión para importar un tique.',
     dateSubstituted: 'El tique pone %{printed}, lo cual no puede ser. Se registra con fecha %{used}.',
+    phaseReading: 'Leyendo tu tique…',
+    phaseMatching: 'Comparándolo con tu lista…',
+    phaseHint: 'Tarda unos segundos. Deja la app abierta.',
   },
   coach: {
     gotIt: 'Entendido',

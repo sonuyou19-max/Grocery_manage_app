@@ -14,6 +14,7 @@ import {
 
 import { PrimaryButton } from '@/components/form';
 import { PressScale } from '@/components/press-scale';
+import { ScanOverlay } from '@/components/scan-overlay';
 import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import { haptics } from '@/lib/haptics';
@@ -24,7 +25,7 @@ import {
   pickPictureSize,
   tooLarge,
 } from '@/lib/receipt-capture';
-import { runScan, stashRun } from '@/lib/receipt-run';
+import { runScan, stashRun, type ScanPhase } from '@/lib/receipt-run';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
@@ -91,6 +92,7 @@ export default function ReceiptCaptureScreen() {
   const [pictureSize, setPictureSize] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [phase, setPhase] = useState<ScanPhase>('reading');
   const [mountFailed, setMountFailed] = useState(false);
 
   const list = lists.find((l) => l.id === id);
@@ -164,6 +166,7 @@ export default function ReceiptCaptureScreen() {
    */
   const scan = useCallback(async () => {
     if (shots.length === 0 || scanning) return;
+    setPhase('reading');
     setScanning(true);
     const run = await runScan(
       shots.map((s) => ({ media: 'image/jpeg', data: s.base64 })),
@@ -173,6 +176,7 @@ export default function ReceiptCaptureScreen() {
         name: it.name,
         category: it.category,
       })),
+      setPhase,
     );
     setScanning(false);
 
@@ -239,6 +243,12 @@ export default function ReceiptCaptureScreen() {
         onCameraReady={() => void onCameraReady()}
         onMountError={() => setMountFailed(true)}
       />
+
+      {/* Over the camera for the whole wait. It also takes the touches, so the
+          shutter cannot be pressed while a scan is in flight — the `busy` and
+          `scanning` flags guard that too, but a live-looking shutter under a
+          progress screen is a confusing thing to leave reachable. */}
+      {scanning && <ScanOverlay uri={shots[0]?.uri ?? null} phase={phase} />}
 
       <Safe style={styles.overlay}>
         <View style={styles.top}>
