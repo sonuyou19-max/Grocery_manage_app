@@ -254,22 +254,31 @@ console.log('\nthe list row');
   const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
   eq('a matched row is patched', plan.patches.map((x) => x.itemId), ['i1']);
   eq('with everything the receipt is evidence about', plan.patches[0].patch, {
-    quantity: null, unit: null, packs: 1, priceCents: 299,
+    quantity: null, unit: null, packs: 1, priceCents: 299, store: 'carrefour',
   });
   eq(
-    'but NOT the store — "buy at" is an intention, not a record',
-    Object.keys(plan.patches[0].patch).includes('store'),
-    false,
+    'the store is overwritten too, on a MATCHED row',
+    plan.patches[0].patch.store,
+    'carrefour',
   );
-  if (!Object.keys(plan.patches[0].patch).includes('store')) {
-    console.log('       (pick Carrefour, shop at Colruyt once, and your list should not');
-    console.log('        quietly change its mind about where you buy coffee)');
+  if (plan.patches[0].patch.store === 'carrefour') {
+    console.log('       (a patch exists only where the shopper confirmed this line IS this');
+    console.log('        item, so the receipt is proof of where it was bought, not a guess)');
   }
+  eq(
+    '...as the chain id, so the BUY AT chip can match it',
+    plan.patches[0].patch.store,
+    storeIdFor(RECEIPT.store),
+  );
   eq(
     'an unmatched line patches nothing',
     plan.patches.filter((x) => x.itemId === 'i2').length,
     0,
   );
+  if (plan.patches.every((x) => x.itemId !== 'i2')) {
+    console.log('       (this is what makes overwriting `store` safe: a row is only');
+    console.log('        touched where a line was confirmed to BE it)');
+  }
 }
 
 {

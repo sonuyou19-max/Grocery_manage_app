@@ -104,32 +104,37 @@ export interface CommitPlan {
  * The subset of a list row a receipt is evidence about.
  *
  * ---------------------------------------------------------------------------
- * Why `store` is NOT in here
+ * All five are overwritten, `store` included
  * ---------------------------------------------------------------------------
  *
- * It was, and it was a category error. "Buy at" on a list row is an INTENTION —
- * where the shopper means to get this next time. A receipt is a RECORD of where
- * they got it once. Overwriting the first with the second means picking
- * Carrefour, shopping at Colruyt because you happened to pass it, and finding
- * your list has quietly changed its mind about where you buy coffee.
+ * A patch is only ever built for a row the receipt MATCHED — a line the shopper
+ * confirmed in the review sheet is this item. At that point the receipt is not
+ * a guess about where they shop, it is proof of where this exact thing was
+ * bought, and "buy at" showing a different shop is simply out of date.
  *
- * Setting it when the row has none is no better: "no preference" is an answer,
- * and turning it into "Colruyt" invents an intention from a single trip.
+ * This was briefly the other way round, on the argument that "buy at" is an
+ * intention and a receipt is only a record. Recorded here because the argument
+ * is not silly and will be made again: what settles it is the MATCH. An
+ * unmatched line changes nothing, so the case that worried us — a list quietly
+ * changing its mind after one incidental trip — is a case where no patch is
+ * written at all.
  *
- * Nothing is lost by leaving it alone. The PURCHASE carries the store, which is
- * where it belongs and what every comparison reads — spend-by-store and
- * "cheaper elsewhere" both group on the purchase log, not on list rows — and
- * the item sheet shows "Last bought · Colruyt" from that same record.
- *
- * The other four fields are facts about the thing itself, which is why they DO
- * get overwritten: a price typed before shopping is an estimate, and the
- * receipt is what the till actually charged.
+ * A price typed before shopping is an estimate the till has since corrected;
+ * the same is true of a shop chosen before shopping. Both are the shopper's
+ * best guess until the receipt says otherwise, and the receipt saying otherwise
+ * is the entire reason for scanning it.
  */
 export interface ItemRowPatch {
   quantity: number | null;
   unit: string | null;
   packs: number;
   priceCents: number;
+  /**
+   * The chain id, never the printed header — the BUY AT chip tests
+   * `item.store === entry.id`, so a header would match no chip and show as a
+   * custom shop. Resolved once in planCommit; see the note there.
+   */
+  store: string | null;
 }
 
 /** What the planner needs to know about one row of the list. */
@@ -256,6 +261,7 @@ export function planCommit(
           unit: p.unit,
           packs: p.packs,
           priceCents: d.priceCents,
+          store,
         },
       });
       // Only rows that are not already ticked. `toggleItem` toggles, so calling
