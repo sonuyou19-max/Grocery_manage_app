@@ -57,6 +57,9 @@ const nl = {
     phaseReading: 'We lezen je bonnetje…',
     phaseMatching: 'Vergelijken met je lijst…',
     phaseHint: 'Dit duurt een paar seconden. Houd de app open.',
+    checkShot: 'Kun je de prijzen lezen?',
+    retake: 'Opnieuw',
+    useShot: 'Foto gebruiken',
   },
   coach: {
     gotIt: 'Duidelijk',

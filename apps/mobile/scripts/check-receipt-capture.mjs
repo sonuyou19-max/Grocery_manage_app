@@ -33,12 +33,30 @@ const REPO = join(ROOT, '..', '..');
 
 const read = (p) => readFileSync(p, 'utf8');
 
-const capture = read(join(ROOT, 'src/lib/receipt-capture.ts'));
-const run = read(join(ROOT, 'src/lib/receipt-run.ts'));
-const screen = read(join(ROOT, 'src/app/receipt/capture.tsx'));
-const review = read(join(ROOT, 'src/app/receipt/review.tsx'));
+/*
+ * Comments stripped, for every assertion that matches source text.
+ *
+ * This has now bitten twice in one day. check-safe-area tested a file for
+ * `useSafeAreaInsets()` and passed against a component that had stopped calling
+ * it, because that file's own doc comment says the name four times explaining
+ * why it is used. Then the same thing here: `contentFit="contain"` is written
+ * in the prose above the line it describes, so the assertion held while the
+ * code said "cover".
+ *
+ * A well-commented file is exactly the file where this happens, and this
+ * codebase is nothing but well-commented files. So the stripping is done once,
+ * at the top, rather than remembered per assertion — an assertion that matches
+ * the prose describing the code is not an assertion about the code.
+ */
+const codeOnly = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+const capture = codeOnly(read(join(ROOT, 'src/lib/receipt-capture.ts')));
+const run = codeOnly(read(join(ROOT, 'src/lib/receipt-run.ts')));
+const screen = codeOnly(read(join(ROOT, 'src/app/receipt/capture.tsx')));
+const review = codeOnly(read(join(ROOT, 'src/app/receipt/review.tsx')));
 const fn = read(join(REPO, 'supabase/functions/receipt-scan/index.ts'));
-const overlay = read(join(ROOT, 'src/components/scan-overlay.tsx'));
+const overlay = codeOnly(read(join(ROOT, 'src/components/scan-overlay.tsx')));
 
 let failures = 0;
 const ok = (name) => console.log(`  ✓ ${name}`);
@@ -165,9 +183,9 @@ assert(
 );
 
 assert(
-  /if \(!ready \|\| busy \|\| shots\.length >= MAX_SHOTS\) return;/.test(screen),
-  'shoot() re-checks the same three conditions itself',
-  'the disabled prop is a hint; a double-tap that lands before the re-render is not',
+  /if \(!ready \|\| busy \|\| pending \|\| shots\.length >= MAX_SHOTS\) return;/.test(screen),
+  'shoot() re-checks every condition itself',
+  'the disabled prop is a hint; a double-tap that lands before the re-render is not. `pending` is the fourth: a second capture over a shot still waiting to be judged would silently discard the first',
 );
 
 assert(
@@ -213,6 +231,44 @@ assert(
   at('applyAiMatches(') > at('matchResidue('),
   'the model’s answers are folded in last, through applyAiMatches',
   'applyAiMatches is what stops a model overruling an exact-key match',
+);
+
+/* --------------------------------------- 3b. the shot, before it counts --- */
+
+console.log('\nconfirm before keeping');
+
+/*
+ * A live camera preview cannot tell you whether the PRICES came out legible,
+ * and that is the only property that matters — a blurred receipt looks exactly
+ * like a receipt until the review sheet is full of nonsense, several seconds
+ * and one vision call later. So the shot is held, looked at, and only then
+ * counted.
+ */
+assert(
+  /setPending\(\{ uri: photo\.uri, base64 \}\)/.test(screen),
+  'a shot is HELD, not appended',
+  'appending straight from the shutter is what left a blurred frame undetectable until the scan came back',
+);
+
+assert(
+  /const keep = \(\) => \{[\s\S]{0,200}setShots\(\(prev\) => \[\.\.\.prev, pending\]\)/.test(screen),
+  'only Use photo appends it',
+);
+
+assert(
+  /const retake = \(\) => \{[\s\S]{0,120}setPending\(null\)/.test(screen),
+  'Retake discards it',
+);
+
+assert(
+  /contentFit="contain"/.test(screen),
+  'the confirm view shows the WHOLE frame',
+  'cover would crop the edges off the thing being inspected, hiding the failure most likely to matter — part of the receipt outside the frame',
+);
+
+assert(
+  /\{pending && !scanning && \(/.test(screen),
+  'the confirm step yields to the scan overlay',
 );
 
 /* ----------------------------------------------- 4. the wait, while it waits */

@@ -57,6 +57,9 @@ const de = {
     phaseReading: 'Wir lesen deinen Bon…',
     phaseMatching: 'Wird mit deiner Liste abgeglichen…',
     phaseHint: 'Das dauert ein paar Sekunden. Lass die App offen.',
+    checkShot: 'Kannst du die Preise lesen?',
+    retake: 'Neu aufnehmen',
+    useShot: 'Foto nehmen',
   },
   coach: {
     gotIt: 'Alles klar',

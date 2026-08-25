@@ -57,6 +57,9 @@ const es = {
     phaseReading: 'Leyendo tu tique…',
     phaseMatching: 'Comparándolo con tu lista…',
     phaseHint: 'Tarda unos segundos. Deja la app abierta.',
+    checkShot: '¿Puedes leer los precios?',
+    retake: 'Repetir',
+    useShot: 'Usar foto',
   },
   coach: {
     gotIt: 'Entendido',

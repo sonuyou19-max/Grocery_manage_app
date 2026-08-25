@@ -66,6 +66,9 @@ const en = {
     phaseReading: 'Reading your receipt…',
     phaseMatching: 'Matching it to your list…',
     phaseHint: 'This takes a few seconds. Keep the app open.',
+    checkShot: 'Can you read the prices?',
+    retake: 'Retake',
+    useShot: 'Use photo',
   },
   coach: {
     gotIt: 'Got it',

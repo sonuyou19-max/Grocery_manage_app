@@ -88,6 +88,15 @@ export default function ReceiptCaptureScreen() {
 
   const camera = useRef<CameraView>(null);
   const [shots, setShots] = useState<Shot[]>([]);
+  /*
+   * The shot just taken, not yet kept.
+   *
+   * A live camera preview cannot tell you whether the PRICES came out legible,
+   * and that is the only thing that matters here — a blurred receipt reads as a
+   * receipt right up until the review sheet is full of nonsense. So every shot
+   * gets looked at full-screen before it counts, and the way back is one tap.
+   */
+  const [pending, setPending] = useState<Shot | null>(null);
   const [ready, setReady] = useState(false);
   const [pictureSize, setPictureSize] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -129,7 +138,7 @@ export default function ReceiptCaptureScreen() {
    * from their side the first attempt did not visibly happen.
    */
   const shoot = useCallback(async () => {
-    if (!ready || busy || shots.length >= MAX_SHOTS) return;
+    if (!ready || busy || pending || shots.length >= MAX_SHOTS) return;
     setBusy(true);
     haptics.tick();
     try {
@@ -139,7 +148,8 @@ export default function ReceiptCaptureScreen() {
         if (!photo || !base64) break;
         if (tooLarge(base64) && quality !== FALLBACK_QUALITY) continue;
         if (tooLarge(base64)) break;
-        setShots((prev) => [...prev, { uri: photo.uri, base64 }]);
+        // Held, not kept. `keep` below is what appends it.
+        setPending({ uri: photo.uri, base64 });
         haptics.success();
         setBusy(false);
         return;
@@ -149,7 +159,19 @@ export default function ReceiptCaptureScreen() {
       showToast(t('receipt.shotFailed'));
     }
     setBusy(false);
-  }, [busy, ready, shots.length, showToast, t]);
+  }, [busy, pending, ready, shots.length, showToast, t]);
+
+  const keep = () => {
+    if (!pending) return;
+    haptics.tick();
+    setShots((prev) => [...prev, pending]);
+    setPending(null);
+  };
+
+  const retake = () => {
+    haptics.tick();
+    setPending(null);
+  };
 
   const removeShot = (index: number) => {
     haptics.tick();
@@ -250,6 +272,11 @@ export default function ReceiptCaptureScreen() {
           progress screen is a confusing thing to leave reachable. */}
       {scanning && <ScanOverlay uris={shots.map((s) => s.uri)} phase={phase} />}
 
+      {/* Look at it before it counts. */}
+      {pending && !scanning && (
+        <ConfirmShot uri={pending.uri} onKeep={keep} onRetake={retake} />
+      )}
+
       <Safe style={styles.overlay}>
         <View style={styles.top}>
           <Text style={styles.hint}>
@@ -332,7 +359,91 @@ export default function ReceiptCaptureScreen() {
   );
 }
 
+/**
+ * The shot, before it counts.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a receipt in particular needs this
+ * ---------------------------------------------------------------------------
+ *
+ * A live camera preview is small, moving, and shows the paper — not the
+ * capture. What it cannot tell you is whether the PRICES came out legible, and
+ * that is the only property that matters: a blurred receipt looks exactly like
+ * a receipt right up until the review sheet is full of nonsense, several
+ * seconds and one vision call later.
+ *
+ * So the question is asked at the only moment it is cheap to answer, and the
+ * caption asks the specific thing rather than "is this ok" — you cannot judge a
+ * photograph in the abstract, but you can absolutely tell whether you can read
+ * the amounts.
+ *
+ * `contentFit="contain"`, not cover: this is for inspection, and cropping the
+ * edges off the thing being inspected would hide the failure most likely to
+ * matter — a section of the receipt that fell outside the frame.
+ */
+function ConfirmShot({
+  uri,
+  onKeep,
+  onRetake,
+}: {
+  uri: string;
+  onKeep: () => void;
+  onRetake: () => void;
+}) {
+  const { colors } = useTheme();
+  const t = useLocale().t;
+
+  return (
+    <View style={styles.confirmRoot}>
+      <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="contain" />
+
+      <Safe style={styles.confirmChrome} edges={['top', 'bottom']}>
+        <Text style={styles.hint}>{t('receipt.checkShot')}</Text>
+
+        <View style={styles.confirmActions}>
+          <PressScale
+            onPress={onRetake}
+            accessibilityRole="button"
+            style={[styles.confirmBtn, styles.retakeBtn]}
+          >
+            <Ionicons name="refresh" size={18} color="#FFFFFF" />
+            <Text style={[type.body, styles.retakeLabel]}>{t('receipt.retake')}</Text>
+          </PressScale>
+
+          <PressScale
+            onPress={onKeep}
+            accessibilityRole="button"
+            style={[styles.confirmBtn, { backgroundColor: colors.accent }]}
+          >
+            <Ionicons name="checkmark" size={18} color={colors.accentInk} />
+            <Text style={[type.body, { color: colors.accentInk, fontWeight: '600' }]}>
+              {t('receipt.useShot')}
+            </Text>
+          </PressScale>
+        </View>
+      </Safe>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  confirmRoot: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000' },
+  confirmChrome: { flex: 1, justifyContent: 'space-between', padding: spacing.lg },
+  confirmActions: { flexDirection: 'row', gap: spacing.md },
+  confirmBtn: {
+    flexGrow: 1,
+    // A zero basis so the two are exactly half each whatever the labels say in
+    // German — the same pairing the list screen's action row uses.
+    flexBasis: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+  },
+  retakeBtn: { backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
+  retakeLabel: { color: '#FFFFFF' },
   root: { flex: 1, backgroundColor: '#000000' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   permWrap: {

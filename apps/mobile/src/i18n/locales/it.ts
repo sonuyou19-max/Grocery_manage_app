@@ -57,6 +57,9 @@ const it = {
     phaseReading: 'Stiamo leggendo lo scontrino…',
     phaseMatching: 'Confronto con la tua lista…',
     phaseHint: 'Ci vogliono pochi secondi. Tieni l’app aperta.',
+    checkShot: 'Riesci a leggere i prezzi?',
+    retake: 'Rifai',
+    useShot: 'Usa la foto',
   },
   coach: {
     gotIt: 'Capito',

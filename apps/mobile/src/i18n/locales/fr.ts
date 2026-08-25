@@ -57,6 +57,9 @@ const fr = {
     phaseReading: 'Lecture de ton ticket…',
     phaseMatching: 'Comparaison avec ta liste…',
     phaseHint: 'Cela prend quelques secondes. Garde l’app ouverte.',
+    checkShot: 'Arrives-tu à lire les prix ?',
+    retake: 'Reprendre',
+    useShot: 'Utiliser',
   },
   coach: {
     gotIt: 'Compris',

@@ -67,6 +67,9 @@ const pl = {
     phaseReading: 'Czytamy twój paragon…',
     phaseMatching: 'Porównujemy z twoją listą…',
     phaseHint: 'To potrwa kilka sekund. Nie zamykaj aplikacji.',
+    checkShot: 'Czy widzisz ceny wyraźnie?',
+    retake: 'Zrób ponownie',
+    useShot: 'Użyj zdjęcia',
   },
   coach: {
     gotIt: 'Jasne',
