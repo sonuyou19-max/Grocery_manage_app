@@ -45,8 +45,8 @@ function check(what, actual, expected) {
  */
 const strip = (file, ...alsoDrop) => {
   let src = readFileSync(join(LIB, file), 'utf8')
-    .replace(/^import .*from '@korb\/shared';$/gm, '')
-    .replace(/^import type .*$/gm, '');
+    .replace(/^import\s[^;]*?from '@korb\/shared';/gm, '')
+    .replace(/^import\s+type\s[^;]*?;/gm, '');
   for (const spec of alsoDrop) {
     src = src.split('\n').filter((line) => !line.includes(`from '${spec}'`)).join('\n');
   }

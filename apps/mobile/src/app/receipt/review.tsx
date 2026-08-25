@@ -28,6 +28,7 @@ import { haptics } from '@/lib/haptics';
 import { parsePriceToCents } from '@/lib/money';
 import {
   displayName,
+  productName,
   type ListCandidate,
   type ReceiptProblem,
   type ReceiptPurchase,
@@ -347,11 +348,41 @@ export default function ReceiptReviewScreen() {
         <Text style={styles.emoji}>{p.emoji ?? '🧾'}</Text>
 
         <View style={styles.grow}>
-          {/* The expansion, not the till's abbreviations — those are the two
-              lines underneath. See displayName. */}
+          {/*
+            The PRODUCT, which is what this becomes. The brand and the size sit
+            below it rather than inside it — that separation is the whole point:
+            it is what lets "milk" stay one item across Delhaize's litre and
+            Alpro's, and what makes their prices comparable at all.
+          */}
           <Text style={[type.body, { color: colors.ink }]} numberOfLines={2}>
-            {displayName(p)}
+            {productName(p)}
           </Text>
+
+          {/*
+            Everything the receipt knew that is NOT the product's identity.
+
+            The brand keeps its own chip rather than joining a run of muted
+            text: it is the field this whole separation exists for, and making
+            it visually distinct is what says "this is a property of the
+            purchase, not part of what the thing is". The size and count follow
+            it as plain text — they are measurements, not identities.
+          */}
+          {(p.brand || sizeOf(p)) && (
+            <View style={styles.factRow}>
+              {p.brand && (
+                <View style={[styles.brand, { borderColor: colors.line }]}>
+                  <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+                    {p.brand}
+                  </Text>
+                </View>
+              )}
+              {sizeOf(p) !== '' && (
+                <Text style={[type.label, styles.shrink, { color: colors.muted }]} numberOfLines={1}>
+                  {sizeOf(p)}
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* The till's own words, always. */}
           {p.raw.map((raw) => (
@@ -366,14 +397,6 @@ export default function ReceiptReviewScreen() {
               price does not fit, and the chip was the piece that got pushed off
               the screen edge. */}
           <View style={styles.metaRow}>
-            {/* Its own chip. Never part of the name — see the header. */}
-            {p.brand && (
-              <View style={[styles.brand, { borderColor: colors.line }]}>
-                <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
-                  {p.brand}
-                </Text>
-              </View>
-            )}
             <Pressable
               onPress={() => {
                 haptics.tick();
@@ -707,6 +730,26 @@ export default function ReceiptReviewScreen() {
  * disagree about whether four cartons of milk are four articles or one, and a
  * message naming a single expected figure would be wrong for half of them.
  */
+/**
+ * Size and count — the measurements that are not the product.
+ *
+ * Assembled here rather than folded into the name, which is the correction this
+ * whole change is: a pantry called "1 litre Delhaize full fat milk" cannot
+ * match next month's Alpro, and "Provital toast 50 pieces" is not a thing
+ * anybody buys again. Keeping these beside the name loses nothing and makes the
+ * comparison possible.
+ *
+ * Returns '' rather than null so the caller's `&&` reads naturally; most loose
+ * produce has none of these.
+ */
+function sizeOf(p: ReceiptPurchase): string {
+  const bits: string[] = [];
+  if (p.quantity != null) bits.push(`${p.quantity}${p.unit ?? ''}`);
+  // Only when it is more than one — "× 1" is noise on every single row.
+  if (p.packs > 1) bits.push(`× ${p.packs}`);
+  return bits.join(' · ');
+}
+
 function phrase(
   p: ReceiptProblem,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -813,6 +856,12 @@ const styles = StyleSheet.create({
     // is a brand worth truncating, not one worth pushing off the screen.
     flexShrink: 1,
     maxWidth: 130,
+  },
+  factRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: 2,
   },
   metaRow: {
     flexDirection: 'row',

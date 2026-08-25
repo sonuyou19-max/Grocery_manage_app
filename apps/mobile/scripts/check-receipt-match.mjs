@@ -50,8 +50,8 @@ const eq = (what, actual, expected) => {
  */
 const strip = (file, ...drop) => {
   let src = readFileSync(join(LIB, file), 'utf8')
-    .replace(/^import .*from '@korb\/shared';$/gm, '')
-    .replace(/^import type .*$/gm, '');
+    .replace(/^import\s[^;]*?from '@korb\/shared';/gm, '')
+    .replace(/^import\s+type\s[^;]*?;/gm, '');
   for (const spec of drop) {
     src = src.split('\n').filter((l) => !l.includes(`from '${spec}'`)).join('\n');
   }
@@ -86,7 +86,44 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds, displayName } = mod;
+const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds, displayName, productName } = mod;
+
+/* ------------------------------------------------------------ productName -- */
+
+/*
+ * Two questions, two answers. displayName is "what did I buy" and wants to be
+ * complete; productName is "what IS it" and wants to be short. The app learned
+ * the difference the hard way, by putting the first answer where the second
+ * belonged: unmatched receipt lines became pantry entries called "Provital
+ * toast 50 pieces" and "1 litre Delhaize full fat milk", neither of which can
+ * ever match the same shopping bought in a different size next month.
+ */
+{
+  const p = (over) => ({
+    name: 'PROVITAL TOAST 500', product: null, expanded: null, translated: null, ...over,
+  });
+
+  eq(
+    'the product name is what a pantry gets',
+    productName(p({ product: 'toast', expanded: 'Provital toast 500 grams' })),
+    'toast',
+  );
+  eq(
+    '...even though the full description is right there',
+    displayName(p({ product: 'toast', expanded: 'Provital toast 500 grams' })),
+    'Provital toast 500 grams',
+  );
+  eq(
+    'an empty product falls through rather than blanking the row',
+    productName(p({ product: '  ', expanded: 'Provital toast 500 grams' })),
+    'Provital toast 500 grams',
+  );
+  eq(
+    'and with neither, the printing is still better than nothing',
+    productName(p()),
+    'PROVITAL TOAST 500',
+  );
+}
 
 /* ------------------------------------------------------------ displayName -- */
 
@@ -107,7 +144,7 @@ const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds, display
  * and `??` would have accepted one.
  */
 {
-  const p = (over) => ({ name: 'DOUNE EGBERTS opiosk', expanded: null, translated: null, ...over });
+  const p = (over) => ({ name: 'DOUNE EGBERTS opiosk', product: null, expanded: null, translated: null, ...over });
 
   eq('the reader’s language wins', displayName(p({ expanded: 'oploskoffie', translated: 'instant coffee' })), 'instant coffee');
   eq('...then the receipt’s own', displayName(p({ expanded: 'oploskoffie' })), 'oploskoffie');
@@ -122,7 +159,7 @@ const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds, display
 /* --------------------------------------------------------------- helpers -- */
 
 const line = (raw, over = {}) => ({
-  raw, kind: 'item', expanded: null, translated: null, brand: null,
+  raw, kind: 'item', product: null, expanded: null, translated: null, brand: null,
   section: null, multiplier: 1, multiplierDp: 0, unit: null, packSize: null,
   packUnit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 0,
   emoji: null, category: null, confidence: 'high', ...over,

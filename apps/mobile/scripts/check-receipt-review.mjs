@@ -43,7 +43,7 @@ const assert = (cond, what, detail) => (cond ? ok(what) : fail(what, detail ? [d
  * in a lib and not in the screen.
  */
 const source = readFileSync(join(SRC, 'lib', 'receipt-review.ts'), 'utf8').replace(
-  /^import type .*$/gm,
+  /^import\s+type\s[^;]*?;/gm,
   '',
 );
 const { outputText } = ts.transpileModule(source, {
@@ -352,6 +352,7 @@ assert(
 assert(
   /\{p\.brand && \(/.test(sheet),
   'brand is drawn as its own node',
+  'a chip rather than a run of muted text: it is the field this separation exists for, and looking distinct is what says it is a property of the purchase rather than part of what the thing is',
 );
 
 assert(
@@ -471,10 +472,29 @@ assert(
   );
 }
 
+/*
+ * The headline is the PRODUCT, which is stricter than the expansion it
+ * replaced. An unmatched line becomes a pantry item, and a pantry item called
+ * "1 litre Delhaize full fat milk" cannot match next month's Alpro — so the
+ * name has to be what the thing IS, with the brand and the size beside it.
+ */
 assert(
-  /\{displayName\(p\)\}/.test(sheet),
-  'the row shows the expansion, not the till’s abbreviations',
-  'the raw line is already rendered underneath as evidence — showing `p.name` above it printed the same garbled string twice and wasted the expansion the scan paid for',
+  /\{productName\(p\)\}/.test(sheet),
+  'the row is headed by the PRODUCT, not the full description',
+  'the description still shows — as the brand chip, the size, and the raw printed line underneath. What must not happen is a brand or a pack size inside the name, because that is what becomes the item.',
+);
+
+assert(
+  /const name = row\?\.name \?\? productName\(p\);/.test(
+    readFileSync(join(SRC, 'lib', 'receipt-commit.ts'), 'utf8'),
+  ),
+  '...and so is the pantry item it becomes',
+  'this is the one that actually bit: unmatched lines were filed under the full description, so the pantry filled with "Provital toast 50 pieces"',
+);
+
+assert(
+  /sizeOf\(p\)/.test(sheet) && !/name.*sizeOf|sizeOf.*productName\(p\)/.test(sheet),
+  'the size is shown BESIDE the name, never inside it',
 );
 
 assert(

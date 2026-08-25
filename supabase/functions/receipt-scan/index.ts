@@ -77,6 +77,7 @@ const UNITS = ['g', 'kg', 'ml', 'l', 'cl', 'pcs'] as const;
 const lineSchema = z.object({
   raw: z.string().min(1).max(200),
   kind: z.enum(LINE_KINDS).catch('item'),
+  product: z.string().max(80).nullable().optional().default(null).catch(null),
   expanded: z.string().max(200).nullable().optional().default(null).catch(null),
   translated: z.string().max(200).nullable().optional().default(null).catch(null),
   brand: z.string().max(80).nullable().optional().default(null).catch(null),
@@ -128,12 +129,14 @@ Return ONLY a JSON object of this exact shape:
 {"store":"...","purchasedAt":"...","currency":"EUR","language":"nl",
  "goodsCents":6110,"paidCents":6110,"articleCount":23,
  "lines":[
-  {"raw":"4 X 1L DLL VOLLE MELK","kind":"item","expanded":"volle melk",
-   "brand":"Delhaize","multiplier":4,"multiplierDp":0,"packSize":1,
+  {"raw":"4 X 1L DLL VOLLE MELK","kind":"item","product":"milk",
+   "expanded":"volle melk 1L","brand":"Delhaize","multiplier":4,
+   "multiplierDp":0,"packSize":1,
    "packUnit":"l","unitPriceCents":167,"unitPriceDp":2,"totalCents":668,
    "emoji":"🥛","category":"dairy_eggs","confidence":"high"},
-  {"raw":"DRUIF ITALIA/VIT","kind":"item","expanded":"witte druiven",
-   "translated":"white grapes","section":"GROENTEN&FRUIT",
+  {"raw":"DRUIF ITALIA/VIT","kind":"item","product":"grapes",
+   "expanded":"witte druiven Italië","translated":"white Italian grapes",
+   "section":"GROENTEN&FRUIT",
    "multiplier":1.094,"multiplierDp":3,"unit":"kg",
    "unitPriceCents":499,"unitPriceDp":2,"totalCents":546,
    "emoji":"🍇","category":"fruit_veg","confidence":"high"}]}
@@ -157,12 +160,24 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   for a cash-rounding adjustment of a few cents. "other" for anything else.
   ANY line whose total is negative is a discount or a deposit return, never an
   item.
-- expanded: the same product with abbreviations opened out, in the receipt's OWN
-  language, WITHOUT the brand and without the pack size. "CAR EIREN X30" ->
-  "eieren". "DOUWE EGBERTS oplosk. dessert glas 200g" -> "oploskoffie". The
-  brand has its own field and the size has two of its own; repeating them here
-  puts them into the product's identity, and "milk" then stops being the same
-  item as "Alpro milk 1L".
+- product: WHAT IT IS, as somebody would write it on a shopping list, in the
+  READER's language. Two or three words. No brand, no size, no pack count.
+  "1L DLL VOLLE MELK" -> "milk". "PROVITAL TOAST 500" -> "toast".
+  "APPEL PINK LADY 6P" -> "apples". "CAR EIREN X30" -> "eggs".
+  This one field decides what the shopper ends up with in their pantry, and it
+  is the only field where being SHORT matters more than being complete. A
+  pantry entry called "Provital toast 50 pieces" is not a thing anybody buys
+  again; "toast" is. The brand, the size and the count all have fields of their
+  own and are kept — they are simply not part of what the thing IS.
+  Keep a distinguishing word only when it makes a genuinely different product:
+  "full fat milk" and "semi-skimmed" are worth separating, "Pink Lady" is not.
+  A brand may stand as the product only where it IS the everyday word for the
+  thing — Coke, Sprite, Nutella — because that is what a shopper writes.
+- expanded: the fuller description, in the receipt's OWN language, with the
+  abbreviations opened out. "DOUWE EGBERTS oplosk. dessert glas 200g" stays
+  recognisable as all of that. This is what the purchase history shows beside
+  the price months later, so completeness is what matters here — the opposite
+  of `product` above, and the reason they are two fields rather than one.
   This is also where you FIX what the camera got wrong. Till printing is small
   and receipts crease, so the raw line will contain scanning slips — DOUNE for
   DOUWE, opiosk for oplosk., rn for m. You know what real products are called;

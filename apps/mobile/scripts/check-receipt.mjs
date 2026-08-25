@@ -456,7 +456,22 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
 {
   const promptText = fn.slice(fn.indexOf('const SYSTEM_PROMPT'));
   const defs = promptText.slice(promptText.indexOf('- expanded:'), promptText.indexOf('- translated:'));
-  check_('the expansion is asked for WITHOUT the brand', /WITHOUT the brand/.test(defs));
+  /*
+   * The rule moved. It used to sit on `expanded`, which was being asked to be a
+   * readable description AND the item's identity at once — and the model
+   * resolved that tension toward description every time, so pantry entries came
+   * out as "Provital toast 50 pieces" and "1 litre Delhaize full fat milk".
+   *
+   * Two fields now, one job each: `product` is short and is what the shopper
+   * ends up with, `expanded` is complete and is what the purchase history
+   * shows. Asserting both, because the pair only works if each stays in its
+   * lane.
+   */
+  const productDef = promptText.slice(promptText.indexOf('- product:'), promptText.indexOf('- expanded:'));
+  check_('the PRODUCT name is asked for without brand, size or count', /No brand, no size, no pack count/.test(productDef));
+  check_('...and short enough to be a pantry entry', /Two or three words/.test(productDef));
+  check_('...in the reader’s language, since it becomes their item', /READER's language/.test(productDef));
+  check_('the expansion is allowed to be complete', /completeness is what matters here/.test(defs));
   check_('...and is where scanning slips get corrected', /FIX what the camera got wrong/i.test(defs));
   check_('...but never a number', /never a number/.test(defs));
 }

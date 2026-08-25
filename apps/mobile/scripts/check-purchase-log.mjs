@@ -27,7 +27,7 @@ const SRC = join(here, '..', 'src', 'lib', 'purchase-log.ts');
 const source = readFileSync(SRC, 'utf8')
   // The single `@/` import (normalizeKey) can't resolve outside Metro, so drop
   // it and supply the same implementation below.
-  .replace(/^import .*from '@\/.*';$/gm, '');
+  .replace(/^import\s[^;]*?from '@\/[^']*';/gm, '');
 
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },

@@ -28,7 +28,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, '..', 'src', 'lib', 'purchase-migration.ts');
 
 // The only import is a type, which erases — so no rewriting is needed.
-const source = readFileSync(SRC, 'utf8').replace(/^import type .*;$/gm, '');
+const source = readFileSync(SRC, 'utf8').replace(/^import\s+type\s[^;]*?;/gm, '');
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });

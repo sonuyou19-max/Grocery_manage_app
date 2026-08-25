@@ -36,7 +36,7 @@ async function load(path, strip = []) {
   return import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
 }
 
-const client = await load(CLIENT, [/^import .*from '@korb\/shared';$/gm]);
+const client = await load(CLIENT, [/^import\s[^;]*?from '@korb\/shared';/gm]);
 const fold = await load(SERVER_FOLD);
 const canon = await load(SERVER_CANON);
 

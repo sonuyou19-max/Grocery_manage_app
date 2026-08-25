@@ -1,6 +1,11 @@
 import type { ItemCategory } from '@korb/shared';
 
-import { displayName, type ReceiptPurchase, type ScannedReceipt } from '@/lib/receipt';
+import {
+  displayName,
+  productName,
+  type ReceiptPurchase,
+  type ScannedReceipt,
+} from '@/lib/receipt';
 import { storeIdFor } from '@/lib/supermarkets';
 import { supabase } from '@/lib/supabase';
 import type { Decisions } from '@/lib/receipt-review';
@@ -225,13 +230,16 @@ export function planCommit(
      * The list's own word is the only spelling stable across both.
      *
      * An unmatched line has no list spelling to borrow, so it uses the model's
-     * EXPANSION — which is why the extractor is asked for one at all, and why
-     * this is displayName rather than `p.name`. `p.name` is the printing:
-     * filing a new pantry item under `DOUNE EGBERTS opiosk, dessert glas 200g`
-     * would put a till's abbreviations and its OCR slips into an item name the
-     * shopper then has to live with, and match nothing ever again.
+     * PRODUCT name — `toast`, not `Provital toast 500 grams`. It is becoming a
+     * pantry item, and a pantry item carrying a brand and a pack size matches
+     * nothing next month, when the same shopping arrives in a different size
+     * from a different shop.
+     *
+     * Not displayName, which is the full description and belongs in the
+     * purchase history; not `p.name`, which is the till's own abbreviated
+     * printing including whatever the camera got wrong.
      */
-    const name = row?.name ?? displayName(p);
+    const name = row?.name ?? productName(p);
     const category = row?.category ?? p.category ?? 'other';
 
     planned.push({
@@ -248,6 +256,9 @@ export function planCommit(
         // Only when it differs from the name we are filing under. For an
         // unmatched line those are the same string, and storing it twice would
         // put a description on every row that says nothing.
+        // The full description, which is the whole point of keeping it separate
+        // from the name: "Douwe Egberts oploskoffie dessert glas 200g" beside a
+        // price, under an item called "coffee".
         description: displayName(p) === name ? null : displayName(p),
         at,
       },

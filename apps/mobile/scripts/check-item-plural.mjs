@@ -45,8 +45,8 @@ function check(what, actual, expected) {
 // is the only thing that has to come out.
 const strip = (file) =>
   readFileSync(join(src, 'lib', file), 'utf8')
-    .replace(/^import .*from '@korb\/shared';$/gm, '')
-    .replace(/^import .*from '@\/lib\/item-emoji';$/gm, '');
+    .replace(/^import\s[^;]*?from '@korb\/shared';/gm, '')
+    .replace(/^import\s[^;]*?from '@\/lib\/item-emoji';/gm, '');
 
 const { outputText } = ts.transpileModule(strip('item-emoji.ts') + '\n' + strip('item-plural.ts'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },

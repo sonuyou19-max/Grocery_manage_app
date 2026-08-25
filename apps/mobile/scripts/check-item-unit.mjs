@@ -40,7 +40,7 @@ const LIB = join(here, '..', 'src', 'lib');
  */
 const compile = (file, rewrite = (s) => s) => {
   const source = rewrite(
-    readFileSync(join(LIB, file), 'utf8').replace(/^import .*from '@korb\/shared';$/gm, ''),
+    readFileSync(join(LIB, file), 'utf8').replace(/^import\s[^;]*?from '@korb\/shared';/gm, ''),
   );
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },

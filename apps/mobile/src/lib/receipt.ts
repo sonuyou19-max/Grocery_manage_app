@@ -32,6 +32,8 @@ export type LineKind = 'item' | 'deposit' | 'discount' | 'rounding' | 'other';
 export interface ScannedLine {
   raw: string;
   kind: LineKind;
+  /** What it IS, list-sized. See productName. */
+  product: string | null;
   expanded: string | null;
   translated: string | null;
   brand: string | null;
@@ -94,6 +96,7 @@ export interface ReceiptPurchase {
   /** Every printed line this came from. Shown in the review, always. */
   raw: string[];
   name: string;
+  product: string | null;
   expanded: string | null;
   translated: string | null;
   brand: string | null;
@@ -134,6 +137,40 @@ export interface ReceiptPurchase {
 export function displayName(p: Pick<ReceiptPurchase, 'name' | 'expanded' | 'translated'>): string {
   const best = p.translated?.trim() || p.expanded?.trim() || p.name.trim();
   return best || p.name;
+}
+
+/**
+ * What the thing IS, short enough to live in a pantry.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not displayName
+ * ---------------------------------------------------------------------------
+ *
+ * displayName answers "what did I buy" and wants to be complete. This answers
+ * "what is it" and wants to be short, and the two are genuinely different
+ * questions — which the app learned by putting the first answer where the
+ * second belonged. Unmatched receipt lines became pantry entries called
+ *
+ *     Provital toast 50 pieces
+ *     1 litre Delhaize full fat milk
+ *     Pink Lady apple 6 pieces
+ *
+ * Those are not things anybody buys again. `toast`, `milk` and `apples` are —
+ * and they are what the burn-rate model needs, because next month's receipt
+ * will print a different size from a different brand and has to land on the
+ * same item.
+ *
+ * The brand, the size and the count are not lost. They ride on the purchase,
+ * where they can be compared across brands precisely BECAUSE they are not part
+ * of the name.
+ *
+ * Falls back to the full description when the model could not reduce it, which
+ * is better than an empty pantry row — and the shopper can rename it.
+ */
+export function productName(
+  p: Pick<ReceiptPurchase, 'name' | 'product' | 'expanded' | 'translated'>,
+): string {
+  return p.product?.trim() || displayName(p);
 }
 
 const isMeasure = (l: ScannedLine): boolean =>
@@ -200,6 +237,7 @@ export function groupLines(lines: ScannedLine[]): ReceiptPurchase[] {
         // already is — a whole duplicated string per line, on a receipt where
         // every output token is time the shopper spends waiting.
         name: line.raw,
+        product: line.product,
         expanded: line.expanded,
         translated: line.translated,
         brand: line.brand,

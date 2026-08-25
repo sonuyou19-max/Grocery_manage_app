@@ -57,22 +57,36 @@ const commit = readFileSync(join(SRC, 'lib', 'receipt-commit.ts'), 'utf8');
  * the exact bug the two-implementation checks elsewhere exist to prevent.
  */
 const receiptLib = readFileSync(join(SRC, 'lib', 'receipt.ts'), 'utf8');
-const lifted = receiptLib.match(/export function displayName[\s\S]*?\n\}/);
-if (!lifted) {
-  fail('displayName could not be lifted out of lib/receipt', [
-    'It has moved or been renamed; this check cannot verify the name a',
-    'purchase is filed under without it.',
+
+/*
+ * BOTH naming functions, because planCommit calls both and they answer
+ * different questions — displayName is "what did I buy" and wants to be
+ * complete, productName is "what IS it" and wants to be short. Lifting only one
+ * is how this check stopped running: the module assembled fine and then threw
+ * at the first call.
+ */
+const lift = (name) => receiptLib.match(new RegExp(`export function ${name}[\\s\\S]*?\\n\\}`));
+const liftedFns = ['displayName', 'productName'].map((n) => [n, lift(n)]);
+const missingFns = liftedFns.filter(([, m]) => !m).map(([n]) => n);
+if (missingFns.length) {
+  fail(`${missingFns.join(' and ')} could not be lifted out of lib/receipt`, [
+    'Moved or renamed; this check cannot verify the name a purchase is filed',
+    'under without them.',
   ]);
 }
+const lifted = [
+  liftedFns
+    .map(([, m]) => m?.[0] ?? '')
+    .join('\n')
+    .replace(/: Pick<ReceiptPurchase, [^>]*>/g, '')
+    .replace(/\): string \{/g, ') {'),
+];
 
 const source = [
   supermarkets,
-  (lifted?.[0] ?? '').replace(
-    /: Pick<ReceiptPurchase, [^>]*>/,
-    '',
-  ).replace(/\): string \{/, ') {'),
+  lifted[0],
   commit
-    .replace(/^import .*$/gm, '')
+    .replace(/^import\s[^;]*?;/gm, '')
     .replace(/export async function claimReceipt[\s\S]*?\n\}/, ''),
 ].join('\n');
 
@@ -88,7 +102,7 @@ const NOW = Date.parse('2026-08-24T10:00:00Z');
 const LAST_NIGHT = '2026-08-23T18:42:00Z';
 
 const buy = (key, name, priceCents, over = {}) => ({
-  key, name, raw: [name.toUpperCase()], expanded: null, translated: null,
+  key, name, raw: [name.toUpperCase()], product: null, expanded: null, translated: null,
   brand: null, section: null, packs: 1, quantity: null, unit: null,
   priceCents, emoji: null, category: 'other', confidence: 'high', ...over,
 });
@@ -105,8 +119,9 @@ const PURCHASES = [
   // The real shape: a garbled printing with a clean expansion beside it. If the
   // planner reached for `name` this would enter the pantry as
   // `DOUNE BINBAGZ 20st`.
-  buy('b', 'DOUNE BINBAGZ 20st', 249, {
-    packs: 2, quantity: 20, unit: 'st', expanded: 'bin bags',
+  buy('b', 'PROVITAL TOAST 500', 249, {
+    packs: 2, quantity: 500, unit: 'g', brand: 'Provital',
+    product: 'toast', expanded: 'Provital toast 500 grams',
   }),
 ];
 
@@ -150,13 +165,25 @@ console.log('\nthe name a purchase is filed under');
 
   eq('and the list row’s category', eggs.category, 'dairy');
 
-  const bags = plan.purchases.find((p) => p.key === 'b');
-  eq('an unmatched line uses the model’s expansion', bags.name, 'bin bags');
-  if (bags.name === 'bin bags') {
-    console.log('       (it becomes a PANTRY ITEM — filed under the printing it would');
-    console.log('        carry the till\'s abbreviations and its OCR slips forever)');
+  const toast = plan.purchases.find((p) => p.key === 'b');
+  eq('an unmatched line is filed under the PRODUCT name', toast.name, 'toast');
+  if (toast.name === 'toast') {
+    console.log('       (it becomes a PANTRY ITEM. "Provital toast 500 grams" cannot');
+    console.log('        match the same shopping in another size next month)');
   }
-  eq('and its own category', bags.category, 'other');
+  eq('and its own category', toast.category, 'other');
+  eq(
+    'the full description rides along, on the PURCHASE',
+    toast.detail.description,
+    'Provital toast 500 grams',
+  );
+  eq('...and the brand stays its own field', toast.detail.brand, 'Provital');
+  eq('...as do the size and the count', [toast.detail.quantity, toast.detail.unit, toast.detail.packs], [500, 'g', 2]);
+  eq(
+    'none of which is in the name',
+    /provital|500|grams/i.test(toast.name),
+    false,
+  );
 }
 
 /* -------------------------------------------------------------- the rest */
@@ -180,8 +207,9 @@ console.log('\nwhat gets planned');
   eq('and never on the name', plan.purchases[0].name.includes('Boni'), false);
 
   eq('packs and amount survive', plan.purchases[1].detail, {
-    priceCents: 249, store: 'carrefour', quantity: 20, unit: 'st',
-    packs: 2, brand: null, description: null, at: Date.parse(LAST_NIGHT),
+    priceCents: 249, store: 'carrefour', quantity: 500, unit: 'g',
+    packs: 2, brand: 'Provital', description: 'Provital toast 500 grams',
+    at: Date.parse(LAST_NIGHT),
   });
 }
 
@@ -389,16 +417,34 @@ console.log('\nthe description');
     console.log('        what was actually in the trolley)');
   }
 
-  const bags = plan.purchases.find((p) => p.key === 'b');
+  /*
+   * An unmatched line now keeps its description too, and that is the change.
+   *
+   * It used to be filed under the full description, so the description was the
+   * same string as the name and storing it twice said nothing. Filed under the
+   * short PRODUCT name, the two differ — and the difference is exactly what the
+   * purchase history is for: "toast" in the pantry, "Provital toast 500 grams"
+   * beside the price.
+   */
+  const toastAgain = plan.purchases.find((p) => p.key === 'b');
   eq(
-    'an unmatched line stores no description',
-    bags.detail.description,
+    'an unmatched line keeps its description, now that the name is shorter',
+    [toastAgain.name, toastAgain.detail.description],
+    ['toast', 'Provital toast 500 grams'],
+  );
+
+  eq(
+    '...and a line whose description IS its name stores none',
+    planCommit(
+      RECEIPT,
+      [buy('c', 'plums', 199, { product: 'plums', expanded: 'plums' })],
+      new Map([['c', { include: true, priceCents: 199, itemId: null }]]),
+      ROWS,
+      NOW,
+    ).purchases[0].detail.description,
     null,
   );
-  if (bags.detail.description === null) {
-    console.log('       (it is already filed under the expansion — the same string twice');
-    console.log('        is a description that says nothing)');
-  }
+  console.log('       (the same string twice is a description that says nothing)');
 }
 
 /* --------------------------------------------------------- the receipt -- */
