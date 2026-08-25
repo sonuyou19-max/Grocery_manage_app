@@ -560,6 +560,7 @@ const nl = {
     emptyBody:
       'Terwijl je items van je lijsten afvinkt, leert Korb hoe snel je ze opmaakt en houdt ze hier bij. Of tik op “Item volgen” om een vaste voorraad toe te voegen die je altijd in huis hebt.',
     search: 'Zoek in je voorraad',
+    historyFor: 'Aankoopgeschiedenis van %{item}',
     noMatchesTitle: 'Geen resultaten',
     noMatchesBody: 'Niets in je voorraad komt overeen met “%{query}”.',
     runningLow: 'Bijna op',

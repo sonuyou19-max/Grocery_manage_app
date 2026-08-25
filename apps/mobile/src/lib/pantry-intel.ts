@@ -264,6 +264,85 @@ export function lifeRemaining(stat: ItemStat, now: number): number {
 }
 
 /**
+ * Below this fraction remaining, an item is not merely low but critical. Was a
+ * bare 0.15 inside the Pantry row's colour expression; named and moved here
+ * when the stock bar needed the same boundary, for the reason in LOW_THRESHOLD.
+ */
+export const CRIT_THRESHOLD = 0.15;
+
+/**
+ * How far past "due" the stock bar's track keeps going, as a fraction of the
+ * item's own interval. 0.5 means the track spans one and a half intervals.
+ *
+ * This exists because lifeRemaining is CLAMPED at zero, and a bar drawn from it
+ * says the same thing about milk that is one day late and milk that is three
+ * weeks gone: empty. Both are "out", and the shopper can see they are out; what
+ * they cannot see is which one has been out longer, which is exactly the thing
+ * that decides what to do about it.
+ *
+ * Half an interval of headroom, rather than an unbounded scale, because the
+ * useful range is short. Two days over on a weekly item matters; forty does
+ * not — by then the answer is "you have stopped buying this", which the Resting
+ * shelf handles. A scale that stretched to accommodate the forty-day case would
+ * squash every ordinary reading into the first eighth of the bar.
+ */
+export const OVERDUE_ROOM = 0.5;
+
+/** Where "due" falls along that track. Derived, so the two cannot drift. */
+export const DUE_MARK = 1 / (1 + OVERDUE_ROOM);
+
+export type StockTone = 'learning' | 'ok' | 'low' | 'crit';
+
+export interface StockGeometry {
+  /** Which of the three colours the row is wearing, or that there is no reading yet. */
+  tone: StockTone;
+  /**
+   * Where the marker sits, 0..1 along the track — NOT a fill fraction. null
+   * while learning, which is the difference between "nothing to draw" and
+   * "draw nothing", and the reason this is nullable rather than 0.
+   */
+  position: number | null;
+  /** Intervals elapsed since the last purchase, UNCLAMPED. 1.4 means 40% over. */
+  elapsed: number | null;
+  /** Past the notch. */
+  overdue: boolean;
+}
+
+/**
+ * Everything the stock bar needs to draw itself, and nothing about drawing.
+ *
+ * Kept beside lifeRemaining rather than in the component because it is the same
+ * judgement wearing a different shape, and because a pure function of (stat,
+ * now) can be checked against a table of cases — which is how the learning case
+ * below got caught.
+ *
+ * THE LEARNING CASE. An item with no purchases has no rhythm, and lifeRemaining
+ * answers 1 for it: full bar, brightest green, "plenty". The screen was
+ * simultaneously printing the word "Learning" beside it. The bar was not
+ * reporting a full larder, it was reporting the absence of a measurement in the
+ * one colour that means the opposite, and the label was left to argue with it.
+ * So the tone is its own value and the position is null: no marker, no fill,
+ * nothing claimed.
+ */
+export function stockGeometry(stat: ItemStat, now: number): StockGeometry {
+  const span = effectiveInterval(stat) * DAY;
+  if (!stat.lastPurchasedAt || span <= 0) {
+    return { tone: 'learning', position: null, elapsed: null, overdue: false };
+  }
+  // Clamped at the near end only. A purchase dated in the future — a receipt
+  // read wrongly, a phone clock adrift — would otherwise drive the marker off
+  // the left of the track.
+  const elapsed = Math.max(0, (now - stat.lastPurchasedAt) / span);
+  const left = Math.max(0, 1 - elapsed);
+  return {
+    tone: left < CRIT_THRESHOLD ? 'crit' : left < LOW_THRESHOLD ? 'low' : 'ok',
+    position: Math.min(elapsed / (1 + OVERDUE_ROOM), 1),
+    elapsed,
+    overdue: elapsed >= 1,
+  };
+}
+
+/**
  * Is this item running low?
  *
  * Being on a shopping list counts, and that is the whole subtlety. Putting

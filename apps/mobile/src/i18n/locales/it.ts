@@ -560,6 +560,7 @@ const it = {
     emptyBody:
       'Mentre spunti gli articoli dalle tue liste, Korb impara quanto in fretta li consumi e li monitora qui. Oppure tocca “Monitora articolo” per aggiungere una scorta che tieni sempre in casa.',
     search: 'Cerca nella dispensa',
+    historyFor: 'Cronologia acquisti di %{item}',
     noMatchesTitle: 'Nessun risultato',
     noMatchesBody: 'Nulla nella tua dispensa corrisponde a “%{query}”.',
     runningLow: 'In esaurimento',

@@ -561,6 +561,7 @@ const de = {
     emptyBody:
       'Während du Artikel von deinen Listen abhakst, lernt Korb, wie schnell du sie verbrauchst, und erfasst sie hier. Oder tippe auf „Artikel verfolgen“, um einen Vorrat hinzuzufügen, den du immer zu Hause hast.',
     search: 'Vorrat durchsuchen',
+    historyFor: 'Kaufhistorie für %{item}',
     noMatchesTitle: 'Keine Treffer',
     noMatchesBody: 'Nichts in deinem Vorrat passt zu „%{query}“.',
     runningLow: 'Geht zur Neige',

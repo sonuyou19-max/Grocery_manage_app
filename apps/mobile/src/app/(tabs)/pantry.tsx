@@ -28,6 +28,7 @@ import { CoachMark } from '@/components/coach-mark';
 import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
 import { StapleSheet } from '@/components/staple-sheet';
+import { StockBar } from '@/components/stock-bar';
 import { TextPromptModal } from '@/components/text-prompt-modal';
 import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
@@ -36,17 +37,17 @@ import { haptics } from '@/lib/haptics';
 import { rubberBand, springTo } from '@/lib/motion';
 import { usePlusGate } from '@/lib/plus-gate';
 import {
-  LOW_THRESHOLD,
   dueAt,
   hasUserCadence,
   isLowStat,
   hasStopped,
   lastBoughtLabel,
-  lifeRemaining,
   listsHolding,
   queuedKeys,
   statusLabel,
+  stockGeometry,
   type ItemStat,
+  type StockTone,
 } from '@/lib/pantry-intel';
 import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useAuth } from '@/store/auth';
@@ -115,6 +116,16 @@ function SignedInPantry() {
   const [stapleKey, setStapleKey] = useState<string | null>(null);
   const [restOpen, setRestOpen] = useState(false);
   const [ledgerFor, setLedgerFor] = useState<{ name: string; category: ItemCategory } | null>(null);
+  /*
+   * Which items have a ledger worth opening, built once for the whole screen.
+   *
+   * The per-row question is "does historyFor return anything", and asking it
+   * that way is a filter over every purchase ever logged, once per row, on
+   * every render — quadratic against the two things that grow together. Both
+   * sides are already normalized keys (see ItemStat.key and Purchase.key), so a
+   * Set answers the same question by lookup.
+   */
+  const logged = useMemo(() => new Set(purchases.map((p) => p.key)), [purchases]);
   /** The staple sheet is mounted exactly while `stapleKey` is set. */
 
   const now = Date.now();
@@ -322,6 +333,16 @@ function SignedInPantry() {
           onOpen={() => {
             haptics.tick();
             setStapleKey(item.key);
+          }}
+          hasHistory={logged.has(item.key)}
+          /* Gated exactly as the settings sheet's row is — same feature, same
+             price. Nothing to defer here: no sheet is open, so the ledger's
+             Modal has no other Modal to collide with. See HistoryRow for the
+             case that does. */
+          onOpenHistory={() => {
+            haptics.tick();
+            if (locked) requirePlus();
+            else setLedgerFor({ name: item.display, category: item.category });
           }}
         />
       ))}
@@ -681,6 +702,8 @@ function PantrySwipeRow({
   onStillGood,
   onAddToList,
   onOpen,
+  hasHistory,
+  onOpenHistory,
   coachRef,
 }: {
   item: ItemStat;
@@ -691,6 +714,14 @@ function PantrySwipeRow({
   onStillGood: () => void;
   onAddToList: () => void;
   onOpen: () => void;
+  /**
+   * Whether there is a ledger to open. The button is hidden rather than
+   * disabled when there is not: a control that opens an empty sheet teaches
+   * that the control is broken, and an item with no logged purchase is the
+   * normal state of a freshly tracked staple, not an error.
+   */
+  hasHistory: boolean;
+  onOpenHistory: () => void;
   /** Set on the first row only, so a coach mark can measure where it sits. */
   coachRef?: RefObject<View | null>;
 }) {
@@ -729,9 +760,23 @@ function PantrySwipeRow({
     opacity: interpolate(tx.value, [-ACTION_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP),
   }));
 
-  const left = lifeRemaining(item, now);
-  const barColor =
-    left < 0.15 ? colors.crit : left < LOW_THRESHOLD ? colors.warn : colors.accent;
+  const geo = stockGeometry(item, now);
+  const toneColor: Record<StockTone, string> = {
+    learning: colors.muted,
+    ok: colors.muted,
+    low: colors.warn,
+    crit: colors.crit,
+  };
+  /*
+   * `ok` reads MUTED here while the bar draws it in the accent. Not an
+   * oversight and not a disagreement: the bar is a reading and shows where a
+   * comfortable item sits on the scale, whereas this line is a caption, and a
+   * caption that shouts on every healthy row leaves nothing louder for the ones
+   * that need it. Colour is the scarce thing on this screen — thirty rows of
+   * green "9 days left" is thirty rows of noise with the two urgent ones buried
+   * in it.
+   */
+  const statusColor = toneColor[geo.tone];
 
   return (
     /* collapsable={false} so Android keeps this view in the hierarchy — a
@@ -754,7 +799,7 @@ function PantrySwipeRow({
               than wrapping it, so a swipe still wins over a press. */}
           <Pressable
             onPress={onOpen}
-            style={styles.grow}
+            style={styles.body}
             accessibilityRole="button"
             accessibilityLabel={t('staple.openFor', { item: item.display })}
           >
@@ -782,20 +827,48 @@ function PantrySwipeRow({
                 {item.display}
               </Text>
             </View>
-            <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-              {queued ? t('pantry.onList') : categoryLabel(item.category, t)} ·{' '}
-              {lastBoughtLabel(item.lastPurchasedAt, now, t)}
-              {hasUserCadence(item) ? ` · ${t('staple.everyDays', { count: item.cadenceDays ?? 0 })}` : ''}
-            </Text>
-          </Pressable>
-          <View style={styles.stock}>
-            <View style={[styles.bar, { backgroundColor: colors.line }]}>
-              <View style={[styles.fill, { width: `${Math.max(left, 0.02) * 100}%`, backgroundColor: barColor }]} />
+            {/*
+             * Facts on the left, verdict on the right. The status used to sit
+             * under the bar in a 104px column, where the longer languages wrap
+             * it to two lines ("Noch 12 Tage") against an ellipsised name; on
+             * its own end of a full-width line it has the room, and it lands in
+             * the same place on every row so the column can be scanned down.
+             */}
+            <View style={styles.metaRow}>
+              <Text style={[type.sub, styles.grow, { color: colors.muted }]} numberOfLines={1}>
+                {queued ? t('pantry.onList') : categoryLabel(item.category, t)} ·{' '}
+                {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+                {hasUserCadence(item) ? ` · ${t('staple.everyDays', { count: item.cadenceDays ?? 0 })}` : ''}
+              </Text>
+              <Text style={[type.sub, styles.status, { color: statusColor }]} numberOfLines={1}>
+                {statusLabel(item, now, t)}
+              </Text>
             </View>
-            <Text style={[type.sub, { color: left < LOW_THRESHOLD ? barColor : colors.muted }]}>
-              {statusLabel(item, now, t)}
-            </Text>
-          </View>
+            <StockBar geo={geo} />
+          </Pressable>
+
+          {/*
+           * Straight to the ledger, without the settings sheet in between.
+           *
+           * It was already reachable — open the item, find the row, tap it —
+           * and it is the thing people come to a pantry row to see, so it was
+           * two taps and a sheet behind a place nobody would think to look.
+           * Being a second target on the row it also has to be genuinely small
+           * and genuinely at the edge, so a thumb aiming at the row does not
+           * land on it: hitSlop gives it the touch area it needs without
+           * lending it any visual weight.
+           */}
+          {hasHistory && (
+            <Pressable
+              onPress={onOpenHistory}
+              hitSlop={10}
+              style={styles.historyBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('pantry.historyFor', { item: item.display })}
+            >
+              <Ionicons name="receipt-outline" size={18} color={colors.muted} />
+            </Pressable>
+          )}
         </Animated.View>
       </GestureDetector>
     </View>
@@ -880,16 +953,24 @@ const styles = StyleSheet.create({
   actionLeft: { justifyContent: 'flex-start' },
   actionRight: { justifyContent: 'flex-end' },
   actionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  // flex-start, not centre: the card is three stacked lines now and the history
+  // button belongs beside the NAME, not floating at the vertical middle of a
+  // block whose height changes with the text.
   rowContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
   },
   grow: { flex: 1, minWidth: 0 },
+  body: { flex: 1, minWidth: 0, gap: spacing.xs },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  stock: { width: 104, gap: spacing.xs },
-  bar: { height: 5, borderRadius: 3, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 3 },
+  metaRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+  // Never squeezed to nothing by a long category or a long item name: it is the
+  // shortest string on the row and the one worth reading.
+  status: { flexShrink: 0, fontWeight: '600' },
+  // Nudged down onto the name's baseline, and given its own top padding so the
+  // touch target reaches the card's edge.
+  historyBtn: { paddingTop: 3 },
 });

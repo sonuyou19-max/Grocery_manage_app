@@ -560,6 +560,7 @@ const es = {
     emptyBody:
       'A medida que marcas artículos de tus listas, Korb aprende lo rápido que los gastas y los controla aquí. O toca «Seguir artículo» para añadir un básico que siempre tienes en casa.',
     search: 'Busca en tu despensa',
+    historyFor: 'Historial de compras de %{item}',
     noMatchesTitle: 'Sin resultados',
     noMatchesBody: 'Nada en tu despensa coincide con «%{query}».',
     runningLow: 'Agotándose',

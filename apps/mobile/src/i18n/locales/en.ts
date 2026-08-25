@@ -572,6 +572,7 @@ const en = {
     emptyBody:
       'As you tick items off your lists, Korb learns how fast you get through them and tracks them here. Or tap “Track item” to add a staple you always keep at home.',
     search: 'Search your pantry',
+    historyFor: 'Purchase history for %{item}',
     noMatchesTitle: 'No matches',
     noMatchesBody: 'Nothing in your pantry matches “%{query}”.',
     runningLow: 'Running low',

@@ -561,6 +561,7 @@ const fr = {
     emptyBody:
       'À mesure que tu coches des articles sur tes listes, Korb apprend à quelle vitesse tu les consommes et les suit ici. Ou appuie sur « Suivre un article » pour ajouter un produit que tu gardes toujours chez toi.',
     search: 'Rechercher dans ton garde-manger',
+    historyFor: 'Historique d’achats de %{item}',
     noMatchesTitle: 'Aucun résultat',
     noMatchesBody: 'Rien dans ton garde-manger ne correspond à « %{query} ».',
     runningLow: 'Bientôt épuisé',

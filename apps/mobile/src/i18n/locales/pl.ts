@@ -624,6 +624,7 @@ const pl = {
     emptyBody:
       'Gdy odhaczasz produkty ze swoich list, Korb uczy się, jak szybko je zużywasz, i śledzi je tutaj. Albo dotknij „Śledź produkt”, aby dodać zapas, który zawsze masz w domu.',
     search: 'Szukaj w spiżarni',
+    historyFor: 'Historia zakupów: %{item}',
     noMatchesTitle: 'Brak wyników',
     noMatchesBody: 'Nic w Twojej spiżarni nie pasuje do „%{query}”.',
     runningLow: 'Kończy się',
