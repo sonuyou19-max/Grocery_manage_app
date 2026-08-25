@@ -60,6 +60,7 @@ const fr = {
     checkShot: 'Arrives-tu à lire les prix ?',
     retake: 'Reprendre',
     useShot: 'Utiliser',
+    offBy: '%{amount} d’écart avec le total du ticket — vérifie les montants.',
   },
   coach: {
     gotIt: 'Compris',

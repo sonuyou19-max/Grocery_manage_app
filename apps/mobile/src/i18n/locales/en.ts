@@ -69,6 +69,7 @@ const en = {
     checkShot: 'Can you read the prices?',
     retake: 'Retake',
     useShot: 'Use photo',
+    offBy: '%{amount} off what the receipt says was paid — check the amounts.',
   },
   coach: {
     gotIt: 'Got it',

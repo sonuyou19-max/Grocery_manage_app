@@ -540,5 +540,27 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
   );
 }
 
+/* ----------------------------- the prompt rules this receipt forced ------- */
+
+/*
+ * A Delhaize receipt came back with every price from the seventh line down
+ * shifted onto the product above it. The model had read the names down one
+ * column and the amounts down the other, and a single missed row put every
+ * remaining amount against the wrong thing — with each amount genuinely
+ * present on the paper, so nothing looked invented.
+ *
+ * Two rules answer it, and the second is the one that matters most: the printed
+ * totals are the only thing on the receipt that can CONTRADICT the model. A
+ * subtotal derived from its own lines agrees with its own lines however wrong
+ * they are, which turns the whole reconciliation into a tautology.
+ */
+check_('the prompt says to read across rows, not down columns', /READ ACROSS EACH ROW, NEVER DOWN THE COLUMNS/.test(fn));
+check_('...and names the failure it prevents', /shifts every\s+remaining price onto the wrong product/.test(fn));
+check_('the model is told to check its own sum first', /ADD UP THE LINES YOU HAVE WRITTEN AND COMPARE THE SUM WITH\s+THE PRINTED TOTAL/.test(fn));
+check_('...and never to move the printed total to fit', /Do not adjust the\s+printed total to fit your lines/.test(fn));
+check_('goodsCents is READ, never derived', /READ IT OFF THE PAPER\. Never add up your own lines/.test(fn));
+check_('...and so is paidCents', /paidCents: the amount actually paid, also READ OFF THE PAPER and never\s+computed/.test(fn));
+check_('the date rule names the middle number', /The middle number is the month/.test(fn));
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

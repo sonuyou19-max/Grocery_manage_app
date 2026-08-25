@@ -60,6 +60,7 @@ const nl = {
     checkShot: 'Kun je de prijzen lezen?',
     retake: 'Opnieuw',
     useShot: 'Foto gebruiken',
+    offBy: '%{amount} verschil met het bonbedrag — controleer de bedragen.',
   },
   coach: {
     gotIt: 'Duidelijk',

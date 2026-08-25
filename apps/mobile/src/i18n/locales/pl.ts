@@ -70,6 +70,7 @@ const pl = {
     checkShot: 'Czy widzisz ceny wyraźnie?',
     retake: 'Zrób ponownie',
     useShot: 'Użyj zdjęcia',
+    offBy: 'Różnica %{amount} wobec kwoty z paragonu — sprawdź kwoty.',
   },
   coach: {
     gotIt: 'Jasne',

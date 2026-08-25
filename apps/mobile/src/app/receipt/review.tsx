@@ -29,6 +29,7 @@ import {
   includedCount,
   includedTotal,
   initialDecisions,
+  offBy,
   setInclude,
   setPrice,
   pickerOptions,
@@ -148,6 +149,13 @@ export default function ReceiptReviewScreen() {
 
   const total = includedTotal(purchases, decisions);
   const count = includedCount(purchases, decisions);
+  /*
+   * The last comparison, against the number on the paper rather than against
+   * the model's own arithmetic. Null when it cannot mean anything — see offBy.
+   */
+  const gap = run
+    ? offBy(purchases, decisions, run.receipt.paidCents, run.receipt.depositCents, run.receipt.discountCents)
+    : null;
 
   if (!run) {
     // No stash: arrived by a back gesture after the run was consumed, or by a
@@ -536,6 +544,13 @@ export default function ReceiptReviewScreen() {
                 {t('receipt.importing', { count })}
               </Text>
               <Text style={[type.h2, { color: colors.ink }]}>{money(total)}</Text>
+              {/* Only when every line is in and the gap is real. A receipt that
+                  adds up says nothing here. */}
+              {gap != null && (
+                <Text style={[type.label, { color: colors.warn }]}>
+                  {t('receipt.offBy', { amount: money(Math.abs(gap)) })}
+                </Text>
+              )}
             </View>
             {/* Nothing to import is a real state — untick every row and the
                 button has no work to do. */}

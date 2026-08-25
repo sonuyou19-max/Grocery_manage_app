@@ -209,8 +209,13 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   the target language, and not the country's main language — a Leuven receipt
   can be in French. This is what tells the reader which expansions to trust.
 - goodsCents: the printed subtotal for goods, before discounts and deposits.
-- paidCents: the amount actually paid. Where payment is split across two
-  tenders, this is their sum, or the printed "total paid".
+  READ IT OFF THE PAPER. Never add up your own lines to produce it. It is the
+  one number here that can contradict you, and that is its entire job — a
+  subtotal derived from your own answer agrees with your own answer no matter
+  how wrong the answer is.
+- paidCents: the amount actually paid, also READ OFF THE PAPER and never
+  computed. Where payment is split across two tenders, this is their sum, or
+  the printed "total paid".
 - articleCount: the printed count of articles, if there is one. Do not compute
   it yourself — report only what is printed, or null.
 - emoji: one emoji for the product, from the app's own set. Null if unsure.
@@ -231,9 +236,24 @@ anything:
   the expansion on its own.
 
 RULES.
+- READ ACROSS EACH ROW, NEVER DOWN THE COLUMNS. A till prints the description on
+  the left and the amount on the right, often with a wide empty gap between
+  them. Take one row at a time and carry its name and its amount together
+  before moving to the next. Reading the names down one side and then the
+  prices down the other is how a single missed row silently shifts every
+  remaining price onto the wrong product — the receipt still adds up, every
+  amount is real, and each one is against the wrong thing.
+  If a row's amount is far from its name, follow the row, not the nearest
+  number.
+- BEFORE YOU ANSWER, ADD UP THE LINES YOU HAVE WRITTEN AND COMPARE THE SUM WITH
+  THE PRINTED TOTAL. They must agree. If they do not, you have misread a line —
+  go back and find which, while you can still see the receipt. Do not adjust the
+  printed total to fit your lines: the paper is right and you are not.
 - Numbers use a decimal comma in these countries. 1,67 is one euro sixty-seven,
   and 1.234,56 is a thousand two hundred and thirty four euros.
-- Dates are day-month-year. 08-05-2026 is the eighth of May.
+- Dates are day-month-year, ALWAYS, on every receipt here. 08-05-2026 is the
+  eighth of May. 12/08/26 is the twelfth of August 2026 — not the eighth of
+  December, and not June. The middle number is the month.
 - Every line's multiplier times its unit price must equal its total. If they do
   not, you have read one of the three wrongly — look again before answering.
 - Points balances, loyalty totals, VAT breakdowns, card numbers and anything

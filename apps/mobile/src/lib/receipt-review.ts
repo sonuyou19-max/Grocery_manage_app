@@ -212,3 +212,49 @@ export function pickerOptions(
   const free = new Set(unclaimed(candidates, decisions).map((c) => c.id));
   return candidates.filter((c) => free.has(c.id) || c.id === mine);
 }
+
+/**
+ * Does the import add up to what the paper says was paid?
+ *
+ * ---------------------------------------------------------------------------
+ * The hole this closes
+ * ---------------------------------------------------------------------------
+ *
+ * The server reconciles the model's lines against the model's own reading of
+ * the printed total — which is a real check right up until the model gets both
+ * wrong in the same direction. A Delhaize receipt came back with every price
+ * from the seventh line onward shifted onto the product above it: every amount
+ * genuinely appeared on the paper, the arithmetic was internally consistent,
+ * and nothing flagged it. €45.49 was offered for a €48.02 shop.
+ *
+ * So the last comparison happens here, against the number in front of the
+ * shopper, using the amounts they can actually see.
+ *
+ * It is deliberately silent unless EVERY line is included. Unticking one is a
+ * normal thing to do and would trip this on the first tap, which is exactly the
+ * reasoning that kept the footer from comparing anything at all until now. The
+ * fix is not to compare less; it is to compare only when the comparison means
+ * something.
+ */
+export function offBy(
+  purchases: readonly ReceiptPurchase[],
+  decisions: Decisions,
+  paidCents: number | null,
+  depositCents: number,
+  discountCents: number,
+): number | null {
+  if (paidCents == null) return null;
+  // Anything left out makes the sums legitimately differ.
+  if (includedCount(purchases, decisions) !== purchases.length) return null;
+
+  /*
+   * Deposits and discounts are money on the receipt and never purchases, so
+   * they are added back before the comparison. Leaving them out would report a
+   * gap on every receipt that carried a bottle deposit — a false alarm on a
+   * warning whose whole value is that it is rare.
+   */
+  const expected = paidCents - depositCents - discountCents;
+  const diff = includedTotal(purchases, decisions) - expected;
+  // A cent or two is rounding on a weighed line, not a misread row.
+  return Math.abs(diff) <= 2 ? null : diff;
+}

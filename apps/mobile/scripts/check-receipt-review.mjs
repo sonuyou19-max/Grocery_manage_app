@@ -56,6 +56,7 @@ const {
   includedCount,
   includedTotal,
   initialDecisions,
+  offBy,
   pickerOptions,
   setInclude,
   setPrice,
@@ -261,6 +262,74 @@ eq(
   includedTotal(PURCHASES, setPrice(d0, 'a', 1670)),
   1670 + 129 + 249,
 );
+
+/* ------------------------------------------------------------- the gap ---- */
+
+console.log('\noffBy — the last comparison');
+
+/*
+ * The server reconciles the model's lines against the model's OWN reading of
+ * the printed total, which stops being a check the moment it gets both wrong in
+ * the same direction. A Delhaize receipt came back with every price from the
+ * seventh line down shifted onto the product above it: every amount really
+ * appeared on the paper, the arithmetic was internally consistent, nothing
+ * flagged it, and €45.49 was offered for a €48.02 shop.
+ *
+ * The fixture below IS that receipt.
+ */
+{
+  const delhaize = [
+    ['melk', 89], ['ajuin', 189], ['kokos', 349], ['soya', 305], ['skyr', 415],
+    ['muesli', 205], ['toast', 499], ['seizoenen', 209], ['fruitsap', 315],
+    ['spinazie', 229], ['appel', 315], ['aardappel', 231], ['coke', 234],
+    ['sprite', 165], ['druif', 546],
+  ].map(([n, c], i) => buy(`d${i}`, n, c));
+
+  const asRead = initialDecisions(delhaize, new Map());
+  const paid = delhaize.reduce((a, p) => a + p.priceCents, 0);
+
+  eq('a receipt that adds up says nothing', offBy(delhaize, asRead, paid, 0, 0), null);
+
+  // The drift: every price from `fruitsap` down moves up one line. Same amounts,
+  // same count, one line's worth of money lost off the end.
+  const drifted = delhaize.map((p, i) =>
+    i >= 8 ? { ...p, priceCents: delhaize[i - 1].priceCents } : p,
+  );
+  const gap = offBy(drifted, initialDecisions(drifted, new Map()), paid, 0, 0);
+  eq(
+    'a one-row shift IS caught, even though every amount is real',
+    gap,
+    drifted.reduce((a, p) => a + p.priceCents, 0) - paid,
+  );
+  if (gap != null) {
+    console.log('       (the server cannot see this: the sums it compares are both the');
+    console.log('        model\'s, and the model was consistently wrong)');
+  }
+
+  eq(
+    'a cent of rounding on a weighed line is not a gap',
+    offBy(
+      delhaize.map((p, i) => (i === 0 ? { ...p, priceCents: p.priceCents + 2 } : p)),
+      asRead, paid, 0, 0,
+    ),
+    null,
+  );
+
+  eq(
+    'nothing is claimed when a line has been excluded',
+    offBy(drifted, setInclude(initialDecisions(drifted, new Map()), 'd0', false), paid, 0, 0),
+    null,
+  );
+  console.log('       (unticking one is normal and would trip this on the first tap)');
+
+  eq('nor when the receipt printed no total', offBy(drifted, asRead, null, 0, 0), null);
+
+  eq(
+    'deposits and discounts are added back before comparing',
+    offBy(delhaize, asRead, paid + 25 - 100, 25, -100),
+    null,
+  );
+}
 
 /* -------------------------------------------------------------- the sheet */
 

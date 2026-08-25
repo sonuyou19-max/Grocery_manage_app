@@ -60,6 +60,7 @@ const de = {
     checkShot: 'Kannst du die Preise lesen?',
     retake: 'Neu aufnehmen',
     useShot: 'Foto nehmen',
+    offBy: '%{amount} Unterschied zum Bonbetrag — prüf die Beträge.',
   },
   coach: {
     gotIt: 'Alles klar',

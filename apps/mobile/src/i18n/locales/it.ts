@@ -60,6 +60,7 @@ const it = {
     checkShot: 'Riesci a leggere i prezzi?',
     retake: 'Rifai',
     useShot: 'Usa la foto',
+    offBy: '%{amount} di differenza dal totale dello scontrino — controlla gli importi.',
   },
   coach: {
     gotIt: 'Capito',

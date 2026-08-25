@@ -60,6 +60,7 @@ const es = {
     checkShot: '¿Puedes leer los precios?',
     retake: 'Repetir',
     useShot: 'Usar foto',
+    offBy: '%{amount} de diferencia con el total del tique — revisa los importes.',
   },
   coach: {
     gotIt: 'Entendido',
