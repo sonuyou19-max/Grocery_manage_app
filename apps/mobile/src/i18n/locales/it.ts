@@ -285,6 +285,7 @@ const it = {
   },
   stopped: {
     section: 'Non lo compro più',
+    label: 'Non lo compro più',
     sectionHint: 'Korb conserva la loro storia ma li esclude da tutto il resto.',
     action: 'Non lo compro più',
     hint: 'Esce dalla dispensa, dal Vibe Check e dai tuoi insight. La storia e i prezzi restano, e ricomprarlo lo riporta subito.',

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRef, type PropsWithChildren } from "react";
+import { useEffect, useRef, useState, type PropsWithChildren } from "react";
 import {
   Pressable,
   ScrollView,
@@ -11,6 +11,17 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Sheet, SheetHandle, useSheetDismiss } from "@/components/sheet";
@@ -217,16 +228,17 @@ export function StapleSheet({
                 Adjacent, they read as a choice. Both muted rather than red: the
                 weight belongs in delete's confirmation, and a red button up
                 here would shout on a screen opened to change a cadence. */}
-            <Pressable
+            <StopBuyingButton
               onPress={onStopBuying}
-              accessibilityRole="button"
-              accessibilityLabel={t("stopped.action")}
-              accessibilityHint={t("stopped.hint")}
-              hitSlop={12}
-              style={styles.trash}
-            >
-              <Ionicons name="bag-remove-outline" size={22} color={colors.muted} />
-            </Pressable>
+              /* The key of the item currently OPEN, not of the snapshot above.
+                 It is null while the sheet is closing, which is what folds the
+                 chip away rather than leaving it expanded through the exit —
+                 and it changes when a different item is opened, which is what
+                 makes the reveal play again for that item. A mount-time effect
+                 would fire exactly once ever: this component stays mounted
+                 between openings, holding `last` so the sheet can animate out. */
+              revealFor={openItem?.key ?? null}
+            />
             <Pressable
               onPress={onDelete}
               accessibilityRole="button"
@@ -349,7 +361,7 @@ function CadenceChip({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       style={[
-        styles.chip,
+        styles.reveal,
         {
           borderColor: active ? colors.accent : colors.line,
           backgroundColor: active ? colors.accentSoft : colors.surface,
@@ -411,6 +423,154 @@ function HistoryRow({
   );
 }
 
+/**
+ * "Stopped buying", said out loud and then put away again.
+ *
+ * ---------------------------------------------------------------------------
+ * What it fixes
+ * ---------------------------------------------------------------------------
+ *
+ * A bag with a minus in it. Nobody knows what that means, and the two icons up
+ * here — this and the bin — are the two ways an item leaves the pantry, so
+ * guessing wrong between them is the one mistake this header can produce: one
+ * is reversible and the other ends the item. VoiceOver already read the label;
+ * everybody else got the pictogram.
+ *
+ * So it introduces itself. The chip opens, holds long enough to be read, and
+ * folds back to the icon it was — which is the point of folding rather than
+ * staying open: the header is not a toolbar of labelled buttons, it is a name
+ * with two small controls beside it, and two permanent word-chips up there
+ * would outweigh the name.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it does not push anything
+ * ---------------------------------------------------------------------------
+ *
+ * The obvious build is to let the chip grow inside the header row and let flex
+ * do the rest. Then it takes ~100dp from the name beside it for two seconds:
+ * the name reflows to a second line, everything below it — the toggle, the
+ * cadence pills, the whole sheet — slides down, and slides back when the chip
+ * closes. An affordance that shoves the screen around is worse than the
+ * ambiguity it was explaining.
+ *
+ * So the chip does not live in the flow. Its slot keeps the icon's width
+ * forever, and the chip itself is absolute inside it, anchored right and
+ * growing leftwards over the name's tail with the sheet's own surface behind
+ * it. Nothing measures differently at any point in the animation.
+ *
+ * Anchored right is also why the content is laid out `justifyContent: flex-end`
+ * with the label refusing to shrink: pinned to the right edge, a narrowing
+ * container clips the LEFT of the row, so the icon holds still at the exact
+ * pixel it occupies at rest and the words come out from behind it. Left-aligned
+ * it would clip the icon instead and the button would appear to slide away.
+ */
+const REVEAL_DELAY = 420;
+const OPEN_MS = 260;
+const HOLD_MS = 1700;
+const CLOSE_MS = 200;
+const ICON = 22;
+/** The chip's height, and the width of its slot in the flow. */
+const CHIP_H = 26;
+
+function StopBuyingButton({
+  onPress,
+  revealFor,
+}: {
+  onPress: () => void;
+  /** The open item's key, or null when the sheet is closed. */
+  revealFor: string | null;
+}) {
+  const { colors } = useTheme();
+  const t = useT();
+  const reduced = useReducedMotion();
+  const open = useSharedValue(0);
+  /*
+   * The label's natural width, measured once. It has to be a real measurement:
+   * the string is seven translations long, "Stopped buying" and "Nicht mehr
+   * gekauft" are not the same size, and a guessed constant would either clip
+   * the German or leave the English sitting in a chip of empty space.
+   */
+  const [labelW, setLabelW] = useState(0);
+
+  useEffect(() => {
+    if (revealFor == null || labelW === 0) {
+      open.value = 0;
+      return;
+    }
+    /*
+     * Reduce Motion gets the chip open and STAYING open.
+     *
+     * Not "no animation, no chip" — that would take the explanation away from
+     * the people who asked for less movement, which is not what they asked
+     * for. The setting is about motion, so the motion goes and the words stay.
+     * It costs the header some width for as long as the sheet is up, which is
+     * the right trade in the one case where it is a trade at all.
+     */
+    if (reduced) {
+      open.value = 1;
+      return;
+    }
+    open.value = withDelay(
+      // Waiting out the sheet's own entrance. A chip unfolding while the sheet
+      // is still sliding up is two motions competing for the same glance, and
+      // the one that loses is the one that was trying to teach something.
+      REVEAL_DELAY,
+      withSequence(
+        withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.quad) }),
+        withDelay(HOLD_MS, withTiming(0, { duration: CLOSE_MS, easing: Easing.in(Easing.quad) })),
+      ),
+    );
+    // One shared value, one cleanup. A sequence left running against an
+    // unmounted view is the same leak the scan overlay's loop was.
+    return () => cancelAnimation(open);
+  }, [labelW, open, reduced, revealFor]);
+
+  const chip = useAnimatedStyle(() => ({
+    width: ICON + open.value * (labelW + spacing.sm + spacing.sm),
+  }));
+  const plate = useAnimatedStyle(() => ({
+    // Ahead of the width, so the words are never legible through the name
+    // behind them. By the time there is anything to read the plate is solid.
+    opacity: interpolate(open.value, [0, 0.35, 1], [0, 1, 1]),
+  }));
+
+  return (
+    <View style={styles.revealSlot}>
+      <Animated.View style={[styles.reveal, chip]}>
+        <Animated.View
+          style={[
+            styles.revealPlate,
+            plate,
+            { backgroundColor: colors.surface, borderColor: colors.line },
+          ]}
+        />
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={t("stopped.action")}
+          accessibilityHint={t("stopped.hint")}
+          hitSlop={12}
+          style={styles.revealRow}
+        >
+          {/* Hidden from the reader: the button is already named above, and
+              announcing the chip's text as well would read the same control
+              twice under two different wordings. */}
+          <Text
+            accessible={false}
+            importantForAccessibility="no"
+            numberOfLines={1}
+            onLayout={(e) => setLabelW(e.nativeEvent.layout.width)}
+            style={[type.sub, styles.revealText, { color: colors.muted }]}
+          >
+            {t("stopped.label")}
+          </Text>
+          <Ionicons name="bag-remove-outline" size={ICON} color={colors.muted} />
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   // Name block and the delete control, top-aligned so the icon stays level
   // with the first line of a name that wraps to two.
@@ -420,6 +580,40 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   trash: { paddingTop: 2 },
+  /*
+   * The slot the chip never outgrows. Exactly the icon's width, forever, so the
+   * header row measures the same whether the chip is open, closed or halfway —
+   * see the note above StopBuyingButton. `overflow: visible` because the chip
+   * is supposed to escape it leftwards; that is the whole arrangement.
+   */
+  revealSlot: { width: ICON, height: CHIP_H, paddingTop: 2 },
+  reveal: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    height: CHIP_H,
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  // Behind the content, not around it: an opaque plate that can fade in on its
+  // own schedule while the chip's width runs on another.
+  revealPlate: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+  },
+  revealRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    // Pinned right, so a narrowing chip clips the label and never the icon.
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+    paddingLeft: spacing.sm,
+  },
+  // Never compressed to fit — it has to report its true width to onLayout, and
+  // a shrunk label would make the chip open to the wrong size.
+  revealText: { flexShrink: 0 },
   titleRow: {
     flexDirection: "row",
     flexWrap: "wrap",

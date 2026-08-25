@@ -315,6 +315,7 @@ const pl = {
   },
   stopped: {
     section: 'Już nie kupuję',
+    label: 'Już nie kupuję',
     sectionHint: 'Korb zachowuje ich historię, ale pomija je wszędzie indziej.',
     action: 'Już tego nie kupuję',
     hint: 'Znika ze spiżarni, z Vibe Check i z Twoich statystyk. Historia i ceny zostają, a ponowny zakup od razu je przywraca.',

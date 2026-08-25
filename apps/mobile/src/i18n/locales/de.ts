@@ -286,6 +286,7 @@ const de = {
   },
   stopped: {
     section: 'Kaufe ich nicht mehr',
+    label: 'Kaufe ich nicht mehr',
     sectionHint: 'Korb behält den Verlauf, lässt sie aber überall sonst weg.',
     action: 'Das kaufe ich nicht mehr',
     hint: 'Es verschwindet aus dem Vorratsmix, dem Vibe Check und deinen Insights. Verlauf und Preise bleiben erhalten, und ein neuer Kauf holt es sofort zurück.',

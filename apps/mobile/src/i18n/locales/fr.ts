@@ -286,6 +286,7 @@ const fr = {
   },
   stopped: {
     section: 'Je n’achète plus',
+    label: 'Je n’achète plus',
     sectionHint: 'Korb garde leur historique mais les exclut de tout le reste.',
     action: 'Je n’achète plus ça',
     hint: 'L’article quitte le mix de placard, le Vibe Check et tes insights. L’historique et les prix sont gardés, et un nouvel achat le ramène aussitôt.',

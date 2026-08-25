@@ -285,6 +285,7 @@ const nl = {
   },
   stopped: {
     section: 'Koop ik niet meer',
+    label: 'Koop ik niet meer',
     sectionHint: 'Korb bewaart hun geschiedenis maar laat ze verder overal weg.',
     action: 'Dit koop ik niet meer',
     hint: 'Het verdwijnt uit de voorraadmix, de Vibe Check en je inzichten. De geschiedenis en prijzen blijven bewaard, en opnieuw kopen brengt het meteen terug.',
