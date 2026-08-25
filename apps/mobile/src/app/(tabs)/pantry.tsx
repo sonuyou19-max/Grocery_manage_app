@@ -412,7 +412,6 @@ function SignedInPantry() {
               )}
             </View>
 
-            {!searching && <SwipeLegend colors={colors} />}
 
             {searching && low.length === 0 && stocked.length === 0 && stoppedMatches.length === 0 ? (
               <EmptyState
@@ -595,43 +594,6 @@ function SignedInPantry() {
         onPick={pickList}
       />
     </>
-  );
-}
-
-/**
- * What the two swipe directions do, shown as the actions themselves.
- *
- * This was one line of text with arrow characters baked into the translation
- * ("Swipe a row: → still good · ← add to a list"). Three problems with that:
- * the arrows rendered at text weight and sat oddly against the words, the glyphs
- * are not reliably present in every Android system font, and a right-to-left
- * locale would need the arrows flipped inside the string — which is exactly the
- * kind of thing translators cannot be expected to get right.
- *
- * Showing the real thing instead: each side is a small pill wearing the same
- * icon and colour as the panel that appears under a swiped row, so the legend
- * and the gesture teach each other. The arrow is an icon, not a character, and
- * the labels reuse the strings the panels already use.
- */
-function SwipeLegend({ colors }: { colors: Colors }) {
-  const t = useT();
-  return (
-    <View style={styles.legend}>
-      <View style={[styles.legendPill, { backgroundColor: colors.warnSoft ?? colors.line }]}>
-        <Ionicons name="arrow-forward" size={13} color={colors.warn} />
-        <Ionicons name="time-outline" size={13} color={colors.warn} />
-        <Text style={[type.sub, { color: colors.warn }]} numberOfLines={1}>
-          {t('pantry.stillGood')}
-        </Text>
-      </View>
-      <View style={[styles.legendPill, { backgroundColor: colors.accentSoft }]}>
-        <Ionicons name="arrow-back" size={13} color={colors.accent} />
-        <Ionicons name="add-circle-outline" size={13} color={colors.accent} />
-        <Text style={[type.sub, { color: colors.accent }]} numberOfLines={1}>
-          {t('pantry.addToList')}
-        </Text>
-      </View>
-    </View>
   );
 }
 
@@ -902,31 +864,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowStack: { gap: spacing.sm },
-  // Wraps: the two labels together overrun a narrow phone in the longer
-  // languages ("Noch gut" + "Zur Liste hinzufügen").
-  //
-  // The vertical margins are its own, not the parent's. Everything on this
-  // screen is spaced by one `gap` on the scroll content, which gave the legend
-  // the same 12dp as the gap between two pantry rows — so a caption explaining
-  // a gesture sat as tightly against the search field above and the section
-  // heading below as list items sit against each other. It is a different KIND
-  // of thing from its neighbours and needs to look like one.
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  legendPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radii.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    maxWidth: '100%',
-  },
   restRow: {
     flexDirection: 'row',
     alignItems: 'center',
