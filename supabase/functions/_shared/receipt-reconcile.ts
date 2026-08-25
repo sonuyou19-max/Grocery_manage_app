@@ -83,10 +83,25 @@ export interface ReceiptTotals {
   articleCount: number | null;
 }
 
+/**
+ * Which check failed, for callers that must branch on it.
+ *
+ * `line` — a line's own multiplier × unit price ≠ its total.
+ * `goods` — the item lines do not add up to the printed goods subtotal.
+ * `paid`  — everything together does not add up to what was paid.
+ * `count` — the article count disagrees with both ways of counting.
+ */
+export type ProblemCode = 'line' | 'goods' | 'paid' | 'count';
+
+/** The failures that mean a NUMBER was misread, rather than a convention. */
+export const MONEY_CODES: readonly ProblemCode[] = ['line', 'goods', 'paid'];
+
 export interface ReconcileResult {
   ok: boolean;
   /** One entry per failed check, in the order they were run. */
   problems: string[];
+  /** The same failures as codes — see ProblemCode. */
+  codes: ProblemCode[];
   /** Indices of lines whose own arithmetic did not hold. */
   badLines: number[];
   /** Derived, for the receipts row. */
@@ -132,6 +147,18 @@ const round = (n: number): number => Math.sign(n) * Math.round(Math.abs(n));
 export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): ReconcileResult {
   const problems: string[] = [];
   const badLines: number[] = [];
+  /*
+   * The same failures, as codes rather than sentences.
+   *
+   * `problems` is written for a person and read by one — it goes on the review
+   * sheet. Anything that has to BRANCH on which check failed needs something
+   * stabler than prose, and the caller that needs it is the retry: re-reading a
+   * receipt with a slower model is worth it when the MONEY disagrees, and is
+   * not worth it when only the article count does. Deciding that by matching
+   * substrings of an English sentence would break the first time the wording
+   * improved.
+   */
+  const codes: ProblemCode[] = [];
 
   /* ---------------------------------------------------- LINE ------------- */
 
@@ -165,6 +192,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
 
   if (badLines.length) {
     problems.push(`${badLines.length} line(s) do not multiply out`);
+    codes.push('line');
   }
 
   /* --------------------------------------------------- GOODS ------------- */
@@ -181,6 +209,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
     problems.push(
       `items add up to ${goodsCents} but the receipt says ${totals.goodsCents}`,
     );
+    codes.push('goods');
   }
 
   /* ---------------------------------------------------- PAID ------------- */
@@ -189,6 +218,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
 
   if (totals.paidCents != null && round(paidCents) !== round(totals.paidCents)) {
     problems.push(`the lines total ${paidCents} but ${totals.paidCents} was paid`);
+    codes.push('paid');
   }
 
   /* --------------------------------------------------- COUNT ------------- */
@@ -229,12 +259,14 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
       problems.push(
         `counted ${asUnits} articles (or ${asLines} lines), the receipt says ${totals.articleCount}`,
       );
+      codes.push('count');
     }
   }
 
   return {
     ok: problems.length === 0,
     problems,
+    codes,
     badLines,
     goodsCents,
     depositCents,

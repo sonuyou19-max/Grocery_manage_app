@@ -10,7 +10,12 @@ import { z } from 'npm:zod@3.24.1';
 
 import { clientIp, reserveBudget } from '../_shared/rate-limit.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
-import { fingerprint, reconcile, type ReceiptLine } from '../_shared/receipt-reconcile.ts';
+import {
+  fingerprint,
+  MONEY_CODES,
+  reconcile,
+  type ReceiptLine,
+} from '../_shared/receipt-reconcile.ts';
 
 /**
  * ---------------------------------------------------------------------------
@@ -72,18 +77,17 @@ const UNITS = ['g', 'kg', 'ml', 'l', 'cl', 'pcs'] as const;
 const lineSchema = z.object({
   raw: z.string().min(1).max(200),
   kind: z.enum(LINE_KINDS).catch('item'),
-  name: z.string().max(200).nullable().catch(null),
-  expanded: z.string().max(200).nullable().catch(null),
-  translated: z.string().max(200).nullable().catch(null),
-  brand: z.string().max(80).nullable().catch(null),
-  section: z.string().max(80).nullable().catch(null),
-  multiplier: z.coerce.number().finite().nullable().catch(null),
-  multiplierDp: z.coerce.number().int().min(0).max(4).nullable().catch(null),
-  unit: z.enum(UNITS).nullable().catch(null),
-  packSize: z.coerce.number().positive().nullable().catch(null),
-  packUnit: z.enum(UNITS).nullable().catch(null),
-  unitPriceCents: z.coerce.number().finite().nullable().catch(null),
-  unitPriceDp: z.coerce.number().int().min(0).max(4).nullable().catch(null),
+  expanded: z.string().max(200).nullable().optional().default(null).catch(null),
+  translated: z.string().max(200).nullable().optional().default(null).catch(null),
+  brand: z.string().max(80).nullable().optional().default(null).catch(null),
+  section: z.string().max(80).nullable().optional().default(null).catch(null),
+  multiplier: z.coerce.number().finite().nullable().optional().default(null).catch(null),
+  multiplierDp: z.coerce.number().int().min(0).max(4).nullable().optional().default(null).catch(null),
+  unit: z.enum(UNITS).nullable().optional().default(null).catch(null),
+  packSize: z.coerce.number().positive().nullable().optional().default(null).catch(null),
+  packUnit: z.enum(UNITS).nullable().optional().default(null).catch(null),
+  unitPriceCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
+  unitPriceDp: z.coerce.number().int().min(0).max(4).nullable().optional().default(null).catch(null),
   totalCents: z.coerce.number().finite(),
   /**
    * The glyph and aisle for the product, so the shared dictionary learns
@@ -95,20 +99,20 @@ const lineSchema = z.object({
    * with no call at all. Both nullable — a line the model cannot place should
    * teach nothing rather than teach a guess.
    */
-  emoji: z.string().min(1).max(8).nullable().catch(null),
-  category: z.enum(CATEGORIES).nullable().catch(null),
+  emoji: z.string().min(1).max(8).nullable().optional().default(null).catch(null),
+  category: z.enum(CATEGORIES).nullable().optional().default(null).catch(null),
   /** The model's own doubt about the EXPANSION, which nothing else can check. */
   confidence: z.enum(['high', 'medium', 'low']).catch('medium'),
 });
 
 const receiptSchema = z.object({
-  store: z.string().max(120).nullable().catch(null),
-  purchasedAt: z.string().max(40).nullable().catch(null),
+  store: z.string().max(120).nullable().optional().default(null).catch(null),
+  purchasedAt: z.string().max(40).nullable().optional().default(null).catch(null),
   currency: z.string().length(3).catch('EUR'),
-  language: z.string().min(2).max(12).nullable().catch(null),
-  goodsCents: z.coerce.number().finite().nullable().catch(null),
-  paidCents: z.coerce.number().finite().nullable().catch(null),
-  articleCount: z.coerce.number().int().nullable().catch(null),
+  language: z.string().min(2).max(12).nullable().optional().default(null).catch(null),
+  goodsCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
+  paidCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
+  articleCount: z.coerce.number().int().nullable().optional().default(null).catch(null),
   lines: z.array(lineSchema).min(1).max(120),
 });
 
@@ -123,11 +127,24 @@ Return ONLY a JSON object of this exact shape:
 
 {"store":"...","purchasedAt":"...","currency":"EUR","language":"nl",
  "goodsCents":6110,"paidCents":6110,"articleCount":23,
- "lines":[{"raw":"...","kind":"item","name":"...","expanded":"...",
- "translated":"...","brand":"...","section":"...","multiplier":4,
- "multiplierDp":0,"unit":null,"packSize":1,"packUnit":"l",
- "unitPriceCents":167,"unitPriceDp":2,"totalCents":668,
- "emoji":"🥛","category":"dairy_eggs","confidence":"high"}]}
+ "lines":[
+  {"raw":"4 X 1L DLL VOLLE MELK","kind":"item","expanded":"volle melk",
+   "brand":"Delhaize","multiplier":4,"multiplierDp":0,"packSize":1,
+   "packUnit":"l","unitPriceCents":167,"unitPriceDp":2,"totalCents":668,
+   "emoji":"🥛","category":"dairy_eggs","confidence":"high"},
+  {"raw":"DRUIF ITALIA/VIT","kind":"item","expanded":"witte druiven",
+   "translated":"white grapes","section":"GROENTEN&FRUIT",
+   "multiplier":1.094,"multiplierDp":3,"unit":"kg",
+   "unitPriceCents":499,"unitPriceDp":2,"totalCents":546,
+   "emoji":"🍇","category":"fruit_veg","confidence":"high"}]}
+
+Two lines, because they are the two shapes: one COUNTED in packs, one WEIGHED.
+Between them they name every field you can use — and notice that neither writes
+a single null. The first has no section and no unit; the second has no brand and
+no pack size. Those keys are simply absent.
+
+That example is a Dutch receipt for an English reader, which is why "translated"
+appears on it. Read by a Dutch reader it would be absent from both lines.
 
 WHAT EVERY FIELD MEANS. Read this before writing anything.
 
@@ -140,7 +157,6 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   for a cash-rounding adjustment of a few cents. "other" for anything else.
   ANY line whose total is negative is a discount or a deposit return, never an
   item.
-- name: the product as printed, with the till's abbreviations left alone.
 - expanded: the same product with abbreviations opened out, in the receipt's OWN
   language, WITHOUT the brand and without the pack size. "CAR EIREN X30" ->
   "eieren". "DOUWE EGBERTS oplosk. dessert glas 200g" -> "oploskoffie". The
@@ -202,6 +218,17 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   heading when the receipt has one — "Tiernahrung" is household, whatever the
   abbreviated product name looks like. Null if unsure.
 - confidence: your own doubt about the EXPANSION, not about the numbers.
+
+HOW TO KEEP THE ANSWER SHORT. A long receipt is a long answer, and the
+shopper is standing there waiting for it. Two rules, neither of which loses
+anything:
+
+- OMIT any field you would answer null. Do not write "unit":null — leave the
+  key out. Most lines have no brand, no section, no unit and no unit price, so
+  this removes about a third of what you would otherwise type.
+- Omit "translated" when the receipt is ALREADY in the reader's language. It
+  would be the same string as "expanded" twice, and the reader falls back to
+  the expansion on its own.
 
 RULES.
 - Numbers use a decimal comma in these countries. 1,67 is one euro sixty-seven,
@@ -341,14 +368,44 @@ Deno.serve(async (req) => {
   let parsed: z.infer<typeof receiptSchema>;
   let result;
   let model = MODEL_FAST;
+  const started = Date.now();
+  let readMs = 0;
+  let retryMs = 0;
+
   try {
     parsed = await ask(MODEL_FAST);
     result = check(parsed);
   } catch (_err) {
     return Response.json({ error: 'Could not read that receipt' }, { status: 422 });
   }
+  readMs = Date.now() - started;
 
-  if (!result.ok) {
+  /*
+   * ---------------------------------------------------------------------------
+   * When a second reading is worth the wait
+   * ---------------------------------------------------------------------------
+   *
+   * This used to retry on ANY failed check, and the retry is a whole second
+   * vision call on a slower model — the single largest thing a shopper waits
+   * for. A seventeen-line Delhaize receipt took over two minutes, and most of
+   * that was reading it twice.
+   *
+   * The COUNT check does not justify that. It already accepts two different
+   * conventions because the chains do not agree with each other, so a receipt
+   * that satisfies neither is usually a THIRD convention nobody has catalogued
+   * — not a misread digit. Re-reading the pixels cannot fix a counting rule.
+   *
+   * The money checks are the opposite: a line that does not multiply out, or a
+   * total that does not add up, IS evidence that a number was read wrong, and a
+   * number read wrong is exactly what a better look at the image fixes.
+   *
+   * So the retry is gated on money. A count-only disagreement still reaches the
+   * review sheet as a warning — the shopper is told, and decides — it just does
+   * not cost them a second call first.
+   */
+  const worthRetrying = result.codes.some((c) => MONEY_CODES.includes(c));
+
+  if (!result.ok && worthRetrying) {
     /*
      * One retry, never a loop. A receipt that will not reconcile twice is
      * usually a bad photograph rather than a weak model, and the user is
@@ -356,6 +413,7 @@ Deno.serve(async (req) => {
      * a second time. The client shows what did not add up and lets them import
      * anyway.
      */
+    const retryAt = Date.now();
     try {
       const careful = await ask(MODEL_CAREFUL);
       const better = check(careful);
@@ -367,7 +425,27 @@ Deno.serve(async (req) => {
     } catch (_err) {
       // Keep the first answer. A failed retry is not worse than no retry.
     }
+    retryMs = Date.now() - retryAt;
   }
+
+  /*
+   * Logged, not guessed at. "The scan took two minutes" is a report nobody can
+   * act on without knowing which half of it was slow, and this is the only
+   * place that knows. It goes to the function log rather than the response
+   * because it is a fact about the server, and a shopper has no use for it.
+   */
+  console.log(
+    JSON.stringify({
+      at: 'receipt-scan',
+      images: images.length,
+      lines: parsed.lines.length,
+      model,
+      readMs,
+      retryMs,
+      ok: result.ok,
+      codes: result.codes,
+    }),
+  );
 
   /*
    * Teach the shared dictionary what the till calls things.

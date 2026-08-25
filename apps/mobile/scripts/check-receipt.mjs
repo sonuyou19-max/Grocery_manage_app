@@ -63,7 +63,7 @@ const src = readFileSync(join(SHARED, 'receipt-reconcile.ts'), 'utf8');
 const { outputText } = ts.transpileModule(src, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
-const { reconcile, classify, fingerprint } = await import(
+const { reconcile, classify, fingerprint, MONEY_CODES } = await import(
   'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 );
 
@@ -459,6 +459,85 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
   check_('the expansion is asked for WITHOUT the brand', /WITHOUT the brand/.test(defs));
   check_('...and is where scanning slips get corrected', /FIX what the camera got wrong/i.test(defs));
   check_('...but never a number', /never a number/.test(defs));
+}
+
+/* --------------------------------------- the retry, and what it is worth --- */
+
+/*
+ * The retry is a whole second vision call on a slower model — the single
+ * largest thing a shopper waits for. A seventeen-line Delhaize receipt took
+ * over two minutes, and most of that was reading it twice.
+ *
+ * The COUNT check does not justify that. It already accepts two conventions
+ * because the chains disagree with each other, so a receipt satisfying neither
+ * is usually a third convention nobody has catalogued — and re-reading the
+ * pixels cannot fix a counting rule. The money checks are the opposite: they
+ * are evidence that a NUMBER was misread, which is exactly what a better look
+ * fixes.
+ */
+{
+  const codesOf = (r) => r.codes.join(',');
+
+  // A count-only failure, built by claiming an article count nothing supports.
+  const countOnly = reconcile(
+    [
+      { raw: 'A', kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
+        unitPriceCents: 100, unitPriceDp: 2, totalCents: 100 },
+    ],
+    { goodsCents: 100, paidCents: 100, articleCount: 9 },
+  );
+  check_('a count-only mismatch is coded as such', codesOf(countOnly) === 'count');
+  check_('...and nothing about money is claimed', !countOnly.codes.some((c) => MONEY_CODES.includes(c)));
+
+  // A line that does not multiply out.
+  const badLine = reconcile(
+    [
+      { raw: 'A', kind: 'item', multiplier: 2, multiplierKind: 'count', multiplierDp: 0,
+        unitPriceCents: 100, unitPriceDp: 2, totalCents: 500 },
+    ],
+    { goodsCents: 500, paidCents: 500, articleCount: 2 },
+  );
+  check_('a misread number IS coded as money', badLine.codes.includes('line'));
+  check_('...so it is worth a second look', badLine.codes.some((c) => MONEY_CODES.includes(c)));
+
+  check_(
+    'every failed check contributes a code',
+    countOnly.problems.length === countOnly.codes.length &&
+      badLine.problems.length === badLine.codes.length,
+  );
+}
+
+{
+  const gate = /const worthRetrying = result\.codes\.some\(\(c\) => MONEY_CODES\.includes\(c\)\);/;
+  check_('the function gates its retry on money', gate.test(fn));
+  check_(
+    '...and only retries when the first read actually failed',
+    /if \(!result\.ok && worthRetrying\)/.test(fn),
+  );
+}
+
+{
+  check_(
+    'the prompt asks for null fields to be omitted',
+    /OMIT any field you would answer null/.test(fn),
+  );
+  check_(
+    '...and for translated to be dropped when it would repeat expanded',
+    /Omit "translated" when the receipt is ALREADY in the reader's language/.test(fn),
+  );
+  check_(
+    'no `name` field is asked for, because `raw` is the printing',
+    !/^\s*name: z\./m.test(fn),
+  );
+}
+
+{
+  check_('the read is timed', /readMs = Date\.now\(\) - started;/.test(fn));
+  check_('...and so is the retry', /retryMs = Date\.now\(\) - retryAt;/.test(fn));
+  check_(
+    '...and both are logged, so "it took two minutes" is answerable',
+    /at: 'receipt-scan'/.test(fn) && /readMs,/.test(fn) && /retryMs,/.test(fn),
+  );
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

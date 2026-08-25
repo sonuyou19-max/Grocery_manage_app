@@ -32,7 +32,6 @@ export type LineKind = 'item' | 'deposit' | 'discount' | 'rounding' | 'other';
 export interface ScannedLine {
   raw: string;
   kind: LineKind;
-  name: string | null;
   expanded: string | null;
   translated: string | null;
   brand: string | null;
@@ -179,7 +178,11 @@ export function groupLines(lines: ScannedLine[]): ReceiptPurchase[] {
       byKey.set(key, {
         key: `${key}#${i}`,
         raw: [line.raw],
-        name: line.name ?? line.raw,
+        // The printing IS the name. The extractor used to return a separate
+        // `name` field defined as "the product as printed", which is what `raw`
+        // already is — a whole duplicated string per line, on a receipt where
+        // every output token is time the shopper spends waiting.
+        name: line.raw,
         expanded: line.expanded,
         translated: line.translated,
         brand: line.brand,

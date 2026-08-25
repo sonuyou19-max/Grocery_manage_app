@@ -122,7 +122,7 @@ const { groupLines, matchPurchases, residue, applyAiMatches, claimedIds, display
 /* --------------------------------------------------------------- helpers -- */
 
 const line = (raw, over = {}) => ({
-  raw, kind: 'item', name: raw, expanded: null, translated: null, brand: null,
+  raw, kind: 'item', expanded: null, translated: null, brand: null,
   section: null, multiplier: 1, multiplierDp: 0, unit: null, packSize: null,
   packUnit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 0,
   emoji: null, category: null, confidence: 'high', ...over,
