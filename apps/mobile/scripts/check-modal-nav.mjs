@@ -452,5 +452,112 @@ if (mistimed.length) {
   console.log('ok   ...and both key it on the Modal, not on the prop that drives it');
 }
 
+/* ------------------------- every sheet brings its own surface ------------- */
+
+/*
+ * <Sheet> supplies the scrim, the motion, and a wrapper that can shrink. It
+ * deliberately supplies NO fill: a bottom sheet and a little centred menu want
+ * different surfaces, so the card is the caller's.
+ *
+ * Which means a caller that forgets one gets a sheet with no background at all.
+ * The receipt review's item picker did exactly that and rendered fully
+ * transparent — the list of prices underneath showed straight through the
+ * options, and the two sets of rows interleaved into something unreadable.
+ *
+ * A surface is a GlassView, a Frosted, or a plain View carrying a
+ * backgroundColor; text-prompt-modal and weekly-list-sheet use the last of
+ * those and are perfectly correct. The rule is that there IS one.
+ */
+const sheetUsers = walk(SRC).filter((rel) => {
+  // The file that DEFINES Sheet is never a caller of it. It is excluded by
+  // name rather than by pattern because it does contain the text `<Sheet>` —
+  // inside the error string useSheetDismiss throws. Comments are stripped
+  // above; string literals are not, and a rule that reads prose out of one is
+  // the same mistake this session has now made three times.
+  if (rel === SHEET) return false;
+  return /<Sheet[\s>]/.test(code(read(rel) ?? ''));
+});
+
+/*
+ * Inside each <Sheet> region, not anywhere in the file.
+ *
+ * The first version asked whether the FILE mentioned a surface, which review.tsx
+ * does several times for things that are not the picker — so it passed against
+ * the transparent sheet it was written to catch. Sheets do not nest, so the
+ * region is everything between the opening tag and its </Sheet>.
+ */
+const sheetRegions = (text) => {
+  const out = [];
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf('<Sheet', at);
+    if (open < 0) break;
+    const close = text.indexOf('</Sheet>', open);
+    if (close < 0) break;
+    out.push(text.slice(open, close));
+    at = close + 1;
+  }
+  return out;
+};
+
+const HAS_SURFACE = /<GlassView\b|<Frosted\b|backgroundColor:\s*colors\.(surface|bg)/;
+/*
+ * Only a sheet that lays out its OWN content needs its own surface. Several
+ * hand the whole card to a child component — range-picker's RangeMenu exists
+ * precisely so it can sit inside the Sheet and call useSheetDismiss — and the
+ * surface is one level down where this cannot see it. Delegating is fine; what
+ * is not fine is drawing text and rows straight onto nothing, which is what the
+ * receipt picker did.
+ */
+const LAYS_OUT_ITSELF = /<(Text|Pressable|View|ScrollView|SectionList|FlatList)[\s>]/;
+
+const bare = sheetUsers.filter((rel) =>
+  sheetRegions(code(read(rel) ?? '')).some(
+    (region) => LAYS_OUT_ITSELF.test(region) && !HAS_SURFACE.test(region),
+  ),
+);
+
+if (bare.length) {
+  fail(`${bare.length} sheet(s) render with no surface of their own`, [
+    ...bare.map((f) => `  ${f}`),
+    '',
+    '<Sheet> gives you the scrim and the motion, never a fill — a menu and a',
+    'bottom sheet want different ones. Without a GlassView, a Frosted, or a',
+    'View with a backgroundColor, the sheet is transparent and whatever is',
+    'behind it reads straight through the rows.',
+  ]);
+} else {
+  console.log(`ok   all ${sheetUsers.length} sheets carry their own surface`);
+}
+
+/*
+ * And the ones that list something have to be able to scroll it. A picker with
+ * nine options ran the full height of the screen with the last rows
+ * unreachable: the card can shrink — check above — but only if its content has
+ * somewhere to shrink TO.
+ */
+const LISTING_SHEETS = [
+  'components/purchase-ledger.tsx',
+  'components/staple-sheet.tsx',
+  'app/receipt/review.tsx',
+];
+
+const unscrollable = LISTING_SHEETS.filter((rel) => {
+  const text = code(read(rel) ?? '');
+  return !/<ScrollView/.test(text) || !/maxHeight:/.test(text);
+});
+
+if (unscrollable.length) {
+  fail(`${unscrollable.length} listing sheet(s) can no longer scroll within a bound`, [
+    ...unscrollable.map((f) => `  ${f}`),
+    '',
+    'A sheet that lists rows needs a ScrollView AND a numeric maxHeight on it.',
+    'Without the cap the list grows until the screen clips it, and the rows',
+    'past the fold cannot be reached at all.',
+  ]);
+} else {
+  console.log(`ok   all ${LISTING_SHEETS.length} listing sheets scroll within a measured bound`);
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

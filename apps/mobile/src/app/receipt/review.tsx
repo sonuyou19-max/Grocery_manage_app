@@ -4,16 +4,20 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Frosted } from '@/components/frosted';
+import { GlassView } from '@/components/glass';
 import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import { MeshBackground } from '@/components/mesh-background';
@@ -47,7 +51,7 @@ import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { useLocale } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
  * Check what the scan read, then import it.
@@ -108,6 +112,7 @@ export default function ReceiptReviewScreen() {
   const { t, money, currency } = useLocale();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const scrollIndicator = useScrollIndicator();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { lists, toggleItem, updateItem } = useGroceries();
   const { logPurchase } = usePantryIntel();
@@ -125,6 +130,21 @@ export default function ReceiptReviewScreen() {
   );
   const [editing, setEditing] = useState<Editing>(null);
   const [picking, setPicking] = useState<string | null>(null);
+  /*
+   * The picker's height, measured rather than guessed.
+   *
+   * Well under the window on purpose: this answers "which item is this?" about
+   * a row the shopper was just looking at, and a picker that covers that row
+   * has hidden the question it is asking. Nine list items used to run the whole
+   * screen with no way to scroll.
+   */
+  const { height: windowHeight } = useWindowDimensions();
+  const pickerCap = Math.round(windowHeight * 0.6);
+  // The estimate only paints the first frame, before onLayout has fired; the
+  // sheet is still animating in for another 220ms after that.
+  const [pickHeadHeight, setPickHeadHeight] = useState(72);
+  const onPickHeadLayout = (e: LayoutChangeEvent) =>
+    setPickHeadHeight(e.nativeEvent.layout.height);
   const [committing, setCommitting] = useState(false);
 
   const list = lists.find((l) => l.id === id);
@@ -585,34 +605,80 @@ export default function ReceiptReviewScreen() {
         already holds — without that second part, re-opening the picker on a
         matched line would show every option EXCEPT the one currently chosen.
       */}
-      <Sheet visible={picking != null} onClose={() => setPicking(null)} align="end" scrim>
-        <Text style={[type.h2, { color: colors.ink }]}>{t('receipt.pickTitle')}</Text>
-        <Pressable
-          onPress={() => {
-            if (picking) setDecisions((d) => assign(d, picking, null));
-            setPicking(null);
-          }}
-          style={[styles.pickRow, { borderColor: colors.line }]}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={colors.muted} />
-          <Text style={[type.body, { color: colors.ink }]}>{t('receipt.notOnList')}</Text>
-        </Pressable>
-        {pickerOptions(candidates, decisions, picking).map((c) => (
-          <Pressable
-            key={c.id}
-            onPress={() => {
-              haptics.tick();
-              if (picking) setDecisions((d) => assign(d, picking, c.id));
-              setPicking(null);
-            }}
-            style={[styles.pickRow, { borderColor: colors.line }]}
+      <Sheet visible={picking != null} onClose={() => setPicking(null)} align="end" scrim gutter={spacing.md}>
+        {/*
+          A CARD, which this sheet did not have.
+
+          <Sheet> supplies the scrim, the motion and a wrapper that can shrink —
+          it deliberately supplies no surface, because a menu and a bottom sheet
+          want different ones. The rows were handed to it bare, so the picker
+          rendered with no fill at all and the review sheet showed straight
+          through it. Every other sheet in this app wraps its children in a
+          GlassView for exactly this reason.
+
+          `over="content"` and not "mesh": there is a list of prices behind this,
+          not the gradient background, and the translucent variant would let it
+          read through — see components/frosted.
+        */}
+        <GlassView over="content" radius={radii.lg} style={[styles.picker, { maxHeight: pickerCap }]}>
+          <View style={styles.pickHead} onLayout={onPickHeadLayout}>
+            <Text style={[type.h2, { color: colors.ink }]}>{t('receipt.pickTitle')}</Text>
+            {/* The line being answered about. The question is meaningless
+                without it, and it is now behind a card. */}
+            {picking && (
+              <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                {run.purchases.find((p) => p.key === picking)?.raw[0] ?? ''}
+              </Text>
+            )}
+          </View>
+
+          {/*
+            Capped with a MEASURED number rather than a percentage, and scrolled.
+
+            A nine-item list ran the full height of the screen and could not be
+            scrolled, so the rows past the fold were unreachable. The cap is
+            deliberately well under the window: this answers "which item is
+            this?" about a row the shopper was just looking at, and a picker that
+            covers that row has hidden the question.
+
+            The measured header is subtracted for the same reason the purchase
+            ledger measures its own — see check-modal-nav, which pins that one.
+          */}
+          <ScrollView
+            {...scrollIndicator}
+            style={[styles.pickScroll, { maxHeight: Math.max(140, pickerCap - pickHeadHeight) }]}
+            contentContainerStyle={styles.pickList}
+            bounces={false}
           >
-            <Ionicons name="cart-outline" size={20} color={colors.accent} />
-            <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-              {c.name}
-            </Text>
-          </Pressable>
-        ))}
+            <Pressable
+              onPress={() => {
+                haptics.tick();
+                if (picking) setDecisions((d) => assign(d, picking, null));
+                setPicking(null);
+              }}
+              style={[styles.pickRow, { borderColor: colors.line }]}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={colors.muted} />
+              <Text style={[type.body, { color: colors.ink }]}>{t('receipt.notOnList')}</Text>
+            </Pressable>
+            {pickerOptions(candidates, decisions, picking).map((c) => (
+              <Pressable
+                key={c.id}
+                onPress={() => {
+                  haptics.tick();
+                  if (picking) setDecisions((d) => assign(d, picking, c.id));
+                  setPicking(null);
+                }}
+                style={[styles.pickRow, { borderColor: colors.line }]}
+              >
+                <Ionicons name="cart-outline" size={20} color={colors.accent} />
+                <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                  {c.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </GlassView>
       </Sheet>
     </View>
   );
@@ -799,6 +865,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   importOff: { opacity: 0.4 },
+  // flexShrink is the static half of the inline maxHeight — it is what lets the
+  // cap actually squeeze the card rather than the card overflowing it.
+  picker: { flexShrink: 1, overflow: 'hidden' },
+  pickHead: { gap: 2, padding: spacing.lg, paddingBottom: spacing.sm },
+  pickScroll: { flexGrow: 0, flexShrink: 1 },
+  pickList: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   pickRow: {
     flexDirection: 'row',
     alignItems: 'center',
