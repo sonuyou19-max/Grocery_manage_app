@@ -20,7 +20,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { EmptyState } from '@/components/empty-state';
-import { Fab } from '@/components/fab';
 import { ItemEmoji } from '@/components/item-emoji';
 import { ListPickerSheet } from '@/components/list-picker-sheet';
 import { PantryTeaser } from '@/components/pantry-teaser';
@@ -383,7 +382,23 @@ function SignedInPantry() {
             ? t('pantry.subtitleEmpty')
             : t('pantry.subtitleTracked', { count: items.length, low: lowCount })
         }
-        hasFab
+        /*
+         * The one thing you come here to add, in the corner opposite the
+         * title.
+         *
+         * It was a green "+ Track item" pill floating over the bottom-right of
+         * the list. Two problems with that on this screen in particular: it sat
+         * on top of the rows it was meant to sit beside — a pantry of 85 items
+         * always has a row underneath it — and a floating pill is the loudest
+         * control the app has, spent on the action people take least often
+         * here. Items mostly arrive by being ticked off a list, not by being
+         * typed in.
+         *
+         * At display size beside the title it is unmissable without hovering
+         * over anything, and it reads as part of the header rather than as
+         * something laid over the content.
+         */
+        headerAction={<TrackButton onPress={() => setAdding(true)} />}
       >
         {items.length === 0 && stopped.length === 0 ? (
           <EmptyState
@@ -508,7 +523,6 @@ function SignedInPantry() {
         )}
       </Screen>
 
-      <Fab label={t('pantry.track')} onPress={() => setAdding(true)} />
       <TextPromptModal
         visible={adding}
         title={t('pantry.trackTitle')}
@@ -594,6 +608,42 @@ function SignedInPantry() {
         onPick={pickList}
       />
     </>
+  );
+}
+
+/**
+ * The "+" opposite the title.
+ *
+ * Drawn as text in `type.display` rather than as an icon, because the thing it
+ * has to match is the word beside it: same family, same 40dp, same weight, so
+ * the two read as one line of header rather than as a heading with a button
+ * stuck next to it. An Ionicons glyph at 40 would be a different shape at a
+ * different optical weight, sitting on a different baseline.
+ *
+ * Accent rather than ink for exactly the reason the size is shared: at the
+ * title's own size and colour it would read as punctuation after "Pantry"
+ * instead of as something to press. Colour is the only thing separating them,
+ * so it is the only thing that differs.
+ *
+ * The name is not written anywhere — a bare "+" beside a screen title is about
+ * as conventional as controls get — but it is the accessible label, which is
+ * why the string that titled the old pill is kept rather than replaced.
+ */
+function TrackButton({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme();
+  const t = useT();
+  return (
+    <Pressable
+      onPress={onPress}
+      // Generous, because the glyph is far narrower than its line box and the
+      // corner of the screen is a hard place to hit precisely.
+      hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
+      accessibilityRole="button"
+      accessibilityLabel={t('pantry.track')}
+      style={styles.track}
+    >
+      <Text style={[type.display, { color: colors.accent }]}>+</Text>
+    </Pressable>
   );
 }
 
@@ -864,6 +914,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowStack: { gap: spacing.sm },
+  /*
+   * Pulls the glyph back to the margin. `type.display` carries -1.4 of
+   * letter-spacing, which a text node applies AFTER its last character too, so
+   * a single "+" renders with a sliver of empty box on its right and sits that
+   * far off the edge the title is aligned to.
+   */
+  track: { marginRight: -2 },
   restRow: {
     flexDirection: 'row',
     alignItems: 'center',
