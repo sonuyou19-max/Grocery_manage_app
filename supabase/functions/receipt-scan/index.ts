@@ -423,7 +423,7 @@ Deno.serve(async (req) => {
    * review sheet as a warning — the shopper is told, and decides — it just does
    * not cost them a second call first.
    */
-  const worthRetrying = result.codes.some((c) => MONEY_CODES.includes(c));
+  const worthRetrying = result.details.some((d) => MONEY_CODES.includes(d.code));
 
   if (!result.ok && worthRetrying) {
     /*
@@ -463,7 +463,9 @@ Deno.serve(async (req) => {
       readMs,
       retryMs,
       ok: result.ok,
-      codes: result.codes,
+      codes: result.details.map((d) => d.code),
+      // In prose, because a log is read by one person in one language.
+      problems: result.problems,
     }),
   );
 
@@ -524,7 +526,7 @@ Deno.serve(async (req) => {
     fingerprint: fingerprint(parsed.store, result.paidCents, parsed.purchasedAt),
     model,
     reconciled: result.ok,
-    problems: result.problems,
+    problems: result.details,
     badLines: result.badLines,
     goodsCents: parsed.goodsCents ?? result.goodsCents,
     depositCents: result.depositCents,

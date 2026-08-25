@@ -96,12 +96,42 @@ export type ProblemCode = 'line' | 'goods' | 'paid' | 'count';
 /** The failures that mean a NUMBER was misread, rather than a convention. */
 export const MONEY_CODES: readonly ProblemCode[] = ['line', 'goods', 'paid'];
 
+/**
+ * A failed check with its numbers, for the screen to phrase itself.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the sentences do not come from here
+ * ---------------------------------------------------------------------------
+ *
+ * They used to. This file wrote "items add up to 4827 but the receipt says
+ * 5020" and the review sheet printed it verbatim — which put raw cent integers
+ * in front of a shopper looking at €48.27 on a piece of paper, in English, on a
+ * phone that might be running in any of seven languages.
+ *
+ * Neither is fixable here. A server has no business deciding how money looks:
+ * the decimal separator, the currency symbol and its position all belong to the
+ * reader's locale, and the app already has a `money()` that knows them. The
+ * language is the same argument. So this reports WHAT failed and WITH WHICH
+ * NUMBERS, in cents, and the sentence is assembled where both are known.
+ */
+export type Problem =
+  | { code: 'line'; lines: number }
+  | { code: 'goods'; got: number; printed: number }
+  | { code: 'paid'; got: number; printed: number }
+  | { code: 'count'; units: number; asLines: number; printed: number };
+
 export interface ReconcileResult {
   ok: boolean;
   /** One entry per failed check, in the order they were run. */
   problems: string[];
-  /** The same failures as codes — see ProblemCode. */
-  codes: ProblemCode[];
+  /**
+   * The same failures, with their numbers, for the client to phrase.
+   *
+   * One list, not two. `codes` used to sit beside `problems` and the pair could
+   * drift — a check that pushed a sentence and forgot a code would go on
+   * looking fine. Callers that only want the codes read them off this.
+   */
+  details: Problem[];
   /** Indices of lines whose own arithmetic did not hold. */
   badLines: number[];
   /** Derived, for the receipts row. */
@@ -148,17 +178,15 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
   const problems: string[] = [];
   const badLines: number[] = [];
   /*
-   * The same failures, as codes rather than sentences.
+   * The same failures, in prose, for the SERVER LOG only.
    *
-   * `problems` is written for a person and read by one — it goes on the review
-   * sheet. Anything that has to BRANCH on which check failed needs something
-   * stabler than prose, and the caller that needs it is the retry: re-reading a
-   * receipt with a slower model is worth it when the MONEY disagrees, and is
-   * not worth it when only the article count does. Deciding that by matching
-   * substrings of an English sentence would break the first time the wording
-   * improved.
+   * It used to go to the review sheet as well, which put raw cent integers and
+   * untranslated English in front of a shopper — see Problem above. The screen
+   * now phrases itself from `details`; these sentences survive because a
+   * function log is read by one person, in one language, who wants the numbers
+   * exactly as the reconciler saw them.
    */
-  const codes: ProblemCode[] = [];
+  const details: Problem[] = [];
 
   /* ---------------------------------------------------- LINE ------------- */
 
@@ -192,7 +220,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
 
   if (badLines.length) {
     problems.push(`${badLines.length} line(s) do not multiply out`);
-    codes.push('line');
+    details.push({ code: 'line', lines: badLines.length });
   }
 
   /* --------------------------------------------------- GOODS ------------- */
@@ -209,7 +237,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
     problems.push(
       `items add up to ${goodsCents} but the receipt says ${totals.goodsCents}`,
     );
-    codes.push('goods');
+    details.push({ code: 'goods', got: round(goodsCents), printed: round(totals.goodsCents) });
   }
 
   /* ---------------------------------------------------- PAID ------------- */
@@ -218,7 +246,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
 
   if (totals.paidCents != null && round(paidCents) !== round(totals.paidCents)) {
     problems.push(`the lines total ${paidCents} but ${totals.paidCents} was paid`);
-    codes.push('paid');
+    details.push({ code: 'paid', got: round(paidCents), printed: round(totals.paidCents) });
   }
 
   /* --------------------------------------------------- COUNT ------------- */
@@ -259,14 +287,14 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
       problems.push(
         `counted ${asUnits} articles (or ${asLines} lines), the receipt says ${totals.articleCount}`,
       );
-      codes.push('count');
+      details.push({ code: 'count', units: asUnits, asLines, printed: totals.articleCount });
     }
   }
 
   return {
     ok: problems.length === 0,
     problems,
-    codes,
+    details,
     badLines,
     goodsCents,
     depositCents,

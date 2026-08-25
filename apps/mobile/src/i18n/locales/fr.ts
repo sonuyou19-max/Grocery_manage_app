@@ -61,6 +61,10 @@ const fr = {
     retake: 'Reprendre',
     useShot: 'Utiliser',
     offBy: '%{amount} d’écart avec le total du ticket — vérifie les montants.',
+    problemLine: { one: '%{count} ligne ne tombe pas juste', other: '%{count} lignes ne tombent pas juste' },
+    problemGoods: 'Les articles font %{got}, le ticket indique %{printed}.',
+    problemPaid: 'Les lignes font %{got}, mais %{printed} ont été payés.',
+    problemCount: 'Nous comptons %{units} articles (ou %{lines} lignes) ; le ticket dit %{printed}.',
   },
   coach: {
     gotIt: 'Compris',

@@ -476,7 +476,7 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
  * fixes.
  */
 {
-  const codesOf = (r) => r.codes.join(',');
+  const codesOf = (r) => r.details.map((d) => d.code).join(',');
 
   // A count-only failure, built by claiming an article count nothing supports.
   const countOnly = reconcile(
@@ -487,7 +487,7 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
     { goodsCents: 100, paidCents: 100, articleCount: 9 },
   );
   check_('a count-only mismatch is coded as such', codesOf(countOnly) === 'count');
-  check_('...and nothing about money is claimed', !countOnly.codes.some((c) => MONEY_CODES.includes(c)));
+  check_('...and nothing about money is claimed', !countOnly.details.some((d) => MONEY_CODES.includes(d.code)));
 
   // A line that does not multiply out.
   const badLine = reconcile(
@@ -497,18 +497,18 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
     ],
     { goodsCents: 500, paidCents: 500, articleCount: 2 },
   );
-  check_('a misread number IS coded as money', badLine.codes.includes('line'));
-  check_('...so it is worth a second look', badLine.codes.some((c) => MONEY_CODES.includes(c)));
+  check_('a misread number IS coded as money', badLine.details.some((d) => d.code === 'line'));
+  check_('...so it is worth a second look', badLine.details.some((d) => MONEY_CODES.includes(d.code)));
 
   check_(
     'every failed check contributes a code',
-    countOnly.problems.length === countOnly.codes.length &&
-      badLine.problems.length === badLine.codes.length,
+    countOnly.problems.length === countOnly.details.length &&
+      badLine.problems.length === badLine.details.length,
   );
 }
 
 {
-  const gate = /const worthRetrying = result\.codes\.some\(\(c\) => MONEY_CODES\.includes\(c\)\);/;
+  const gate = /const worthRetrying = result\.details\.some\(\(d\) => MONEY_CODES\.includes\(d\.code\)\);/;
   check_('the function gates its retry on money', gate.test(fn));
   check_(
     '...and only retries when the first read actually failed',
@@ -561,6 +561,54 @@ check_('...and never to move the printed total to fit', /Do not adjust the\s+pri
 check_('goodsCents is READ, never derived', /READ IT OFF THE PAPER\. Never add up your own lines/.test(fn));
 check_('...and so is paidCents', /paidCents: the amount actually paid, also READ OFF THE PAPER and never\s+computed/.test(fn));
 check_('the date rule names the middle number', /The middle number is the month/.test(fn));
+
+/* ------------------ the numbers travel; the sentence is the client's ------ */
+
+/*
+ * The reconciler used to write the sentence and the review sheet printed it
+ * verbatim, so a shopper holding a receipt that says €48,02 was shown
+ *
+ *     ITEMS ADD UP TO 4827 BUT THE RECEIPT SAYS 5020
+ *
+ * — cents as bare integers, in English, on a phone that might be running in any
+ * of seven languages. Neither is fixable on a server: the separator, the symbol
+ * and its position come from the reader's locale, and so does the language.
+ */
+{
+  const r = reconcile(
+    [
+      { raw: 'A', kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
+        unitPriceCents: 100, unitPriceDp: 2, totalCents: 100 },
+    ],
+    { goodsCents: 4827, paidCents: 4718, articleCount: 9 },
+  );
+
+  const goods = r.details.find((d) => d.code === 'goods');
+  check_('a goods failure carries both numbers, in cents', goods.got === 100 && goods.printed === 4827);
+
+  const paid = r.details.find((d) => d.code === 'paid');
+  check_('...and so does a paid failure', paid.got === 100 && paid.printed === 4718);
+
+  const count = r.details.find((d) => d.code === 'count');
+  check_(
+    'a count failure carries BOTH readings it accepts',
+    count.units === 1 && count.asLines === 1 && count.printed === 9,
+  );
+
+  check_(
+    'no detail carries a formatted string',
+    r.details.every((d) => Object.values(d).every((v) => typeof v === 'number' || typeof v === 'string' && d.code === v)),
+  );
+}
+
+check_(
+  'the wire sends the details, not the prose',
+  /problems: result\.details,/.test(fn),
+);
+check_(
+  '...and the prose survives only in the log',
+  /problems: result\.problems,/.test(fn) && /at: 'receipt-scan'/.test(fn),
+);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -70,6 +70,10 @@ const en = {
     retake: 'Retake',
     useShot: 'Use photo',
     offBy: '%{amount} off what the receipt says was paid — check the amounts.',
+    problemLine: { one: '%{count} line does not multiply out', other: '%{count} lines do not multiply out' },
+    problemGoods: 'The items add up to %{got}, but the receipt says %{printed}.',
+    problemPaid: 'The lines come to %{got}, but %{printed} was paid.',
+    problemCount: 'We counted %{units} articles (or %{lines} lines); the receipt says %{printed}.',
   },
   coach: {
     gotIt: 'Got it',

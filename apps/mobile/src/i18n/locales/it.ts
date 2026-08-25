@@ -61,6 +61,10 @@ const it = {
     retake: 'Rifai',
     useShot: 'Usa la foto',
     offBy: '%{amount} di differenza dal totale dello scontrino — controlla gli importi.',
+    problemLine: { one: '%{count} riga non torna', other: '%{count} righe non tornano' },
+    problemGoods: 'Gli articoli fanno %{got}, lo scontrino dice %{printed}.',
+    problemPaid: 'Le righe fanno %{got}, ma sono stati pagati %{printed}.',
+    problemCount: 'Contiamo %{units} articoli (o %{lines} righe); lo scontrino dice %{printed}.',
   },
   coach: {
     gotIt: 'Capito',

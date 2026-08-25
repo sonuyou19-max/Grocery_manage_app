@@ -71,6 +71,10 @@ const pl = {
     retake: 'Zrób ponownie',
     useShot: 'Użyj zdjęcia',
     offBy: 'Różnica %{amount} wobec kwoty z paragonu — sprawdź kwoty.',
+    problemLine: { one: '%{count} pozycja się nie zgadza', few: '%{count} pozycje się nie zgadzają', many: '%{count} pozycji się nie zgadza', other: '%{count} pozycji się nie zgadza' },
+    problemGoods: 'Pozycje sumują się do %{got}, a paragon podaje %{printed}.',
+    problemPaid: 'Pozycje dają %{got}, a zapłacono %{printed}.',
+    problemCount: 'Liczymy %{units} artykułów (lub %{lines} pozycji); paragon podaje %{printed}.',
   },
   coach: {
     gotIt: 'Jasne',

@@ -61,6 +61,10 @@ const de = {
     retake: 'Neu aufnehmen',
     useShot: 'Foto nehmen',
     offBy: '%{amount} Unterschied zum Bonbetrag — prüf die Beträge.',
+    problemLine: { one: '%{count} Zeile geht nicht auf', other: '%{count} Zeilen gehen nicht auf' },
+    problemGoods: 'Die Artikel ergeben %{got}, auf dem Bon steht %{printed}.',
+    problemPaid: 'Die Zeilen ergeben %{got}, bezahlt wurden %{printed}.',
+    problemCount: 'Wir zählen %{units} Artikel (oder %{lines} Zeilen); der Bon sagt %{printed}.',
   },
   coach: {
     gotIt: 'Alles klar',

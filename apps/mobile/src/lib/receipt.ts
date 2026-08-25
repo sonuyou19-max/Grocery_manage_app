@@ -49,6 +49,13 @@ export interface ScannedLine {
   confidence: 'high' | 'medium' | 'low';
 }
 
+/** A failed reconciliation check, for the review sheet to phrase itself. */
+export type ReceiptProblem =
+  | { code: 'line'; lines: number }
+  | { code: 'goods'; got: number; printed: number }
+  | { code: 'paid'; got: number; printed: number }
+  | { code: 'count'; units: number; asLines: number; printed: number };
+
 export interface ScannedReceipt {
   store: string | null;
   purchasedAt: string | null;
@@ -58,7 +65,17 @@ export interface ScannedReceipt {
   model: string;
   /** Did the parse agree with the totals the receipt prints about itself? */
   reconciled: boolean;
-  problems: string[];
+  /**
+   * What failed, with its numbers — NOT a sentence.
+   *
+   * The server used to send prose: "items add up to 4827 but the receipt says
+   * 5020". That put raw cent integers in front of somebody holding a receipt
+   * that says €48.27, in English, on a phone that might be running in any of
+   * seven languages. Both of those are the device's business, not a server's —
+   * it is the only side that knows the reader's locale and has a `money()` that
+   * respects it.
+   */
+  problems: ReceiptProblem[];
   badLines: number[];
   goodsCents: number;
   depositCents: number;

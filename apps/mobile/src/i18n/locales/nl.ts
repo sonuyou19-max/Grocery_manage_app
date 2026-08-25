@@ -61,6 +61,10 @@ const nl = {
     retake: 'Opnieuw',
     useShot: 'Foto gebruiken',
     offBy: '%{amount} verschil met het bonbedrag — controleer de bedragen.',
+    problemLine: { one: '%{count} regel klopt niet', other: '%{count} regels kloppen niet' },
+    problemGoods: 'De artikelen komen op %{got}, op het bonnetje staat %{printed}.',
+    problemPaid: 'De regels komen op %{got}, maar er is %{printed} betaald.',
+    problemCount: 'Wij tellen %{units} artikelen (of %{lines} regels); het bonnetje zegt %{printed}.',
   },
   coach: {
     gotIt: 'Duidelijk',

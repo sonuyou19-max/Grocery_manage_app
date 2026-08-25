@@ -22,7 +22,12 @@ import { Sheet } from '@/components/sheet';
 import { currencySymbolFor } from '@/i18n';
 import { haptics } from '@/lib/haptics';
 import { parsePriceToCents } from '@/lib/money';
-import { displayName, type ListCandidate, type ReceiptPurchase } from '@/lib/receipt';
+import {
+  displayName,
+  type ListCandidate,
+  type ReceiptProblem,
+  type ReceiptPurchase,
+} from '@/lib/receipt';
 import {
   assign,
   groupPurchases,
@@ -460,8 +465,8 @@ export default function ReceiptReviewScreen() {
                       {t('receipt.notReconciled')}
                     </Text>
                     {receipt.problems.map((p) => (
-                      <Text key={p} style={[type.label, { color: colors.muted }]}>
-                        {p}
+                      <Text key={p.code} style={[type.label, { color: colors.muted }]}>
+                        {phrase(p, t, money)}
                       </Text>
                     ))}
                   </View>
@@ -611,6 +616,50 @@ export default function ReceiptReviewScreen() {
       </Sheet>
     </View>
   );
+}
+
+/**
+ * A failed check, in the reader's own words and their own currency.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not the server's job
+ * ---------------------------------------------------------------------------
+ *
+ * It was, and it showed. The reconciler wrote the sentence and the sheet
+ * printed it, so a shopper holding a receipt that says €48,02 was told
+ *
+ *     ITEMS ADD UP TO 4827 BUT THE RECEIPT SAYS 5020
+ *     THE LINES TOTAL 4718 BUT 4802 WAS PAID
+ *
+ * — cents as bare integers, and English, on a phone that might be running in
+ * any of the seven languages this app ships. Neither is fixable on a server:
+ * the decimal separator, the symbol and its position come from the reader's
+ * locale, and so does the language. Both live here.
+ *
+ * The count case says the two numbers it accepts. That is deliberate: it looks
+ * like hedging and it is the honest thing to print, because the chains genuinely
+ * disagree about whether four cartons of milk are four articles or one, and a
+ * message naming a single expected figure would be wrong for half of them.
+ */
+function phrase(
+  p: ReceiptProblem,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  money: (cents: number) => string,
+): string {
+  switch (p.code) {
+    case 'line':
+      return t('receipt.problemLine', { count: p.lines });
+    case 'goods':
+      return t('receipt.problemGoods', { got: money(p.got), printed: money(p.printed) });
+    case 'paid':
+      return t('receipt.problemPaid', { got: money(p.got), printed: money(p.printed) });
+    case 'count':
+      return t('receipt.problemCount', {
+        units: p.units,
+        lines: p.asLines,
+        printed: p.printed,
+      });
+  }
 }
 
 function Header({ title, subtitle }: { title: string; subtitle: string | null }) {

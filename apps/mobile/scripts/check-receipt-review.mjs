@@ -360,6 +360,54 @@ assert(
   'a half-typed price is a price mid-thought, not a decision to pay nothing',
 );
 
+/*
+ * The sheet phrases the failures itself. A server sentence would carry raw
+ * cents and one language into a screen that has neither the reader's currency
+ * format nor their locale — which is exactly what "ITEMS ADD UP TO 4827"
+ * looked like.
+ */
+assert(
+  /\{phrase\(p, t, money\)\}/.test(sheet),
+  'the reconciliation failures are phrased on the device',
+  'the server sends numbers; only the client knows the reader\'s currency format and language',
+);
+
+/*
+ * Extracted and checked branch by branch, because the first version of this
+ * allowed a hundred and sixty characters of anything after `case 'goods':` and
+ * therefore matched the money() belonging to the NEXT case. It passed against a
+ * goods message printing bare cents — the very thing it was written to stop.
+ *
+ * The count case is deliberately exempt: its numbers are articles and lines,
+ * not money, and wrapping a count in a currency format would be its own bug.
+ */
+{
+  const body = /function phrase\([\s\S]*?\n\}/.exec(sheet)?.[0] ?? '';
+  const branch = (code) =>
+    new RegExp(`case '${code}':([\\s\\S]*?)(?=\\n    case |\\n  \\})`).exec(body)?.[1] ?? '';
+
+  const wrapped = ['goods', 'paid'].filter((code) => {
+    const b = branch(code);
+    return /money\(p\.got\)/.test(b) && /money\(p\.printed\)/.test(b);
+  });
+  assert(
+    wrapped.length === 2,
+    '...through money(), so a cent count never reaches the screen',
+    'both money branches must wrap BOTH of their amounts',
+  );
+
+  assert(
+    !/(?:got|printed):\s*p\.(?:got|printed)\b/.test(branch('goods') + branch('paid')),
+    '...and never passes a raw cent count beside a formatted one',
+  );
+}
+
+assert(
+  /case 'count':[\s\S]{0,200}units: p\.units[\s\S]{0,80}lines: p\.asLines/.test(sheet),
+  'the count message names BOTH readings it accepts',
+  'the chains disagree about whether four cartons are four articles or one, so naming a single expected figure would be wrong for half of them',
+);
+
 assert(
   /!receipt\.reconciled && \(/.test(sheet),
   'the reconciliation banner is shown when the scan did not reconcile',
