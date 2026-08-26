@@ -1095,8 +1095,12 @@ function SeasonCard({ now, order }: { now: number; order?: number }) {
               {/* No impact dot. Every item here is seasonal produce, so a green
                   dot on all six marked nothing — it distinguished them from
                   nothing else on the card. The emoji already says what each one
-                  is. (The Climate page keeps its dots because there the colour
-                  varies and therefore means something.) */}
+                  is.
+
+                  This used to add "the Climate page keeps its dots because
+                  there the colour varies". It did not vary: every row under
+                  Heavy hitters was hardcoded to the same red, for the same
+                  reason these were all green. Both are gone now. */}
               <ItemEmoji
                 name={key}
                 category="fruit_veg"

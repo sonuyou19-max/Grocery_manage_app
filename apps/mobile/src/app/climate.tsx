@@ -512,7 +512,11 @@ function HeavyRow({
         accessibilityState={{ expanded: open }}
         style={styles.row}
       >
-        <View style={[styles.tierDot, { backgroundColor: CARBON_COLORS.high }]} />
+        {/* No impact dot. Every row under "Heavy hitters" is a heavy hitter, so
+            the colour was the same on all of them — it distinguished them from
+            nothing, and it repeated a heading four centimetres above wearing
+            the same red. The emoji says what the item is; the section says why
+            it is here. */}
         <ItemEmoji name={name} category={category} />
         <View style={styles.grow}>
           <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
@@ -647,7 +651,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
   },
-  tierDot: { width: 10, height: 10, borderRadius: 5 },
   // The soft tint that says "this belongs to the row above". accentSoft rather
   // than a new colour: it is already the app's "this is a related surface" fill.
   drawer: {
