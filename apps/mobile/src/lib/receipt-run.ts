@@ -44,7 +44,24 @@ export type ScanPhase = 'reading' | 'matching';
 export interface ScanRun {
   receipt: ScannedReceipt;
   purchases: ReceiptPurchase[];
+  /** What the free, offline rungs settled. Available the instant the read lands. */
   matches: Map<string, MatchOutcome>;
+  /**
+   * The AI matcher's answers, still in flight.
+   *
+   * A promise rather than a value because this used to be the last thing the
+   * shopper waited for and it did not need to be. Matching is a second round
+   * trip that cannot start until the read is back, so putting it in front of
+   * the review sheet meant the sheet appeared one whole network call after
+   * everything it displays was already known.
+   *
+   * It resolves to the FULL map — offline answers included — so a caller that
+   * awaits it gets what `matches` used to be, and one that does not gets the
+   * offline half immediately. Never rejects: matchResidue already answers []
+   * on every failure, because a matcher that is down is a review sheet with
+   * more rows to correct, not a failed import.
+   */
+  settle: Promise<Map<string, MatchOutcome>>;
 }
 
 export async function runScan(
@@ -71,14 +88,33 @@ export async function runScan(
    * sheet with more rows to correct, not a failed import.
    */
   const left = residue(purchases, offline);
-  // Announced only when there is something to ask about. A receipt the free
-  // rungs settled entirely never enters this phase, and saying it had would be
-  // the same invention the phase list exists to avoid.
-  if (left.length > 0) onPhase?.('matching');
-  const answers = await matchResidue(left, list, claimedIds(offline), language);
-  const matches = applyAiMatches(offline, answers, list);
 
-  return { receipt, purchases, matches };
+  /*
+   * Started, not awaited.
+   *
+   * The review sheet has everything it needs the moment the read is back: the
+   * lines, the prices, the totals, and whatever normalizeKey settled for free.
+   * What it does not have is the answers to the handful of lines nobody could
+   * place offline — and waiting for those before drawing anything meant the
+   * shopper watched a progress screen through a whole second round trip to
+   * learn which of two rows the chocolate belonged to.
+   *
+   * So the sheet opens on the offline half and these land on it. See
+   * mergeLateMatches, which is where the care is: an answer composed before the
+   * sheet existed must never undo an edit made after it.
+   *
+   * Still announced as a phase for the case where nothing was settled offline —
+   * a receipt whose every line needs asking about has genuinely nothing to show
+   * yet, and the caller can decide to keep waiting.
+   */
+  if (left.length > 0) onPhase?.('matching');
+  const settle = matchResidue(left, list, claimedIds(offline), language)
+    .then((answers) => applyAiMatches(offline, answers, list))
+    // applyAiMatches over an empty answer set is exactly `offline`, so a
+    // rejection here degrades to what the free rungs already found.
+    .catch(() => offline);
+
+  return { receipt, purchases, matches: offline, settle };
 }
 
 /* ------------------------------------------------------------ hand-off --- */

@@ -412,6 +412,50 @@ assert(
   assert(inGuard("t('receipt.scan')"), 'the Scan button is inside the guard');
 }
 
+/* ------------------------------- the matcher is not on the critical path -- */
+
+/*
+ * The review sheet has everything it displays the moment the READ comes back:
+ * the lines, the prices, the totals, and whatever normalizeKey settled for
+ * free. The AI matcher is a second round trip that cannot even start until then,
+ * and awaiting it meant the shopper watched a progress screen through a whole
+ * extra call to learn which of two rows the chocolate belonged to.
+ *
+ * So it is started and not awaited. Which makes the merge the delicate part:
+ * an answer composed BEFORE the sheet existed must never undo an edit made
+ * after it.
+ */
+{
+  const runSrc = codeOnly(read(join(ROOT, 'src/lib/receipt-run.ts')));
+  const reviewSrc = codeOnly(read(join(ROOT, 'src/app/receipt/review.tsx')));
+  const merge = codeOnly(read(join(ROOT, 'src/lib/receipt-review.ts')));
+
+  assert(!/await matchResidue\(/.test(runSrc), 'the run does not await the matcher');
+  assert(/settle: Promise<Map<string, MatchOutcome>>/.test(runSrc), '...it hands back a promise instead');
+  assert(/matches: offline, settle/.test(runSrc), '...and the offline answers immediately');
+  // matchResidue already answers [] on every failure; this covers the rest.
+  assert(/\.catch\(\(\) => offline\)/.test(runSrc), 'a failed match degrades to the offline half');
+
+  assert(/run\.settle\.then\(/.test(reviewSrc), 'the review folds them in when they land');
+  assert(/mergeLateMatches\(prev, matches\)/.test(reviewSrc), '...through the guarded merge');
+  // A setState after the import has navigated away is a warning at best.
+  assert(/if \(alive\) setDecisions/.test(reviewSrc), '...and never after the screen has gone');
+
+  /*
+   * The two refusals. Without the first, a late answer overwrites an assignment
+   * the shopper made by hand; without the second it can move a claim off the
+   * line they just put it on, because `assign` moves rather than duplicates.
+   */
+  assert(
+    /if \(!current \|\| current\.itemId != null\) continue;/.test(merge),
+    'an assigned purchase is left alone',
+  );
+  assert(
+    /if \(taken\.has\(m\.itemId\)\) continue;/.test(merge),
+    '...and a row already spoken for is not handed out twice',
+  );
+}
+
 /* ------------------------------------------------------------------------ */
 
 if (failures > 0) {

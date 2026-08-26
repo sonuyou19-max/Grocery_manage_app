@@ -399,12 +399,53 @@ check_(
   /reconcile\(lines, \{/.test(fn),
 );
 check_(
-  'a failed reconciliation retries once on a stronger model',
+  'a failed reconciliation is repaired on a stronger model',
   /MODEL_CAREFUL/.test(fn) && /better\.problems\.length < result\.problems\.length/.test(fn),
 );
+/*
+ * ONE full transcription, ever.
+ *
+ * The escalation used to be a second `ask` — every line on the paper read again
+ * on a slower model, which is roughly two thousand output tokens generated
+ * twice, and output is what the shopper actually waits for. It is a REPAIR now:
+ * the same images, the numbers already read, and the rows in dispute.
+ *
+ * Counted rather than described, because the way this regresses is somebody
+ * reaching for `ask` again — it is right there, it works, and it is the reason
+ * a seventeen-line receipt took minutes.
+ */
 check_(
-  '...and only once — no loop',
-  (fn.match(/await ask\(/g) ?? []).length === 2,
+  'the receipt is transcribed exactly once',
+  (fn.match(/await ask\(/g) ?? []).length === 1,
+);
+check_(
+  '...and the repair asks only for corrections',
+  /const repair = async \(/.test(fn) && /max_tokens: REPAIR_TOKENS/.test(fn),
+);
+/*
+ * A repair big enough to re-transcribe is a repair that has not understood the
+ * question. Capping it means such an answer fails to parse and the first
+ * reading stands, rather than costing a second full read to arrive there.
+ */
+check_(
+  '...within a budget too small to re-transcribe',
+  /const REPAIR_TOKENS = (\d+)/.test(fn) && Number(fn.match(/const REPAIR_TOKENS = (\d+)/)[1]) <= 2048,
+);
+/*
+ * The repair is handed numbers, not prose. Every name it reads back is a token
+ * the shopper waits for, and the names were never in dispute.
+ */
+check_(
+  '...and is not sent the names it does not need',
+  /raw: l\.raw\.slice\(0, 40\)/.test(fn) && !/expanded: l\.expanded/.test(fn.slice(fn.indexOf('const repair'))),
+);
+/*
+ * A fix for a row the reading does not have is the one answer that could
+ * corrupt a good line, and renumbering is exactly what the prompt forbids.
+ */
+check_(
+  'a fix for a line that does not exist is dropped',
+  /const line = lines\[f\.i\];\s*if \(!line\) continue;/.test(fn),
 );
 /*
  * The lexicon offer has to carry an EMOJI. offerToLexicon drops any candidate

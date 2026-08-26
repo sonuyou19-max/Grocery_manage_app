@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -40,6 +40,7 @@ import {
   includedCount,
   includedTotal,
   initialDecisions,
+  mergeLateMatches,
   offBy,
   setInclude,
   setPrice,
@@ -130,6 +131,25 @@ export default function ReceiptReviewScreen() {
   const [decisions, setDecisions] = useState<Decisions>(() =>
     run ? initialDecisions(run.purchases, run.matches) : new Map(),
   );
+  /*
+   * The AI matcher's answers, arriving after the sheet is already up.
+   *
+   * Guarded twice over. `mergeLateMatches` refuses to touch a purchase that is
+   * already assigned or a list row already spoken for, and `alive` stops the
+   * write entirely once this screen has gone — a setState after an import has
+   * navigated away is a warning at best and a resurrected sheet at worst.
+   */
+  useEffect(() => {
+    if (!run) return;
+    let alive = true;
+    run.settle.then((matches) => {
+      if (alive) setDecisions((prev) => mergeLateMatches(prev, matches));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [run]);
+
   const [editing, setEditing] = useState<Editing>(null);
   const [picking, setPicking] = useState<string | null>(null);
   /*

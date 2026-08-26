@@ -66,6 +66,48 @@ export function initialDecisions(
   return out;
 }
 
+/**
+ * Fold in matches that arrived after the sheet was already on screen.
+ *
+ * The AI matcher is a second round trip and the shopper used to wait through it
+ * before seeing anything. It runs beside the review now, so its answers land on
+ * a sheet somebody may already be working in — which makes "do not undo what
+ * they just did" the entire specification.
+ *
+ * Two rules, and both are refusals:
+ *
+ *   A purchase that already has an itemId is left alone. Either the matcher
+ *   settled it offline before the sheet opened, or the shopper assigned it by
+ *   hand; in both cases a late answer is stale by definition, since it was
+ *   composed from a question asked before that happened.
+ *
+ *   A list row already spoken for is not handed out twice. `assign` moves a
+ *   claim rather than duplicating it, so an unchecked late answer could silently
+ *   take a row off the line the shopper had just put it on — the one edit they
+ *   would be most sure they had made.
+ *
+ * Everything else is a blank being filled, which is all this was ever for.
+ */
+export function mergeLateMatches(
+  d: Decisions,
+  matches: ReadonlyMap<string, MatchOutcome>,
+): Map<string, Decision> {
+  const out = new Map(d);
+  const taken = new Set<string>();
+  for (const [, decision] of out) {
+    if (decision.itemId != null) taken.add(decision.itemId);
+  }
+  for (const [key, m] of matches) {
+    if (m.kind !== 'matched') continue;
+    const current = out.get(key);
+    if (!current || current.itemId != null) continue;
+    if (taken.has(m.itemId)) continue;
+    out.set(key, { ...current, itemId: m.itemId });
+    taken.add(m.itemId);
+  }
+  return out;
+}
+
 export function setInclude(d: Decisions, key: string, include: boolean): Map<string, Decision> {
   const out = new Map(d);
   const current = out.get(key);

@@ -106,6 +106,30 @@ const lineSchema = z.object({
   confidence: z.enum(['high', 'medium', 'low']).catch('medium'),
 });
 
+/**
+ * What a repair may say back.
+ *
+ * Numbers only, and every one optional: a fix that changes the multiplier and
+ * nothing else is the common case, and requiring the rest would make the model
+ * re-state values it was not asked about. `.catch` on each so one unparseable
+ * field costs that field rather than the whole correction.
+ */
+const fixSchema = z.object({
+  i: z.coerce.number().int().min(0),
+  multiplier: z.coerce.number().finite().nullable().optional().catch(null),
+  multiplierDp: z.coerce.number().int().min(0).max(4).nullable().optional().catch(null),
+  unitPriceCents: z.coerce.number().finite().nullable().optional().catch(null),
+  unitPriceDp: z.coerce.number().int().min(0).max(4).nullable().optional().catch(null),
+  totalCents: z.coerce.number().finite().nullable().optional().catch(null),
+  kind: z.enum(LINE_KINDS).nullable().optional().catch(null),
+});
+
+const repairSchema = z.object({
+  fixes: z.array(fixSchema).max(40).catch([]),
+  goodsCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
+  paidCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
+});
+
 const receiptSchema = z.object({
   store: z.string().max(120).nullable().optional().default(null).catch(null),
   purchasedAt: z.string().max(40).nullable().optional().default(null).catch(null),
@@ -280,12 +304,82 @@ const MODEL_FAST = 'claude-haiku-4-5-20251001';
  * The escalation, and the only place a second model earns its keep.
  *
  * Not as a checker — a model checking a model is strictly worse than
- * arithmetic that cannot be talked round. As a RETRY: read cheaply, and if the
- * receipt's own totals say the read was wrong, read again with something
- * stronger. That costs nothing on the receipts that reconcile first time, and
- * it turns "which model" from a guess into a measurement.
+ * arithmetic that cannot be talked round. As a REPAIR: read cheaply, and if the
+ * receipt's own totals say a number was read wrong, look again with something
+ * stronger.
+ *
+ * ---------------------------------------------------------------------------
+ * It re-reads the disputed lines, not the receipt
+ * ---------------------------------------------------------------------------
+ *
+ * This used to call `ask` a second time, which is a whole second transcription
+ * of every line on the paper on a slower model. On a seventeen-line Delhaize
+ * receipt that is roughly two thousand output tokens generated twice, and
+ * output is what a shopper actually waits for — the images upload once and are
+ * read in parallel, but the JSON comes back one token at a time.
+ *
+ * The reconciler already knows exactly which lines failed (`badLines`), and a
+ * money problem is by definition local: a line that does not multiply out is
+ * three numbers on one row, and a total that does not add up is the total.
+ * Re-transcribing the sixteen rows that were right to fix the one that was
+ * wrong is the whole cost of the old shape and none of its value.
+ *
+ * So the repair sends the same images, the reading so far, and the specific
+ * rows in dispute — and asks for corrections to those rows only. Output falls
+ * from every line to a handful, which is the difference between a retry that
+ * doubles the wait and one that adds a few seconds to it.
  */
 const MODEL_CAREFUL = 'claude-sonnet-5';
+
+/**
+ * Enough for a handful of corrected rows and nothing else.
+ *
+ * A repair that wants more than this has not understood the question — it is
+ * re-transcribing — and capping it means such an answer fails to parse and the
+ * first reading stands, rather than costing the shopper a second full read to
+ * arrive at the same place.
+ */
+const REPAIR_TOKENS = 1024;
+
+const REPAIR_PROMPT = `You are correcting ONE READING of a supermarket receipt.
+
+You are given the photographs, the lines somebody already transcribed from them,
+and the rows whose arithmetic does not work. Their transcription is mostly
+right. Your job is the rows in dispute and nothing else.
+
+Return ONLY a JSON object of this exact shape:
+
+{"fixes":[{"i":3,"multiplier":1.094,"multiplierDp":3,"unitPriceCents":499,
+           "unitPriceDp":2,"totalCents":546}],
+ "goodsCents":4911,"paidCents":4802}
+
+- i: the index of the line as given to you, unchanged. Never renumber.
+- Include ONLY the numeric fields you are changing. A field you leave out keeps
+  the value it already has.
+- Include a line in "fixes" ONLY if you are changing something about it. An
+  empty "fixes" array is a valid and useful answer: it means you looked and the
+  reading was right, and the receipt itself does not add up.
+- goodsCents and paidCents: only if you read a different printed total. READ
+  THEM OFF THE PAPER. Never add up the lines to produce them — a total derived
+  from the lines agrees with the lines no matter how wrong they are, and that
+  agreement is exactly what the check exists to detect.
+- Do not add lines. Do not remove lines. Do not rewrite any text: the names,
+  brands and translations are not in dispute and re-typing them costs the
+  shopper time for nothing.
+
+WHAT TO LOOK FOR, in the order it is usually wrong:
+
+- A DIGIT misread in one of the three numbers on a row. 8 for 6, 1 for 7, a
+  decimal comma taken for a full stop. Look at the row again in the image.
+- THE ROW READ ACROSS WRONGLY: a price taken from the row above or below,
+  because the description and the amount are far apart with white space
+  between them. If one row's amount is wrong, check whether it belongs to its
+  neighbour.
+- DECIMAL PLACES. Colruyt prints unit prices to three; a weight printed as
+  "0,49" is two even when the true weight had more. Report what is on the
+  paper, because that is what decides how much rounding the check forgives.
+- A DISCOUNT or DEPOSIT counted as an item, or an item counted as neither.
+  Negative amounts are never items.`;
 
 /** Roughly 1.6k tokens per image, plus the prompt, plus a long receipt's JSON. */
 const MAX_TOKENS = 8192;
@@ -380,6 +474,102 @@ Deno.serve(async (req) => {
     return receiptSchema.parse(JSON.parse(extractJson(raw)));
   };
 
+  /**
+   * Re-read only what did not add up.
+   *
+   * The images go again — the disputed numbers are IN them, and a correction
+   * made from the transcript alone would just be arithmetic dressed as reading.
+   * What does not go again is the answer: the model is handed the lines as
+   * numbers, without a single name, because the names are not in dispute and
+   * every one it read back would be a token the shopper waits for.
+   */
+  const repair = async (
+    parsed: z.infer<typeof receiptSchema>,
+    disputed: readonly number[],
+  ) => {
+    const soFar = parsed.lines.map((l, i) => ({
+      i,
+      // The raw printing, so it can find the row in the photograph. Truncated:
+      // it is a lookup key here, not evidence to be preserved.
+      raw: l.raw.slice(0, 40),
+      kind: l.kind,
+      multiplier: l.multiplier,
+      multiplierDp: l.multiplierDp,
+      unitPriceCents: l.unitPriceCents,
+      unitPriceDp: l.unitPriceDp,
+      totalCents: l.totalCents,
+    }));
+
+    const message = await anthropic.messages.create({
+      model: MODEL_CAREFUL,
+      max_tokens: REPAIR_TOKENS,
+      system: REPAIR_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            ...content,
+            {
+              type: 'text',
+              text: JSON.stringify({
+                lines: soFar,
+                goodsCents: parsed.goodsCents,
+                paidCents: parsed.paidCents,
+                // Named rather than left to be deduced. A totals mismatch names
+                // no row, so `disputed` is empty there and the instruction is
+                // "the totals do not add up" — a different search from "row 3
+                // does not multiply out", and the model should not have to
+                // guess which one it is being asked.
+                disputed,
+              }),
+            },
+            {
+              type: 'text',
+              text:
+                disputed.length > 0
+                  ? `Rows ${disputed.join(', ')} do not multiply out. Look at those rows in the photographs.`
+                  : 'The lines do not add up to the printed total. Find the row that was read wrongly, or correct the printed total.',
+            },
+          ],
+        },
+      ],
+    });
+    await guard.settle(message.usage);
+    const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
+    return repairSchema.parse(JSON.parse(extractJson(raw)));
+  };
+
+  /**
+   * Fold a repair back in, field by field.
+   *
+   * Only the fields it actually named, and only onto lines that exist. A fix
+   * for an index the reading does not have is the one answer that could corrupt
+   * a good line — renumbering is the failure the prompt spends a bullet on —
+   * so it is dropped rather than clamped onto the nearest row.
+   */
+  const applyFixes = (
+    parsed: z.infer<typeof receiptSchema>,
+    fix: z.infer<typeof repairSchema>,
+  ): z.infer<typeof receiptSchema> => {
+    const lines = parsed.lines.map((l) => ({ ...l }));
+    for (const f of fix.fixes) {
+      const line = lines[f.i];
+      if (!line) continue;
+      if (f.multiplier != null) line.multiplier = f.multiplier;
+      if (f.multiplierDp != null) line.multiplierDp = f.multiplierDp;
+      if (f.unitPriceCents != null) line.unitPriceCents = f.unitPriceCents;
+      if (f.unitPriceDp != null) line.unitPriceDp = f.unitPriceDp;
+      if (f.totalCents != null) line.totalCents = f.totalCents;
+      if (f.kind != null) line.kind = f.kind;
+    }
+    return {
+      ...parsed,
+      lines,
+      goodsCents: fix.goodsCents ?? parsed.goodsCents,
+      paidCents: fix.paidCents ?? parsed.paidCents,
+    };
+  };
+
   const check = (parsed: z.infer<typeof receiptSchema>) => {
     const lines: ReceiptLine[] = parsed.lines.map((l) => ({
       raw: l.raw,
@@ -450,15 +640,22 @@ Deno.serve(async (req) => {
      */
     const retryAt = Date.now();
     try {
-      const careful = await ask(MODEL_CAREFUL);
-      const better = check(careful);
+      const fixed = applyFixes(parsed, await repair(parsed, result.badLines));
+      const better = check(fixed);
+      /*
+       * Kept only if it is actually better. A repair that fixes one row and
+       * breaks another has not helped, and `problems.length` is the same
+       * measure the old full re-read was judged by — the point of the change is
+       * that it costs a tenth as much to ask, not that the answer is trusted
+       * any more readily.
+       */
       if (better.ok || better.problems.length < result.problems.length) {
-        parsed = careful;
+        parsed = fixed;
         result = better;
         model = MODEL_CAREFUL;
       }
     } catch (_err) {
-      // Keep the first answer. A failed retry is not worse than no retry.
+      // Keep the first answer. A failed repair is not worse than no repair.
     }
     retryMs = Date.now() - retryAt;
   }
