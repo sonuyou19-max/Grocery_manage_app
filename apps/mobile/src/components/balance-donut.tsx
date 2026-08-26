@@ -92,7 +92,7 @@ import { spacing, type, useTheme } from "@/theme";
  * trick.
  *
  * ---------------------------------------------------------------------------
- * Why the gradients are built from opacity rather than from two hex values
+ * Nothing is translucent, and that is what stopped the tips reading as blobs
  * ---------------------------------------------------------------------------
  *
  * Each slice fades from a wash of its colour into the full colour, along the
@@ -100,12 +100,32 @@ import { spacing, type, useTheme } from "@/theme";
  * end points on the circle, so it follows the sweep instead of running flat
  * across the box.
  *
- * A second, lighter hex per group would mean five more colours to keep in step
- * with the five that already mean something on the list screen, and they would
- * be wrong in one theme or the other: a tint chosen against white goes muddy on
- * a dark card. Opacity stops let the card's own background do the lightening,
- * so the same two stops read as light-to-saturated on white and as
- * deep-to-saturated on black, with one palette.
+ * That wash used to be built from opacity stops: one hex per group, 45% alpha
+ * at the start, 100% at the end, and the surface underneath doing the
+ * lightening. One palette, correct in both themes, and it made the tips look
+ * like stickers.
+ *
+ * Translucency does not overwrite, it accumulates. The tip is a circle sitting
+ * on the last half-stroke of its own body, so wherever the two overlapped, the
+ * same colour was composited over itself: 0.96 over 0.96 is 0.998, and that
+ * region came out visibly darker than the arc it belongs to. Not a colour
+ * clash — a colour on top of ITSELF, which is why it read as a disc stuck to
+ * the ring rather than as the end of an arc. Every join had one.
+ *
+ * So the wash is now a real colour: the group's hue mixed toward the track it
+ * sits on, at the same 45%, computed rather than picked. It looks like what the
+ * alpha version looked like, because it is the same arithmetic — done once, in
+ * advance, instead of by the compositor every time something overlaps.
+ *
+ * The reason it was alpha in the first place still holds and is why this is a
+ * mix and not five new hex values in the palette. Five hand-picked tints would
+ * be five more colours to keep in step with the five that already mean
+ * something on the list screen, and a tint chosen against white goes muddy on a
+ * dark card. Mixing against `colors.line` gets both: one palette, and a start
+ * colour that is correct in whichever theme is running.
+ *
+ * With nothing translucent anywhere, an overlap is simply the top colour
+ * winning — which is all it was ever meant to be.
  */
 
 /** Diameter in dp. Sized to sit beside the legend, not to dominate the card. */
@@ -115,8 +135,40 @@ const STROKE = 16;
 const R = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * R;
 
-/** The wash each slice starts from. See the note on opacity stops above. */
+/** How much of the group's own colour survives at the start of its slice. */
 const FADE = 0.45;
+
+/**
+ * `color` laid over `onto` at `amount`, resolved to a hex.
+ *
+ * The same sum the compositor would do for `stopOpacity={amount}`, done once
+ * here so that nothing on the ring is translucent — see the note above on why
+ * that matters. Exported because check-donut asserts the endpoints: at 1 it has
+ * to be the group's own colour exactly, or the saturated end of every slice is
+ * quietly off-palette.
+ */
+export function mixHex(color: string, onto: string, amount: number): string {
+  const parse = (hex: string) => {
+    const h = hex.replace("#", "");
+    // Three-digit hex expands by doubling each nibble; #abc is #aabbcc, not
+    // #0a0b0c. Handled rather than assumed — the palette is six-digit today and
+    // a shorthand slipping in would otherwise mix against near-black silently.
+    const full =
+      h.length === 3
+        ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2]
+        : h.padEnd(6, "0").slice(0, 6);
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+  };
+  const a = parse(color);
+  const b = parse(onto);
+  const t = Math.max(0, Math.min(1, amount));
+  return (
+    "#" +
+    a
+      .map((v, i) => Math.round(v * t + b[i] * (1 - t)).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
 
 /**
  * Where a fraction sits on the circle, in the SVG's own coordinates.
@@ -240,8 +292,11 @@ export function BalanceDonut({
                   x2={to.x}
                   y2={to.y}
                 >
-                  <Stop offset="0" stopColor={GROUP_COLORS[a.group]} stopOpacity={FADE} />
-                  <Stop offset="1" stopColor={GROUP_COLORS[a.group]} stopOpacity={1} />
+                  {/* Two opaque colours, not one colour at two opacities. The
+                      first is the group's hue already mixed into the track, so
+                      it looks like a wash without behaving like one. */}
+                  <Stop offset="0" stopColor={mixHex(GROUP_COLORS[a.group], colors.line, FADE)} />
+                  <Stop offset="1" stopColor={GROUP_COLORS[a.group]} />
                 </LinearGradient>
               );
             })}

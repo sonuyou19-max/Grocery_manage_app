@@ -70,6 +70,7 @@ const wanted = [
   // everything below passed by testing nothing.
   /^export function arcBody\([\s\S]*?\n\}$/m,
   /^export function tipFraction\([\s\S]*?\n\}$/m,
+  /^export function mixHex\([\s\S]*?\n\}$/m,
 ];
 const parts = wanted.map((re) => src.match(re));
 if (parts.some((p) => !p)) {
@@ -81,11 +82,20 @@ const { outputText } = ts.transpileModule(parts.map((p) => p[0]).join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { arcBody, tipFraction } = mod;
+const { arcBody, tipFraction, mixHex } = mod;
 
 // Re-read the constants from the source rather than restating them here, so a
 // change to the stroke or the overlap is tested rather than silently diverged
 // from.
+/*
+ * Source assertions read this, not `src`. The component's own comments explain
+ * why it no longer uses stopOpacity — and a check for the absence of
+ * `stopOpacity` therefore failed on the sentence saying it was removed. Three
+ * guards in this repo have now matched prose instead of code; this is the
+ * fourth, and the first to do it while forbidding something.
+ */
+const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
 const num = (re) => Number(src.match(re)[1]);
 const SIZE = num(/^const SIZE = (\d+)/m);
 const STROKE = num(/^const STROKE = (\d+)/m);
@@ -180,12 +190,12 @@ function painted(startFraction, fraction) {
  * on the start that the tip puts on the end — which is the shape being removed,
  * and it would silently lengthen every slice by half a stroke on top of it.
  */
-check('the body draws butt caps', /strokeLinecap="butt"/.test(src), true);
-check('...and no round linecap survives anywhere', /strokeLinecap="round"/.test(src), false);
-check('the tip is a filled circle of the stroke\'s own diameter', /r=\{STROKE \/ 2\} fill=\{`url\(#slice-/.test(src), true);
-check('the renderer asks the geometry rather than doing its own maths', /arcBody\(a\.start/.test(src) && /tipFraction\(a\.start/.test(src), true);
-check('the body is pulled back half a stroke', /startFraction \* CIRCUMFERENCE - STROKE \/ 2/.test(src), true);
-check('nothing corrects the dash any more — butt caps add nothing', /length - STROKE/.test(src), false);
+check('the body draws butt caps', /strokeLinecap="butt"/.test(code), true);
+check('...and no round linecap survives anywhere', /strokeLinecap="round"/.test(code), false);
+check('the tip is a filled circle of the stroke\'s own diameter', /r=\{STROKE \/ 2\} fill=\{`url\(#slice-/.test(code), true);
+check('the renderer asks the geometry rather than doing its own maths', /arcBody\(a\.start/.test(code) && /tipFraction\(a\.start/.test(code), true);
+check('the body is pulled back half a stroke', /startFraction \* CIRCUMFERENCE - STROKE \/ 2/.test(code), true);
+check('nothing corrects the dash any more — butt caps add nothing', /length - STROKE/.test(code), false);
 
 /* ------------------------- the saturated end is the one on top ------------ */
 
@@ -197,40 +207,70 @@ check('nothing corrects the dash any more — butt caps add nothing', /length - 
  * to butt joins. And each slice's leading wash would land on the previous
  * slice's saturated end, which is what made the boundaries muddy before.
  */
-check('the slices paint back to front', /\[\.\.\.arcs\]\.reverse\(\)\.map/.test(src), true);
+check('the slices paint back to front', /\[\.\.\.arcs\]\.reverse\(\)\.map/.test(code), true);
 check(
   '...so the LAST slice patches the wrap, not the first',
-  /const last = arcs\[arcs\.length - 1\];/.test(src),
+  /const last = arcs\[arcs\.length - 1\];/.test(code),
   true,
 );
 check(
   '...and the patch is the tip alone, not the whole slice redrawn',
-  /tipFraction\(last\.start/.test(src) && !/arcBody\(last\.start/.test(src),
+  /tipFraction\(last\.start/.test(code) && !/arcBody\(last\.start/.test(code),
   true,
 );
 check(
   '...skipped for a single slice, which already caps itself',
-  /arcs\.length > 1/.test(src),
+  /arcs\.length > 1/.test(code),
   true,
 );
 
 /* ------------------------------------------------- gradients, not flat fill */
 
-check('each slice is stroked with its own gradient', /stroke=\{`url\(#slice-\$\{a\.group\}\)`\}/.test(src), true);
-check('the gradient runs along the arc, not across the box', /x1=\{from\.x\}[\s\S]{0,120}y2=\{to\.y\}/.test(src), true);
+check('each slice is stroked with its own gradient', /stroke=\{`url\(#slice-\$\{a\.group\}\)`\}/.test(code), true);
+check('the gradient runs along the arc, not across the box', /x1=\{from\.x\}[\s\S]{0,120}y2=\{to\.y\}/.test(code), true);
 check(
   'a full circle gets a fallback direction rather than a zero-length gradient',
-  /a\.end - a\.start > 0\.999/.test(src),
+  /a\.end - a\.start > 0\.999/.test(code),
   true,
 );
+/* ------------------------------------------- nothing on the ring is see-through */
+
 /*
- * Opacity stops rather than a second hex per group: one palette, and the card's
- * own background does the lightening, so the same two stops read correctly in
- * both themes. Five more colours would be five more things to keep in step with
- * the dots on the list screen.
+ * The whole reason the tips read as discs stuck onto the ring.
+ *
+ * A tip is a circle sitting on the last half-stroke of its own body. With
+ * translucent paint that overlap composites a colour over ITSELF — 0.96 over
+ * 0.96 is 0.998 — so the region came out darker than the arc it belongs to, at
+ * every join. Opaque, the same overlap is invisible: the top colour is the
+ * colour, which is all it was ever meant to be.
+ *
+ * Asserted on the source because it is a property of what is DRAWN, and the one
+ * way it comes back is somebody reaching for stopOpacity again to soften an
+ * edge.
  */
-check('the fade is built from opacity', /stopOpacity=\{FADE\}/.test(src), true);
-check('...of the group\'s own colour', /stopColor=\{GROUP_COLORS\[a\.group\]\}/.test(src), true);
+check('no stop is translucent', /stopOpacity/.test(code), false);
+check('the start is a mixed colour', /stopColor=\{mixHex\(GROUP_COLORS\[a\.group\], colors\.line, FADE\)\}/.test(code), true);
+check('...and the end is the palette colour itself', /<Stop offset="1" stopColor=\{GROUP_COLORS\[a\.group\]\} \/>/.test(code), true);
+check('the tip is filled, never faded', /fillOpacity|opacity=\{/.test(code), false);
+
+/*
+ * The mix has to be exact at both ends or the ring drifts off-palette: at 1 it
+ * IS the group's colour, at 0 it is the track, and nothing in between may
+ * overshoot into a channel it does not have.
+ */
+{
+  const GREEN = '#5FA85A';
+  const LINE = '#414A3B';
+  check('a full mix is the colour itself', mixHex(GREEN, LINE, 1), GREEN.toLowerCase());
+  check('an empty mix is the track', mixHex(GREEN, LINE, 0), LINE.toLowerCase());
+  check('the wash sits between them', mixHex(GREEN, LINE, 0.45), '#4f7449');
+  check('it always returns six digits', mixHex('#000000', '#ffffff', 0.5).length, 7);
+  // Shorthand expands by doubling, not by zero-padding — #abc is #aabbcc.
+  check('shorthand hex expands correctly', mixHex('#abc', '#abc', 1), '#aabbcc');
+  // Out-of-range amounts clamp rather than producing channels past 255.
+  check('an amount over 1 clamps', mixHex(GREEN, LINE, 4), GREEN.toLowerCase());
+  check('a negative amount clamps', mixHex(GREEN, LINE, -2), LINE.toLowerCase());
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
