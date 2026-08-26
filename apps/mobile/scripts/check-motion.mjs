@@ -361,7 +361,39 @@ if (faded.length) {
 
   // The chip says the words. A hardcoded English string here would be the one
   // untranslated thing on a translated sheet.
-  check('the chip is translated', /\{t\("stopped\.label"\)\}/.test(sheet), true);
+  check('the chip is translated', /const label = t\("stopped\.label"\);/.test(sheet), true);
+
+  /*
+   * MEASURED ONCE. This shipped as a plain setState in onLayout and looped:
+   * onLayout fires again as the chip animates, the width returns a fraction
+   * different, labelW changes, the effect re-runs because labelW is in its
+   * deps, and the sequence restarts from its opening delay. The chip froze
+   * partway open, waited, and started over — on device it read as broken
+   * rather than as animating.
+   */
+  check(
+    'the label is measured once, not on every frame it animates',
+    /setMeasured\(\(prev\) => \(prev\?\.text === label \? prev : \{ text: label, w \}\)\)/.test(sheet),
+    true,
+  );
+
+  /*
+   * `styles.reveal` is absolutely positioned, and exactly one element may wear
+   * it. A rename applied with a global replace once put it on every cadence
+   * preset instead, which stacked all five on top of the paragraph beside them
+   * — a typecheck cannot see this, because both keys exist and both are valid
+   * styles.
+   */
+  check(
+    'only the reveal itself is absolutely positioned',
+    (sheet.match(/styles\.reveal,/g) ?? []).length,
+    1,
+  );
+  check(
+    'the cadence presets stay in the flow',
+    /style=\{\[\s*styles\.chip,/.test(sheet),
+    true,
+  );
   check(
     'and the reader is not told the same control twice',
     /accessible=\{false\}[\s\S]{0,120}importantForAccessibility="no"/.test(sheet),

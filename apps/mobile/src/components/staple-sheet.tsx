@@ -361,7 +361,7 @@ function CadenceChip({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       style={[
-        styles.reveal,
+        styles.chip,
         {
           borderColor: active ? colors.accent : colors.line,
           backgroundColor: active ? colors.accentSoft : colors.surface,
@@ -464,10 +464,10 @@ function HistoryRow({
  * pixel it occupies at rest and the words come out from behind it. Left-aligned
  * it would clip the icon instead and the button would appear to slide away.
  */
-const REVEAL_DELAY = 420;
-const OPEN_MS = 260;
-const HOLD_MS = 1700;
-const CLOSE_MS = 200;
+const REVEAL_DELAY = 280;
+const OPEN_MS = 190;
+const HOLD_MS = 1200;
+const CLOSE_MS = 150;
 const ICON = 22;
 /** The chip's height, and the width of its slot in the flow. */
 const CHIP_H = 26;
@@ -484,13 +484,25 @@ function StopBuyingButton({
   const t = useT();
   const reduced = useReducedMotion();
   const open = useSharedValue(0);
+  const label = t("stopped.label");
   /*
-   * The label's natural width, measured once. It has to be a real measurement:
-   * the string is seven translations long, "Stopped buying" and "Nicht mehr
-   * gekauft" are not the same size, and a guessed constant would either clip
-   * the German or leave the English sitting in a chip of empty space.
+   * The label's natural width, measured ONCE per label — and the "once" is
+   * load-bearing, not tidiness.
+   *
+   * This was a plain `setLabelW(layout.width)`, which loops. onLayout fires
+   * again as the chip animates, the width comes back a fraction different, the
+   * state changes, the effect below re-runs because labelW is in its deps, and
+   * the sequence restarts from its opening delay — so the chip freezes at
+   * whatever width it had reached, waits, and starts over, forever. On device
+   * it read as a control that was stuck rather than one that was animating.
+   *
+   * The label's text does not change while it is mounted, so the first
+   * measurement is the answer. Keyed on the string rather than on a bare `if
+   * (labelW === 0)` so switching language in Settings re-measures instead of
+   * sizing the chip to a word it is no longer showing.
    */
-  const [labelW, setLabelW] = useState(0);
+  const [measured, setMeasured] = useState<{ text: string; w: number } | null>(null);
+  const labelW = measured?.text === label ? measured.w : 0;
 
   useEffect(() => {
     if (revealFor == null || labelW === 0) {
@@ -559,10 +571,16 @@ function StopBuyingButton({
             accessible={false}
             importantForAccessibility="no"
             numberOfLines={1}
-            onLayout={(e) => setLabelW(e.nativeEvent.layout.width)}
+            onLayout={(e) => {
+              const w = e.nativeEvent.layout.width;
+              // Returning `prev` unchanged makes React bail out of the render
+              // entirely, which is what keeps a second layout pass from
+              // restarting the animation. See `measured` above.
+              setMeasured((prev) => (prev?.text === label ? prev : { text: label, w }));
+            }}
             style={[type.sub, styles.revealText, { color: colors.muted }]}
           >
-            {t("stopped.label")}
+            {label}
           </Text>
           <Ionicons name="bag-remove-outline" size={ICON} color={colors.muted} />
         </Pressable>
