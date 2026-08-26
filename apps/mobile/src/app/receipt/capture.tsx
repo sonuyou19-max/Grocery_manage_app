@@ -277,6 +277,22 @@ export default function ReceiptCaptureScreen() {
         <ConfirmShot uri={pending.uri} onKeep={keep} onRetake={retake} />
       )}
 
+      {/*
+        The camera's own chrome, and ONLY while the camera is what you are
+        looking at.
+    
+        Both of the screens above are absoluteFill and both are rendered before
+        this, so without the guard this draws over them: the capture hint landed
+        on top of "Can you read the amounts?" as one unreadable line of two
+        sentences, and the Scan button sat over "Use photo". Two overlays, three
+        sets of controls, all live at once — and the wrong one on top, because
+        painting order is document order and this is last.
+    
+        Guarded here rather than inside each piece. A screen that has been
+        replaced should stop existing, not have its parts individually talked
+        out of drawing.
+      */}
+      {!pending && !scanning && (
       <Safe style={styles.overlay}>
         <View style={styles.top}>
           <Text style={styles.hint}>
@@ -355,6 +371,7 @@ export default function ReceiptCaptureScreen() {
           </View>
         </View>
       </Safe>
+      )}
     </View>
   );
 }

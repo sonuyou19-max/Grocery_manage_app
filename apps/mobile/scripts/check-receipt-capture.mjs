@@ -347,6 +347,71 @@ assert(
   'a GIF or Lottie file would be a bundled asset at best and a native dependency at worst — the feature stays shippable over the air',
 );
 
+/* ------------------------------------------ one screen at a time --------- */
+
+/*
+ * Three screens live in this file — the camera, the confirm, and the scan
+ * progress — and the last two are absoluteFill. They are rendered BEFORE the
+ * camera's chrome, so painting order puts the chrome on top of both unless
+ * something stops it.
+ *
+ * Nothing did. The capture hint landed on top of "Can you read the amounts?" as
+ * one unreadable line of two sentences, and the Scan button sat over "Use
+ * photo" — two overlays and three sets of controls all live at once, with the
+ * wrong one reachable.
+ *
+ * Asserted structurally, because nothing about it can be observed from the
+ * outside: every piece drew correctly, in the wrong place, on top of a screen
+ * that had replaced it.
+ */
+{
+  const chrome = screen.indexOf('<Safe style={styles.overlay}>');
+  const guard = screen.indexOf('{!pending && !scanning && (');
+  assert(guard > 0, 'the camera chrome is guarded');
+  assert(guard > 0 && guard < chrome, '...and the guard comes before it');
+
+  // Both screens it defers to are full-screen, which is the reason the guard
+  // has to exist at all. If either stopped covering the screen, the guard would
+  // be hiding controls for no reason.
+  assert(
+    /confirmRoot: \{ \.\.\.StyleSheet\.absoluteFillObject/.test(screen),
+    'the confirm screen fills the screen',
+  );
+  assert(
+    /root: \{\s*\.\.\.StyleSheet\.absoluteFillObject/.test(overlay),
+    'the scan screen fills the screen',
+  );
+
+  // Each screen carries its own hint, and only one is ever mounted — which is
+  // what stops two sentences sharing a line.
+  /*
+   * Each screen carries its own hint and only one is ever mounted, which is what
+   * stops two sentences sharing a line.
+   *
+   * Against the guarded REGION, not against the guard's position: ConfirmShot is
+   * declared below the component, so "before the guard" is false for it and the
+   * first version of this failed on correct code.
+   */
+  /*
+   * Anchored to the line, not to the characters. `'      )}'` also occurs INSIDE
+   * `'          )}'` — the thumbnail strip's own closing brace — so the region
+   * ended a third of the way through and the Scan button fell outside it. The
+   * assertion below then passed by testing the wrong span, which is the failure
+   * this whole file exists to avoid.
+   */
+  const guardEnd = screen.indexOf('\n      )}\n    </View>', guard);
+  const inGuard = (needle) => {
+    const at = screen.indexOf(needle);
+    return at > guard && at < guardEnd;
+  };
+  assert(guardEnd > guard, 'the guarded region was found');
+  assert(inGuard("t('receipt.hint'"), 'the camera hint is inside the guard');
+  assert(!inGuard("t('receipt.checkShot')"), 'the confirm hint is not');
+  // And the Scan button IS — it belongs to the camera, and it was the control
+  // that ended up sitting over "Use photo".
+  assert(inGuard("t('receipt.scan')"), 'the Scan button is inside the guard');
+}
+
 /* ------------------------------------------------------------------------ */
 
 if (failures > 0) {
