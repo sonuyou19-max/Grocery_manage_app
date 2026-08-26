@@ -412,6 +412,53 @@ export function unitPrice(p: Priceable): number | null {
 }
 
 /**
+ * The price per unit, scaled to a unit somebody would actually quote.
+ *
+ * `unitPrice` above answers in cents per whatever `unit` happens to be, and for
+ * grams and millilitres that is a number no shop has ever printed: 500 g of
+ * toast at €4.99 is 0.499 cents per gram, which rounds to zero and renders as
+ * "€0.00". The item sheet was doing exactly that.
+ *
+ * So grams become kilos and millilitres become litres, which is how the price
+ * is written on the shelf edge and therefore the only form worth comparing
+ * against it.
+ *
+ * This is the figure the whole brand/size split was for. "Is this one cheaper"
+ * cannot be answered from a total — €0.89 for 1 L and €1.79 for 1.5 L is not a
+ * comparison anybody does in their head — and it is the one number a history of
+ * one item can put side by side down a column.
+ *
+ * Returns the parts rather than a string: the cents have to go through the
+ * locale's own money(), and a unit is not a sentence.
+ */
+export interface UnitPriceParts {
+  cents: number;
+  /** 'kg', 'l', or whatever was measured — 'pcs' means per piece. */
+  unit: string;
+}
+
+export function unitPriceParts(p: Priceable): UnitPriceParts | null {
+  const per = unitPrice(p);
+  if (per == null || !p.unit) return null;
+  // Only the sub-units need scaling; kg, l and pcs are already quotable.
+  const SCALE: Record<string, { factor: number; unit: string }> = {
+    g: { factor: 1000, unit: 'kg' },
+    ml: { factor: 1000, unit: 'l' },
+    cl: { factor: 100, unit: 'l' },
+  };
+  const scaled = SCALE[p.unit];
+  const cents = Math.round(per * (scaled?.factor ?? 1));
+  /*
+   * Nothing useful left to say. A unit price that rounds to zero even after
+   * scaling — a few cents of something sold by the kilo — is not a comparison,
+   * it is a rounding artefact, and printing "€0.00 / kg" beside a real total
+   * makes the whole row look wrong.
+   */
+  if (cents <= 0) return null;
+  return { cents, unit: scaled?.unit ?? p.unit };
+}
+
+/**
  * What the shopper actually hands over: the shelf price of one pack times how
  * many of them.
  *

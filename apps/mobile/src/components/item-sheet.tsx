@@ -36,7 +36,7 @@ import { haptics } from '@/lib/haptics';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
 import { parsePriceToCents } from '@/lib/money';
-import { historyFor, totalCents, unitPrice } from '@/lib/purchase-log';
+import { amountLabel, historyFor, totalCents, unitPrice, unitPriceParts } from '@/lib/purchase-log';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -662,7 +662,17 @@ function LastBought({ name }: { name: string }) {
   const last = historyFor(purchases, name).find((p) => p.priceCents != null);
   if (!last) return null;
 
-  const each = unitPrice(last);
+  /*
+   * Per PACK, which is what "each" means — the total divided by how many were
+   * bought. This read unitPrice, which is per unit of MEASURE: for 2 × 500 g at
+   * €4.99 that is 0.499 cents per gram, so the line rendered "€0.00 each".
+   * Right for a litre by luck, wrong for everything sold by weight.
+   */
+  const each =
+    last.priceCents != null && last.packs > 1 ? last.priceCents / last.packs : null;
+  // And the shelf-edge figure, scaled so grams read as kilos. See
+  // unitPriceParts — the same helper the purchase history leads with.
+  const per = unitPriceParts(last);
   const when = new Date(last.at).toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'short',
@@ -689,12 +699,14 @@ function LastBought({ name }: { name: string }) {
       )}
 
       <Text style={[type.sub, { color: colors.muted }]}>
-        {last.packs > 1 ? `${last.packs} × ` : ''}
-        {last.quantity != null ? `${last.quantity}${last.unit ?? ''} · ` : ''}
+        {amountLabel(last) != null ? `${amountLabel(last)} · ` : ''}
         {money(last.priceCents ?? 0)}
-        {/* Per-unit only when it is a different number from the total —
+        {/* Both only when they are different numbers from the total —
             otherwise it reads as the same price printed twice. */}
-        {each != null && last.packs > 1 ? ` · ${money(Math.round(each))} ${t('itemSheet.each')}` : ''}
+        {each != null ? ` · ${money(Math.round(each))} ${t('itemSheet.each')}` : ''}
+        {per != null
+          ? ` · ${money(per.cents)}${per.unit === 'pcs' ? ` ${t('itemSheet.each')}` : ` / ${per.unit}`}`
+          : ''}
       </Text>
     </View>
   );

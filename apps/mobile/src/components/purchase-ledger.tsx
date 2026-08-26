@@ -15,7 +15,12 @@ import { Sheet } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { ItemEmoji } from "@/components/item-emoji";
 import { SupermarketBadge } from "@/components/supermarket-badge";
-import { amountLabel, historyFor, type Purchase } from "@/lib/purchase-log";
+import {
+  amountLabel,
+  historyFor,
+  unitPriceParts,
+  type Purchase,
+} from "@/lib/purchase-log";
 import { useLocale } from "@/store/locale";
 import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
@@ -180,7 +185,16 @@ export function PurchaseLedger({
           style={[styles.scroll, { maxHeight: scrollCap }]}
           bounces={false}
         >
-          {rows.map((p, i) => (
+          {rows.map((p, i) => {
+            const brand = p.brand?.trim() || null;
+            const desc = p.description?.trim() || null;
+            // Whether the row has anything to call itself besides its date.
+            const named = brand != null || desc != null;
+            const headline = brand ?? desc ?? dateOf(p.at);
+            const sub = brand != null ? desc : null;
+            const amount = amountLabel(p);
+            const each = unitPriceParts(p);
+            return (
             <View
               key={p.id}
               style={[
@@ -192,10 +206,34 @@ export function PurchaseLedger({
                 i === rows.length - 1 && styles.lastRow,
               ]}
             >
+              {/*
+                Led by the BRAND, because that is what a column of these is
+                scanned for — "which one did I buy last time, and was it the
+                cheaper one". The name of the item is already at the top of the
+                sheet; repeating it on every row would spend the loudest line on
+                the one fact the reader arrived knowing.
+
+                Three shapes, from the same two fields:
+
+                  brand + description  brand leads, description under it
+                  description only     it leads (loose produce names itself)
+                  neither              the DATE leads, and the row is exactly
+                                       what it was before any of this
+
+                That last one is most of a typical history — a purchase logged
+                by ticking an item off carries no brand and never will — so it
+                gets the plain shape rather than a placeholder apologising for
+                being ordinary.
+              */}
               <View style={styles.grow}>
-                <Text style={[type.body, { color: colors.ink }]}>
-                  {dateOf(p.at)}
+                <Text style={[type.body, styles.headline, { color: colors.ink }]} numberOfLines={1}>
+                  {headline}
                 </Text>
+                {sub != null && (
+                  <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                    {sub}
+                  </Text>
+                )}
                 <View style={styles.meta}>
                   {p.store != null ? (
                     <SupermarketBadge store={p.store} size={16} />
@@ -204,52 +242,61 @@ export function PurchaseLedger({
                       {t("ledger.noStore")}
                     </Text>
                   )}
-                  {/*
-                    Through amountLabel, which is what fixes this row. It printed
-                    `quantity` and `unit` alone — the size of ONE pack — so four
-                    litres of milk arrived in the history as "1 l". The pack
-                    count was in the database the whole time and had no way to
-                    reach the screen.
-                  */}
-                  {amountLabel(p) != null && (
-                    <Text style={[type.sub, { color: colors.muted }]}>
-                      {amountLabel(p)}
-                    </Text>
+                  {/* Only when the headline is not already the date. */}
+                  {named && (
+                    <Text style={[type.sub, { color: colors.muted }]}>{dateOf(p.at)}</Text>
                   )}
                 </View>
+              </View>
+
+              {/*
+                The figures, right-aligned as a column so they can be read down
+                rather than across: total, how much of it, and what that comes to
+                per kilo or per litre.
+              */}
+              <View style={styles.figures}>
+                {/* An unpriced purchase shows a dash, not a zero: it happened,
+                    it just carries no amount, and €0.00 would be a lie that
+                    also drags every average it lands in. */}
+                <Text
+                  style={[
+                    type.price,
+                    { color: p.priceCents == null ? colors.muted : colors.ink },
+                  ]}
+                >
+                  {p.priceCents == null ? "—" : money(p.priceCents)}
+                </Text>
+
                 {/*
-                  What the till actually called it, and who made it.
-                  
-                  This is the reason price_entries carries brand and description
-                  at all — the whole point of splitting them off the item's name
-                  was that the name stays short enough to match next month while
-                  the detail survives HERE. It was being written and never read.
-                  One line, truncated: it is evidence you glance at, not a field
-                  to study, and a long German description would otherwise push
-                  every row to three lines.
+                  Through amountLabel, which is what fixed this row. It printed
+                  `quantity` and `unit` alone — the size of ONE pack — so four
+                  litres of milk arrived in the history as "1 l". The pack count
+                  was in the database the whole time with no way to reach the
+                  screen.
                 */}
-                {(p.brand != null || p.description != null) && (
-                  <Text
-                    style={[type.sub, { color: colors.muted }]}
-                    numberOfLines={1}
-                  >
-                    {[p.brand, p.description].filter(Boolean).join(" · ")}
+                {amount != null && (
+                  <Text style={[type.sub, { color: colors.muted }]}>{amount}</Text>
+                )}
+
+                {/*
+                  The comparison, and the reason for splitting brand off the
+                  name in the first place. A total cannot answer "was that one
+                  cheaper" across two different pack sizes; this can, and it is
+                  the only figure here worth the accent.
+
+                  "each" for a count, because "€0.53 / pcs" is not how anybody
+                  says it — and that word is already translated.
+                */}
+                {each != null && (
+                  <Text style={[type.sub, styles.each, { color: colors.accent }]}>
+                    {money(each.cents)}
+                    {each.unit === "pcs" ? ` ${t("itemSheet.each")}` : ` / ${each.unit}`}
                   </Text>
                 )}
               </View>
-              {/* An unpriced purchase shows a dash, not a zero: it happened,
-                      it just carries no amount, and €0.00 would be a lie that
-                      also drags every average it lands in. */}
-              <Text
-                style={[
-                  type.price,
-                  { color: p.priceCents == null ? colors.muted : colors.ink },
-                ]}
-              >
-                {p.priceCents == null ? "—" : money(p.priceCents)}
-              </Text>
             </View>
-          ))}
+            );
+          })}
         </ScrollView>
       </GlassView>
     </Sheet>
@@ -277,12 +324,19 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    // Top, not centre: the two columns are different heights now — three lines
+    // of words against one to three figures — and centring them makes the date
+    // drift up and down the row depending on how much the receipt knew.
+    alignItems: "flex-start",
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   lastRow: { borderBottomWidth: 0 },
+  headline: { fontWeight: "700" },
+  // Read DOWN, so the totals line up whatever is under them.
+  figures: { alignItems: "flex-end" },
+  each: { fontWeight: "600" },
   meta: {
     flexDirection: "row",
     alignItems: "center",

@@ -443,6 +443,43 @@ check(
   check('a fractional count is rounded', label({ quantity: 1, unit: 'l', packs: 2.4 }), '2 × 1 l');
 }
 
+/* ------------------------------------------------------- unitPriceParts -- */
+
+/*
+ * The figure the whole brand/size split was for. A total cannot answer "was
+ * that one cheaper" across two pack sizes — €0.89 for 1 L against €1.79 for
+ * 1.5 L is not a comparison anybody does in their head.
+ *
+ * The scaling is the part that was actually broken elsewhere. unitPrice answers
+ * in cents per whatever the unit happens to be, and for grams that is a number
+ * no shop has ever printed: 500 g at €4.99 is 0.499 cents per gram, which
+ * rounds to zero. The item sheet rendered exactly that — "€0.00 each" — for
+ * everything sold by weight.
+ */
+{
+  const per = mod.unitPriceParts;
+  check('litres are quoted per litre', per({ priceCents: 356, quantity: 1, unit: 'l', packs: 4 }), { cents: 89, unit: 'l' });
+  check('grams are quoted per kilo', per({ priceCents: 499, quantity: 500, unit: 'g', packs: 2 }), { cents: 499, unit: 'kg' });
+  check('millilitres are quoted per litre', per({ priceCents: 315, quantity: 500, unit: 'ml', packs: 1 }), { cents: 630, unit: 'l' });
+  check('centilitres too', per({ priceCents: 165, quantity: 50, unit: 'cl', packs: 1 }), { cents: 330, unit: 'l' });
+  check('kilos are already quotable', per({ priceCents: 546, quantity: 1.094, unit: 'kg', packs: 1 }), { cents: 499, unit: 'kg' });
+  check('a count is quoted per piece', per({ priceCents: 315, quantity: 6, unit: 'pcs', packs: 1 }), { cents: 53, unit: 'pcs' });
+
+  /*
+   * The unscaled bug, stated as the thing it produced: per GRAM, this rounds to
+   * nothing. If unitPriceParts ever stops scaling, this is what comes back.
+   */
+  check('unscaled, the same purchase rounds to nothing', Math.round(mod.unitPrice({ priceCents: 499, quantity: 500, unit: 'g', packs: 2 })), 0);
+
+  // Nothing to divide by, nothing to say.
+  check('no price, no figure', per({ priceCents: null, quantity: 500, unit: 'g', packs: 1 }), null);
+  check('no quantity, no figure', per({ priceCents: 499, quantity: null, unit: 'g', packs: 1 }), null);
+  check('no unit, no figure', per({ priceCents: 499, quantity: 500, unit: null, packs: 1 }), null);
+  // A few cents of something sold by the kilo is a rounding artefact, not a
+  // comparison, and "€0.00 / kg" beside a real total makes the row look broken.
+  check('a figure that rounds to zero is withheld', per({ priceCents: 1, quantity: 900, unit: 'kg', packs: 1 }), null);
+}
+
 /* ----------------------------------------- the surfaces that show it ----- */
 
 /*
@@ -456,11 +493,43 @@ check(
   const ledger = strip(readFileSync(join(here, '..', 'src', 'components', 'purchase-ledger.tsx'), 'utf8'));
   const list = strip(readFileSync(join(here, '..', 'src', 'app', 'list', '[id].tsx'), 'utf8'));
 
-  check('the ledger states the amount through amountLabel', /amountLabel\(p\)/.test(ledger), true);
+  check('the ledger states the amount through amountLabel', /const amount = amountLabel\(p\)/.test(ledger), true);
+  /*
+   * Led by the brand. A column of these is scanned for "which one did I buy
+   * last time" — the item's own name is already at the top of the sheet, so
+   * repeating it per row would spend the loudest line on the one fact the
+   * reader arrived knowing.
+   */
+  check('the brand leads the row', /const headline = brand \?\? desc \?\? dateOf\(p\.at\)/.test(ledger), true);
+  check('...with the description under it', /const sub = brand != null \? desc : null/.test(ledger), true);
+  /*
+   * And a row with neither falls back to exactly what it was before — most of a
+   * typical history is purchases logged by ticking, which carry no brand and
+   * never will. A placeholder apologising for that would be on most rows.
+   */
+  check('a row with nothing to say leads with its date', /const named = brand != null \|\| desc != null/.test(ledger), true);
+  check('the comparison figure is shown', /const each = unitPriceParts\(p\)/.test(ledger), true);
+  check('...in the accent, as the one figure worth it', /styles\.each, \{ color: colors\.accent \}/.test(ledger), true);
+  check('...and a count reads "each", not "/ pcs"', /each\.unit === "pcs" \? ` \$\{t\("itemSheet\.each"\)\}`/.test(ledger), true);
   check('...and no longer prints one pack\'s size as the amount', /\{p\.quantity\}/.test(ledger), false);
-  check('the ledger shows the brand and description it stores', /\[p\.brand, p\.description\]/.test(ledger), true);
+  // Both fields are read — the headline/sub assertions below say WHERE.
+  check('the ledger reads the brand it stores', /const brand = p\.brand\?\.trim\(\)/.test(ledger), true);
+  check('...and the description', /const desc = p\.description\?\.trim\(\)/.test(ledger), true);
 
   check('a ticked list row states its amount', /it\.checked && amountLabel\(it\)/.test(list), true);
+
+  /*
+   * "each" means per PACK. The item sheet computed it with unitPrice, which is
+   * per unit of MEASURE — right for a litre by luck, and "€0.00 each" for
+   * everything sold by weight.
+   */
+  const sheet = strip(readFileSync(join(here, '..', 'src', 'components', 'item-sheet.tsx'), 'utf8'));
+  check(
+    'the item sheet divides "each" by the pack count',
+    /const each =\s*last\.priceCents != null && last\.packs > 1 \? last\.priceCents \/ last\.packs : null;/.test(sheet),
+    true,
+  );
+  check('...and quotes the shelf figure through unitPriceParts', /const per = unitPriceParts\(last\)/.test(sheet), true);
 }
 
 /* ------------------------------------------- every column that is mapped -- */
