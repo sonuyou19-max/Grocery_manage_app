@@ -101,8 +101,28 @@ export interface CommitPlan {
    * about a product and no receipt knows it.
    */
   patches: { itemId: string; patch: ItemRowPatch }[];
+  /**
+   * Rows to CREATE, already ticked: receipt lines that matched nothing.
+   *
+   * Every one of these reached the pantry before and stopped there, which left
+   * the two halves of one shop describing different trips — the log knew about
+   * the chocolate, the list did not, and the list is what the shopper opens
+   * afterwards to see what the import did.
+   *
+   * Ticked rather than to-buy, obviously: it has been bought. That also means
+   * it can never collide, because 0018's unique index covers open rows only.
+   */
+  adds: NewBoughtRow[];
   /** The instant every purchase is filed under. */
   at: number;
+}
+
+/** One row the import creates from scratch. */
+export interface NewBoughtRow {
+  /** The product name, chosen exactly as a matched purchase's is — see below. */
+  name: string;
+  category: ItemCategory;
+  detail: ItemRowPatch;
 }
 
 /**
@@ -208,6 +228,7 @@ export function planCommit(
   const planned: PlannedPurchase[] = [];
   const tick: string[] = [];
   const patches: { itemId: string; patch: ItemRowPatch }[] = [];
+  const adds: NewBoughtRow[] = [];
 
   for (const p of purchases) {
     const d = decisions.get(p.key);
@@ -278,6 +299,32 @@ export function planCommit(
       // Only rows that are not already ticked. `toggleItem` toggles, so calling
       // it on a ticked row would UNtick it — an import that unbuys the shopping.
       if (!row.checked) tick.push(row.id);
+    } else {
+      /*
+       * A line nobody wrote down, going onto the list as already bought.
+       *
+       * It reached the pantry before this and stopped there, which left the two
+       * halves of one shop describing different trips: the log knew about the
+       * chocolate, the list did not, and the list is the screen the shopper
+       * actually opens afterwards to see what the receipt did. "Added to
+       * pantry" said thirteen when fifteen things had been.
+       *
+       * Same name and same category as the purchase above, from the same two
+       * lines, so the row and the pantry item cannot disagree about what was
+       * bought. Same detail too — this is where the pack count and the total
+       * become visible.
+       */
+      adds.push({
+        name,
+        category,
+        detail: {
+          quantity: p.quantity,
+          unit: p.unit,
+          packs: p.packs,
+          priceCents: d.priceCents,
+          store,
+        },
+      });
     }
   }
 
@@ -285,6 +332,7 @@ export function planCommit(
     at,
     tick,
     patches,
+    adds,
     purchases: planned,
     receipt: {
       fingerprint: receipt.fingerprint,

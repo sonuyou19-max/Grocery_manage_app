@@ -161,6 +161,28 @@ interface GroceriesContext {
    * at last week's ticked item. This branches on the row's state instead.
    */
   addOrReviveItem: (listId: string, item: ParsedItem) => AddOutcome;
+  /**
+   * Put something on the list that was ALREADY bought — a receipt line the
+   * shopper never wrote down.
+   *
+   * Deliberately not addOrReviveItem with a flag. That one exists to get an
+   * item into "to buy", so it inserts unticked and it REVIVES a ticked row back
+   * to unticked; both are the opposite of what a receipt import means. Handing
+   * it a boolean would give one function two purposes that disagree about its
+   * central case.
+   *
+   * It always inserts, and never looks for an equivalent row to merge into.
+   * Matching is the review screen's job and it has already been done there,
+   * with a picker and the shopper watching; second-guessing that decision here
+   * would silently overwrite one of two genuinely different milks with the
+   * other. The database agrees this is safe — 0018's unique index covers OPEN
+   * rows, so a ticked insert can never collide.
+   */
+  addBoughtItem: (
+    listId: string,
+    item: { name: string; category: ItemCategory },
+    detail: ItemPatch,
+  ) => void;
   toggleItem: (listId: string, itemId: string) => void;
   updateItem: (listId: string, itemId: string, patch: ItemPatch) => void;
   /**
@@ -229,6 +251,30 @@ const seedUnit = (
   explicit: string | null | undefined,
   usual: string | null | undefined,
 ): string | null => explicit ?? usual ?? unitFor(name, category);
+
+/**
+ * A list row for something already bought, built once for both backends.
+ *
+ * The two of them insert it differently — one talks to Supabase, one does not —
+ * but WHAT they insert has to be identical, or a receipt imported signed-out
+ * lands as a different row from the same receipt imported signed-in. The parts
+ * that vary by backend are the parts left out of here.
+ */
+const boughtRow = (
+  item: { name: string; category: ItemCategory },
+  detail: ItemPatch,
+  now: number = Date.now(),
+): Item => ({
+  ...newItem(item.name, item.category, {
+    quantity: detail.quantity ?? null,
+    unit: detail.unit ?? null,
+    store: detail.store ?? null,
+  }),
+  packs: detail.packs != null && detail.packs > 0 ? detail.packs : 1,
+  priceCents: detail.priceCents ?? null,
+  checked: true,
+  checkedAt: now,
+});
 
 const newItem = (name: string, category: ItemCategory, opts: Partial<Item> = {}): Item => ({
   id: uuidv4(),
@@ -539,6 +585,19 @@ function LocalGroceriesProvider({ children }: PropsWithChildren) {
         }
         insertParsed(listId, p);
         return 'added';
+      },
+      addBoughtItem: (listId, item, detail) => {
+        // No supabase here and no `added_by`: a local list has one owner and no
+        // rows anywhere else. Everything else is identical, on purpose — a
+        // receipt imported signed-out must land the same way it does signed in.
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId
+              ? { ...l, items: [...l.items, boughtRow(item, detail)] }
+              : l,
+          ),
+        );
+        rememberItemList(item.name, listId);
       },
       toggleItem: (listId, itemId) =>
         setLists((prev) =>
@@ -1265,6 +1324,35 @@ function CloudGroceriesProvider({
         }
         insertParsed(listId, p);
         return 'added';
+      },
+      addBoughtItem: (listId, item, detail) => {
+        const row = boughtRow(item, detail);
+        setLists((prev) =>
+          prev.map((l) => (l.id === listId ? { ...l, items: [...l.items, row] } : l)),
+        );
+        supabase
+          .from('list_items')
+          .insert({
+            id: row.id,
+            list_id: listId,
+            name: row.name,
+            category: row.category,
+            quantity: row.quantity,
+            unit: row.unit,
+            packs: row.packs,
+            price_cents: row.priceCents,
+            store: row.store,
+            // Both columns in one insert. A row whose `checked` and
+            // `checked_at` disagree either never settles or settles while still
+            // on the list — see lib/list-sweep, which owns that rule.
+            checked: true,
+            checked_at: new Date(row.checkedAt ?? Date.now()).toISOString(),
+            added_by: user?.id ?? null,
+          })
+          .then(({ error }) => {
+            recoverFrom('list_items.insert.bought', error);
+          });
+        rememberItemList(item.name, listId);
       },
       toggleItem: (listId, itemId) => {
         const current = lists

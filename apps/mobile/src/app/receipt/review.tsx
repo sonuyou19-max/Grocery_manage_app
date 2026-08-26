@@ -116,7 +116,7 @@ export default function ReceiptReviewScreen() {
   const insets = useSafeAreaInsets();
   const scrollIndicator = useScrollIndicator();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { lists, toggleItem, updateItem } = useGroceries();
+  const { lists, toggleItem, updateItem, addBoughtItem } = useGroceries();
   const { logPurchase } = usePantryIntel();
   const { activeId } = useHousehold();
   const { showToast } = useToast();
@@ -306,6 +306,15 @@ export default function ReceiptReviewScreen() {
     if (list) {
       for (const { itemId, patch } of plan.patches) updateItem(list.id, itemId, patch);
       for (const itemId of plan.tick) toggleItem(list.id, itemId);
+      /*
+       * And the lines nobody wrote down, as rows that are already bought.
+       *
+       * Last, so a failure part-way through cannot leave a list holding new
+       * rows for a shop whose matched rows never got their prices. These are
+       * the only writes here that ADD something, which makes them the ones to
+       * do once everything else has worked.
+       */
+      for (const row of plan.adds) addBoughtItem(list.id, row, row.detail);
     }
 
     haptics.success();

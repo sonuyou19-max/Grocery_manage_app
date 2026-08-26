@@ -635,5 +635,83 @@ console.log('\na multipack keeps its count');
   eq('...and the brand kept apart from it', plan.purchases[0].detail.brand, 'Delhaize');
 }
 
+/* ------------------------------------ a line nobody wrote down gets a row -- */
+
+/*
+ * "ALSO BOUGHT" used to reach the pantry and stop there, so the two halves of
+ * one shop described different trips: the log knew about the chocolate, the
+ * list did not, and the list is the screen the shopper opens afterwards to see
+ * what the import did.
+ */
+console.log('\nlines that matched nothing');
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide(), ROWS, NOW);
+
+  // 'a' matched i1; 'b' matched nothing.
+  eq('only the unmatched line becomes a row', plan.adds.length, 1);
+  eq('...under the same name the pantry files it under', plan.adds[0].name, plan.purchases[1].name);
+  eq('...and never the till’s own printing', plan.adds[0].name === 'PROVITAL TOAST 500', false);
+  eq('...in the same category', plan.adds[0].category, plan.purchases[1].category);
+  eq('it carries the pack count', plan.adds[0].detail.packs, 2);
+  eq('...the size of one pack', plan.adds[0].detail.quantity, 500);
+  eq('...the total paid', plan.adds[0].detail.priceCents, 249);
+  eq('...and the shop, resolved', plan.adds[0].detail.store, 'carrefour');
+
+  // A matched line must never be added as well: it would be on the list twice,
+  // once ticked by the patch and once as a fresh row.
+  eq('a matched line is patched, not added', plan.patches.length, 1);
+
+  // Excluded lines are excluded everywhere, not just from the log.
+  const without = planCommit(RECEIPT, PURCHASES, decide({ b: { include: false, priceCents: 249, itemId: null } }), ROWS, NOW);
+  eq('an excluded line adds nothing', without.adds.length, 0);
+}
+
+/*
+ * The whole receipt against an EMPTY list, which is the ordinary case for
+ * somebody who scans a receipt without having written a list at all. Every line
+ * is unmatched, so every line becomes a bought row — and nothing is patched or
+ * ticked, because there is nothing there to patch.
+ */
+{
+  const plan = planCommit(RECEIPT, PURCHASES, decide({
+    a: { include: true, priceCents: 299, itemId: null },
+  }), [], NOW);
+  eq('an empty list takes every line', plan.adds.length, 2);
+  eq('...patching nothing', plan.patches.length, 0);
+  eq('...and ticking nothing', plan.tick.length, 0);
+  eq('...while the log still gets both', plan.purchases.length, 2);
+}
+
+/* ---------------------------------- and the writes that carry them out ---- */
+
+/*
+ * Structural, because the arithmetic above proves nothing on its own: a plan
+ * with perfect `adds` that no screen applies is exactly the state this feature
+ * was already in for the pantry half.
+ */
+{
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const review = strip(readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8'));
+  const store = strip(readFileSync(join(SRC, 'store', 'groceries.tsx'), 'utf8'));
+
+  eq('the review applies the adds', /for \(const row of plan\.adds\) addBoughtItem\(list\.id, row, row\.detail\)/.test(review), true);
+  // Last of the three list writes. A failure part-way through must not leave a
+  // list holding new rows for a shop whose matched rows never got their prices.
+  eq('...after the patches', review.indexOf('plan.adds') > review.indexOf('plan.patches'), true);
+  eq('...and after the ticks', review.indexOf('plan.adds') > review.indexOf('plan.tick'), true);
+
+  /*
+   * Both backends, and the same row from both. A receipt imported signed-out
+   * has to land as the same row as one imported signed-in, which is why the
+   * shape is built in one place and only the writing differs.
+   */
+  eq('both backends implement it', (store.match(/addBoughtItem: \(listId, item, detail\)/g) ?? []).length, 2);
+  eq('...from one row builder', (store.match(/boughtRow\(item, detail\)/g) ?? []).length, 2);
+  eq('the row arrives ticked', /checked: true,\s*checkedAt: now,/.test(store), true);
+  // checked and checked_at disagreeing is the one state that must never exist —
+  // see lib/list-sweep, which owns the rule.
+  eq('...with its timestamp, in the same insert', /checked: true,\s*checked_at: new Date\(/.test(store), true);
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
