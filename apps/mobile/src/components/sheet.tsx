@@ -125,7 +125,20 @@ export function SheetHandle() {
 
 /** Long enough to read as a movement, short enough not to sit in the way. */
 const OPEN_MS = 220;
-const CLOSE_MS = 160;
+/*
+ * The close was 160ms on `Easing.in(Easing.cubic)`, which accelerates away —
+ * the right shape for a card folding out of sight, and the wrong shape for
+ * everything that fades with it. An accelerating curve spends its time near 1
+ * and then falls off a cliff: at four fifths of the way through the exit the
+ * value is still at 0.49, and the whole remainder happens in the last 30ms.
+ * On the card that reads as briskness. On the scrim it reads as the background
+ * light being switched, which is exactly how it was reported.
+ *
+ * `out` puts the slow part at the END instead, where the abruptness was. The
+ * card leaves promptly and the dim settles to nothing rather than dropping to
+ * it, and 200ms gives the tail somewhere to happen.
+ */
+const CLOSE_MS = 200;
 
 export interface SheetProps {
   visible: boolean;
@@ -232,7 +245,7 @@ export function Sheet({
     } else {
       progress.value = withTiming(
         0,
-        { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) },
+        { duration: CLOSE_MS, easing: Easing.out(Easing.quad) },
         (done) => {
           if (done) runOnJS(setMounted)(false);
         },
@@ -252,16 +265,32 @@ export function Sheet({
         },
   );
 
-  // Only used by `slide`. The scale motion keeps its scrim as a flat background
-  // colour on the backdrop, exactly as before — this is deliberately not a
-  // behaviour change for the ten modals that did not ask for one.
+  /*
+   * The dim, and it animates for both motions now.
+   *
+   * `scale` used to wear its scrim as a flat backgroundColor on the backdrop,
+   * left that way on purpose when the eleven modals were consolidated — a
+   * static scrim was what they had, and changing it was not what that work was
+   * about. It turns out to have been the wrong thing to leave alone. The card
+   * fades and the backdrop does not, so for the whole exit the page behind
+   * stays at full dim; then the Modal's window is torn down and the dim is
+   * gone between one frame and the next. Nothing animated it away, so nothing
+   * could look soft: it is a cut, and a cut from 45% black to nothing is a
+   * flash.
+   *
+   * Tied to `progress`, so the dim and the card leave together on one clock and
+   * there is no moment where one has finished and the other has not.
+   *
+   * `slide` keeps its own reading. It springs, and a spring has a long settling
+   * tail; the fade has to be over while the sheet is still well clear of its
+   * resting place, or the last of the dim arrives after the sheet has already
+   * stopped moving.
+   */
   const scrimAnim = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      sheetY.value,
-      [0, screenH * 0.7],
-      [1, 0],
-      Extrapolation.CLAMP,
-    ),
+    opacity:
+      motion === "slide"
+        ? interpolate(sheetY.value, [0, screenH * 0.7], [1, 0], Extrapolation.CLAMP)
+        : progress.value,
   }));
 
   // Keyed on `mounted`, the Modal's real visibility — not on `visible`, which
@@ -325,19 +354,17 @@ export function Sheet({
       style={[
         styles.backdrop,
         { padding: gutter },
-        scrim && motion !== "slide" ? styles.scrim : null,
         align === "center" ? styles.center : styles.end,
         bottomClearance != null ? { paddingBottom: bottomClearance } : null,
       ]}
       onPress={onClose}
     >
-      {/* The sliding scrim is its own layer rather than a colour on the
-          backdrop, because it has to fade and the backdrop must not: this
-          Pressable is what catches a tap outside the card, and animating the
-          view that owns the touch target is how that stops being reliable.
-          pointerEvents none for the same reason — it sits over the backdrop
-          and would otherwise be the thing tapped. */}
-      {scrim && motion === "slide" && (
+      {/* Its own layer rather than a colour on the backdrop, because it has to
+          fade and the backdrop must not: this Pressable is what catches a tap
+          outside the card, and animating the view that owns the touch target is
+          how that stops being reliable. pointerEvents none for the same reason
+          — it sits over the backdrop and would otherwise be the thing tapped. */}
+      {scrim && (
         <Animated.View
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, styles.scrim, scrimAnim]}

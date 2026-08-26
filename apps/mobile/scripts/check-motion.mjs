@@ -160,6 +160,8 @@ const walk = (dir) => {
   return out;
 };
 
+const SHEET = join(here, '..', 'src', 'components', 'sheet.tsx');
+
 const stripComments = (text) =>
   text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
@@ -254,6 +256,78 @@ if (faded.length) {
   console.log('ok   no Modal cross-dissolves in place');
 }
 
+
+/* ------------------------------------------------------------------------- */
+/* The scrim. It has to be animated, and it has to be its own layer.          */
+/*                                                                           */
+/* A static backdrop colour is invisible while the sheet is open and reads as */
+/* a flash when it closes: the card fades, the dim does not, and then the     */
+/* Modal's window goes and takes 45% black with it between two frames.        */
+/* Nothing animated it away, so nothing could look soft.                      */
+/*                                                                           */
+/* It also cannot go back on the backdrop Pressable, which is the view that   */
+/* catches a tap outside the card — animating the thing that owns a touch     */
+/* target is how that stops being reliable.                                   */
+/* ------------------------------------------------------------------------- */
+{
+  const before = failures;
+  const sheet = stripComments(readFileSync(SHEET, 'utf8'));
+
+  check(
+    'the scrim is an animated layer',
+    /<Animated\.View\s+pointerEvents="none"\s+style=\{\[StyleSheet\.absoluteFill, styles\.scrim, scrimAnim\]\}/.test(sheet),
+    true,
+  );
+  check(
+    '...rendered whenever a scrim is asked for, whatever the motion',
+    /\{scrim && \(/.test(sheet),
+    true,
+  );
+  check(
+    '...and never a flat colour on the view that catches taps',
+    /styles\.backdrop,[\s\S]{0,200}styles\.scrim/.test(sheet),
+    false,
+  );
+  check(
+    'it does not block the backdrop it sits over',
+    /pointerEvents="none"/.test(sheet),
+    true,
+  );
+
+  /*
+   * The exit must not accelerate. `Easing.in` spends the whole close near 1 and
+   * drops in the last few frames, which on a scrim is a cut rather than a fade
+   * — the reported flash. The slow part belongs at the end.
+   */
+  check(
+    'the close eases OUT, so the dim settles instead of dropping',
+    /duration: CLOSE_MS, easing: Easing\.out\(Easing\.quad\)/.test(sheet),
+    true,
+  );
+  /*
+   * Scoped to scrimAnim's own body. Written against the whole file this matched
+   * `opacity: progress.value` in cardAnim instead — it passed while the scrim
+   * was pinned at a constant, which is the exact bug it was written to catch.
+   */
+  {
+    const from = sheet.indexOf('const scrimAnim');
+    const body = from < 0 ? '' : sheet.slice(from, sheet.indexOf('}));', from));
+    check(
+      'the scale scrim shares the card’s clock',
+      /:\s*progress\.value/.test(body),
+      true,
+    );
+    check(
+      '...and the sliding one keeps its own reading',
+      /interpolate\(sheetY\.value/.test(body),
+      true,
+    );
+  }
+
+  if (failures === before) {
+    console.log('ok   the scrim fades rather than being switched off');
+  }
+}
 
 /* ------------------------------------------------------------------------- */
 /* The staple sheet's "Stopped buying" reveal.                                */
