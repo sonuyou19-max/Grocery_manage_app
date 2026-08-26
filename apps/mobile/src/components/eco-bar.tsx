@@ -1,8 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { StackedBar } from '@/components/stacked-bar';
 import { CARBON_COLORS, type CarbonTier } from '@/lib/eco';
 import { useT } from '@/store/locale';
-import { radii, spacing, type, useTheme } from '@/theme';
+import { spacing, type, useTheme } from '@/theme';
 
 /**
  * The low / medium / high bar, and nothing else.
@@ -34,11 +35,18 @@ export function EcoBar({ shares, counts, compact = false }: EcoBarProps) {
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.bar, { backgroundColor: colors.line }]}>
-        {present.map((tier) => (
-          <View key={tier} style={{ flex: counts[tier], backgroundColor: CARBON_COLORS[tier] }} />
-        ))}
-      </View>
+      {/* `shares`, not `counts`. The bar drew itself from the raw counts while
+          the legend beside it printed the shares — the same numbers by
+          construction, but two sources for one figure, and the kind of pair
+          that only stays in step until somebody changes how a share is
+          weighted. */}
+      <StackedBar
+        segments={present.map((tier) => ({
+          key: tier,
+          share: shares[tier],
+          color: CARBON_COLORS[tier],
+        }))}
+      />
       {!compact && (
         <View style={styles.legend}>
           {present.map((tier) => (
@@ -57,7 +65,6 @@ export function EcoBar({ shares, counts, compact = false }: EcoBarProps) {
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.md },
-  bar: { flexDirection: 'row', height: 16, borderRadius: radii.sm, overflow: 'hidden' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xs },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },

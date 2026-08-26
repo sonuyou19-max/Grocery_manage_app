@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Defs, G, LinearGradient, Stop } from "react-native-svg";
 
 import { GROUP_COLORS, groupLabel, type BalanceSlice } from "@/lib/nutrition";
+import { CHART_FADE, mixHex } from "@/lib/color-mix";
 import { useLocale } from "@/store/locale";
 import { spacing, type, useTheme } from "@/theme";
 
@@ -113,7 +114,8 @@ import { spacing, type, useTheme } from "@/theme";
  * the ring rather than as the end of an arc. Every join had one.
  *
  * So the wash is now a real colour: the group's hue mixed toward the track it
- * sits on, at the same 45%, computed rather than picked. It looks like what the
+ * sits on, at the same 45%, computed rather than picked — see lib/color-mix,
+ * which the two stacked bars share, since the same fix applies to them. It looks like what the
  * alpha version looked like, because it is the same arithmetic — done once, in
  * advance, instead of by the compositor every time something overlaps.
  *
@@ -134,41 +136,6 @@ const SIZE = 104;
 const STROKE = 16;
 const R = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * R;
-
-/** How much of the group's own colour survives at the start of its slice. */
-const FADE = 0.45;
-
-/**
- * `color` laid over `onto` at `amount`, resolved to a hex.
- *
- * The same sum the compositor would do for `stopOpacity={amount}`, done once
- * here so that nothing on the ring is translucent — see the note above on why
- * that matters. Exported because check-donut asserts the endpoints: at 1 it has
- * to be the group's own colour exactly, or the saturated end of every slice is
- * quietly off-palette.
- */
-export function mixHex(color: string, onto: string, amount: number): string {
-  const parse = (hex: string) => {
-    const h = hex.replace("#", "");
-    // Three-digit hex expands by doubling each nibble; #abc is #aabbcc, not
-    // #0a0b0c. Handled rather than assumed — the palette is six-digit today and
-    // a shorthand slipping in would otherwise mix against near-black silently.
-    const full =
-      h.length === 3
-        ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2]
-        : h.padEnd(6, "0").slice(0, 6);
-    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
-  };
-  const a = parse(color);
-  const b = parse(onto);
-  const t = Math.max(0, Math.min(1, amount));
-  return (
-    "#" +
-    a
-      .map((v, i) => Math.round(v * t + b[i] * (1 - t)).toString(16).padStart(2, "0"))
-      .join("")
-  );
-}
 
 /**
  * Where a fraction sits on the circle, in the SVG's own coordinates.
@@ -237,7 +204,7 @@ export function tipFraction(startFraction: number, fraction: number): number {
 }
 
 /** Test seams: check-donut re-derives the painted extent from these. */
-export const __DONUT = { SIZE, STROKE, R, CIRCUMFERENCE, FADE };
+export const __DONUT = { SIZE, STROKE, R, CIRCUMFERENCE, FADE: CHART_FADE };
 
 export function BalanceDonut({
   slices,
@@ -295,7 +262,7 @@ export function BalanceDonut({
                   {/* Two opaque colours, not one colour at two opacities. The
                       first is the group's hue already mixed into the track, so
                       it looks like a wash without behaving like one. */}
-                  <Stop offset="0" stopColor={mixHex(GROUP_COLORS[a.group], colors.line, FADE)} />
+                  <Stop offset="0" stopColor={mixHex(GROUP_COLORS[a.group], colors.line, CHART_FADE)} />
                   <Stop offset="1" stopColor={GROUP_COLORS[a.group]} />
                 </LinearGradient>
               );

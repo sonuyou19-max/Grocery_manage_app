@@ -5,8 +5,9 @@ import {
   groupLabel,
   type BalanceSlice,
 } from "@/lib/nutrition";
+import { StackedBar } from "@/components/stacked-bar";
 import { useLocale } from "@/store/locale";
-import { radii, spacing, type, useTheme } from "@/theme";
+import { spacing, type, useTheme } from "@/theme";
 
 /**
  * A stacked, weighted bar of food-group slices with a percentage legend.
@@ -19,21 +20,22 @@ import { radii, spacing, type, useTheme } from "@/theme";
  * The pantry's version of this idea is a donut (components/balance-donut.tsx).
  * The two are deliberately different shapes for different questions: a basket
  * is a handful of items you are about to buy and reads left to right, a pantry
- * is a standing composition of a whole.
+ * is a standing composition of a whole. The BAR itself is components/
+ * stacked-bar — shared with the climate mix, which was drawing the same twenty
+ * lines a second time.
  */
 export function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
   const { colors } = useTheme();
   const { t } = useLocale();
   return (
     <View style={styles.root}>
-      <View style={[styles.bar, { backgroundColor: colors.line }]}>
-        {slices.map((s) => (
-          <View
-            key={s.group}
-            style={{ flex: s.count, backgroundColor: GROUP_COLORS[s.group] }}
-          />
-        ))}
-      </View>
+      <StackedBar
+        segments={slices.map((s) => ({
+          key: s.group,
+          share: s.fraction,
+          color: GROUP_COLORS[s.group],
+        }))}
+      />
       <View style={styles.legend}>
         {slices.map((s) => (
           <View key={s.group} style={styles.legendItem}>
@@ -52,12 +54,6 @@ export function BalanceBar({ slices }: { slices: BalanceSlice[] }) {
 
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
-  bar: {
-    flexDirection: "row",
-    height: 16,
-    borderRadius: radii.sm,
-    overflow: "hidden",
-  },
   legend: {
     flexDirection: "row",
     flexWrap: "wrap",

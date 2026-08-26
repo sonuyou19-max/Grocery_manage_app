@@ -70,7 +70,6 @@ const wanted = [
   // everything below passed by testing nothing.
   /^export function arcBody\([\s\S]*?\n\}$/m,
   /^export function tipFraction\([\s\S]*?\n\}$/m,
-  /^export function mixHex\([\s\S]*?\n\}$/m,
 ];
 const parts = wanted.map((re) => src.match(re));
 if (parts.some((p) => !p)) {
@@ -82,7 +81,7 @@ const { outputText } = ts.transpileModule(parts.map((p) => p[0]).join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { arcBody, tipFraction, mixHex } = mod;
+const { arcBody, tipFraction } = mod;
 
 // Re-read the constants from the source rather than restating them here, so a
 // change to the stroke or the overlap is tested rather than silently diverged
@@ -249,28 +248,19 @@ check(
  * edge.
  */
 check('no stop is translucent', /stopOpacity/.test(code), false);
-check('the start is a mixed colour', /stopColor=\{mixHex\(GROUP_COLORS\[a\.group\], colors\.line, FADE\)\}/.test(code), true);
+check('the start is a mixed colour', /stopColor=\{mixHex\(GROUP_COLORS\[a\.group\], colors\.line, CHART_FADE\)\}/.test(code), true);
 check('...and the end is the palette colour itself', /<Stop offset="1" stopColor=\{GROUP_COLORS\[a\.group\]\} \/>/.test(code), true);
 check('the tip is filled, never faded', /fillOpacity|opacity=\{/.test(code), false);
 
 /*
- * The mix has to be exact at both ends or the ring drifts off-palette: at 1 it
- * IS the group's colour, at 0 it is the track, and nothing in between may
- * overshoot into a channel it does not have.
+ * The mix itself lives in lib/color-mix now, shared with the two stacked bars,
+ * and check-stacked-bar owns its arithmetic. What stays here is that the donut
+ * asks for it against the right things: its own palette, and the track it
+ * actually sits on — mixing toward the card instead would be a start colour
+ * that is subtly wrong in exactly one theme.
  */
-{
-  const GREEN = '#5FA85A';
-  const LINE = '#414A3B';
-  check('a full mix is the colour itself', mixHex(GREEN, LINE, 1), GREEN.toLowerCase());
-  check('an empty mix is the track', mixHex(GREEN, LINE, 0), LINE.toLowerCase());
-  check('the wash sits between them', mixHex(GREEN, LINE, 0.45), '#4f7449');
-  check('it always returns six digits', mixHex('#000000', '#ffffff', 0.5).length, 7);
-  // Shorthand expands by doubling, not by zero-padding — #abc is #aabbcc.
-  check('shorthand hex expands correctly', mixHex('#abc', '#abc', 1), '#aabbcc');
-  // Out-of-range amounts clamp rather than producing channels past 255.
-  check('an amount over 1 clamps', mixHex(GREEN, LINE, 4), GREEN.toLowerCase());
-  check('a negative amount clamps', mixHex(GREEN, LINE, -2), LINE.toLowerCase());
-}
+check('the wash is mixed toward the track, not the card', /colors\.line, CHART_FADE/.test(code), true);
+check('...using the shared mixer', /import \{ CHART_FADE, mixHex \} from "@\/lib\/color-mix"/.test(code), true);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
