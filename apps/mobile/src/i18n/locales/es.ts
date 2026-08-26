@@ -285,7 +285,6 @@ const es = {
   },
   stopped: {
     section: 'Ya no lo compro',
-    label: 'Ya no lo compro',
     sectionHint: 'Korb guarda su historial pero los deja fuera de todo lo demás.',
     action: 'Ya no compro esto',
     hint: 'Sale de la mezcla de despensa, del Vibe Check y de tus insights. El historial y lo que pagaste se guardan, y volver a comprarlo lo trae de vuelta.',

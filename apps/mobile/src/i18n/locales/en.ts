@@ -297,7 +297,6 @@ const en = {
   },
   stopped: {
     section: 'Stopped buying',
-    label: 'Stopped buying',
     sectionHint: 'Korb keeps their history but leaves them out of everything else.',
     action: 'I’ve stopped buying this',
     hint: 'It leaves the pantry mix, the Vibe Check and your insights. The history and what you paid are kept, and buying it again brings it straight back.',
