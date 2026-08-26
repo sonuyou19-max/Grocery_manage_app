@@ -344,6 +344,23 @@ cls(12, 'pcs', 'count');
  */
 const fn = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', 'receipt-scan', 'index.ts'), 'utf8');
 
+
+/**
+ * The example ANSWER, and only that — not the paragraph explaining it.
+ *
+ * The slice used to run to "WHAT EVERY FIELD MEANS", which swept in the prose
+ * under the JSON. That prose names fields in order to talk about them, so a
+ * field mentioned there counted as demonstrated in the example — the check
+ * could be satisfied by a sentence rather than by the thing a model copies.
+ */
+const exampleJson = (src) => {
+  const prompt = src.slice(src.indexOf('const SYSTEM_PROMPT'));
+  const text = prompt.slice(0, prompt.indexOf('`;'));
+  const from = text.indexOf('{"store"');
+  const to = text.indexOf(']}', from);
+  return from < 0 || to < 0 ? '' : text.slice(from, to + 2);
+};
+
 {
   const schema = fn.match(/const lineSchema = z\.object\(\{[\s\S]*?\n\}\);/);
   const receipt = fn.match(/const receiptSchema = z\.object\(\{[\s\S]*?\n\}\);/);
@@ -376,8 +393,19 @@ const fn = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', 'r
     // And the example object, which is what a model actually copies. The
     // categorize function shipped for weeks answering with two of its five keys
     // because the example named two.
-    const example = text.slice(text.indexOf('{"store"'), text.indexOf('WHAT EVERY FIELD MEANS'));
-    const missing = fields.filter((f) => !example.includes(`"${f}"`));
+    const example = exampleJson(fn);
+    /*
+     * `expanded` and `translated` are alternatives — one description per line,
+     * in the reader's language — so the example can only ever demonstrate one
+     * of them. Whichever it shows, the other must be absent, which is the
+     * assertion above. Requiring both here would demand exactly the answer that
+     * costs the shopper a second description on every line.
+     */
+    const ALTERNATIVES = ['expanded', 'translated'];
+    const shown = ALTERNATIVES.some((f) => example.includes(`"${f}"`));
+    const missing = fields.filter(
+      (f) => !example.includes(`"${f}"`) && !(shown && ALTERNATIVES.includes(f)),
+    );
     if (missing.length) {
       fail(`${missing.length} field(s) missing from the prompt's example object`, [
         ...missing.map((f) => `  ${f}`),
@@ -577,10 +605,35 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
     'the prompt asks for null fields to be omitted',
     /OMIT any field you would answer null/.test(fn),
   );
+  /*
+   * ONE DESCRIPTION PER LINE, and this is the rule that costs real time.
+   *
+   * `expanded` and `translated` are the same sentence in two languages, and the
+   * app shows one of them — displayName prefers `translated` and falls back.
+   * Asking for both on a Dutch receipt read in English is a whole second
+   * description typed per line, on the one field that is a sentence rather than
+   * a number, and output is what the shopper waits for: a 93-second read that
+   * the phone gave up on before it finished.
+   *
+   * The rule used to be half-stated — drop `translated` when it would repeat
+   * `expanded` — which covers a Dutch reader and says nothing about the case
+   * that actually costs anything.
+   */
   check_(
-    '...and for translated to be dropped when it would repeat expanded',
-    /Omit "translated" when the receipt is ALREADY in the reader's language/.test(fn),
+    '...and for exactly one description per line, never the pair',
+    /WRITE THE DESCRIPTION ONCE/.test(fn) && /Never both\./.test(fn),
   );
+  /*
+   * And the EXAMPLE has to obey it. A model handed an example answers with that
+   * example whatever the prose says — the example here demonstrated writing
+   * both, on the very line the prose was about to forbid.
+   */
+  {
+    check_(
+      '...which the example object demonstrates rather than contradicts',
+      !(exampleJson(fn).includes('"expanded"') && exampleJson(fn).includes('"translated"')),
+    );
+  }
   check_(
     'no `name` field is asked for, because `raw` is the printing',
     !/^\s*name: z\./m.test(fn),

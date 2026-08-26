@@ -476,20 +476,54 @@ export function applyAiMatches(
  * for all of them, because the difference is not actionable at a till: the
  * answer is always to try a clearer photograph or to type it in.
  */
+/**
+ * How long to wait for a read before giving up, in ms.
+ *
+ * Stated rather than inherited, and that is the whole point of it. There was no
+ * timeout here, which does not mean "wait forever" — it means whatever the
+ * platform decides, which on iOS is a 60-second default nobody chose. The
+ * function's own log shows what that looked like from the other end: booted,
+ * then `shutdown ... reason: EarlyDrop` ninety-three seconds later, with 204ms
+ * of CPU used. EarlyDrop is the runtime saying the caller went away. The phone
+ * had already hung up on a read that was still being written, and the shopper
+ * saw a failure with no reason and tried again — which is how one slow scan
+ * becomes "several minutes".
+ *
+ * Two minutes because a four-photograph shop is genuinely a long read and
+ * failing one that would have arrived is worse than waiting. It is a ceiling
+ * for the pathological case, not a target: anything close to it is a bug in
+ * this file's neighbours, and the server now logs its own read time the moment
+ * it lands so the two can be compared rather than guessed at.
+ */
+const SCAN_TIMEOUT_MS = 120_000;
+
 export async function scanReceipt(
   images: { media: string; data: string }[],
   language: string,
 ): Promise<ScannedReceipt | null> {
+  /*
+   * AbortController rather than Promise.race: racing leaves the request running
+   * and the phone still uploading megabytes for an answer nobody will read.
+   * This actually cancels it, which is also what tells the server to stop.
+   */
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), SCAN_TIMEOUT_MS);
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/receipt-scan`, {
       method: 'POST',
       headers: await aiFunctionHeaders(),
       body: JSON.stringify({ images, language }),
+      signal: abort.signal,
     });
     if (!res.ok) return null;
     return (await res.json()) as ScannedReceipt;
   } catch {
     return null;
+  } finally {
+    // Always, including the success path: a two-minute timer left armed on a
+    // scan that finished in twenty seconds keeps this module alive for the rest
+    // of it, and fires an abort on a controller nobody is listening to.
+    clearTimeout(timer);
   }
 }
 

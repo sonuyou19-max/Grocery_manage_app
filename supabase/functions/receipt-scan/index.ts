@@ -154,13 +154,12 @@ Return ONLY a JSON object of this exact shape:
  "goodsCents":6110,"paidCents":6110,"articleCount":23,
  "lines":[
   {"raw":"4 X 1L DLL VOLLE MELK","kind":"item","product":"milk",
-   "expanded":"volle melk 1L","brand":"Delhaize","multiplier":4,
+   "translated":"full fat milk 1L","brand":"Delhaize","multiplier":4,
    "multiplierDp":0,"packSize":1,
    "packUnit":"l","unitPriceCents":167,"unitPriceDp":2,"totalCents":668,
    "emoji":"🥛","category":"dairy_eggs","confidence":"high"},
   {"raw":"DRUIF ITALIA/VIT","kind":"item","product":"grapes",
-   "expanded":"witte druiven Italië","translated":"white Italian grapes",
-   "section":"GROENTEN&FRUIT",
+   "translated":"white Italian grapes","section":"GROENTEN&FRUIT",
    "multiplier":1.094,"multiplierDp":3,"unit":"kg",
    "unitPriceCents":499,"unitPriceDp":2,"totalCents":546,
    "emoji":"🍇","category":"fruit_veg","confidence":"high"}]}
@@ -170,8 +169,10 @@ Between them they name every field you can use — and notice that neither write
 a single null. The first has no section and no unit; the second has no brand and
 no pack size. Those keys are simply absent.
 
-That example is a Dutch receipt for an English reader, which is why "translated"
-appears on it. Read by a Dutch reader it would be absent from both lines.
+That example is a Dutch receipt for an English reader, which is why both lines
+carry "translated" and NEITHER carries "expanded". Read by a Dutch reader it is
+the other way round: "expanded" on both, "translated" on neither. One
+description per line, in the language the reader will see — never the pair.
 
 WHAT EVERY FIELD MEANS. Read this before writing anything.
 
@@ -210,7 +211,9 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   well-known brand or a common product word, never a number.
   If you cannot tell what the product is, leave it null rather than inventing
   one — a wrong expansion cannot be detected by any check here.
-- translated: expanded, rendered in the target language given in the request.
+- translated: the same description as "expanded", in the target language given
+  in the request — and INSTEAD of it, never alongside it. See the brevity rules
+  below: one description per line, in the language the reader will see.
 - brand: the manufacturer, where the line names one, spelled correctly rather
   than as the camera read it — "DOUNE EGBERTS" is Douwe Egberts. Own-brand
   counts (BONI, EVERYDAY, CAR). Null for loose produce.
@@ -270,9 +273,16 @@ anything:
 - OMIT any field you would answer null. Do not write "unit":null — leave the
   key out. Most lines have no brand, no section, no unit and no unit price, so
   this removes about a third of what you would otherwise type.
-- Omit "translated" when the receipt is ALREADY in the reader's language. It
-  would be the same string as "expanded" twice, and the reader falls back to
-  the expansion on its own.
+- WRITE THE DESCRIPTION ONCE. "expanded" and "translated" are the same sentence
+  in two languages, and the reader only ever shows one of them. So:
+
+    receipt already in the reader's language  ->  "expanded", no "translated"
+    receipt in a different language           ->  "translated", no "expanded"
+
+  Never both. On a Dutch receipt read in English that is one full description
+  per line instead of two, which on a long shop is the single biggest thing you
+  are asked to type. The corrections still happen — a camera slip is fixed in
+  whichever of the two you are writing.
 
 RULES.
 - READ ACROSS EACH ROW, NEVER DOWN THE COLUMNS. A till prints the description on
@@ -604,6 +614,23 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Could not read that receipt' }, { status: 422 });
   }
   readMs = Date.now() - started;
+
+  /*
+   * Logged HERE, the moment the read lands, and again at the end.
+   *
+   * The summary at the bottom of this function is the useful one and it did not
+   * print for the invocation that mattered: the runtime logged `booted` and then
+   * `shutdown ... reason: EarlyDrop` ninety-three seconds later, with 204ms of
+   * CPU used. EarlyDrop means the phone gave up and the function was terminated
+   * mid-await — so every line after the model call, including the only record of
+   * how long that call took, never ran.
+   *
+   * A measurement that survives only the runs that succeed cannot tell you why
+   * the others failed. This one is written before anything else can go wrong.
+   */
+  console.log(
+    JSON.stringify({ at: 'receipt-scan.read', images: images.length, lines: parsed.lines.length, readMs }),
+  );
 
   /*
    * ---------------------------------------------------------------------------

@@ -456,6 +456,55 @@ assert(
   );
 }
 
+/* --------------------------------------------- the read has a deadline --- */
+
+/*
+ * There was no timeout on the scan, which does not mean "wait forever" — it
+ * means whatever the platform decides. The function's log showed what that
+ * looked like from the other end: booted, then `shutdown ... reason: EarlyDrop`
+ * ninety-three seconds later with 204ms of CPU used. EarlyDrop is the runtime
+ * saying the caller went away: the phone had hung up on a read still being
+ * written, the shopper saw a failure with no reason, and tried again.
+ */
+{
+  const lib = codeOnly(read(join(ROOT, 'src/lib/receipt.ts')));
+  assert(/const SCAN_TIMEOUT_MS = /.test(lib), 'the read has a stated deadline');
+  assert(/signal: abort\.signal/.test(lib), '...and the request actually carries it');
+  /*
+   * Aborted, not raced. A race leaves the request running and the phone still
+   * uploading megabytes for an answer nobody will read — and never tells the
+   * server to stop.
+   */
+  assert(/new AbortController\(\)/.test(lib), '...by aborting rather than racing');
+  // Cleared on every path. A two-minute timer left armed on a scan that
+  // finished in twenty seconds fires an abort nobody is listening to.
+  assert(/\} finally \{[\s\S]{0,400}clearTimeout\(timer\)/.test(lib), '...and the timer is always cleared');
+  // A ceiling for the pathological case, not a target. Below a minute would
+  // fail reads that were going to arrive.
+  {
+    const ms = Number((lib.match(/const SCAN_TIMEOUT_MS = ([\d_]+)/) ?? [])[1]?.replace(/_/g, ''));
+    assert(ms >= 60_000 && ms <= 180_000, 'the deadline is generous but bounded');
+  }
+}
+
+/* ------------------------------------- the server times its own read ----- */
+
+/*
+ * The summary at the end of receipt-scan never printed for the invocation that
+ * mattered, because the function was terminated mid-await. A measurement that
+ * survives only the runs which succeed cannot explain the ones that do not.
+ */
+{
+  const fn = codeOnly(read(join(REPO, 'supabase/functions/receipt-scan/index.ts')));
+  assert(
+    /at: 'receipt-scan\.read'/.test(fn),
+    'the read is logged the moment it lands, not only at the end',
+  );
+  const readLog = fn.indexOf("at: 'receipt-scan.read'");
+  const retry = fn.indexOf('worthRetrying');
+  assert(readLog > 0 && readLog < retry, '...before anything else can fail');
+}
+
 /* ------------------------------------------------------------------------ */
 
 if (failures > 0) {
