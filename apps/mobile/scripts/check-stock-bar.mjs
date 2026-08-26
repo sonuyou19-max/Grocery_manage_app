@@ -77,8 +77,15 @@ const geo = (over) => mod.stockGeometry(stat(over), now);
 
 /* ------------------------------------------------------------- the scale */
 
-check('the track spans one and a half intervals', mod.OVERDUE_ROOM, 0.5);
+check('the track spans one and a half times the wait', mod.OVERDUE_ROOM, 0.5);
 check('due sits two thirds along it', Math.round(mod.DUE_MARK * 1000) / 1000, 0.667);
+
+/*
+ * dairy_eggs defaults to 7 days and an item comes due at 90% of that, so the
+ * marker travels 6.3 days to reach the notch — not 7. The whole point of the
+ * numbers below is that they are dueAt's numbers, not the interval's.
+ */
+const DUE_DAYS = 6.3;
 
 /* --------------------------------------------------------- the readings */
 
@@ -86,64 +93,82 @@ check('due sits two thirds along it', Math.round(mod.DUE_MARK * 1000) / 1000, 0.
 check('just bought sits at the start', geo({ lastPurchasedAt: now }), {
   tone: 'ok',
   position: 0,
-  elapsed: 0,
+  progress: 0,
   overdue: false,
 });
 
-// Half an interval gone → half of 1.5 along the track.
 check(
-  'half an interval is a third along',
-  Math.round(geo({ lastPurchasedAt: now - 3.5 * DAY }).position * 1000) / 1000,
+  'half the wait is a third along',
+  Math.round(geo({ lastPurchasedAt: now - DUE_DAYS / 2 * DAY }).position * 1000) / 1000,
   0.333,
 );
 
-// Exactly due: on the notch, and flagged.
+/*
+ * THE ONE THAT WAS WRONG, and the reason for all of this.
+ *
+ * The marker and the words sit on the same row six millimetres apart. If the
+ * notch is not exactly where the label flips to "Due now", the row states two
+ * different things about one item and the reader cannot tell which half to
+ * believe. So this is asserted against statusLabel itself rather than against a
+ * number copied out of it.
+ */
 {
-  const g = geo({ lastPurchasedAt: now - 7 * DAY });
-  check('due lands exactly on the notch', Math.round(g.position * 1000) / 1000, 0.667);
-  check('...and says so', g.overdue, true);
+  const due = stat({ lastPurchasedAt: now - DUE_DAYS * DAY });
+  const g = mod.stockGeometry(due, now);
+  check('the marker lands on the notch...', Math.round(g.position * 1000) / 1000, 0.667);
+  check('...on the exact day the words say Due now', mod.statusLabel(due, now, (k) => k), 'status.dueNow');
+  check('...and the geometry agrees it is due', g.overdue, mod.isDue(due, now));
+}
+
+// Genuinely late: past the notch, and travelling.
+{
+  const late = geo({ lastPurchasedAt: now - 8 * DAY });
+  const later = geo({ lastPurchasedAt: now - 9 * DAY });
+  check('a day and a half over is past the notch', late.position > mod.DUE_MARK, true);
+  check('...and says so', late.overdue, true);
+  check('...and being later still reads differently', later.position > late.position, true);
 }
 
 /*
- * THE REASON THIS COMPONENT EXISTS.
+ * THE REPORTED BUG.
  *
- * lifeRemaining clamps at zero, so it answers 0 for both of these and a bar
- * drawn from it is empty for both. One is a day late; the other has been gone
- * for a week and a half. If these two ever report the same position again, the
- * gauge has been quietly turned back into a progress bar.
+ * An item bought four months ago and snoozed is NOT overdue — the household
+ * said so. The bar measured elapsed time against the raw interval, which knows
+ * nothing about a snooze, so it pinned the marker hard against the end of the
+ * track while the label beside it read "~3 days left". Long gone and not yet,
+ * on the same row.
  */
 {
-  const barelyLate = geo({ lastPurchasedAt: now - 8 * DAY });
-  const longGone = geo({ lastPurchasedAt: now - 17.5 * DAY });
-  check('a day over still moves', Math.round(barelyLate.position * 1000) / 1000, 0.762);
-  check('...and being much later reads differently', longGone.position > barelyLate.position, true);
-  check('lifeRemaining cannot tell them apart', [
-    mod.lifeRemaining(stat({ lastPurchasedAt: now - 8 * DAY }), now),
-    mod.lifeRemaining(stat({ lastPurchasedAt: now - 17.5 * DAY }), now),
-  ], [0, 0]);
+  const snoozed = stat({
+    lastPurchasedAt: now - 120 * DAY,
+    snoozeUntil: now + 3 * DAY,
+  });
+  const g = mod.stockGeometry(snoozed, now);
+  check('a snoozed item is not drawn as overdue', g.overdue, false);
+  check('...its marker stops short of the notch', g.position < mod.DUE_MARK, true);
+  check('...matching the words beside it', mod.statusLabel(snoozed, now, (k) => k), 'status.daysLeft');
+  check('...and matching isDue, which is the app’s own answer', g.overdue, mod.isDue(snoozed, now));
+  /*
+   * What the old basis said about the very same item, kept as the record of
+   * what was actually wrong: nothing left at all, which is what pinned the
+   * marker while the label counted down.
+   */
+  check('the raw interval still calls it empty', mod.lifeRemaining(snoozed, now), 0);
 }
 
 // Past the end of the track it pins rather than running off.
-check(
-  'far overdue pins at the end',
-  geo({ lastPurchasedAt: now - 90 * DAY }).position,
-  1,
-);
+check('far overdue pins at the end', geo({ lastPurchasedAt: now - 90 * DAY }).position, 1);
 
 // A future timestamp — a misread receipt, a wrong phone clock — must not push
 // the marker off the left.
-check(
-  'a future purchase does not go negative',
-  geo({ lastPurchasedAt: now + 5 * DAY }).position,
-  0,
-);
+check('a future purchase does not go negative', geo({ lastPurchasedAt: now + 5 * DAY }).position, 0);
 
 /* ------------------------------------------------------ the learning case */
 
 check('no history reports no reading at all', geo({ lastPurchasedAt: 0 }), {
   tone: 'learning',
   position: null,
-  elapsed: null,
+  progress: null,
   overdue: false,
 });
 check(
@@ -154,15 +179,25 @@ check(
 
 /* ------------------------------------------------------------ the tones */
 
-// The boundaries the section headings and the recipe importer also use, so the
-// bar's colour and the "Running low" section cannot disagree.
+/*
+ * The colour deliberately stays on the SECTION's clock, not the label's — see
+ * the note in stockGeometry. It answers "should I flag this", which is the
+ * question the heading above the row is already answering, so these boundaries
+ * are the interval's and not dueAt's.
+ */
 check('comfortable', geo({ lastPurchasedAt: now - 3 * DAY }).tone, 'ok');
 check('past LOW_THRESHOLD is low', geo({ lastPurchasedAt: now - 5 * DAY }).tone, 'low');
 check('past CRIT_THRESHOLD is critical', geo({ lastPurchasedAt: now - 6.5 * DAY }).tone, 'crit');
+check('the low boundary is the one the pantry sections use', mod.LOW_THRESHOLD, 0.35);
 check(
-  'the low boundary is the one the pantry sections use',
-  mod.LOW_THRESHOLD,
-  0.35,
+  'the tone is read through lifeRemaining, not re-derived',
+  /const left = lifeRemaining\(stat, now\);/.test(codeOnly(read('src', 'lib', 'pantry-intel.ts'))),
+  true,
+);
+check(
+  'and the position through dueAt',
+  /const span = dueAt\(stat\) - stat\.lastPurchasedAt;/.test(codeOnly(read('src', 'lib', 'pantry-intel.ts'))),
+  true,
 );
 
 /* ----------------------------------------------------------- the drawing */

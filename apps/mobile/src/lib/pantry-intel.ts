@@ -272,7 +272,8 @@ export const CRIT_THRESHOLD = 0.15;
 
 /**
  * How far past "due" the stock bar's track keeps going, as a fraction of the
- * item's own interval. 0.5 means the track spans one and a half intervals.
+ * time it takes to BECOME due. 0.5 means the track spans one and a half of
+ * those, so the marker can travel half as far again past the notch.
  *
  * This exists because lifeRemaining is CLAMPED at zero, and a bar drawn from it
  * says the same thing about milk that is one day late and milk that is three
@@ -302,43 +303,80 @@ export interface StockGeometry {
    * "draw nothing", and the reason this is nullable rather than 0.
    */
   position: number | null;
-  /** Intervals elapsed since the last purchase, UNCLAMPED. 1.4 means 40% over. */
-  elapsed: number | null;
-  /** Past the notch. */
+  /** How far along the way to due, UNCLAMPED. 1.4 means 40% past it. */
+  progress: number | null;
+  /** Past the notch, which is the same claim isDue makes. */
   overdue: boolean;
 }
 
 /**
  * Everything the stock bar needs to draw itself, and nothing about drawing.
  *
- * Kept beside lifeRemaining rather than in the component because it is the same
- * judgement wearing a different shape, and because a pure function of (stat,
- * now) can be checked against a table of cases — which is how the learning case
- * below got caught.
+ * ---------------------------------------------------------------------------
+ * The marker reads the same clock as the words beside it
+ * ---------------------------------------------------------------------------
  *
- * THE LEARNING CASE. An item with no purchases has no rhythm, and lifeRemaining
- * answers 1 for it: full bar, brightest green, "plenty". The screen was
- * simultaneously printing the word "Learning" beside it. The bar was not
- * reporting a full larder, it was reporting the absence of a measurement in the
- * one colour that means the opposite, and the label was left to argue with it.
- * So the tone is its own value and the position is null: no marker, no fill,
- * nothing claimed.
+ * This measured elapsed time against the raw interval, while statusLabel — six
+ * millimetres to the right on the same row — measures it against dueAt. Those
+ * are not the same clock. dueAt carries two things this ignored: the 90% of
+ * DUE_FRACTION, and any "still good" snooze.
+ *
+ * The snooze is what made it a bug worth reporting rather than a rounding
+ * quarrel. An item bought four months ago and snoozed is not overdue — the
+ * household said so — but elapsed-against-interval knows nothing about that,
+ * so it pinned the marker hard against the end of the track while the label
+ * beside it read "~3 days left". The row said "long gone" and "not yet" at the
+ * same time, and the reader has no way to tell which half to believe.
+ *
+ * So position is measured against dueAt. The notch is now exactly the moment
+ * the words change to "Due now", by construction rather than by coincidence,
+ * and a snoozed item cannot show as overdue because its due date has genuinely
+ * moved.
+ *
+ * ---------------------------------------------------------------------------
+ * The COLOUR stays on the other clock, and that is deliberate
+ * ---------------------------------------------------------------------------
+ *
+ * Not an oversight, and not the same contradiction wearing a different hat. The
+ * two thresholds answer different questions and both answers are used elsewhere
+ * — see the note on statusLabel. LOW_THRESHOLD is "should I flag this", which
+ * is the question the section heading above the row is already answering, so
+ * the bar's colour agreeing with the SECTION is the thing that keeps those two
+ * from arguing.
+ *
+ * Position and colour therefore report different things on purpose: where the
+ * item is in its cycle, and how much it is worth your attention. A snoozed item
+ * reads red with its marker short of the notch, which is exactly its situation
+ * — flagged, and not due yet.
+ *
+ * ---------------------------------------------------------------------------
+ * The learning case
+ * ---------------------------------------------------------------------------
+ *
+ * An item with no purchases has no rhythm, and lifeRemaining answers 1 for it:
+ * full bar, brightest green, "plenty". The screen was simultaneously printing
+ * the word "Learning" beside it. The bar was not reporting a full larder, it
+ * was reporting the absence of a measurement in the one colour that means the
+ * opposite, and the label was left to argue with it. So the tone is its own
+ * value and the position is null: no marker, no fill, nothing claimed.
  */
 export function stockGeometry(stat: ItemStat, now: number): StockGeometry {
-  const span = effectiveInterval(stat) * DAY;
+  const span = dueAt(stat) - stat.lastPurchasedAt;
   if (!stat.lastPurchasedAt || span <= 0) {
-    return { tone: 'learning', position: null, elapsed: null, overdue: false };
+    return { tone: 'learning', position: null, progress: null, overdue: false };
   }
   // Clamped at the near end only. A purchase dated in the future — a receipt
   // read wrongly, a phone clock adrift — would otherwise drive the marker off
   // the left of the track.
-  const elapsed = Math.max(0, (now - stat.lastPurchasedAt) / span);
-  const left = Math.max(0, 1 - elapsed);
+  const progress = Math.max(0, (now - stat.lastPurchasedAt) / span);
+  // Through lifeRemaining rather than re-derived, so the bar's colour and the
+  // section it sits under cannot drift apart. See above.
+  const left = lifeRemaining(stat, now);
   return {
     tone: left < CRIT_THRESHOLD ? 'crit' : left < LOW_THRESHOLD ? 'low' : 'ok',
-    position: Math.min(elapsed / (1 + OVERDUE_ROOM), 1),
-    elapsed,
-    overdue: elapsed >= 1,
+    position: Math.min(progress / (1 + OVERDUE_ROOM), 1),
+    progress,
+    overdue: progress >= 1,
   };
 }
 
