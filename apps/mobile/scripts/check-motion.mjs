@@ -378,5 +378,58 @@ if (faded.length) {
   }
 }
 
+/* ------------------------------------------------------------------------- */
+/* The create menu's dim, which is the one scrim that cannot live in Sheet.   */
+/* ------------------------------------------------------------------------- */
+{
+  const before = failures;
+  const bar = stripComments(readFileSync(join(here, '..', 'src', 'components', 'floating-tab-bar.tsx'), 'utf8'));
+
+  /*
+   * A <Modal> is its own native window, above the whole app, so a scrim drawn
+   * inside one covers the tab bar too — there is no z-order in that window that
+   * can put something from a different window beneath it. Hence a dim in the
+   * bar's own tree, and hence: it must be drawn BEFORE the bar, or it covers
+   * the thing it exists to spare.
+   */
+  const dimAt = bar.indexOf('<CreateBackdrop');
+  const barAt = bar.indexOf('styles.wrap');
+  check('the dim exists', dimAt > 0, true);
+  check('...and is painted under the bar, not over it', dimAt > 0 && dimAt < barAt, true);
+  check(
+    'the create sheet does not ask Sheet for a scrim',
+    /scrim/.test(stripComments(readFileSync(join(here, '..', 'src', 'components', 'create-sheet.tsx'), 'utf8'))),
+    false,
+  );
+
+  // React Navigation lays a custom tab bar out in a strip the height of the
+  // bar, so absoluteFill would dim the strip and nothing else.
+  check('it is sized from the window, not from its container', /const \{ height \} = useWindowDimensions\(\)/.test(bar), true);
+  check('...growing up from the screen bottom', /backdrop: \{ position: 'absolute', left: 0, right: 0, bottom: 0 \}/.test(bar), true);
+
+  /*
+   * Never takes a touch. The Modal's own backdrop sits above this and is what
+   * closes the menu — including a tap over the cross, which is the same gesture
+   * as pressing the button again and has to keep working.
+   */
+  check('it never catches a tap', /<Animated\.View\s+pointerEvents="none"/.test(bar), true);
+
+  /*
+   * One clock. Two fades a few milliseconds apart do not read as two fades,
+   * they read as one fade with something wrong with it.
+   */
+  check('it shares the sheet’s timings', /SHEET_OPEN_MS[\s\S]{0,200}SHEET_CLOSE_MS/.test(bar), true);
+  check('...and the sheet’s black', /backgroundColor: SCRIM_COLOR/.test(bar), true);
+  check(
+    '...read from Sheet rather than restated',
+    /import \{ SCRIM_COLOR, SHEET_CLOSE_MS, SHEET_OPEN_MS \} from '@\/components\/sheet'/.test(bar),
+    true,
+  );
+
+  if (failures === before) {
+    console.log('ok   the create menu dims the page and spares the bar');
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

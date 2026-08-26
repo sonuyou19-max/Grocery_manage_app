@@ -123,8 +123,21 @@ export function SheetHandle() {
   return <GestureDetector gesture={ctx.drag}>{bar}</GestureDetector>;
 }
 
-/** Long enough to read as a movement, short enough not to sit in the way. */
-const OPEN_MS = 220;
+/**
+ * Long enough to read as a movement, short enough not to sit in the way.
+ *
+ * Exported because one scrim cannot live in here. The create menu dims the page
+ * but must NOT dim the floating tab bar it grows out of, and a scrim inside
+ * this Modal covers the tab bar too — a Modal is its own native window and
+ * everything else in the app is underneath it. So that one dims from the tab
+ * bar's own tree, and reads these to move on exactly this clock. Two fades a
+ * few milliseconds apart look like a fault in one of them.
+ */
+/** The dim itself, so the one drawn outside this file is the same black. */
+export const SCRIM_COLOR = "rgba(12,18,10,0.45)";
+
+export const SHEET_OPEN_MS = 220;
+const OPEN_MS = SHEET_OPEN_MS;
 /*
  * The close was 160ms on `Easing.in(Easing.cubic)`, which accelerates away —
  * the right shape for a card folding out of sight, and the wrong shape for
@@ -138,7 +151,8 @@ const OPEN_MS = 220;
  * card leaves promptly and the dim settles to nothing rather than dropping to
  * it, and 200ms gives the tail somewhere to happen.
  */
-const CLOSE_MS = 200;
+export const SHEET_CLOSE_MS = 200;
+const CLOSE_MS = SHEET_CLOSE_MS;
 
 export interface SheetProps {
   visible: boolean;
@@ -447,7 +461,7 @@ const styles = StyleSheet.create({
   },
   grabber: { width: 36, height: 4, borderRadius: radii.pill },
   backdrop: { flex: 1 },
-  scrim: { backgroundColor: "rgba(12,18,10,0.45)" },
+  scrim: { backgroundColor: SCRIM_COLOR },
   end: { justifyContent: "flex-end" },
   /*
    * `stretch` is what the wrapper already did implicitly (the backdrop's

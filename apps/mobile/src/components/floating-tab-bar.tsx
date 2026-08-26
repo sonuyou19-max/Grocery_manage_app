@@ -4,16 +4,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withSpring,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Frosted } from '@/components/frosted';
 import { CreateSheet } from '@/components/create-sheet';
+import { SCRIM_COLOR, SHEET_CLOSE_MS, SHEET_OPEN_MS } from '@/components/sheet';
 import { haptics } from '@/lib/haptics';
 import { SPRING } from '@/lib/motion';
 import { useT } from '@/store/locale';
@@ -141,6 +144,8 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   }));
 
   return (
+    <>
+      <CreateBackdrop open={creating} />
     <View style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }]} pointerEvents="box-none">
       <View style={styles.shadow}>
         <Frosted
@@ -249,6 +254,70 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
         bottomClearance={insets.bottom + TAB_BAR_GAP + TAB_BAR_HEIGHT + FAB_LIFT + spacing.md}
       />
     </View>
+    </>
+  );
+}
+
+/**
+ * The page dimming behind the create menu, WITHOUT dimming the bar it came from.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this cannot be Sheet's own scrim
+ * ---------------------------------------------------------------------------
+ *
+ * Sheet has one, and every other dialog in the app uses it. It is unusable
+ * here for a structural reason rather than a stylistic one: a <Modal> is its
+ * own native window, stacked above the entire app, so a scrim drawn inside it
+ * covers the tab bar as well. There is no z-order inside that Modal that can
+ * put something from a different window underneath it.
+ *
+ * So the dim is drawn from the tab bar's own tree instead, as a sibling
+ * BEFORE the bar. The page is below it, the bar is above it, and the menu —
+ * being in the Modal — is above them both. Each of the three ends up in the
+ * layer it belongs in, and the bar goes on looking exactly as it did.
+ *
+ * ---------------------------------------------------------------------------
+ * Sizing it without a container to fill
+ * ---------------------------------------------------------------------------
+ *
+ * React Navigation lays a custom tab bar out in a strip the height of the bar,
+ * so `StyleSheet.absoluteFill` here would dim the strip and nothing else. The
+ * strip does not clip — the create button already stands proud of it — so this
+ * takes the window's height and grows upward from the strip's bottom edge,
+ * which is the screen's.
+ *
+ * ---------------------------------------------------------------------------
+ * It never takes a touch
+ * ---------------------------------------------------------------------------
+ *
+ * pointerEvents none, always. The Modal's own backdrop is above this and is
+ * what closes the menu, including on a tap over the cross — which is the same
+ * gesture as tapping the button again and has to keep working. A dim that
+ * caught touches would be a second, invisible backdrop with its own opinion
+ * about what a tap outside means.
+ */
+function CreateBackdrop({ open }: { open: boolean }) {
+  const { height } = useWindowDimensions();
+  const dim = useSharedValue(0);
+
+  useEffect(() => {
+    /*
+     * The same clock the sheet is on, read from sheet.tsx rather than restated.
+     * Two fades a few milliseconds apart do not read as two fades; they read as
+     * one fade with something wrong with it.
+     */
+    dim.value = open
+      ? withTiming(1, { duration: SHEET_OPEN_MS, easing: Easing.out(Easing.cubic) })
+      : withTiming(0, { duration: SHEET_CLOSE_MS, easing: Easing.out(Easing.quad) });
+  }, [open, dim]);
+
+  const style = useAnimatedStyle(() => ({ opacity: dim.value }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.backdrop, { height, backgroundColor: SCRIM_COLOR }, style]}
+    />
   );
 }
 
@@ -306,6 +375,9 @@ function TabButton({
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: H_MARGIN, right: H_MARGIN },
+  // Anchored to the strip's bottom, which is the screen's, and given the
+  // window's height so it grows up over the whole page. See CreateBackdrop.
+  backdrop: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   shadow: {
     borderRadius: 30,
     shadowColor: '#08130B',
