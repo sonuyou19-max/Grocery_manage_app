@@ -1316,12 +1316,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xs,
   },
-  bar: {
-    flexDirection: "row",
-    height: 16,
-    borderRadius: radii.sm,
-    overflow: "hidden",
-  },
   legend: {
     flexDirection: "row",
     flexWrap: "wrap",
