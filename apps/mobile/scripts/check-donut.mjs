@@ -11,16 +11,25 @@
  * no symptom — it still looks like a donut, the legend still says 20%, and the
  * slice next to it is simply a bit bigger than it should be.
  *
- * That is exactly what round caps do if added on their own. A round cap extends
- * STROKE/2 past each end of its dash, so every slice paints a whole stroke
- * longer than its number: on a five-slice ring at this size, 80px of invention
- * on a 276px circumference. The component's previous version used butt caps and
- * a comment saying so, and reversing that decision is only safe while the
- * correction below travels with it.
+ * That is exactly what a cap does if it is not paid for. A cap adds STROKE/2
+ * past the end of its dash, so a slice drawn with one and not corrected for it
+ * paints half a stroke longer than its number.
  *
- * So this re-derives the painted extent from the dash and offset — the same
- * arithmetic the renderer does, written the other way round — and asserts it
- * lands on the fraction.
+ * The ring is rounded at the END of each slice only, which SVG cannot express
+ * as a linecap — both ends of a dash share one. So a slice is a butt-capped
+ * BODY plus a filled circle for its TIP, and the body is pulled back half a
+ * stroke to start underneath the previous slice's tip. What that arrangement
+ * has to guarantee is three things at once, all of them invisible when wrong:
+ *
+ *   1. the VISIBLE extent of each slice is exactly its fraction — the leading
+ *      half-stroke is under a neighbour and must not be counted;
+ *   2. the tip reaches the slice's end and no further;
+ *   3. consecutive slices underlap by exactly half a stroke, which is what
+ *      fills the crescent the round tip narrows away from. Less and the track
+ *      shows through at every join.
+ *
+ * So this re-derives all three from what the geometry returns — the same
+ * arithmetic the renderer does, written the other way round.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -55,12 +64,12 @@ const wanted = [
   /^const STROKE = .*$/m,
   /^const R = .*$/m,
   /^const CIRCUMFERENCE = .*$/m,
-  /^const OVERLAP = .*$/m,
-  // `\n}$` and not `\n}`: seamCap's parameter is an inline object type, so its
-  // closing `}): {` also starts a line — the looser pattern truncated the
-  // function at its own signature and the import came back undefined.
-  /^export function arcDash\([\s\S]*?\n\}$/m,
-  /^export function seamCap\([\s\S]*?\n\}$/m,
+  // `\n}$` and not `\n}`: a parameter written as an inline object type closes
+  // with `}): {` at the start of a line too, and the looser pattern truncated
+  // the function at its own signature — the import then came back undefined and
+  // everything below passed by testing nothing.
+  /^export function arcBody\([\s\S]*?\n\}$/m,
+  /^export function tipFraction\([\s\S]*?\n\}$/m,
 ];
 const parts = wanted.map((re) => src.match(re));
 if (parts.some((p) => !p)) {
@@ -72,7 +81,7 @@ const { outputText } = ts.transpileModule(parts.map((p) => p[0]).join('\n'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { arcDash, seamCap } = mod;
+const { arcBody, tipFraction } = mod;
 
 // Re-read the constants from the source rather than restating them here, so a
 // change to the stroke or the overlap is tested rather than silently diverged
@@ -80,15 +89,29 @@ const { arcDash, seamCap } = mod;
 const num = (re) => Number(src.match(re)[1]);
 const SIZE = num(/^const SIZE = (\d+)/m);
 const STROKE = num(/^const STROKE = (\d+)/m);
-const OVERLAP = num(/^const OVERLAP = (\d+)/m);
 const R = (SIZE - STROKE) / 2;
 const C = 2 * Math.PI * R;
 
-/** What the renderer will actually paint, caps included. */
+/**
+ * What the renderer paints, and what a reader actually sees, which are not the
+ * same span — the difference IS the design.
+ *
+ * `from` is where the body's flat edge lands, half a stroke back under the
+ * previous slice's tip. `visibleFrom` is where the colour starts being this
+ * slice's, which is where that tip stops covering it. `to` is the far edge of
+ * this slice's own tip.
+ */
 function painted(startFraction, fraction) {
-  const { dash, offset } = arcDash(startFraction, fraction);
-  const dashStart = -offset;
-  return { from: dashStart - STROKE / 2, to: dashStart + dash + STROKE / 2 };
+  const { dash, offset } = arcBody(startFraction, fraction);
+  const from = -offset;
+  const tip = tipFraction(startFraction, fraction) * C;
+  return {
+    from,
+    visibleFrom: from + STROKE / 2,
+    bodyTo: from + dash,
+    tip,
+    to: tip + STROKE / 2,
+  };
 }
 
 /* ------------------------------- the ring stays true to the numbers ------- */
@@ -98,33 +121,46 @@ function painted(startFraction, fraction) {
   const mix = [0.4, 0.24, 0.16, 0.12, 0.08];
   let start = 0;
   for (const f of mix) {
-    const { from, to } = painted(start, f);
+    const P = painted(start, f);
     const pct = Math.round(f * 100);
-    check(`${pct}% starts half an overlap early`, from, start * C - OVERLAP / 2);
-    check(`${pct}% ends half an overlap late`, to, (start + f) * C + OVERLAP / 2);
-    check(`${pct}% paints its own length plus the overlap`, to - from, f * C + OVERLAP);
+    check(`${pct}% begins where its neighbour's tip stops covering it`, P.visibleFrom, start * C);
+    check(`${pct}% ends exactly at its fraction`, P.to, (start + f) * C);
+    check(`${pct}% shows its own length and nothing more`, P.to - P.visibleFrom, f * C);
+    // The half-stroke of underlap: what fills the crescent the tip vacates.
+    check(`${pct}% starts half a stroke early, underneath`, start * C - P.from, STROKE / 2);
+    // The body has to reach the tip's centre, or there is a hole between them.
+    check(`${pct}% body meets its tip`, P.bodyTo >= P.tip - 0.0001, true);
     start += f;
   }
   check('the slices still sum to the whole ring', start, 1);
 }
 
 /*
- * The join. Every boundary has to bleed by the same amount, or the overlap
- * reads as a rendering fault at one seam rather than as a style at all of them.
+ * The join, which is the thing the user could see. A round tip narrows away
+ * from the full ring width over its last half-stroke; if the next body did not
+ * start under it, the track would show through that crescent at every boundary.
  */
 {
   const a = painted(0, 0.3);
   const b = painted(0.3, 0.3);
-  check('neighbours overlap by exactly OVERLAP', a.to - b.from, OVERLAP);
+  check('the next slice starts under the previous tip', b.from < a.to, true);
+  check('...by exactly half a stroke', a.to - b.from, STROKE / 2);
+  check('...which is the full depth of the rounding', a.to - a.tip, STROKE / 2);
 }
 
 /* --------------------------------------- a small group is a dot, not a gap */
 
 {
-  const { dash } = arcDash(0.9, 0.01);
-  check('a 1% slice keeps a positive dash', dash >= 1, true);
-  const { from, to } = painted(0.9, 0.01);
-  check('...and paints at least a full cap', to - from >= STROKE, true);
+  const { dash } = arcBody(0.9, 0.01);
+  check('a 1% slice keeps a positive body', dash >= 1, true);
+  const P = painted(0.9, 0.01);
+  check('...and paints at least a full cap', P.to - P.from >= STROKE, true);
+  /*
+   * The clamp. A group shorter than its own cap would otherwise be centred
+   * BEFORE it begins, putting its dot inside the previous slice — wearing the
+   * wrong neighbour's position, which is worse than overstating its size.
+   */
+  check('...at its own start, never behind it', P.tip >= 0.9 * C - 0.0001, true);
 }
 
 /* ------------------------------------------- the gap never goes negative */
@@ -132,7 +168,7 @@ function painted(startFraction, fraction) {
 {
   // One group holding everything. A negative gap makes the dash array
   // meaningless and the platforms disagree about what to draw.
-  const { dash, gap } = arcDash(0, 1);
+  const { dash, gap } = arcBody(0, 1);
   check('a full ring has a non-negative gap', gap >= 0, true);
   check('...and does not dash longer than the circle', dash <= C, true);
 }
@@ -140,64 +176,43 @@ function painted(startFraction, fraction) {
 /* ---------------------------------------- the two halves travel together */
 
 /*
- * Round caps are only safe while the shortening is there. Either one alone is
- * a bug: caps without it inflate every slice, the shortening without them
- * leaves a visible gap at every join.
+ * The body MUST be butt-capped. A round linecap here would put the same bulge
+ * on the start that the tip puts on the end — which is the shape being removed,
+ * and it would silently lengthen every slice by half a stroke on top of it.
  */
-check('the ring draws round caps', /strokeLinecap="round"/.test(src), true);
-check('and arcDash still subtracts the stroke', /length - STROKE \+ OVERLAP/.test(src), true);
-check('the renderer asks arcDash rather than doing its own maths', /arcDash\(a\.start/.test(src), true);
+check('the body draws butt caps', /strokeLinecap="butt"/.test(src), true);
+check('...and no round linecap survives anywhere', /strokeLinecap="round"/.test(src), false);
+check('the tip is a filled circle of the stroke\'s own diameter', /r=\{STROKE \/ 2\} fill=\{`url\(#slice-/.test(src), true);
+check('the renderer asks the geometry rather than doing its own maths', /arcBody\(a\.start/.test(src) && /tipFraction\(a\.start/.test(src), true);
+check('the body is pulled back half a stroke', /startFraction \* CIRCUMFERENCE - STROKE \/ 2/.test(src), true);
+check('nothing corrects the dash any more — butt caps add nothing', /length - STROKE/.test(src), false);
 
 /* ------------------------- the saturated end is the one on top ------------ */
 
 /*
- * The first version painted forwards, and it was wrong in a way that showed:
- * each slice's leading cap is a translucent wash, so every join put 45% of one
- * colour over 100% of another. The dark end stopped reading as opaque and the
- * boundaries muddied.
+ * Order, not geometry, and it carries two things at once.
  *
- * Reversed, the only thing painted over another slice is a cap at full
- * opacity, and the washes have nothing under them but the track. This is a
- * property of ORDER, not of geometry, so it is checked structurally — there is
- * nothing numeric to assert.
+ * Painted forwards, every body would sit on top of the tip it is meant to be
+ * tucked under — the round end sliced flat by its neighbour, and the ring back
+ * to butt joins. And each slice's leading wash would land on the previous
+ * slice's saturated end, which is what made the boundaries muddy before.
  */
 check('the slices paint back to front', /\[\.\.\.arcs\]\.reverse\(\)\.map/.test(src), true);
 check(
   '...so the LAST slice patches the wrap, not the first',
-  /const last = arcs\[arcs\.length - 1\];/.test(src) && /seamCap\(arcDash\(/.test(src),
+  /const last = arcs\[arcs\.length - 1\];/.test(src),
   true,
 );
 check(
-  '...and the patch is a stub, not the whole slice redrawn',
-  /cap\.dash/.test(src) && !/\[\.\.\.arcs, /.test(src),
+  '...and the patch is the tip alone, not the whole slice redrawn',
+  /tipFraction\(last\.start/.test(src) && !/arcBody\(last\.start/.test(src),
   true,
 );
-
-/*
- * The stub has to end exactly where the slice it belongs to ends, or the seam
- * shows a step. And it must never be wider than that slice: a group of one item
- * has a dash of a single pixel, and an unclamped stub would spill its colour
- * backwards over the neighbour.
- */
-{
-  const slice = arcDash(0.7, 0.3);
-  const cap = seamCap(slice);
-  const capEnd = -cap.offset + cap.dash + STROKE / 2;
-  check('the wrap stub ends where its slice ends', capEnd, painted(0.7, 0.3).to);
-  check('...and is no longer than the overlap', cap.dash <= OVERLAP, true);
-
-  /*
-   * The floored case, which is where the first version of seamCap was wrong: a
-   * one-item group paints a little past its fraction on purpose, so a stub
-   * positioned from the fraction lands short of the dot it is capping.
-   */
-  const tiny = arcDash(0.99, 0.01);
-  const tinyCap = seamCap(tiny);
-  check('a one-pixel slice gets a one-pixel stub', tinyCap.dash, tiny.dash);
-  const tinyCapEnd = -tinyCap.offset + tinyCap.dash + STROKE / 2;
-  check('...still ending where the slice actually paints', tinyCapEnd, painted(0.99, 0.01).to);
-  check('...and never past it', tinyCapEnd <= painted(0.99, 0.01).to, true);
-}
+check(
+  '...skipped for a single slice, which already caps itself',
+  /arcs\.length > 1/.test(src),
+  true,
+);
 
 /* ------------------------------------------------- gradients, not flat fill */
 

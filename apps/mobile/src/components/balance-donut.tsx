@@ -42,29 +42,54 @@ import { spacing, type, useTheme } from "@/theme";
  * first slice were the second.
  *
  * ---------------------------------------------------------------------------
- * The caps overlap on purpose, and that is a reversal
+ * Rounded at the end only, and why that cannot be a linecap
  * ---------------------------------------------------------------------------
  *
- * This drew butt caps, with a comment explaining that round ones "overlap their
- * neighbour at every boundary, which on a five-slice ring is five wrong colours
- * a few px wide". That was true of round caps added on their own, and it is the
- * reason the two changes below have to arrive together rather than one at a
- * time.
+ * A slice should finish in a round tip and START square, tucked under the slice
+ * before it. That is the shape of every ring chart people like the look of, and
+ * SVG will not draw it: `strokeLinecap` applies to BOTH ends of a dash, so a
+ * round cap that softens the end also puts a translucent bulge on the start.
  *
- * A round cap extends STROKE/2 past each end of its dash. Left alone, every
- * slice paints a whole stroke-width longer than the number it represents — on
- * a five-slice ring, 80px of invention on a 276px circumference. So each dash
- * is SHORTENED by exactly what the caps add back, less a small deliberate
- * OVERLAP, and the offset is nudged by half the difference so the painted arc
- * stays centred on the angles the data actually describes. The ring is
- * therefore still honest to the fraction; only the joins are soft.
+ * Round at both ends was what this drew, and it is what looked wrong. Two
+ * semicircles meet at every boundary, so the join is a lens of overlapping
+ * colour rather than one arc ending against another — and each slice's leading
+ * bulge is the faded end of its gradient, laid over its neighbour's saturated
+ * one.
  *
- * The overlap reads as intentional because it is consistent: SVG paints in
- * document order, so each slice's leading cap lands on top of the one before
- * it. Every join except one — the wrap at twelve o'clock, where the last slice
- * would otherwise sit on top of the first and that single seam would face the
- * other way. The first slice is drawn a second time at the end to fix it, which
- * costs one <Circle> and is the whole of the trick.
+ * So the two ends are drawn by two different things:
+ *
+ *   BODY  a butt-capped dash. Flat at both ends, and it is the honest length.
+ *   TIP   a filled circle of the stroke's own diameter, sitting on the
+ *         centre-line at the arc's end. A cap is exactly that circle, so this
+ *         is not an approximation of one — it is the same shape, drawn where
+ *         only one end needs it.
+ *
+ * ---------------------------------------------------------------------------
+ * Where the flat end goes, which is the whole of the alignment
+ * ---------------------------------------------------------------------------
+ *
+ * A round tip narrows away from the full ring width over its last STROKE/2. If
+ * the next slice began at the boundary with a flat edge, the crescent the tip
+ * vacates would show the track through it — a dark notch at every join, which
+ * is the gap this arrangement exists to avoid.
+ *
+ * So every body is pulled back by STROKE/2 and starts underneath the previous
+ * slice's tip, exactly where that tip's rounding begins. The full-width
+ * rectangle fills the crescent; the tip is painted over it; the boundary a
+ * reader sees is the curve of the tip and nothing else.
+ *
+ * The arithmetic stays honest through it. A slice covers `[p0 - STROKE/2, p1]`,
+ * of which the leading STROKE/2 is under its neighbour, so what is VISIBLE is
+ * exactly `[p0, p1]` — its own fraction, no correction term, nothing to tune.
+ * The half-stroke of underlap is the overlap: there is no separate OVERLAP
+ * constant any more, because the geometry produces one.
+ *
+ * SVG paints in document order and the slices go back to front, so each tip
+ * lands on the body after it. Every join but one: the wrap at twelve o'clock,
+ * where the last slice's tip has to sit above the first slice's body and the
+ * painting order has already put the first slice highest. That one tip is drawn
+ * a second time at the end, which costs one <Circle> and is the whole of the
+ * trick.
  *
  * ---------------------------------------------------------------------------
  * Why the gradients are built from opacity rather than from two hex values
@@ -90,15 +115,6 @@ const STROKE = 16;
 const R = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * R;
 
-/**
- * How far each slice bleeds over the one before it, in px of arc.
- *
- * Six is about a third of the stroke: enough that the joins read as soft
- * rather than as a rendering artefact, small enough that a reader tracing a
- * boundary still lands within a percent of the truth.
- */
-const OVERLAP = 6;
-
 /** The wash each slice starts from. See the note on opacity stops above. */
 const FADE = 0.45;
 
@@ -119,79 +135,57 @@ function pointAt(fraction: number): { x: number; y: number } {
 }
 
 /**
- * The dash and offset that paint one slice, round caps included.
+ * The butt-capped body of one slice.
  *
  * Exported and pure because it is the one part of this component that can be
- * wrong without looking wrong. A donut is read as proportions, so an arc that
- * is a stroke-width too long is a chart quietly lying by a few percent — and
- * nothing on screen says so. check-donut asserts the painted extent lands on
- * the fraction; see it for the arithmetic written the other way round.
+ * wrong without looking wrong. A donut is read as proportions, so an arc a
+ * stroke-width too long is a chart quietly lying by a few percent, and nothing
+ * on screen says so. check-donut re-derives the painted extent from what this
+ * returns; see it for the arithmetic written the other way round.
  *
- * `dash + STROKE` is what actually appears, because a round cap adds STROKE/2
- * at each end. Subtracting STROKE gives an honest arc; adding OVERLAP back
- * gives the deliberate bleed, split evenly across the two ends by the offset.
+ * The dash is the slice's TRUE length — butt caps add nothing, so there is no
+ * correction to make and none to get wrong. The offset is the only interesting
+ * part: it starts the body half a stroke EARLY, under the previous slice's
+ * round tip, so the crescent that tip narrows away from is filled by full-width
+ * colour rather than by the track. See the note above.
  */
-export function arcDash(
+export function arcBody(
   startFraction: number,
   fraction: number,
 ): { dash: number; gap: number; offset: number } {
-  const length = fraction * CIRCUMFERENCE;
-  // Floored at 1px: a group with a handful of items still deserves to be
-  // visible, and the caps render it as a dot — which is honest about being
-  // small, where a sub-pixel sliver would just look like a gap in the ring.
-  const dash = Math.max(1, length - STROKE + OVERLAP);
+  // Floored at 1px so a group with a handful of items still has a body under
+  // its tip, rather than a sub-pixel sliver the renderer may drop entirely.
+  const dash = Math.max(1, fraction * CIRCUMFERENCE);
   return {
     dash,
     gap: Math.max(0, CIRCUMFERENCE - dash),
-    offset: -(startFraction * CIRCUMFERENCE + (STROKE - OVERLAP) / 2),
+    offset: -(startFraction * CIRCUMFERENCE - STROKE / 2),
   };
 }
 
 /**
- * The patch that fixes the wrap, and why it cannot just be the slice again.
+ * Where the round tip sits, as a fraction of the circle.
  *
- * Every adjacent pair wants the earlier slice on top — including the pair that
- * wraps twelve o'clock, where the LAST slice has to sit above the first. That
- * is a cycle (A above B above C above A) and no painting order satisfies it, so
- * one seam always needs a patch. This is that patch.
+ * A cap is a circle of the stroke's diameter centred ON the centre-line, so to
+ * reach exactly the slice's end the centre goes half a stroke short of it. The
+ * tip then covers `[p1 - STROKE, p1]` and the slice finishes where its number
+ * says it does.
  *
- * Redrawing the whole last slice on top is the obvious version and is wrong for
- * the same reason the reversal exists: it would put that slice's own faded
- * leading cap over its neighbour's saturated end, moving the mud from one seam
- * to another rather than removing it. So only the TAIL is redrawn — a stub
- * whose painted extent ends exactly where the slice's does, sampling the
- * gradient where it is fully saturated.
- *
- * Clamped to the slice's own dash, because a group of one item has a dash of a
- * single pixel: an unclamped stub would be wider than the slice it belongs to
- * and would spill its colour backwards over the neighbour.
+ * Clamped forward to the slice's own start, for the case that has caught every
+ * previous version of this file: a group of one item is shorter than the cap
+ * that draws it. Unclamped, its tip would be centred BEFORE its start and the
+ * dot would sit inside the previous slice, wearing the wrong neighbour's
+ * position. Clamped, a tiny group reads as a dot at its own start — overstating
+ * its size, which it must, since a dot is the smallest thing a ring can show,
+ * and doing so in the right place.
  */
-export function seamCap(slice: {
-  dash: number;
-  offset: number;
-}): { dash: number; gap: number; offset: number } {
-  /*
-   * Positioned from the slice's OWN dash and offset rather than recomputed
-   * from its end fraction, which is not the same thing once the dash has been
-   * floored. A group of one item wants a dash of -7px and gets 1px, so it
-   * paints a little past where its fraction ends — deliberately, as a visible
-   * dot. A stub placed at the theoretical end would then sit several pixels
-   * short of the dot it is meant to cap, and the seam would show a step.
-   *
-   * check-donut caught exactly that; the first version of this function took
-   * an end fraction.
-   */
-  const sliceEnd = -slice.offset + slice.dash + STROKE / 2;
-  const dash = Math.min(OVERLAP, slice.dash);
-  return {
-    dash,
-    gap: Math.max(0, CIRCUMFERENCE - dash),
-    offset: -(sliceEnd - dash - STROKE / 2),
-  };
+export function tipFraction(startFraction: number, fraction: number): number {
+  const end = (startFraction + fraction) * CIRCUMFERENCE - STROKE / 2;
+  return Math.max(startFraction * CIRCUMFERENCE, end) / CIRCUMFERENCE;
 }
 
 /** Test seams: check-donut re-derives the painted extent from these. */
-export const __DONUT = { SIZE, STROKE, R, CIRCUMFERENCE, OVERLAP, FADE };
+export const __DONUT = { SIZE, STROKE, R, CIRCUMFERENCE, FADE };
 
 export function BalanceDonut({
   slices,
@@ -266,65 +260,74 @@ export function BalanceDonut({
               fill="none"
             />
             {/*
-              REVERSED, so the saturated end of each slice lands on top of the
-              faded start of the next one.
+              REVERSED, so each slice's tip lands on the body of the one after
+              it — which is the arrangement the whole shape depends on. Painted
+              forwards, every body would sit on top of the tip it is supposed to
+              be tucked under: the round end would be sliced flat by its
+              neighbour and the ring would be back to butt joins with extra
+              steps.
 
-              Painted forwards — the obvious order — every join is the other way
-              round: the next slice's leading cap is a translucent wash, and it
-              goes over the previous slice's fully saturated end. Two things go
-              wrong at once and they look like one. The dark end stops reading
-              as opaque, because something see-through is sitting on it; and the
-              overlap muddies, because a 45%-opacity brown over a solid grey is
-              neither colour. The ring looked dirty at every boundary.
-
-              Reversed, the only thing ever painted over another slice is a cap
-              at full opacity, and the translucent starts have nothing under
-              them but the track. The wash still reads as a wash; the joins read
-              as one colour ending on top of another.
-
-              The wrap then needs the LAST slice redrawn on top rather than the
-              first: painting backwards puts the first slice highest, so twelve
-              o'clock would be the one seam facing the wrong way. Only when
-              there is more than one slice — a single one overlapping itself
-              would put a cap in the middle of a solid ring.
+              It is also what keeps the gradients readable. The only thing ever
+              painted over another slice is a tip, which is sampled where the
+              gradient is fully saturated; the faded starts have nothing under
+              them but the track. Forwards, a 45%-opacity wash would land on a
+              solid colour at every boundary — the dark end would stop reading
+              as opaque and the join would turn to mud, which is what this
+              looked like before.
             */}
             {[...arcs].reverse().map((a) => {
-              const { dash, gap, offset } = arcDash(a.start, a.end - a.start);
+              const body = arcBody(a.start, a.end - a.start);
+              const tip = pointAt(tipFraction(a.start, a.end - a.start));
               return (
-                <Circle
-                  key={a.group}
-                  cx={SIZE / 2}
-                  cy={SIZE / 2}
-                  r={R}
-                  stroke={`url(#slice-${a.group})`}
-                  strokeWidth={STROKE}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={`${dash} ${gap}`}
-                  strokeDashoffset={offset}
-                />
+                <G key={a.group}>
+                  <Circle
+                    cx={SIZE / 2}
+                    cy={SIZE / 2}
+                    r={R}
+                    stroke={`url(#slice-${a.group})`}
+                    strokeWidth={STROKE}
+                    fill="none"
+                    /* Butt, and the tip below is why. A round cap here would
+                       put the same bulge on the START, which is the shape being
+                       removed. */
+                    strokeLinecap="butt"
+                    strokeDasharray={`${body.dash} ${body.gap}`}
+                    strokeDashoffset={body.offset}
+                  />
+                  {/* The cap, as the circle a cap actually is. Filled with the
+                      slice's own gradient, which at this end of the sweep is at
+                      its saturated stop — so the tip is the darkest part of the
+                      slice, and it is the part that sits on top. */}
+                  <Circle cx={tip.x} cy={tip.y} r={STROKE / 2} fill={`url(#slice-${a.group})`} />
+                </G>
               );
             })}
             {/*
-              The wrap seam, last of all. See seamCap: with the slices painted
-              backwards the first one sits highest, so twelve o'clock is the one
-              boundary where the earlier slice would otherwise be underneath.
+              The wrap, last of all. Every pair wants the earlier slice's tip
+              above the later slice's body, including the pair that straddles
+              twelve o'clock — where the LAST slice has to sit above the first.
+              That is a cycle, and no painting order satisfies it, so one seam
+              always needs a patch.
+
+              It is just the tip again. Nothing else is redrawn: putting the
+              whole slice back on top would lay its own faded body over its
+              neighbour's saturated tip, which is the mud this order exists to
+              avoid — it would move the problem to a different seam rather than
+              solve it.
+
+              Only when there is more than one slice. A single slice already
+              paints its tip after its own body, so the wrap is covered.
             */}
             {arcs.length > 1
               ? (() => {
                   const last = arcs[arcs.length - 1];
-                  const cap = seamCap(arcDash(last.start, last.end - last.start));
+                  const tip = pointAt(tipFraction(last.start, last.end - last.start));
                   return (
                     <Circle
-                      cx={SIZE / 2}
-                      cy={SIZE / 2}
-                      r={R}
-                      stroke={`url(#slice-${last.group})`}
-                      strokeWidth={STROKE}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeDasharray={`${cap.dash} ${cap.gap}`}
-                      strokeDashoffset={cap.offset}
+                      cx={tip.x}
+                      cy={tip.y}
+                      r={STROKE / 2}
+                      fill={`url(#slice-${last.group})`}
                     />
                   );
                 })()
