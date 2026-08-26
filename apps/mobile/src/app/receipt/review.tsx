@@ -13,7 +13,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Frosted } from '@/components/frosted';
@@ -24,6 +24,7 @@ import { MeshBackground } from '@/components/mesh-background';
 import { PressScale } from '@/components/press-scale';
 import { Sheet } from '@/components/sheet';
 import { currencySymbolFor } from '@/i18n';
+import { cascade } from '@/lib/cascade';
 import { haptics } from '@/lib/haptics';
 import { parsePriceToCents } from '@/lib/money';
 import {
@@ -322,7 +323,7 @@ export default function ReceiptReviewScreen() {
 
     return (
       <Animated.View
-        entering={FadeInDown.delay(Math.min(order, 12) * 28).duration(240)}
+        entering={cascade(order)}
         style={[styles.row, { borderColor: colors.line }, !d.include && styles.excluded]}
       >
         <Pressable

@@ -2,12 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, SectionList, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Safe } from "@/components/safe";
 
 import { BalanceDonut } from "@/components/balance-donut";
 import { EmptyState } from "@/components/empty-state";
+import { cascade } from "@/lib/cascade";
 import { Frosted } from "@/components/frosted";
 import { ItemEmoji } from "@/components/item-emoji";
 import { MeshBackground } from "@/components/mesh-background";
@@ -189,12 +190,9 @@ export default function PantryMixScreen() {
             renderItem={({ item: row, index, section }) => (
               <Animated.View
                 // On the ROW, not the cell: two cells entering a frame apart
-                // reads as a stutter rather than a cascade. Capped at twelve
-                // steps, or the fortieth row of a big pantry waits over a
-                // second and the flourish reads as the screen being slow.
-                entering={FadeInDown.delay(
-                  Math.min(row.order, 12) * 28,
-                ).duration(240)}
+                // reads as a stutter rather than a cascade. The cap and the
+                // step live in lib/cascade, shared with every other screen.
+                entering={cascade(row.order)}
                 style={[
                   styles.gridRow,
                   index < section.data.length - 1 && {

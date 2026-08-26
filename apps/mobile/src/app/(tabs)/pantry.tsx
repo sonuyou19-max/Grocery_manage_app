@@ -33,6 +33,7 @@ import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { coachMarkDue, useCoachMark } from '@/lib/coach-marks';
 import { haptics } from '@/lib/haptics';
+import { cascade } from '@/lib/cascade';
 import { rubberBand, springTo } from '@/lib/motion';
 import { usePlusGate } from '@/lib/plus-gate';
 import {
@@ -317,8 +318,22 @@ function SignedInPantry() {
   const renderRows = (rows: ItemStat[]) => (
     <View style={styles.rowStack}>
       {rows.map((item, i) => (
+        /*
+         * The cascade goes on a wrapper, not on the row.
+         *
+         * PantrySwipeRow already owns a transform — the swipe — driven by a
+         * shared value on the UI thread. An entering animation on the same view
+         * writes the same property from the layout-animation side, and the two
+         * fight: a row swiped while the screen is still arriving snaps back to
+         * wherever the entrance had got to.
+         *
+         * The wrapper is also what makes the numbering right. `i` restarts at
+         * zero for each section, which is what you want — a collapsed section
+         * expanding should cascade from its own top, not continue a count from
+         * whatever was above it.
+         */
+        <Animated.View key={item.key} entering={cascade(i)}>
         <PantrySwipeRow
-          key={item.key}
           /* Only the first row of the FIRST section carries a coach ref, and
              collapsable={false} inside the row keeps Android from flattening
              the view away — a flattened view measures nothing. */
@@ -344,6 +359,7 @@ function SignedInPantry() {
             else setLedgerFor({ name: item.display, category: item.category });
           }}
         />
+        </Animated.View>
       ))}
     </View>
   );

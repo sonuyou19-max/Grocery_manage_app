@@ -426,7 +426,7 @@ function SignedInInsights() {
       {!locked && <WeeklyRecapCard />}
 
       {cart.total > 0 && (
-        <Card>
+        <Card order={0}>
           <CardHead
             icon="nutrition-outline"
             title={t("insights.basketTitle")}
@@ -463,6 +463,7 @@ function SignedInInsights() {
           is what it is. */}
       {eco.score != null && (
         <EcoCard
+          order={1}
           eco={eco}
           heaviest={heaviest}
           now={now}
@@ -475,7 +476,7 @@ function SignedInInsights() {
           about the reader, so it is the one card a day-one install can show.
           Directly after the climate card on purpose: see EcoCard's header, which
           now depends on something good following it. */}
-      <SeasonCard now={now} />
+      <SeasonCard now={now} order={2} />
 
       {/* Plus: HIDE, not prompt. A pantry mix is a ring and a legend — there is
           no shell worth leaving behind, and a locked one would just be a
@@ -486,7 +487,7 @@ function SignedInInsights() {
           middle of the ring, and the same count in both places was the header
           repeating what the chart already said. */}
       {!locked && pantry.total > 0 && (
-        <Card>
+        <Card order={3}>
           <CardHead
             icon="file-tray-full-outline"
             title={t("insights.pantryMixTitle")}
@@ -517,7 +518,7 @@ function SignedInInsights() {
       {/* Plus: HIDE, same reasoning. Staples is a list of names; without the
           names there is nothing to show. */}
       {!locked && staples.length > 0 && (
-        <Card>
+        <Card order={4}>
           <CardHead
             icon="repeat-outline"
             title={t("insights.staplesTitle")}
@@ -554,7 +555,7 @@ function SignedInInsights() {
       {/* Spend across weeks, from the purchase log — this is the only card that
           survives deleting the list the prices were logged on. */}
       {hasTrend && (
-        <Card>
+        <Card order={5}>
           <CardHead
             icon="stats-chart-outline"
             title={t("insights.trendTitle")}
@@ -617,7 +618,7 @@ function SignedInInsights() {
           is a claim about the past, and five weeks is not enough past to make
           it. */}
       {!locked && moves.length > 0 && (
-        <Card>
+        <Card order={6}>
           <CardHead
             icon="swap-vertical-outline"
             title={t("insights.movesTitle")}
@@ -647,7 +648,7 @@ function SignedInInsights() {
           picker, because unmounting it took away the only control that could
           get back to a range with data in it. */}
       {pricedItems.length > 0 ? (
-        <Card>
+        <Card order={7}>
           <CardHead
             icon="cash-outline"
             title={t("insights.spendingTitle")}
@@ -684,7 +685,7 @@ function SignedInInsights() {
           </Recalc>
         </Card>
       ) : (
-        <Card>
+        <Card order={8}>
           <CardHead
             icon="pricetag-outline"
             title={t("insights.spendingTitle")}
@@ -699,7 +700,7 @@ function SignedInInsights() {
       {/* Spend per store — whenever a store has ever been priced. Scoped to the
           chosen range inside, so an empty range says so rather than vanishing. */}
       {hasStoreSpendEver && (
-        <Card>
+        <Card order={9}>
           <CardHead
             icon="storefront-outline"
             title={t("insights.whereTitle")}
@@ -732,7 +733,7 @@ function SignedInInsights() {
           and somebody who logged a 2 L bottle has to be able to tell which one
           they are reading. */}
       {!locked && cheaper.length > 0 && (
-        <Card>
+        <Card order={10}>
           <CardHead
             icon="trending-down-outline"
             title={t("insights.cheaperTitle")}
@@ -754,7 +755,7 @@ function SignedInInsights() {
           missing here IS the weeks — a locked shell would be an empty chart
           with a price on it. */}
       {!locked && ecoScored.length >= 2 && (
-        <Card>
+        <Card order={11}>
           <CardHead
             icon="trending-up-outline"
             title={t("eco.trendTitle")}
@@ -1063,7 +1064,7 @@ function CardHead({
  *
  * Free, and ungated on data for exactly that reason.
  */
-function SeasonCard({ now }: { now: number }) {
+function SeasonCard({ now, order }: { now: number; order?: number }) {
   const { colors } = useTheme();
   const { t, region } = useLocale();
 
@@ -1085,7 +1086,7 @@ function SeasonCard({ now }: { now: number }) {
   if (season.length === 0) return null;
 
   return (
-    <Card>
+    <Card order={order}>
       <CardHead icon="sunny-outline" title={t("climate.seasonTitle")} />
       {rows.map((row) => (
         <View key={row.join("|")} style={styles.seasonRow}>
@@ -1125,7 +1126,9 @@ function EcoCard({
   now,
   range,
   onRange,
+  order,
 }: {
+  order?: number;
   eco: EcoScore;
   heaviest: HeaviestStaple | null;
   now: number;
@@ -1137,7 +1140,7 @@ function EcoCard({
   const [explained, setExplained] = useState(false);
 
   return (
-    <Card>
+    <Card order={order}>
       <View style={styles.cardHead}>
         <Ionicons name="leaf-outline" size={18} color={colors.accent} />
         <Text style={[type.label, styles.grow, { color: colors.ink }]}>

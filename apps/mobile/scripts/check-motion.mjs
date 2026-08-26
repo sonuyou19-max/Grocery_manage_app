@@ -329,5 +329,54 @@ if (faded.length) {
   }
 }
 
+/* ------------------------------------------------------------------------- */
+/* The cascade. One set of numbers, or the house style varies by screen.      */
+/* ------------------------------------------------------------------------- */
+{
+  const before = failures;
+  const cascade = stripComments(readFileSync(join(here, '..', 'src', 'lib', 'cascade.ts'), 'utf8'));
+
+  // The cap is the design. Uncapped, the delay is proportional to position and
+  // a long list punishes its own length — the fortieth row waits over a second,
+  // which reads as the screen being slow rather than as a flourish.
+  check('the cascade is capped', /Math\.min\(Math\.max\(0, Math\.floor\(order\)\), CASCADE_CAP\)/.test(cascade), true);
+  check('...at twelve steps', /CASCADE_CAP = 12/.test(cascade), true);
+  check('a negative order cannot pull the delay backwards', /Math\.max\(0,/.test(cascade), true);
+
+  /*
+   * Stated rather than inherited. Reanimated's default for layout animations
+   * follows the system setting, which is what we want — but a default that
+   * changes in a minor release would take a whole accessibility behaviour with
+   * it, silently, and nothing here would fail.
+   */
+  check('Reduce Motion is stated', /\.reduceMotion\(ReduceMotion\.System\)/.test(cascade), true);
+
+  /*
+   * Every screen that staggers something goes through it. Three had grown their
+   * own copy with three different sets of constants before this existed; the
+   * point of the helper is lost the moment a fourth appears.
+   */
+  const staggered = [];
+  for (const file of walk(APP)) {
+    const rel = relative(APP, file).split('\\').join('/');
+    if (rel === 'lib/cascade.ts') continue;
+    const text = stripComments(readFileSync(file, 'utf8'));
+    /*
+     * A DELAY on an entrance is what makes it a stagger, and staggering is the
+     * thing worth having one of. A single element arriving on its own — the
+     * climate hero, the list's sticky bar — is a different gesture with its own
+     * timing, and forbidding those would be tidying rather than guarding.
+     */
+    if (/\b(?:FadeIn|FadeOut|SlideIn|SlideOut|ZoomIn)\w*\.delay\(/.test(text)) {
+      staggered.push(rel);
+    }
+  }
+  check('no screen rolls its own stagger', staggered, []);
+
+  if (failures === before) {
+    console.log('ok   one cascade, one set of numbers, everywhere');
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

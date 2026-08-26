@@ -26,6 +26,7 @@ import { Safe } from "@/components/safe";
 
 import { EcoBar } from "@/components/eco-bar";
 import { EmptyState } from "@/components/empty-state";
+import { cascade } from "@/lib/cascade";
 import { Frosted } from "@/components/frosted";
 import { ItemEmoji } from "@/components/item-emoji";
 import { ListPickerSheet } from "@/components/list-picker-sheet";
@@ -504,7 +505,7 @@ function HeavyRow({
   const { t } = useLocale();
 
   return (
-    <Animated.View entering={FadeInDown.delay(Math.min(order, 10) * 30).duration(240)}>
+    <Animated.View entering={cascade(order)}>
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
