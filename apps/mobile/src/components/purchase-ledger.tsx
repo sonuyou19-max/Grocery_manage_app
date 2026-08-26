@@ -15,7 +15,7 @@ import { Sheet } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { ItemEmoji } from "@/components/item-emoji";
 import { SupermarketBadge } from "@/components/supermarket-badge";
-import { historyFor, type Purchase } from "@/lib/purchase-log";
+import { amountLabel, historyFor, type Purchase } from "@/lib/purchase-log";
 import { useLocale } from "@/store/locale";
 import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
@@ -204,13 +204,38 @@ export function PurchaseLedger({
                       {t("ledger.noStore")}
                     </Text>
                   )}
-                  {p.quantity != null && (
+                  {/*
+                    Through amountLabel, which is what fixes this row. It printed
+                    `quantity` and `unit` alone — the size of ONE pack — so four
+                    litres of milk arrived in the history as "1 l". The pack
+                    count was in the database the whole time and had no way to
+                    reach the screen.
+                  */}
+                  {amountLabel(p) != null && (
                     <Text style={[type.sub, { color: colors.muted }]}>
-                      {p.quantity}
-                      {p.unit ? ` ${p.unit}` : ""}
+                      {amountLabel(p)}
                     </Text>
                   )}
                 </View>
+                {/*
+                  What the till actually called it, and who made it.
+                  
+                  This is the reason price_entries carries brand and description
+                  at all — the whole point of splitting them off the item's name
+                  was that the name stays short enough to match next month while
+                  the detail survives HERE. It was being written and never read.
+                  One line, truncated: it is evidence you glance at, not a field
+                  to study, and a long German description would otherwise push
+                  every row to three lines.
+                */}
+                {(p.brand != null || p.description != null) && (
+                  <Text
+                    style={[type.sub, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
+                    {[p.brand, p.description].filter(Boolean).join(" · ")}
+                  </Text>
+                )}
               </View>
               {/* An unpriced purchase shows a dash, not a zero: it happened,
                       it just carries no amount, and €0.00 would be a lie that

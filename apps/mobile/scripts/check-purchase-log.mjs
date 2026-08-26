@@ -413,5 +413,99 @@ check(
   NOW - 5 * 60000,
 );
 
+/* --------------------------------------------------------- amountLabel --- */
+
+/*
+ * The pack count is the part that kept getting lost, and losing it is not a
+ * rounding error — it is a different shopping. `quantity` is the size of ONE
+ * pack, so a surface printing it alone says "1 l" about four litres of milk.
+ * That is exactly what the purchase ledger did, for every receipt import, with
+ * the count sitting in the database the whole time.
+ */
+{
+  const label = mod.amountLabel;
+  check('a multipack states its count', label({ quantity: 1, unit: 'l', packs: 4 }), '4 × 1 l');
+  check('a single pack does not', label({ quantity: 500, unit: 'g', packs: 1 }), '500 g');
+  check('...nor does a missing count', label({ quantity: 500, unit: 'g' }), '500 g');
+  check('a counted thing with no size still counts', label({ quantity: null, unit: null, packs: 3 }), '×3');
+  check('a size with no unit is just the number', label({ quantity: 6, unit: null, packs: 1 }), '6');
+  // One pack of an unmeasured thing is just a thing. "1 ×" beside it would be
+  // noise dressed as data.
+  check('nothing to say says nothing', label({ quantity: null, unit: null, packs: 1 }), null);
+  check('...and a zero size is nothing to say', label({ quantity: 0, unit: 'g', packs: 1 }), null);
+  // Rows written before migration 0036 have no packs at all.
+  check('a pre-0036 row reads as one pack', label({ quantity: 2, unit: 'kg', packs: null }), '2 kg');
+  // A weighed line carries three decimals on the receipt; the label is read at
+  // a glance, not audited.
+  check('a weighed amount is trimmed', label({ quantity: 1.094, unit: 'kg', packs: 1 }), '1.09 kg');
+  check('...without leaving a trailing zero', label({ quantity: 1.5, unit: 'kg', packs: 1 }), '1.5 kg');
+  // A count is a count. Nothing should ever print "2.4 ×".
+  check('a fractional count is rounded', label({ quantity: 1, unit: 'l', packs: 2.4 }), '2 × 1 l');
+}
+
+/* ----------------------------------------- the surfaces that show it ----- */
+
+/*
+ * Structural, because the failure this exists to stop was not that the label
+ * was wrong — there was no label. Both of these printed `quantity` alone, or
+ * nothing at all, while the pack count sat in the database being written on
+ * every import.
+ */
+{
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const ledger = strip(readFileSync(join(here, '..', 'src', 'components', 'purchase-ledger.tsx'), 'utf8'));
+  const list = strip(readFileSync(join(here, '..', 'src', 'app', 'list', '[id].tsx'), 'utf8'));
+
+  check('the ledger states the amount through amountLabel', /amountLabel\(p\)/.test(ledger), true);
+  check('...and no longer prints one pack\'s size as the amount', /\{p\.quantity\}/.test(ledger), false);
+  check('the ledger shows the brand and description it stores', /\[p\.brand, p\.description\]/.test(ledger), true);
+
+  check('a ticked list row states its amount', /it\.checked && amountLabel\(it\)/.test(list), true);
+}
+
+/* ------------------------------------------- every column that is mapped -- */
+
+/*
+ * THE BUG THAT HID BEHIND THE OTHER ONE.
+ *
+ * price_entries.brand and .description are written on every receipt import and
+ * were missing from the live read, so they made the round trip and came back as
+ * null on the next launch. The ledger could not have shown them however it was
+ * written — the data was gone before it got there.
+ *
+ * What hid it is that a DIFFERENT select, the one-off migration read, has
+ * always carried them: the columns were plainly in use, just not by the read
+ * that matters. So this asserts the property rather than the string — every
+ * field mapPriceRow maps must appear in every select of that table, or the
+ * mapping quietly invents nulls.
+ */
+{
+  const store = readFileSync(
+    join(here, '..', 'src', 'store', 'pantry-intel.tsx'),
+    'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  const body = store.match(/^interface DbPriceRow \{([\s\S]*?)^\}/m);
+  const mapped = body
+    ? [...body[1].matchAll(/^\s{2}(\w+)\??:/gm)].map((f) => f[1])
+    : [];
+  check('DbPriceRow was found', mapped.length > 5, true);
+
+  /*
+   * Anchored to the table, not to a column name. Matching any select that
+   * mentions item_key swept in pantry_items reads as well, which have every
+   * right to a different column list — the assertion then failed on code that
+   * was correct, which is the way a guard gets deleted rather than fixed.
+   */
+  const selects = [...store.matchAll(/from\('price_entries'\)[\s\S]{0,600}?\.select\(\s*'([^']*)'/g)]
+    .map((m) => m[1].replace(/\s+/g, ' '));
+  check('both price_entries selects were found', selects.length, 2);
+
+  for (const [i, sel] of selects.entries()) {
+    const missing = mapped.filter((f) => !sel.split(/\s*,\s*/).includes(f));
+    check(`select ${i + 1} carries every mapped column`, missing, []);
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

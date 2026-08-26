@@ -780,7 +780,20 @@ function CloudPantryIntelProvider({
     const since = new Date(cutoffRef.current ?? Date.now() - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, recorded_at')
+      /*
+       * brand and description were missing here, and they are written on every
+       * receipt import — so they made the round trip to the database and came
+       * back as null on the very next launch. The ledger could not have shown
+       * them however it was written; the data was gone before it got there.
+       *
+       * The migration read below has always selected them, which is what hid
+       * this: the columns were plainly in use, just not by the read that
+       * matters. Any select of price_entries has to carry every column
+       * mapPriceRow maps, or the mapping quietly invents nulls.
+       */
+      .select(
+        'id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, description, recorded_at',
+      )
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .order('recorded_at', { ascending: false })

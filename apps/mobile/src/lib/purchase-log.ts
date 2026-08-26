@@ -352,6 +352,35 @@ export interface Priceable {
 }
 
 /**
+ * How much was bought, as a person would write it: "4 × 1 l", "500 g", "×3".
+ *
+ * The pack COUNT is the part that kept getting lost. `quantity` is the size of
+ * one pack — the number on the label — so a row showing it alone says "1 l"
+ * about four litres of milk, which is not a rounding error but a different
+ * shopping. Every surface that showed an amount was doing exactly that: the
+ * purchase ledger printed `quantity` and `unit` and nothing else, so a receipt
+ * line reading "4 X 1L DLL VOLLE MELK" arrived in the history as "1 l".
+ *
+ * Numerals and "×" rather than words, deliberately. This is read in seven
+ * languages and there is no sentence here to translate — "4 × 1 l" means the
+ * same thing in all of them, where "4 packs" would need a plural rule per
+ * locale to say something a multiplication sign already says.
+ *
+ * Null when there is genuinely nothing to say: one pack of an unmeasured thing
+ * is just "a thing", and printing "1 ×" beside it would be noise dressed as
+ * data.
+ */
+export function amountLabel(p: Pick<Priceable, 'quantity' | 'unit' | 'packs'>): string | null {
+  const packs = p.packs != null && p.packs > 0 ? Math.round(p.packs) : 1;
+  const size =
+    p.quantity != null && p.quantity > 0
+      ? `${Number(p.quantity.toFixed(2))}${p.unit ? ` ${p.unit}` : ''}`
+      : null;
+  if (packs > 1) return size ? `${packs} × ${size}` : `×${packs}`;
+  return size;
+}
+
+/**
  * Per-unit price, so €2/1L and €4/2L compare equal.
  *
  * Returns null rather than guessing when the quantity is missing or zero: a

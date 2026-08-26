@@ -38,6 +38,7 @@ import { CoachMark } from "@/components/coach-mark";
 import { FlyToCart, type FlyToCartHandle } from "@/components/fly-to-cart";
 import { GlassView } from "@/components/glass";
 import { EcoBar } from "@/components/eco-bar";
+import { amountLabel } from "@/lib/purchase-log";
 import { useRecipeGate } from "@/lib/recipe-gate";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { ItemEmoji } from "@/components/item-emoji";
@@ -1169,6 +1170,31 @@ function SwipeableItemRow({
               mine={claimMine}
               onPress={onToggleClaim}
             />
+          )}
+
+          {/*
+            The amount, and ONLY once the row is ticked.
+        
+            The note above says an amount belongs to the shop rather than to the
+            writing of the list, and for a row still to buy that holds — the
+            quantity is what you check against the shelf, and Shopping Mode is
+            where you are standing when you do.
+        
+            A ticked row is not that. It has stopped being an instruction and
+            become a record of what was bought, and a record that says €6.68
+            without saying what for is missing the half that makes the number
+            mean anything. A receipt import writes four packs and a total; this
+            row was showing the total alone, so "4 × 1 l" existed in the
+            database, in the item's own sheet, and nowhere a reader would look.
+        
+            Inline rather than on a second line: these rows sit in a collapsed
+            section that is scanned, and two heights in one list is what the
+            note was protecting against in the first place.
+          */}
+          {it.checked && amountLabel(it) != null && (
+            <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+              {amountLabel(it)}
+            </Text>
           )}
 
           <Pressable onPress={guard(onEdit)} hitSlop={8}>

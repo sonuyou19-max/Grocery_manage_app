@@ -599,5 +599,41 @@ assert(
 
 /* ------------------------------------------------------------------------ */
 
+/* ------------------------------------------- a multipack keeps its count -- */
+
+/*
+ * The reported case: "4 X 1L DLL VOLLE MELK". It reviewed correctly and then
+ * lost its count somewhere, and the only way to know WHERE is to assert each
+ * hand-off separately. This is the first one — what planCommit hands to the
+ * list and to the log.
+ *
+ * It passes, which is the useful result: the count was never lost here. The
+ * patch and the purchase both carried it into a database that stored it. It
+ * was lost on the way back out — by a read that did not ask for every column,
+ * and by two screens that printed one pack's size and called it the amount.
+ * See check-purchase-log for both.
+ */
+console.log('\na multipack keeps its count');
+{
+  const four = buy('m', '4 X 1L DLL VOLLE MELK', 668, {
+    packs: 4, quantity: 1, unit: 'l', brand: 'Delhaize',
+    product: 'milk', expanded: 'Delhaize volle melk 1L',
+  });
+  const rows = [{ id: 'i9', name: 'Milk', category: 'dairy', checked: false }];
+  const decisions = new Map([['m', { include: true, priceCents: 668, itemId: 'i9' }]]);
+  const plan = planCommit(RECEIPT, [four], decisions, rows, NOW);
+
+  eq('the list row is patched with the pack count', plan.patches[0].patch.packs, 4);
+  eq('...and one pack’s size, not the total', plan.patches[0].patch.quantity, 1);
+  eq('...and the TOTAL paid, not the shelf price', plan.patches[0].patch.priceCents, 668);
+  eq('the purchase carries the count too', plan.purchases[0].detail.packs, 4);
+  eq('...with the same size', plan.purchases[0].detail.quantity, 1);
+  eq('...and the same total', plan.purchases[0].detail.priceCents, 668);
+  // Filed under the list's word, so the burn rate keeps one history.
+  eq('...under the list’s own name', plan.purchases[0].name, 'Milk');
+  eq('...with the till’s wording kept as the description', plan.purchases[0].detail.description, 'Delhaize volle melk 1L');
+  eq('...and the brand kept apart from it', plan.purchases[0].detail.brand, 'Delhaize');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
