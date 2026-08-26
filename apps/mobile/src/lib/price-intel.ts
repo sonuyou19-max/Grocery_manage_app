@@ -19,6 +19,27 @@ export interface PricedItem {
    */
   quantity: number | null;
   unit: string | null;
+  /**
+   * How many packs — the half of the size that kept getting dropped.
+   *
+   * `quantity` is ONE pack's size, so a four-pack of litre bottles is
+   * `quantity: 1, packs: 4` and the litres bought are the product of the two.
+   * Optional because most callers legitimately have no count, and `unitPrice`
+   * reads an absent one as 1 — which is right for a single bottle and silently
+   * wrong for anything else.
+   *
+   * It was missing from this shape while `quantity` was present, which is worse
+   * than both being missing: the type looked like it carried the size, the
+   * arithmetic looked like it divided by the size, and a four-pack of milk at
+   * €3.56 was read as €3.56 a litre. The card then named the OTHER shop as the
+   * bargain — with a precise figure beside it — when this one was four times
+   * cheaper per litre.
+   *
+   * That is the same failure the note on cheaperStoreHints describes, one level
+   * further up the pipe. The first time, quantity never reached the helper. The
+   * second time it did, and the pack count did not.
+   */
+  packs?: number | null;
 }
 
 export interface StoreSpend {

@@ -54,13 +54,14 @@ const check = (name, actual, expected) => {
   }
 };
 
-/** A priced purchase. quantity/unit default to "not given". */
-const buy = (name, store, priceCents, quantity = null, unit = null) => ({
+/** A priced purchase. quantity/unit default to "not given"; packs to one. */
+const buy = (name, store, priceCents, quantity = null, unit = null, packs = 1) => ({
   name,
   store,
   priceCents,
   quantity,
   unit,
+  packs,
 });
 
 /* ------------------------------------------------ the bug that shipped */
@@ -170,6 +171,59 @@ check(
 // Spelling and case must not split one item into two.
 const drift = cheaperStoreHints([buy('milk', 'lidl', 200), buy('Milk', 'aldi', 100)]);
 check('spelling drift still groups as one item', drift.length, 1);
+
+/* ------------------------------------- the same bug, one level further up */
+
+/*
+ * THE PACK COUNT IS HALF THE SIZE.
+ *
+ * `quantity` is ONE pack's size, so a four-pack of litre bottles is
+ * `quantity: 1, packs: 4` and the litres bought are the product. unitPrice
+ * reads an absent count as 1 — right for a single bottle, silently wrong for
+ * anything else.
+ *
+ * This is the bug at the top of this file happening a second time, one level
+ * further up the pipe. The first time, quantity never reached the helper. The
+ * second time it did and the pack count did not: Insights built each purchase
+ * as {name, price, store, quantity, unit} and dropped `packs` on the way, so a
+ * four-pack of milk at €3.56 was read as €3.56 a litre — and the card named the
+ * OTHER shop as the bargain, with a precise figure beside it, when this one was
+ * four times cheaper per litre.
+ */
+{
+  // Delhaize: 4 × 1 l for €3.56, so €0.89 a litre. Colruyt: one bottle, €1.09.
+  const hint = cheaperStoreHints([
+    buy('Milk', 'delhaize', 356, 1, 'l', 4),
+    buy('Milk', 'colruyt', 109, 1, 'l', 1),
+  ])[0];
+  check('a multipack is priced per litre, not per line', hint.cheapCents, 89);
+  check('...so the cheaper shop is the cheaper shop', hint.cheapStore, 'delhaize');
+  check('...and the dearer one is named as dearer', [hint.dearStore, hint.dearCents], ['colruyt', 109]);
+
+  /*
+   * What the same two purchases produced with the count dropped, kept as the
+   * record of what was actually wrong. Not a hypothetical: this is what the
+   * card showed.
+   */
+  const without = cheaperStoreHints([
+    { name: 'Milk', store: 'delhaize', priceCents: 356, quantity: 1, unit: 'l' },
+    { name: 'Milk', store: 'colruyt', priceCents: 109, quantity: 1, unit: 'l' },
+  ])[0];
+  check('without the count it named the wrong shop', without.cheapStore, 'colruyt');
+}
+
+/*
+ * And the shape has to CARRY it. The helper cannot divide by a number the
+ * caller never sent, and a PricedItem that has `quantity` but not `packs` looks
+ * like it carries the size while carrying half of it.
+ */
+{
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const lib = strip(readFileSync(join(HERE, '..', 'src', 'lib', 'price-intel.ts'), 'utf8'));
+  const screen = strip(readFileSync(join(HERE, '..', 'src', 'app', '(tabs)', 'insights.tsx'), 'utf8'));
+  check('PricedItem carries the pack count', /packs\?: number \| null;/.test(lib), true);
+  check('...and Insights actually sends it', /packs: p\.packs,/.test(screen), true);
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -285,11 +285,21 @@ function SignedInInsights() {
         category: statsByKey.get(p.key)?.category ?? ("other" as ItemCategory),
         priceCents: p.priceCents as number,
         store: p.store,
-        // Carried through, not dropped. Without these the cheaper-elsewhere
-        // card compared €1.20 for 1 L against €2.00 for 2 L and named the
-        // dearer shop as the bargain. See lib/price-intel.ts.
+        /*
+         * Carried through, not dropped. Without these the cheaper-elsewhere
+         * card compared €1.20 for 1 L against €2.00 for 2 L and named the
+         * dearer shop as the bargain. See lib/price-intel.ts.
+         *
+         * `packs` is here for the second half of that same bug. quantity is ONE
+         * pack's size, so without the count a four-pack of litre bottles at
+         * €3.56 read as €3.56 a litre rather than €0.89 — and the card named
+         * the shop that was more expensive, which is the exact failure the
+         * comment above is about. Fixed once for quantity, and the pack count
+         * was still being left behind.
+         */
         quantity: p.quantity,
         unit: p.unit,
+        packs: p.packs,
         // Carried so the range pickers can scope this array; the price helpers
         // ignore it, and a filter that had to re-join against `purchases` would
         // be a second source of truth for what "in this window" means.
