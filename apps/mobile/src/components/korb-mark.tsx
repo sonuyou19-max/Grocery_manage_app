@@ -14,50 +14,61 @@ import Svg, { G, Path } from 'react-native-svg';
  * only ever be white. This inherits a colour and stays crisp at any size.
  *
  * ---------------------------------------------------------------------------
- * Four strokes, and the count is the design
+ * The asymmetry is the mark
  * ---------------------------------------------------------------------------
  *
- * The reference art has ribs down the inside of the basket. They are the first
- * thing to turn to mud: at 28dp they cross the check and the mark reads as a
- * scribble. What survives shrinking is the silhouette — a handle, a rim, a
- * taper — and one gesture inside it. So the ribs are gone, deliberately, and
- * the check is what the extra ink is spent on: it is the app's one recurring
- * shape, on every ticked row and every imported line.
+ * The handle does not arch symmetrically and meet the rim on both sides. It
+ * rises on the left, goes over, and comes down THROUGH the rim to a rounded
+ * terminal below it. That single detail is what stops this reading as a bucket
+ * with a bar across it, and it is the thing a first attempt at this drops —
+ * mine did, along with the slats, and the result was recognisably a basket and
+ * recognisably not THIS basket.
+ *
+ * The two slats down the left are the other half of it. They are the most
+ * fragile part at small sizes and they are kept anyway, because without them
+ * the left of the basket is empty and the whole mark leans right.
  *
  * ---------------------------------------------------------------------------
- * These strings are the brand
+ * Where it is legible, and where it is not
  * ---------------------------------------------------------------------------
  *
- * The same `d` values are in assets/brand/*.svg, which is what the app icon,
- * the Android adaptive icon and the splash PNG are rasterised from. Two copies
- * of a logo drift, and a logo that drifts is one the icon and the app disagree
- * about — so check-brand asserts every path here appears in every one of those
- * files, and fails the build rather than letting them part company.
- */
+ * Drawn at 96 and rendered down: crisp at 128 and 56, muddy by 28. Every
+ * current use is large — the icon, the adaptive foreground, the splash and the
+ * boot screen — so it is drawn whole everywhere it appears today. `parts` is
+ * how a small use would drop the slats rather than shipping mud; nothing needs
+ * it yet, and inventing a second silhouette before something does is how a
+ * brand ends up with two marks.
+ *
 export const KORB_PATHS = {
-  /** Rises from the rim and returns to it, so the two read as one object. */
-  handle: 'M33 40 C33 20 39.5 14 48 14 C56.5 14 63 20 63 40',
-  rim: 'M12 40 H84',
-  /** Sides tapering into a base with real corner radius: a basket, not a bucket. */
-  body: 'M20.5 40 L26.5 70 C27.6 76 31.5 79 37.5 79 H58.5 C64.5 79 68.4 76 69.5 70 L75.5 40',
   /**
-   * Centred in the BODY's width rather than the viewBox's — the taper moves the
-   * middle down here, and a check centred on 48 sits visibly left of the space
-   * it is in.
+   * Up from the rim, over, and down THROUGH it to a rounded terminal. See
+   * above: this stroke is the difference between the mark and a bucket.
    */
-  check: 'M37.5 56.5 L44.5 63.5 L59 49',
+  handle: 'M32 41 C32 22 37.5 15.5 46 15.5 C55 15.5 61 22 60.5 31 L59.5 46',
+  rim: 'M10 41 H86',
+  /** Squat and wide with a narrow base — a basket seen from slightly above. */
+  body: 'M17 41 L23.5 67 C24.6 73 28.5 76 34.5 76 H61.5 C67.5 76 71.4 73 72.5 67 L79 41',
+  /** Weave down the left. Short of both ends, so they read as slats not walls. */
+  slatA: 'M28 46 L31 70',
+  slatB: 'M39.5 46 L41 72',
+  /**
+   * The app's one recurring gesture, sized to be the second thing seen. It
+   * sits right of centre, which is where the slats are not — the basket's
+   * middle is already spoken for.
+   */
+  check: 'M43.5 60 L50.5 67 L66.5 50.5',
 } as const;
 
 /** Stroke weight on the 96-unit grid. Scales with the mark. */
-export const KORB_STROKE = 6.5;
+export const KORB_STROKE = 6.2;
 
 export function KorbMark({
   size = 96,
   color = 'currentColor',
   /**
-   * Fraction of the mark to draw, 0..1, in stroke order: handle, rim, body,
-   * check. Left undefined it draws whole — the animated lockup is the only
-   * caller that wants anything else.
+   * Which strokes to draw. Left undefined it draws whole, which is what every
+   * caller wants today; see the note above on why a reduced variant is not
+   * invented before something needs one.
    */
   parts,
 }: {

@@ -46,14 +46,42 @@ const markTsx = read(join(ROOT, 'src', 'components', 'korb-mark.tsx'));
 const paths = [...markTsx.matchAll(/^\s{2}(\w+): '([^']+)',$/gm)].map(([, k, d]) => [k, d]);
 
 check('the mark has path data', paths.length >= 3, true);
-// The silhouette is what survives shrinking. If a rib or a second gesture
-// arrives later, it has to be a deliberate edit here rather than an accident.
-check('...four strokes, no more', paths.length, 4);
+/*
+ * Named and counted, so a stroke cannot quietly appear or vanish.
+ *
+ * Both have happened. The first attempt at this mark dropped the slats and the
+ * handle's terminal on the grounds that they blur at small sizes — true, and it
+ * produced a basket that was recognisably not the one in the brief. They are
+ * the mark's character and they are load-bearing.
+ */
+check('...six strokes', paths.length, 6);
 check(
   '...named for what they are',
   paths.map(([k]) => k),
-  ['handle', 'rim', 'body', 'check'],
+  ['handle', 'rim', 'body', 'slatA', 'slatB', 'check'],
 );
+/*
+ * The handle descends BELOW the rim to a rounded terminal. A handle that stops
+ * at the rim on both sides is a symmetric arch, which is a bucket — this is the
+ * single stroke that makes the mark itself, so it is asserted rather than left
+ * to survive a tidy-up.
+ */
+{
+  const byName = Object.fromEntries(paths);
+  /*
+   * Read defensively, because a handle that has been flattened back into an
+   * arch has no trailing line segment at all — and the first version of this
+   * indexed the null match, so that mutation CRASHED the guard instead of
+   * failing it. A check that dies is a check whose output nobody reads.
+   */
+  const rimY = Number(byName.rim?.match(/M[\d.]+ ([\d.]+)/)?.[1]);
+  const endY = Number(byName.handle?.match(/L[\d.]+ ([\d.]+)\s*$/)?.[1]);
+  check(
+    'the handle ends below the rim, not on it',
+    Number.isFinite(rimY) && Number.isFinite(endY) && endY > rimY,
+    true,
+  );
+}
 
 /* ------------------------------------- every shipped SVG draws that mark */
 
