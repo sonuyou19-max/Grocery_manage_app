@@ -1,7 +1,7 @@
-import { Image } from 'expo-image';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, StyleSheet, useColorScheme, View } from 'react-native';
 
+import { KorbWordmark } from '@/components/korb-wordmark';
 import { MeshBackground } from '@/components/mesh-background';
 import { hydrateFirstRunFlags } from '@/lib/onboarding';
 import { useAuth } from '@/store/auth';
@@ -132,14 +132,17 @@ export function BootGate({ children }: PropsWithChildren) {
           instead of cutting to it. */}
       <MeshBackground />
       <View style={styles.centre}>
-        <Image
-          source={require('../../assets/images/splash-icon.png')}
-          style={styles.mark}
-          contentFit="contain"
-          // No fade: this picks up exactly where the native splash left off,
-          // and the same mark dissolving back in would read as a flicker.
-          transition={0}
-        />
+        {/*
+          The handover, and why this is a vector now.
+        
+          The native splash paints the same basket at 128dp and hands over on
+          the first frame. This picks it up at the same size, in the same white,
+          on the same centre line — so the mark does not move at the seam — and
+          then the name arrives beside it. Drawn rather than loaded because the
+          PNG can only ever be white and can only ever be one size; see
+          components/korb-mark.
+        */}
+        <KorbWordmark size={128} color="#FFFFFF" wordColor="#FFFFFF" />
         <ActivityIndicator color={colors.accent} />
       </View>
     </View>
@@ -149,9 +152,4 @@ export function BootGate({ children }: PropsWithChildren) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   centre: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.xl },
-  // The splash renders this at 128dp (see app.json); matching it means the mark
-  // does not jump size at the handover. Change one and you must change the
-  // other — the jump is small enough to look like a rendering glitch rather
-  // than a mistake, which is what makes it easy to ship.
-  mark: { width: 128, height: 128 },
 });
