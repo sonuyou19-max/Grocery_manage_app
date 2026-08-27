@@ -12,6 +12,7 @@
     "gen:routes": "node scripts/gen-routes.mjs",
     "gen:mesh-dither": "node scripts/gen-mesh-dither.mjs",
     "typecheck": "node scripts/gen-routes.mjs && tsc --noEmit",
+    "gen:brand": "node scripts/gen-brand.mjs",
     "check:brand": "node scripts/check-brand.mjs",
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:locales": "node scripts/check-locales.mjs",

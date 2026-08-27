@@ -142,7 +142,7 @@ export function BootGate({ children }: PropsWithChildren) {
           PNG can only ever be white and can only ever be one size; see
           components/korb-mark.
         */}
-        <KorbWordmark size={128} color="#FFFFFF" wordColor="#FFFFFF" />
+        <KorbWordmark size={128} />
         <ActivityIndicator color={colors.accent} />
       </View>
     </View>

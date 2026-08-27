@@ -1,24 +1,32 @@
 #!/usr/bin/env node
 /**
- * One logo, in five places, and none of them allowed to drift.
+ * One logo, in seven files, and none of them allowed to drift.
  *
  * ---------------------------------------------------------------------------
  * Why a check rather than care
  * ---------------------------------------------------------------------------
  *
- * The mark exists as path data in components/korb-mark, as three SVGs under
- * assets/brand, and as five PNGs rasterised from those SVGs. Nothing in the
- * build regenerates the PNGs, so a change to the drawn mark alone produces an
- * app whose icon on the home screen is one logo and whose boot screen is
- * another — which is exactly the kind of wrong that ships, because everything
- * looks right on whichever screen the person making the change was looking at.
+ * The mark is not drawn in this repo any more. It is TRACED out of the original
+ * artwork by scripts/gen-brand, which needs a browser and so does not run in
+ * the build — meaning the only thing keeping the icon on the home screen and
+ * the mark on the boot screen in agreement is that somebody remembered to run
+ * it. That is exactly the kind of wrong that ships, because everything looks
+ * right on whichever screen the person making the change was looking at.
  *
- * So the TypeScript is the source and this asserts the rest agrees with it. A
- * `d` string is not something anybody edits twice on purpose.
+ * So: the artwork is the source, and every asset must be no older than it.
+ *
+ * ---------------------------------------------------------------------------
+ * The history this file is a monument to
+ * ---------------------------------------------------------------------------
+ *
+ * The mark was hand-drawn as bezier paths three times and was wrong three
+ * times — recognisably a basket, recognisably not THE basket. Redrawing a logo
+ * is tracing it badly. If the paths ever come back, the checks below fail: the
+ * app must render the traced asset, not an approximation of it.
  *
  * Run with `pnpm --filter mobile check:brand`.
  */
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,136 +45,110 @@ const check = (name, actual, expected) => {
     console.log(`ok   ${name}`);
   }
 };
-
 const read = (p) => readFileSync(p, 'utf8');
+const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-/* ------------------------------------------------ the drawn mark is source */
+/* ------------------------------------------------------ the artwork is source */
 
-const markTsx = read(join(ROOT, 'src', 'components', 'korb-mark.tsx'));
-const paths = [...markTsx.matchAll(/^\s{2}(\w+): '([^']+)',$/gm)].map(([, k, d]) => [k, d]);
+const SOURCE = join(BRAND, 'korb-source.png');
+check('the original artwork is checked in', existsSync(SOURCE), true);
+check('...and the generator with it', existsSync(join(HERE, 'gen-brand.mjs')), true);
 
-check('the mark has path data', paths.length >= 3, true);
 /*
- * Named and counted, so a stroke cannot quietly appear or vanish.
- *
- * Both have happened. The first attempt at this mark dropped the slats and the
- * handle's terminal on the grounds that they blur at small sizes — true, and it
- * produced a basket that was recognisably not the one in the brief. They are
- * the mark's character and they are load-bearing.
- */
-check('...six strokes', paths.length, 6);
-check(
-  '...named for what they are',
-  paths.map(([k]) => k),
-  ['handle', 'rim', 'body', 'slatA', 'slatB', 'check'],
-);
-/*
- * The handle descends BELOW the rim to a rounded terminal. A handle that stops
- * at the rim on both sides is a symmetric arch, which is a bucket — this is the
- * single stroke that makes the mark itself, so it is asserted rather than left
- * to survive a tidy-up.
+ * Nothing in the build runs gen-brand — it needs a headless browser — so the
+ * only evidence the assets came from THIS artwork is that they are no older
+ * than it. Crude, and it catches the failure that actually happens: the source
+ * was replaced and the icons were forgotten.
  */
 {
-  const byName = Object.fromEntries(paths);
-  /*
-   * Read defensively, because a handle that has been flattened back into an
-   * arch has no trailing line segment at all — and the first version of this
-   * indexed the null match, so that mutation CRASHED the guard instead of
-   * failing it. A check that dies is a check whose output nobody reads.
-   */
-  const rimY = Number(byName.rim?.match(/M[\d.]+ ([\d.]+)/)?.[1]);
-  const endY = Number(byName.handle?.match(/L[\d.]+ ([\d.]+)\s*$/)?.[1]);
-  check(
-    'the handle ends below the rim, not on it',
-    Number.isFinite(rimY) && Number.isFinite(endY) && endY > rimY,
-    true,
-  );
-}
-
-/* ------------------------------------- every shipped SVG draws that mark */
-
-/*
- * The icon and the adaptive foreground scale the mark to fit their own masks,
- * so their transforms differ — but the PATHS may not. A logo whose icon has a
- * different basket from its splash is two logos.
- */
-for (const file of ['korb-mark.svg', 'korb-icon.svg', 'korb-adaptive-foreground.svg']) {
-  const svg = read(join(BRAND, file));
-  const missing = paths.filter(([, d]) => !svg.includes(d)).map(([k]) => k);
-  check(`${file} draws the same mark`, missing, []);
-  // The old leaning K, in case a file is ever restored from history rather than
-  // regenerated. Its first stroke is unmistakable.
-  check(`...and none of the old one`, svg.includes('M28.5 73'), false);
-}
-
-/*
- * Stroke weight travels with the paths. The same outline at a different weight
- * is a different logo, and it is the one property that does not announce itself
- * in a diff of `d` strings.
- */
-{
-  const weight = markTsx.match(/KORB_STROKE = ([\d.]+)/)?.[1];
-  check('the stroke weight is stated once', Boolean(weight), true);
-  for (const file of ['korb-mark.svg', 'korb-icon.svg', 'korb-adaptive-foreground.svg']) {
-    check(
-      `${file} strokes it at the same weight`,
-      read(join(BRAND, file)).includes(`stroke-width="${weight}"`),
-      true,
-    );
-  }
-}
-
-/* ----------------------------------------- the PNGs were regenerated too */
-
-/*
- * Nothing in the build rasterises these, so the only evidence they were
- * regenerated is that they are newer than the SVG they come from. Crude, and
- * it catches the failure that actually happens: the mark changed, the SVGs
- * were rewritten, and the icons were forgotten.
- */
-{
-  const svgAt = Math.max(
-    ...['korb-mark.svg', 'korb-icon.svg', 'korb-adaptive-foreground.svg'].map(
-      (f) => statSync(join(BRAND, f)).mtimeMs,
-    ),
-  );
-  const stale = [
+  const sourceAt = statSync(SOURCE).mtimeMs;
+  const generated = [
     'icon.png',
     'favicon.png',
     'splash-icon.png',
     'android-icon-foreground.png',
     'android-icon-monochrome.png',
-  ].filter((f) => statSync(join(IMAGES, f)).mtimeMs < svgAt - 5_000);
-  check('every icon is at least as new as the mark', stale, []);
+    'korb-mark.png',
+    'korb-word.png',
+  ];
+  const missing = generated.filter((f) => !existsSync(join(IMAGES, f)));
+  check('every asset was generated', missing, []);
+  const stale = generated
+    .filter((f) => existsSync(join(IMAGES, f)))
+    .filter((f) => statSync(join(IMAGES, f)).mtimeMs < sourceAt - 5_000);
+  check('...from the artwork that is checked in now', stale, []);
 }
 
-/* ------------------------------------------------- and app.json ships them */
+/*
+ * The hand-drawn mark, in case a file is ever restored from history rather than
+ * regenerated. Its rim stroke is unmistakable, and so is the leaning K before
+ * it. Neither may come back.
+ */
+for (const f of ['korb-mark.svg', 'korb-icon.svg', 'korb-adaptive-foreground.svg']) {
+  check(`the drawn ${f} is gone`, existsSync(join(BRAND, f)), false);
+}
+
+/* --------------------------------------------------- the app draws the trace */
+
+{
+  const mark = strip(read(join(ROOT, 'src', 'components', 'korb-mark.tsx')));
+  check('the mark component loads the traced asset', /assets\/images\/korb-mark\.png/.test(mark), true);
+  check('...and the wordmark its own', /assets\/images\/korb-word\.png/.test(mark), true);
+  // An approximation coming back is the failure this file exists for.
+  check('...and draws no paths of its own', /<Path|KORB_PATHS|stroke-width/.test(mark), false);
+  /*
+   * White source, tinted from there. Tint replaces colour and keeps alpha, so a
+   * white asset tints cleanly to any hue while a coloured one muddies.
+   */
+  /*
+   * BOTH halves. The first version of this asserted the pattern appeared at
+   * all, and passed with the mark's tint deleted because the word still had
+   * one — a check that a lockup is tintable, satisfied by half a lockup.
+   */
+  check('both halves are tintable', (mark.match(/tintColor=\{color\}/g) ?? []).length, 2);
+
+  /*
+   * The lockup's offset is arithmetic, not a measurement: the row slides by half
+   * the word's width, and reading that from onLayout makes the animation's
+   * first frame a guess.
+   */
+  const lockup = strip(read(join(ROOT, 'src', 'components', 'korb-wordmark.tsx')));
+  check('the lockup computes the word width', /const wordW = wordH \* WORD_ASPECT/.test(lockup), true);
+  check('...rather than measuring it', /onLayout/.test(lockup), false);
+  check('...and slides the row, never a width', /translateX: \(1 - open\.value\) \* \(\(wordW \+ GAP\) \/ 2\)/.test(lockup), true);
+  check('Reduce Motion still gets the whole lockup', /if \(reduced\) \{\s*land\.value = 1;\s*open\.value = 1;/.test(lockup), true);
+
+  /*
+   * WORD_ASPECT is the traced piece's own shape. gen-brand prints each piece's
+   * dimensions; if the artwork is re-shot and the word's proportions change,
+   * this constant has to change with it or the lockup stretches the name.
+   */
+  const aspect = read(join(ROOT, 'src', 'components', 'korb-mark.tsx')).match(
+    /WORD_ASPECT = (\d+) \/ (\d+)/,
+  );
+  check('the word aspect is stated as the traced pixels', Boolean(aspect), true);
+}
+
+/* --------------------------------------------------------- and app.json ships */
 
 {
   const app = JSON.parse(read(join(ROOT, 'app.json'))).expo;
   check('the app icon is the generated one', app.icon, './assets/images/icon.png');
-  check('the splash is the mark', app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-splash-screen')[1].image, './assets/images/splash-icon.png');
+  const splash = app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-splash-screen')[1];
+  check('the splash is the mark', splash.image, './assets/images/splash-icon.png');
   check('Android draws the adaptive foreground', app.android.adaptiveIcon.foregroundImage, './assets/images/android-icon-foreground.png');
-}
 
-/* --------------------------------------------- the boot screen draws it too */
-
-/*
- * The handover is the point: the native splash paints the mark and this picks
- * it up on the first frame. Rendering the PNG there would work and would be
- * stuck at one size in one colour — which is what it was, and why the mark is
- * a component now.
- */
-{
-  const boot = read(join(ROOT, 'src', 'components', 'boot-gate.tsx'))
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
-  check('the boot screen draws the vector', /<KorbWordmark/.test(boot), true);
-  check('...rather than the splash PNG', /splash-icon\.png/.test(boot), false);
-  // Same size as app.json's imageWidth, so the mark does not jump at the seam.
-  const app = JSON.parse(read(join(ROOT, 'app.json'))).expo;
-  const splashWidth = app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-splash-screen')[1].imageWidth;
-  check('...at the size the native splash left it', new RegExp(`size=\\{${splashWidth}\\}`).test(boot), true);
+  /*
+   * The handover: the native splash paints the mark and the boot screen picks
+   * it up on the first frame, at the same size, so nothing jumps at the seam.
+   */
+  const boot = strip(read(join(ROOT, 'src', 'components', 'boot-gate.tsx')));
+  check('the boot screen draws the lockup', /<KorbWordmark/.test(boot), true);
+  check(
+    '...at the size the native splash left it',
+    new RegExp(`size=\\{${splash.imageWidth}\\}`).test(boot),
+    true,
+  );
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

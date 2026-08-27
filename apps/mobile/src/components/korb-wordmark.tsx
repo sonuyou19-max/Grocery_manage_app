@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -13,7 +13,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { KorbMark } from '@/components/korb-mark';
+import { KorbMark, KorbWord, WORD_ASPECT } from '@/components/korb-mark';
 import { SPRING } from '@/lib/motion';
 
 /**
@@ -29,7 +29,7 @@ import { SPRING } from '@/lib/motion';
  * it: the shape first, then what the shape is called.
  *
  * ---------------------------------------------------------------------------
- * Nothing animates a width
+ * Nothing animates a width, and nothing is measured
  * ---------------------------------------------------------------------------
  *
  * The obvious build is to grow the word's width from zero and let the row
@@ -43,10 +43,10 @@ import { SPRING } from '@/lib/motion';
  * lands centred. The mark never moves relative to the word — the row moves —
  * and "the word pushed it left" is what that reads as, on one transform.
  *
- * The word's width has to be measured for that, which is the one thing here
- * that costs a frame. It costs nothing visible: before the measurement the word
- * is transparent and the mark is centred, which is the first frame of the
- * animation anyway.
+ * The word's width used to come from onLayout, which cost a frame and made the
+ * animation's first frame a guess. It is arithmetic now: the wordmark is an
+ * image of known aspect, so its width IS its height times WORD_ASPECT, and the
+ * offset is known before anything is drawn.
  */
 
 /** Gap between the mark and the word, in the finished lockup. */
@@ -59,14 +59,20 @@ const WORD_DELAY = 260;
 export function KorbWordmark({
   size = 96,
   color,
-  wordColor,
 }: {
   size?: number;
-  color: string;
-  wordColor: string;
+  /** Applied to both halves, so the lockup is one colour by construction. */
+  color?: string;
 }) {
   const reduced = useReducedMotion();
-  const [wordW, setWordW] = useState(0);
+
+  /*
+   * The word's height, and from it its width. Set against the mark's cap rather
+   * than its full box: the basket's artwork carries its own margin, so matching
+   * box heights would leave the name visibly smaller than the mark beside it.
+   */
+  const wordH = size * 0.42;
+  const wordW = wordH * WORD_ASPECT;
 
   /** 0 = mark alone on the centre line. 1 = the lockup, settled. */
   const open = useSharedValue(0);
@@ -87,13 +93,6 @@ export function KorbWordmark({
       return;
     }
     land.value = withSpring(1, SPRING.settle);
-    return () => cancelAnimation(land);
-  }, [land, open, reduced]);
-
-  useEffect(() => {
-    // Nothing to push until the word has been measured, and starting before
-    // then would slide the row by a distance that is about to change.
-    if (reduced || wordW === 0) return;
     open.value = withDelay(
       WORD_DELAY,
       withTiming(1, {
@@ -104,8 +103,11 @@ export function KorbWordmark({
         reduceMotion: ReduceMotion.System,
       }),
     );
-    return () => cancelAnimation(open);
-  }, [open, reduced, wordW]);
+    return () => {
+      cancelAnimation(land);
+      cancelAnimation(open);
+    };
+  }, [land, open, reduced]);
 
   /*
    * Half the word plus the gap, undone as `open` runs. At 0 that offset puts
@@ -135,14 +137,7 @@ export function KorbWordmark({
         </Animated.View>
 
         <Animated.View style={word}>
-          <Text
-            // Measured once. The name does not change length while it is on
-            // screen, and re-measuring would restart a finished animation.
-            onLayout={(e) => setWordW((prev) => (prev === 0 ? e.nativeEvent.layout.width : prev))}
-            style={[styles.word, { color: wordColor, fontSize: size * 0.62 }]}
-          >
-            Korb
-          </Text>
+          <KorbWord height={wordH} color={color} />
         </Animated.View>
       </Animated.View>
     </View>
@@ -152,15 +147,4 @@ export function KorbWordmark({
 const styles = StyleSheet.create({
   root: { alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: GAP },
-  /*
-   * The wordmark, not body text. Heavy and tightly tracked to match the
-   * reference lettering, and `includeFontPadding: false` so Android's own line
-   * padding does not push the word off the mark's optical centre — the one
-   * place the two platforms would otherwise disagree about this lockup.
-   */
-  word: {
-    fontWeight: '800',
-    letterSpacing: -1.5,
-    includeFontPadding: false,
-  },
 });
