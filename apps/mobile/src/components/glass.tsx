@@ -2,6 +2,7 @@ import type { PropsWithChildren } from 'react';
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Frosted } from '@/components/frosted';
+import { useOnScrim } from '@/components/sheet';
 import { radii, useTheme } from '@/theme';
 
 interface GlassViewProps extends PropsWithChildren {
@@ -39,10 +40,24 @@ export function GlassView({
 }: GlassViewProps) {
   const { colors } = useTheme();
 
+  /*
+   * A `content` surface INSIDE a scrimmed sheet is really a `scrim` surface,
+   * and asking each call site to know that is how one of them ends up wrong.
+   *
+   * It is read from the Sheet rather than passed down because the sheets are
+   * written all over the app and this is not a fact about any of them — it is a
+   * fact about the thing they are inside. The Edit item sheet came out
+   * grey-green on iOS because a blur takes on what is behind it, and behind it
+   * was 45% black; nothing in that file was wrong, and nothing in it could have
+   * said so. See components/frosted.
+   */
+  const onScrim = useOnScrim();
+  const surface = over === 'content' && onScrim ? 'scrim' : over;
+
   return (
     <Frosted
       intensity={intensity}
-      over={over}
+      over={surface}
       style={[
         styles.base,
         { borderRadius: radius, borderColor: accented ? colors.accent : colors.glassBorder },

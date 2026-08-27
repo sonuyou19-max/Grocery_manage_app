@@ -382,5 +382,70 @@ if (!locale) {
   console.log('ok   the first frame paints the splash colour, not nothing');
 }
 
+/* ------------------------------------------- and the surface ON a scrim --- */
+
+/*
+ * A blur does two things, and only the first was accounted for.
+ *
+ * It hides what is behind it — which is what `over` was invented for, and why
+ * Android's `content` fill is opaque. It ALSO takes on the colour of what is
+ * behind it, and that one is iOS-only: behind a dialog on a dimmed page is 45%
+ * black, so the Edit item sheet sampled the scrim, came out grey-green, and
+ * read as though the whole form were disabled.
+ *
+ * `scrim` is therefore opaque on BOTH platforms. Asserted structurally because
+ * the failure is a colour on one platform — the kind of thing that ships when
+ * the person changing it is looking at the other one.
+ */
+{
+  const grab = (f) => readFileSync(join(SRC, 'components', f), 'utf8');
+  const frosted = grab('frosted.tsx');
+  const glass = grab('glass.tsx');
+  const sheet = grab('sheet.tsx');
+  const check = (name, actual, expected) => {
+    if (JSON.stringify(actual) === JSON.stringify(expected)) console.log(`ok   ${name}`);
+    else fail(name, [`  expected ${JSON.stringify(expected)}`, `  actual   ${JSON.stringify(actual)}`]);
+  };
+
+  check('a scrimmed surface is its own kind', /over === 'scrim'/.test(frosted), true);
+  /*
+   * BEFORE the platform branch. Below it, iOS would fall through to the blur
+   * and the fix would apply on Android only — where there was never a problem.
+   */
+  check(
+    '...handled before the platform branch, not after it',
+    frosted.indexOf("over === 'scrim'") < frosted.indexOf("Platform.OS !== 'ios'"),
+    true,
+  );
+  /*
+   * The scrim BRANCH, extracted — not a window after the match.
+   *
+   * This was `/over === 'scrim'[\s\S]{0,400}overlaySolid/`, and 400 characters
+   * reaches past the branch into the Android one, which uses the same token. It
+   * passed with the scrim surface set to a translucent fill: an assertion about
+   * one branch, satisfied by the next one down. The same spill has now cost
+   * three checks in this repo.
+   */
+  {
+    const from = frosted.indexOf("if (over === 'scrim')");
+    const branch = from < 0 ? '' : frosted.slice(from, frosted.indexOf('\n  }', from));
+    check('...and is opaque', /backgroundColor: colors\.overlaySolid/.test(branch), true);
+    check('...with no blur in it at all', /BlurView|glassFill/.test(branch), false);
+  }
+
+  /*
+   * Read from the Sheet, not passed by hand. Asking twenty call sites to know
+   * whether they are on a scrim is how one of them ends up wrong.
+   */
+  check('the sheet publishes whether it dims', /scrim: boolean;/.test(sheet), true);
+  check('...through a hook that does not throw outside one', /useContext\(Ctx\)\?\.scrim \?\? false/.test(sheet), true);
+  check('...and GlassView reads it', /const onScrim = useOnScrim\(\)/.test(glass), true);
+  check(
+    "...upgrading a content surface that sits on one",
+    /over === 'content' && onScrim \? 'scrim' : over/.test(glass),
+    true,
+  );
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

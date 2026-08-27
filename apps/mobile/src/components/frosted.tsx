@@ -60,6 +60,24 @@ import { useTheme } from '@/theme';
  * The one place a real blur is load-bearing is components/teaser.tsx, where it
  * exists to make invented sample figures unreadable. That one keeps its
  * BlurView on both platforms, and check-blur.mjs knows it is the exception.
+ *
+ * ---------------------------------------------------------------------------
+ * And `scrim`, which is the case iOS got wrong
+ * ---------------------------------------------------------------------------
+ *
+ * The rule above is about what shows THROUGH a surface. There is a second thing
+ * a blur does, and only on iOS: it takes on the colour of what is behind it.
+ *
+ * Behind a dialog on a dimmed page is 45% black. So the Edit item sheet — a
+ * BlurView with a 55% white wash — sampled the scrim, came out grey-green, and
+ * read as though the whole form were disabled. Android never had it, because
+ * `over="content"` there is already an opaque fill; a plain View cannot absorb
+ * a colour it was not given.
+ *
+ * `scrim` is therefore opaque on BOTH platforms, and does not blur at all on
+ * either. Nothing is visible through it to justify the effect: the page behind
+ * has already been dimmed to 45% black on purpose, and blurring that only
+ * spreads it onto the one surface that must stay readable.
  */
 interface FrostedProps extends PropsWithChildren {
   /** iOS blur strength (0–100). Ignored on Android, which does not blur. */
@@ -67,16 +85,34 @@ interface FrostedProps extends PropsWithChildren {
   /**
    * What is behind this surface. `mesh` (default) is the gradient background —
    * a translucent fill is right there. `content` is anything else, and gets an
-   * opaque fill so text and controls underneath cannot read through. See the
-   * note above; getting this wrong is visible immediately.
+   * opaque fill on Android so text and controls underneath cannot read through.
+   * `scrim` is a dimmed page, and is opaque on both platforms because on iOS a
+   * blur would take the dimming on. See the note above; getting this wrong is
+   * visible immediately.
+   *
+   * Sheets do not pass `scrim` by hand — GlassView reads it from the Sheet they
+   * are in, so a dialog cannot be given the wrong one by being written later.
    */
-  over?: 'mesh' | 'content';
+  over?: 'mesh' | 'content' | 'scrim';
   style?: StyleProp<ViewStyle>;
   pointerEvents?: ViewStyle['pointerEvents'];
 }
 
 export function Frosted({ intensity, over = 'mesh', style, pointerEvents, children }: FrostedProps) {
   const { colors, scheme } = useTheme();
+
+  /*
+   * Opaque on both platforms, and no blur on either. See the note above: there
+   * is nothing to see through, and on iOS the blur would pick up the 45% black
+   * the page was deliberately dimmed with.
+   */
+  if (over === 'scrim') {
+    return (
+      <View style={[style, { backgroundColor: colors.overlaySolid }]} pointerEvents={pointerEvents}>
+        {children}
+      </View>
+    );
+  }
 
   if (Platform.OS !== 'ios') {
     const fill = over === 'content' ? colors.overlaySolid : colors.glassSolid;

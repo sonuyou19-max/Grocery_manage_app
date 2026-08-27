@@ -85,6 +85,16 @@ interface SheetApi {
   dismiss: (action?: () => void) => void;
   /** The pull-down gesture, for sheets that slide. Null for the others. */
   drag: PanGesture | null;
+  /**
+   * Whether this sheet dims the page behind it.
+   *
+   * Published so the card can stop being translucent. A frosted surface on iOS
+   * samples what is behind it, and behind a scrimmed sheet is 45% black — so
+   * the card came out grey-green and the whole dialog read as disabled. Android
+   * never had it, because `over="content"` there is an opaque fill; the blur is
+   * the only thing that can absorb a colour it was not given.
+   */
+  scrim: boolean;
 }
 
 const Ctx = createContext<SheetApi | null>(null);
@@ -94,6 +104,17 @@ export function useSheetDismiss(): SheetApi["dismiss"] {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useSheetDismiss must be used within a <Sheet>");
   return ctx.dismiss;
+}
+
+/**
+ * Whether the surface you are drawing sits on a dimmed page.
+ *
+ * Answers false outside a Sheet rather than throwing, unlike useSheetDismiss —
+ * every frosted surface in the app asks this, and most of them are cards on a
+ * screen. "Am I on a scrim" has a correct answer there and it is no.
+ */
+export function useOnScrim(): boolean {
+  return useContext(Ctx)?.scrim ?? false;
 }
 
 /**
@@ -359,8 +380,8 @@ export function Sheet({
   );
 
   const api = useMemo<SheetApi>(
-    () => ({ dismiss, drag: motion === "slide" ? drag : null }),
-    [dismiss, drag, motion],
+    () => ({ dismiss, drag: motion === "slide" ? drag : null, scrim }),
+    [dismiss, drag, motion, scrim],
   );
 
   const body = (
