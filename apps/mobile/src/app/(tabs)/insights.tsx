@@ -39,6 +39,7 @@ import {
   type HeaviestStaple,
 } from "@/lib/eco";
 import { ItemEmoji } from "@/components/item-emoji";
+import { CATEGORY_EMOJI } from "@/lib/item-emoji";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { basketBalance, basketItems } from "@/lib/nutrition";
 import { hasStopped } from "@/lib/pantry-intel";
@@ -99,6 +100,15 @@ interface StapleDatum {
   key: string;
   display: string;
   times: number;
+  /**
+   * The aisle, so the row can draw a glyph.
+   *
+   * From the PURCHASE, not from the pantry: the log records the category at the
+   * time of buying, which is migration 0023's whole point — a category the user
+   * corrected by hand survives a rebuild, and a staple that has since been
+   * deleted from the pantry still knows what it was.
+   */
+  category: ItemCategory;
 }
 
 /**
@@ -243,14 +253,20 @@ function SignedInInsights() {
    * question.
    */
   const staples = useMemo(() => {
-    const counts = new Map<
-      string,
-      { key: string; display: string; times: number }
-    >();
+    const counts = new Map<string, StapleDatum>();
     for (const p of withinRange(purchases, stapleRange, now)) {
       const found = counts.get(p.key);
       if (found) found.times += 1;
-      else counts.set(p.key, { key: p.key, display: p.name, times: 1 });
+      else
+        counts.set(p.key, {
+          key: p.key,
+          display: p.name,
+          times: 1,
+          // The FIRST purchase in range decides the glyph. They are the same
+          // item, so a later row disagreeing about its aisle is a correction
+          // that has not reached the older rows rather than a second thing.
+          category: p.category ?? 'other',
+        });
     }
     return [...counts.values()].sort((a, b) => b.times - a.times);
   }, [purchases, stapleRange, now]);
@@ -682,6 +698,19 @@ function SignedInInsights() {
             </View>
             {spendByCat.map((x) => (
               <View key={x.category} style={styles.row}>
+                {/*
+                  `glyph`, not a name lookup. These rows are AISLES rather than
+                  items — "Fruit & Veg" is not a thing anybody buys — so there is
+                  no name to resolve and asking emojiFor to match a translated
+                  category label would find nothing in six languages out of
+                  seven. CATEGORY_EMOJI is keyed on the category itself and is
+                  right in all of them.
+                */}
+                <ItemEmoji
+                  name={x.category}
+                  category={x.category}
+                  glyph={CATEGORY_EMOJI[x.category]}
+                />
                 <Text style={[type.sub, styles.grow, { color: colors.ink }]}>
                   {categoryLabel(x.category, t)}
                 </Text>
@@ -857,6 +886,10 @@ function StapleRow({ staple }: { staple: StapleDatum }) {
   const t = useT();
   return (
     <>
+      {/* Resolved from the NAME, which is what ItemEmoji is for: these are
+          items, and "Bananas" has a glyph of its own that the category's
+          generic one would throw away. */}
+      <ItemEmoji name={staple.display} category={staple.category} />
       <Text
         style={[type.body, styles.grow, { color: colors.ink }]}
         numberOfLines={1}

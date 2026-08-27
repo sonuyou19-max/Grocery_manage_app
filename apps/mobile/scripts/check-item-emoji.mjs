@@ -183,5 +183,42 @@ const values = Object.values(mod.CATEGORY_EMOJI);
 check('every category has a distinct-enough set', values.length, CATEGORIES.length);
 check('no category emoji is empty', values.every((v) => typeof v === 'string' && v.length > 0), true);
 
+/* ------------------------------------------- the two Insights cards -------- */
+
+/*
+ * `name` or `glyph`, and the choice is not cosmetic.
+ *
+ * ItemEmoji resolves a glyph from the NAME, falling back to the category. That
+ * is right for a staple — "Bananas" has its own glyph and the aisle's generic
+ * one would throw it away — and wrong for the spending card, whose rows are
+ * AISLES. "Fruit & Veg" is not a thing anybody buys, so there is no name to
+ * resolve, and asking emojiFor to match a translated category label finds
+ * nothing in six languages out of seven. CATEGORY_EMOJI is keyed on the
+ * category itself and is right in all of them.
+ */
+{
+  const src = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'insights.tsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const failed = [];
+  const want = (name, ok) => { if (!ok) failed.push(name); };
+
+  want('a staple draws a glyph', /<ItemEmoji name=\{staple\.display\} category=\{staple\.category\}/.test(src));
+  // From the purchase, not the pantry: the log records the aisle at buying
+  // time, so a corrected category survives and a deleted item keeps its glyph.
+  want('...with the aisle the purchase recorded', /category: p\.category \?\? 'other'/.test(src));
+
+  want('a spending row draws one too', /glyph=\{CATEGORY_EMOJI\[x\.category\]\}/.test(src));
+  want('...and imports the map to do it', /import \{ CATEGORY_EMOJI \} from "@\/lib\/item-emoji"/.test(src));
+
+  if (failed.length) {
+    failures += 1;
+    console.log('FAIL the Insights rows draw their glyphs');
+    for (const f of failed) console.log(`  ${f}`);
+  } else {
+    console.log('ok   the staples and spending rows both draw a glyph');
+  }
+}
+
 console.log(failures === 0 ? 'ALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
