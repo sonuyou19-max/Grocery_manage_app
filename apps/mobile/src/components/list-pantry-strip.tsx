@@ -4,15 +4,42 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ItemEmoji } from '@/components/item-emoji';
 import { recallItemList } from '@/lib/item-home-list';
-import { dueAt, isDue, normalizeKey, type ItemStat } from '@/lib/pantry-intel';
+import { isDue, normalizeKey, type ItemStat } from '@/lib/pantry-intel';
+import { purchaseCounts, usualBuys } from '@/lib/usual-buys';
 import { useGroceries, type List } from '@/store/groceries';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
- * "Running low" chips shown inside a list — the pantry surfaced where you'd act
- * on it, instead of only living behind its own tab.
+ * The regulars for this list — what the household buys often, one tap away.
+ *
+ * ---------------------------------------------------------------------------
+ * It counts, it does not predict
+ * ---------------------------------------------------------------------------
+ *
+ * This showed what was DUE, which is a different question from the one its
+ * heading asks. "You usually buy" is about how often something is bought, and a
+ * burn-rate prediction can put an item there that was bought once and is merely
+ * overdue by its category's default guess. The rule is lib/usual-buys now:
+ * bought at least twice, among the most-bought, ties included.
+ *
+ * ---------------------------------------------------------------------------
+ * Anything on the list is off the strip — ticked or not
+ * ---------------------------------------------------------------------------
+ *
+ * The exclusion used to skip only UNTICKED rows, on the reasoning that ticked
+ * ones are past shops and suggesting them again is the point. True of a shop
+ * from last week, and false of the one on screen: a receipt import ticks every
+ * row it matches and adds the rest already bought, so the strip cheerfully
+ * offered back the bread sitting in "added to pantry" a few centimetres below
+ * it.
+ *
+ * Both are covered by excluding everything currently on the list, because the
+ * list this reads is the SWEPT one — a finished shop's rows leave on their own
+ * (see lib/list-sweep), and the item becomes suggestible again the moment they
+ * do. Which is the original intent, without recommending something visible in
+ * the same scroll.
  *
  * This is a **lens, not a partition**. The burn-rate maths still runs over one
  * unified pantry; this only filters which of those items are worth showing here,
@@ -25,21 +52,20 @@ import { radii, spacing, type, useTheme } from '@/theme';
  * haven't shopped from yet stays clean.
  */
 
-const MAX_CHIPS = 6;
 
 export function ListPantryStrip({ list }: { list: List }) {
   const { colors } = useTheme();
   const t = useT();
-  const { stats, markAlmostOut } = usePantryIntel();
+  const { stats, purchases, markAlmostOut } = usePantryIntel();
   const { addOrReviveItem } = useGroceries();
 
-  const due = useMemo(() => {
-    const now = Date.now();
-    // Anything already waiting on this list is redundant here. Ticked-off rows
-    // don't count — those are past shops, and suggesting them again is the point.
-    const queued = new Set(
-      list.items.filter((it) => !it.checked).map((it) => normalizeKey(it.name)),
-    );
+  const usual = useMemo(() => {
+    /*
+     * Everything on the list, ticked or not. See the note above: a ticked row is
+     * only a "past shop" once the sweep has taken it, and until then it is
+     * visible on this very screen.
+     */
+    const onList = new Set(list.items.map((it) => normalizeKey(it.name)));
     /*
      * The household's answer first, this device's memory only as a fallback.
      *
@@ -55,13 +81,13 @@ export function ListPantryStrip({ list }: { list: List }) {
      * before this device wrote the home list to it.
      */
     const homeOf = (s: ItemStat) => s.homeList ?? recallItemList(s.display);
-    return Object.values(stats)
-      .filter((s) => isDue(s, now) && !queued.has(s.key) && homeOf(s) === list.id)
-      .sort((a, b) => dueAt(a) - dueAt(b))
-      .slice(0, MAX_CHIPS);
-  }, [stats, list.items, list.id]);
+    return usualBuys(
+      Object.values(stats).filter((s) => !onList.has(s.key) && homeOf(s) === list.id),
+      purchaseCounts(purchases),
+    );
+  }, [stats, purchases, list.items, list.id]);
 
-  if (due.length === 0) return null;
+  if (usual.length === 0) return null;
 
   const add = (item: ItemStat) => {
     addOrReviveItem(list.id, {
@@ -70,7 +96,17 @@ export function ListPantryStrip({ list }: { list: List }) {
       quantity: null,
       unit: null,
     });
-    markAlmostOut(item.key);
+    /*
+     * Only when it really is due, and that condition is new with the strip's
+     * meaning.
+     *
+     * markAlmostOut teaches the burn rate: it pulls the learned interval down
+     * toward the gap observed so far. That is the right lesson from "I am
+     * running out early" and the wrong one from "this is my usual bread" —
+     * adding a weekly loaf two days after buying one would tell the model the
+     * household gets through bread in two days, and it would keep saying so.
+     */
+    if (isDue(item, Date.now())) markAlmostOut(item.key);
   };
 
   return (
@@ -84,7 +120,7 @@ export function ListPantryStrip({ list }: { list: List }) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {due.map((item) => (
+        {usual.map((item) => (
           <Pressable
             key={item.key}
             onPress={() => add(item)}
