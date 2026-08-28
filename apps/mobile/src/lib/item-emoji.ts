@@ -89,6 +89,23 @@ const ITEM_EMOJI: Record<string, string> = {
   // --- vegetables ----------------------------------------------------------
   tomato: '🍅', tomatoes: '🍅', tomate: '🍅', tomaten: '🍅', tomates: '🍅',
   pomodoro: '🍅', pomodori: '🍅', pomidory: '🍅', pomidor: '🍅',
+  /*
+   * Cherry tomatoes are a tomato, and the word scan says otherwise.
+   *
+   * `cherry` is in this table, comes first, and wins — so the whole phrase came
+   * back 🍒. A qualifier that is itself a food beating the noun it qualifies is
+   * the same shape as `water colour` and `almond milk`, both fixed above by
+   * rules; this one is fixed by naming the phrase, because the head noun sits
+   * LAST here and no positional rule that fixes it leaves `olive oil` alone.
+   *
+   * Whole-name entries are tier one, above both the lexicon and the word scan,
+   * so these settle it before `cherry` is ever looked at.
+   */
+  'cherry tomato': '🍅', 'cherry tomatoes': '🍅', cherrytomaat: '🍅',
+  kerstomaat: '🍅', kerstomaten: '🍅', cherrytomaten: '🍅',
+  kirschtomate: '🍅', kirschtomaten: '🍅', 'tomate cerise': '🍅',
+  'tomates cerises': '🍅', 'tomate cherry': '🍅', 'tomates cherry': '🍅',
+  pomodorino: '🍅', pomodorini: '🍅', 'pomidorki koktajlowe': '🍅',
   potato: '🥔', potatoes: '🥔', kartoffel: '🥔', kartoffeln: '🥔', aardappel: '🥔',
   aardappels: '🥔', patata: '🥔', patatas: '🥔', patate: '🥔', ziemniaki: '🥔',
   onion: '🧅', onions: '🧅', zwiebel: '🧅', zwiebeln: '🧅', oignon: '🧅', oignons: '🧅',

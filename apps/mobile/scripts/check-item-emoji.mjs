@@ -104,6 +104,22 @@ check('surrounding space is ignored', mod.emojiFor('  Milk  ', 'other'), mod.emo
 
 check('"olive oil" is the oil, not the olive', mod.emojiFor('Olive oil', 'pantry'), '🫒');
 check('"ice cream" is not an ice cube', mod.emojiFor('Ice cream', 'frozen'), '🍨');
+/*
+ * "cherry tomatoes" came back 🍒. `cherry` is in the table, comes first in the
+ * word scan, and won — a qualifier that happens to be a food beating the noun
+ * it qualifies, the same shape as the two above.
+ *
+ * It mattered more than a wrong icon. The glyph is evidence in two places: the
+ * offline matcher's fourth rung, and the veto that refuses the model's
+ * matches — so a cherry-tomato line would have been REFUSED its tomato row on
+ * the strength of a fruit it is not.
+ */
+check('"cherry tomatoes" is a tomato', mod.emojiFor('Cherry tomatoes', 'fruit_veg'), '🍅');
+check('...singular too', mod.emojiFor('cherry tomato', 'fruit_veg'), '🍅');
+check('...and in Dutch, on a Belgian till', mod.emojiFor('Kerstomaten', 'fruit_veg'), '🍅');
+check('...and in French', mod.emojiFor('Tomates cerises', 'fruit_veg'), '🍅');
+// The plain fruit is untouched — the fix is a phrase, not a demotion.
+check('a cherry is still a cherry', mod.emojiFor('Cherries', 'fruit_veg'), '🍒');
 check('"icecream" joined also works', mod.emojiFor('icecream', 'frozen'), '🍨');
 check('a modifier before a known word still matches', mod.emojiFor('Whole milk', 'dairy_eggs'), '🥛');
 check('a modifier after a known word still matches', mod.emojiFor('Milk semi-skimmed', 'dairy_eggs'), '🥛');

@@ -293,6 +293,88 @@ function glyph(name: string, category: ItemCategory = 'other'): string | null {
 }
 
 /**
+ * The purchase's glyph: the extractor's, else resolved from its own names.
+ *
+ * Shared by the matching rung below and the veto further down, so the two
+ * cannot end up with different ideas of what a line looks like — a veto reading
+ * a different glyph from the rung it polices would refuse matches for reasons
+ * the rung could never have had.
+ */
+function purchaseGlyph(p: ReceiptPurchase): string | null {
+  return (
+    p.emoji ??
+    [p.name, p.expanded, p.translated]
+      .filter((n): n is string => !!n)
+      .map((n) => glyph(n, p.category ?? 'other'))
+      .find((x): x is string => x != null) ??
+    null
+  );
+}
+
+/**
+ * Is this match refuted by what we already know about both sides?
+ *
+ * ---------------------------------------------------------------------------
+ * Why the model needs a second opinion at all
+ * ---------------------------------------------------------------------------
+ *
+ * A real Delhaize scan matched `RODE AZIJN 750G` — red vinegar — to a list row
+ * called `red onion`. Both are red; nothing else about them agrees. The prompt
+ * warns the model off brands and off pack sizes and tells it to answer null
+ * rather than guess, and it guessed anyway, because a shared adjective looks
+ * like evidence when you are reading one line at a time.
+ *
+ * That failure is invisible after the fact. €1.89 lands on the onions, the
+ * vinegar is never recorded, and the price history that feeds every comparison
+ * in the app is quietly wrong about both — for as long as the history is kept.
+ *
+ * ---------------------------------------------------------------------------
+ * Two signals, either of which may refuse
+ * ---------------------------------------------------------------------------
+ *
+ * GLYPH. The curated table resolved 🧴 for the vinegar and 🧅 for the onion. It
+ * does not know what a thing IS, but two confident and different glyphs is the
+ * table saying these are not the same concept.
+ *
+ * CATEGORY. Shampoo is personal care and apples are fruit. The aisles disagree
+ * even where the glyphs are silent — `toilet paper` resolves to the household
+ * fallback, so it has no glyph of its own to compare.
+ *
+ * Either one is enough. They fail in different places, which is the point of
+ * having both.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it cannot refuse the ordinary case
+ * ---------------------------------------------------------------------------
+ *
+ * `glyph` returns null when a name only reaches its category's own fallback,
+ * and that single rule is what keeps this quiet on the matches the feature
+ * exists to make. 🍞 IS the bakery fallback, so a list row called `bread` has no
+ * confident glyph and `baguette` 🥖 is free to match it. Same for `chicken`
+ * against `chicken breast`, and `fish` against `smoked salmon`.
+ *
+ * This never PROPOSES a match. It only refuses one, and the asymmetry is the
+ * whole argument: a refused match is a row in the review sheet somebody fixes
+ * with one tap, and an accepted wrong one is a number nobody will ever question.
+ */
+export function refutes(p: ReceiptPurchase, candidate: ListCandidate): string | null {
+  const pg = purchaseGlyph(p);
+  const cg = glyph(candidate.name, candidate.category);
+  if (pg && cg && pg !== cg) return `glyph ${pg}≠${cg}`;
+
+  /*
+   * 'other' is not an aisle, it is the absence of one — the value every item
+   * carries before anything has categorised it. Treating it as a disagreement
+   * would refuse most matches on most lists.
+   */
+  const pc = p.category;
+  const cc = candidate.category;
+  if (pc && pc !== 'other' && cc !== 'other' && pc !== cc) return `category ${pc}≠${cc}`;
+
+  return null;
+}
+
+/**
  * Which list row is this purchase, if any.
  *
  * ---------------------------------------------------------------------------
@@ -376,10 +458,7 @@ export function matchPurchases(
 
     // Rung four. The purchase's own glyph — from the extractor when it offered
     // one, else resolved from its names.
-    const g =
-      p.emoji ??
-      names.map((n) => glyph(n, p.category ?? 'other')).find((x): x is string => x != null) ??
-      null;
+    const g = purchaseGlyph(p);
 
     if (g) {
       const sharing = free.filter((l) => glyph(l.name, l.category) === g);
@@ -437,14 +516,24 @@ export interface AiMatch {
  * were free, and — for exact and plural matches — they are not judgement calls
  * at all. A model disagreeing with `normalizeKey` equality is a model that is
  * wrong.
+ *
+ * And `refutes` is the last of those refusals: what the device already knows
+ * about both sides, allowed to overrule what the model decided about them. See
+ * that function for the receipt that made it necessary.
+ *
+ * `purchases` is required rather than optional on purpose. It is only needed for
+ * the veto, so an optional parameter would let a caller silently switch the veto
+ * off by forgetting it — the compiler catching that is worth the two words.
  */
 export function applyAiMatches(
   matches: Map<string, MatchOutcome>,
   answers: readonly AiMatch[],
   list: readonly ListCandidate[],
+  purchases: readonly ReceiptPurchase[],
 ): Map<string, MatchOutcome> {
   const out = new Map(matches);
-  const known = new Set(list.map((l) => l.id));
+  const known = new Map(list.map((l) => [l.id, l]));
+  const byKey = new Map(purchases.map((p) => [p.key, p]));
   // Seeded with whatever the offline rungs already took, so the model cannot
   // hand a second line an item that is spoken for.
   const claimed = new Set(
@@ -456,8 +545,18 @@ export function applyAiMatches(
     if (!current) continue;
     if (current.kind === 'matched') continue;
     if (a.itemId == null) continue;
-    if (!known.has(a.itemId)) continue;
+    const candidate = known.get(a.itemId);
+    if (!candidate) continue;
     if (claimed.has(a.itemId)) continue;
+
+    /*
+     * The veto. A purchase this call was not given cannot be checked, and an
+     * uncheckable match is refused rather than waved through — the one caller
+     * passes every purchase, so a miss here means the wiring is wrong, and
+     * accepting on a wiring fault is how a safety net goes quiet.
+     */
+    const p = byKey.get(a.key);
+    if (!p || refutes(p, candidate)) continue;
 
     claimed.add(a.itemId);
     out.set(a.key, { kind: 'matched', itemId: a.itemId, how: `ai ${a.confidence}` });

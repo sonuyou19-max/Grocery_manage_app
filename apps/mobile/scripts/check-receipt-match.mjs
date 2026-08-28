@@ -404,14 +404,14 @@ const aiCase = () => {
 
 {
   const { ps, base } = aiCase();
-  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'cheese', confidence: 'high' }], LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'cheese', confidence: 'high' }], LIST, ps);
   eq('a sound answer is taken', got.get(ps[0].key).itemId, 'cheese');
   eq("...and labelled as the model's, not an offline rung", got.get(ps[0].key).how, 'ai high');
 }
 
 {
   const { ps, base } = aiCase();
-  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'not-a-real-id', confidence: 'high' }], LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'not-a-real-id', confidence: 'high' }], LIST, ps);
   eq('an invented id is dropped, not corrected', got.get(ps[0].key).kind, 'unmatched');
 }
 
@@ -424,6 +424,7 @@ const aiCase = () => {
       { key: ps[1].key, itemId: 'cheese', confidence: 'high' },
     ],
     LIST,
+    ps,
   );
   eq('one list row, one claim — the first answer wins', got.get(ps[0].key).itemId, 'cheese');
   eq('...and the second is left unmatched', got.get(ps[1].key).kind, 'unmatched');
@@ -439,7 +440,7 @@ const aiCase = () => {
     line('DELIO CHICKY SAMOU', { totalCents: 359 }),
   ]);
   const base = matchPurchases(ps, LIST);
-  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'milk', confidence: 'high' }], LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'milk', confidence: 'high' }], LIST, ps);
   eq('the model cannot overturn an exact match', got.get(ps[0].key).itemId, 'avocado');
 }
 
@@ -453,13 +454,13 @@ const aiCase = () => {
     line('DELIO CHICKY SAMOU', { totalCents: 359 }),
   ]);
   const base = matchPurchases(ps, LIST);
-  const got = applyAiMatches(base, [{ key: ps[1].key, itemId: 'avocado', confidence: 'high' }], LIST);
+  const got = applyAiMatches(base, [{ key: ps[1].key, itemId: 'avocado', confidence: 'high' }], LIST, ps);
   eq('a row already claimed offline stays claimed', got.get(ps[1].key).kind, 'unmatched');
 }
 
 {
-  const { base } = aiCase();
-  const got = applyAiMatches(base, [{ key: 'a-key-never-sent', itemId: 'cheese', confidence: 'high' }], LIST);
+  const { ps, base } = aiCase();
+  const got = applyAiMatches(base, [{ key: 'a-key-never-sent', itemId: 'cheese', confidence: 'high' }], LIST, ps);
   /*
    * Asserted on the map's SHAPE, not on some other line still being unmatched.
    * The first version checked the latter and passed a mutation that happily
@@ -472,7 +473,7 @@ const aiCase = () => {
 
 {
   const { ps, base } = aiCase();
-  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: null, confidence: 'low' }], LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: null, confidence: 'low' }], LIST, ps);
   eq('a null answer is a real answer, and leaves the line alone', got.get(ps[0].key).kind, 'unmatched');
 }
 
@@ -484,8 +485,114 @@ const aiCase = () => {
   const ps = groupLines([line('paneer nvf', { emoji: '🧀', totalCents: 437 })]);
   const base = matchPurchases(ps, LIST);
   eq('the glyph rung leaves it open', base.get(ps[0].key).kind, 'ambiguous');
-  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'paneer', confidence: 'high' }], LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'paneer', confidence: 'high' }], LIST, ps);
   eq('...and the model resolves it', got.get(ps[0].key).itemId, 'paneer');
+}
+
+/* ------------------------------------------------------------- the veto -- */
+
+/*
+ * WHAT THIS IS FOR. A real Delhaize scan matched "RODE AZIJN 750G" — red
+ * vinegar — to a list row called "Red onion". Both are red; nothing else about
+ * them agrees, and the model matched on the adjective. €1.89 would have landed
+ * on the onions, the vinegar would never have been recorded, and both items'
+ * price history would have been wrong from then on with nothing on screen to
+ * say so.
+ *
+ * The veto is two independent signals, either of which may refuse, and NEITHER
+ * of which may propose. The tests below are in two halves, and the second half
+ * is the important one: a veto that refuses too much is not a safety net, it is
+ * a broken matcher.
+ */
+const VETO_LIST = [
+  { id: 'onion', name: 'Red onion', category: 'fruit_veg' },
+  { id: 'apples', name: 'Apples', category: 'fruit_veg' },
+  { id: 'bread', name: 'Bread', category: 'bakery' },
+  { id: 'chicken', name: 'Chicken', category: 'meat_fish' },
+];
+
+/** One purchase, one answer from the model, against VETO_LIST. */
+const vetoed = (over, itemId) => {
+  const ps = groupLines([line(over.raw ?? 'x', { totalCents: 189, ...over })]);
+  const base = matchPurchases(ps, VETO_LIST);
+  // Only meaningful if the offline rungs left it alone — otherwise this would
+  // be testing the rungs, and passing for the wrong reason.
+  if (base.get(ps[0].key).kind === 'matched') return 'MATCHED OFFLINE';
+  const got = applyAiMatches(
+    base,
+    [{ key: ps[0].key, itemId, confidence: 'high' }],
+    VETO_LIST,
+    ps,
+  );
+  return got.get(ps[0].key).kind;
+};
+
+// THE REPORTED CASE. 🧴 against 🧅 — the table saying these are not one thing.
+eq(
+  'red vinegar is refused the red onion',
+  vetoed({ raw: 'RODE AZIJN 750G', translated: 'red vinegar', category: 'pantry' }, 'onion'),
+  'unmatched',
+);
+// ...and with no category at all, on the glyphs alone.
+eq(
+  '...on the glyphs alone, with no category to help',
+  vetoed({ raw: 'RODE AZIJN 750G', translated: 'red vinegar' }, 'onion'),
+  'unmatched',
+);
+/*
+ * The other signal, where the first is silent: `toilet paper` resolves to the
+ * household FALLBACK, so it has no glyph of its own and only the aisle can
+ * refuse this.
+ */
+eq(
+  'the aisle refuses what the glyph cannot see',
+  vetoed({ raw: 'DLZ TOILETPAPIER', translated: 'toilet paper', category: 'household' }, 'apples'),
+  'unmatched',
+);
+
+/*
+ * AND NOW THE HALF THAT MATTERS. Every one of these is a match the feature
+ * exists to make, and a veto that refuses any of them has cost more than it
+ * saved. They pass because `glyph` returns null when a name only reaches its
+ * category's own fallback: 🍞 IS the bakery fallback, so the list row "Bread"
+ * offers no glyph to contradict 🥖 with.
+ */
+eq('a baguette may still be bread', vetoed({ raw: 'BAGUETTE', translated: 'baguette', category: 'bakery' }, 'bread'), 'matched');
+eq(
+  '...and a chicken breast still chicken',
+  vetoed({ raw: 'KIPFILET', translated: 'chicken breast', category: 'meat_fish' }, 'chicken'),
+  'matched',
+);
+/*
+ * Nothing known about either side is not evidence of a mismatch. A till line
+ * nobody can read is exactly what the model is for.
+ */
+eq(
+  'an unreadable line is not refused for being unreadable',
+  vetoed({ raw: 'PROU PROT WB' }, 'bread'),
+  'matched',
+);
+/*
+ * 'other' is the absence of a category, not a category. Treating it as a
+ * disagreement would refuse most matches on most lists — every item carries it
+ * until something has classified it.
+ */
+eq(
+  'the default category refuses nothing',
+  vetoed({ raw: 'ONBEKEND', category: 'other' }, 'bread'),
+  'matched',
+);
+/*
+ * The veto is a refusal, never a proposal. Handed a line it cannot check at
+ * all, it must not invent a match — and a purchase missing from the list it was
+ * given is a wiring fault, where waving matches through is how a safety net
+ * goes quiet.
+ */
+{
+  const ps = groupLines([line('RODE AZIJN 750G', { totalCents: 189 })]);
+  const base = matchPurchases(ps, VETO_LIST);
+  const got = applyAiMatches(base, [{ key: ps[0].key, itemId: 'onion', confidence: 'high' }], VETO_LIST, []);
+  eq('a purchase the call never got is refused, not assumed', got.get(ps[0].key).kind, 'unmatched');
 }
 
 /* claimedIds is what decides which rows the model is even offered. */
@@ -497,7 +604,7 @@ const aiCase = () => {
 /* Folding must not mutate the map it was handed. */
 {
   const { ps, base } = aiCase();
-  applyAiMatches(base, [{ key: ps[0].key, itemId: 'cheese', confidence: 'high' }], LIST);
+  applyAiMatches(base, [{ key: ps[0].key, itemId: 'cheese', confidence: 'high' }], LIST, ps);
   eq('the offline result is left untouched', base.get(ps[0].key).kind, 'unmatched');
 }
 

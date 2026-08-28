@@ -109,7 +109,7 @@ export async function runScan(
    */
   if (left.length > 0) onPhase?.('matching');
   const settle = matchResidue(left, list, claimedIds(offline), language)
-    .then((answers) => applyAiMatches(offline, answers, list))
+    .then((answers) => applyAiMatches(offline, answers, list, purchases))
     // applyAiMatches over an empty answer set is exactly `offline`, so a
     // rejection here degrades to what the free rungs already found.
     .catch(() => offline);
