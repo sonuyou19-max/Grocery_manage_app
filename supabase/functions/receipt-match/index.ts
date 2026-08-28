@@ -108,9 +108,22 @@ RULES.
   and "EVERYDAY" are shop own-brands and say nothing about what the thing is.
 - A pack size is not the product either. "450G", "X30", "1L" describe how much,
   not what.
+- AN ADJECTIVE IS NOT THE PRODUCT. Colour, size, cut and flavour words qualify
+  the noun; they do not name it. "Red vinegar" and "red onion" share the only
+  word they have in common and are not the same thing. Before matching, ask
+  what the NOUN is on each side and require those to agree: vinegar to vinegar,
+  onion to onion. If the nouns do not agree, answer null however much of the
+  rest of the line looks familiar.
+- The same goes for a shared category. Two things from the same aisle are not
+  each other. "Yoghurt" does not match a list item called "milk" merely because
+  both are dairy.
 - Answer null rather than guessing. An unmatched line is shown to the shopper
   and corrected in a second; a line matched to the wrong item quietly puts a
-  price on the wrong product and is never noticed.`;
+  price on the wrong product and is never noticed.
+- confidence is "high" only when the nouns agree and you would defend the match
+  out loud. Use "low" when you are matching on a resemblance you cannot name —
+  and prefer null to a low-confidence guess, because the device may refuse it
+  anyway and a refusal it has to make is a round trip nobody needed.`;
 
 const MAX_TOKENS = 2048;
 

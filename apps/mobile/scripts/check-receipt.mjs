@@ -500,6 +500,75 @@ check_(
   !/rows in dispute and nothing else/.test(fn) && /not where to stop/.test(fn),
 );
 /*
+ * A CORRECTED ROW MUST STILL MULTIPLY OUT.
+ *
+ * The repair closed a 60-cent gap against the printed total and the scan still
+ * came back with one row not multiplying out. Raising a row's total to make the
+ * sums agree breaks that row's own arithmetic unless one of the other two
+ * numbers moves with it — and nothing in the prompt said so, while the
+ * acceptance rule (fewer problems than before) happily keeps a repair that
+ * trades three failures for one.
+ */
+check_(
+  'the repair is told a row it corrects must still multiply out',
+  /A ROW YOU CORRECT MUST STILL MULTIPLY OUT/.test(fn) &&
+    /Sending a total alone is right only when/.test(fn),
+);
+
+/*
+ * And the log names the row. "1 line does not multiply out" is a count, and a
+ * count cannot be acted on — it says a row is wrong without saying which, so
+ * finding it meant reading the paper beside the screen.
+ */
+/*
+ * Scoped to the LOG call, not searched across the file. `badLines:
+ * result.badLines,` also appears in the response payload at the bottom of the
+ * function, so a whole-file match passed with the log line deleted — it was
+ * asserting on the response the device already had.
+ */
+const logCall = fn.slice(
+  fn.indexOf("at: 'receipt-scan',"),
+  fn.indexOf('Teach the shared dictionary'),
+);
+check_('the log block was found', logCall.length > 100 && logCall.length < 3000);
+check_('the log names which rows failed', /badLines: result\.badLines,/.test(logCall));
+check_(
+  '...with the three numbers that did not multiply out',
+  /badRows: result\.badLines\.map/.test(logCall) &&
+    /unit: l\.unitPriceCents, total: l\.totalCents/.test(logCall),
+);
+/*
+ * But NOT what was bought. A function log is not the place for somebody's
+ * shopping, and the index is enough to find the row in the response the device
+ * already holds.
+ */
+check_('...and not what was bought', !/badRows[\s\S]{0,300}raw:/.test(logCall));
+
+/* --------------------------------------------- the matcher's own prompt -- */
+
+/*
+ * A different function, checked here because it is the same failure: the model
+ * matched "RODE AZIJN 750G" — red vinegar — to a list row called "red onion",
+ * on the one word they share. The device now vetoes that (see receipt.ts), but
+ * a veto that has to fire is a round trip nobody needed.
+ */
+const matcher = readFileSync(
+  join(here, '..', '..', '..', 'supabase', 'functions', 'receipt-match', 'index.ts'),
+  'utf8',
+);
+check_(
+  'the matcher is told an adjective is not the product',
+  /AN ADJECTIVE IS NOT THE PRODUCT/.test(matcher),
+);
+check_(
+  '...and to require the nouns to agree',
+  /require\s+those to agree/.test(matcher) && /If the nouns do not agree, answer null/.test(matcher),
+);
+check_(
+  '...and that a shared aisle is not a match either',
+  /Two things from the same aisle are not\s+each other/.test(matcher),
+);
+/*
  * A repair big enough to re-transcribe is a repair that has not understood the
  * question. Capping it means such an answer fails to parse and the first
  * reading stands, rather than costing a second full read to arrive there.

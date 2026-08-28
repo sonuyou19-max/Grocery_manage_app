@@ -435,6 +435,18 @@ WHAT TO LOOK FOR, in the order it is usually wrong:
 - DECIMAL PLACES. Colruyt prints unit prices to three; a weight printed as
   "0,49" is two even when the true weight had more. Report what is on the
   paper, because that is what decides how much rounding the check forgives.
+
+A ROW YOU CORRECT MUST STILL MULTIPLY OUT.
+
+Every row carries three numbers — multiplier, unitPriceCents, totalCents — and
+quantity times unit price has to equal the total, to within the rounding the
+printed decimal places allow. If you raise a row's total to close a gap against
+the printed sum, its own arithmetic breaks unless you say which of the other two
+numbers moves with it.
+
+So when you change one of the three, read the other two off the paper and send
+whichever of them also changed. Sending a total alone is right only when the
+quantity and unit price you were given already multiply out to it.
 - A DISCOUNT or DEPOSIT counted as an item, or an item counted as neither.
   Negative amounts are never items.`;
 
@@ -762,6 +774,25 @@ Deno.serve(async (req) => {
       retryMs,
       ok: result.ok,
       codes: result.details.map((d) => d.code),
+      /*
+       * WHICH rows, with their numbers — not just how many.
+       *
+       * "1 line does not multiply out" is a count, and a count cannot be acted
+       * on: it says a row is wrong without saying which, so the only way to
+       * find it was to read the paper next to the screen. The indices and the
+       * three numbers that failed turn that into a subtraction.
+       *
+       * The raw printing is deliberately NOT here. A function log is not the
+       * place for what somebody bought, and the index is enough to find the row
+       * in the response the device already has.
+       */
+      badLines: result.badLines,
+      badRows: result.badLines.map((i) => {
+        const l = parsed.lines[i];
+        return l
+          ? { i, m: l.multiplier, dp: l.multiplierDp, unit: l.unitPriceCents, total: l.totalCents }
+          : { i, missing: true };
+      }),
       // In prose, because a log is read by one person in one language.
       problems: result.problems,
     }),
