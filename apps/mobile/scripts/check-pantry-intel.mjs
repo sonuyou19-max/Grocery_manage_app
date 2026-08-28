@@ -862,8 +862,34 @@ check(
    * narrow-screen rule went with the split: on its own row the chart no longer
    * has to earn its place against the text.
    */
-  check('the insights card is two rows', has(/insightTop: \{ flexDirection: 'row'/) && has(/insightBottom: \{ flexDirection: 'row'/), true);
+  check(
+    'the insights card is two rows',
+    has(/insightTop: \{\s*flexDirection: 'row'/) && has(/insightBottom: \{\s*flexDirection: 'row'/),
+    true,
+  );
   check('...with the chart on the lower one', has(/insightBottom[\s\S]{0,400}IntervalChart/), true);
+  /*
+   * AND NO SPACER. The lower row is space-between, so the date box pushes right
+   * only when there is a chart to push away from. A hard spacer pinned it right
+   * in both cases — and most items in a real pantry have one interval or none,
+   * which left a lone box in the corner with a rectangle of nothing beside it.
+   * The card looked broken exactly where it had the least to say.
+   */
+  {
+    /*
+     * The BLOCK, extracted rather than a `[\s\S]{0,N}` window after the style's
+     * name. `sectHead` two declarations earlier is also space-between, so a
+     * window here would be one style's rule vouching for another's — which is
+     * how this file's guards have gone wrong before, and is worth avoiding even
+     * when the window happens to be short enough today.
+     */
+    const block = sheet.slice(sheet.indexOf('insightBottom: {'));
+    const body = block.slice(0, block.indexOf('},') + 2);
+    check('the date box only pushes right when there is a chart',
+      /justifyContent: 'space-between'/.test(body), true);
+  }
+  check('...rather than being pinned there by a spacer',
+    /IntervalChart days=\{intervals\} \/>\}\s*<View style=\{styles\.grow\} \/>/.test(sheet), false);
 
   /*
    * ONE spacing system. The content gap and per-card marginTops were both in

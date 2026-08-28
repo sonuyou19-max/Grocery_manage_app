@@ -539,7 +539,15 @@ export function StapleSheet({
                   place against the text, so the narrow-screen rule is gone.
                 */}
                 {intervals.length >= 2 && <IntervalChart days={intervals} />}
-                <View style={styles.grow} />
+                {/*
+                  NO SPACER. The row is space-between, so the box pushes right
+                  only when there is a chart to push away FROM.
+
+                  A hard spacer pinned it right in both cases, and most items in
+                  a real pantry have one interval or none — which left a lone
+                  box in the corner with a rectangle of nothing beside it. The
+                  card looked broken exactly where it had the least to say.
+                */}
                 <View style={[styles.lastBuy, { borderColor: colors.line, backgroundColor: colors.surface }]}>
                   <Ionicons name="calendar-outline" size={15} color={colors.muted} />
                   <View style={styles.lastBuyText}>
@@ -870,7 +878,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   insightTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  insightBottom: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  insightBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   badge: {
     width: 38,
     height: 38,
