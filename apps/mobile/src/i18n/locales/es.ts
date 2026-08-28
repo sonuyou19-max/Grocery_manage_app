@@ -602,6 +602,31 @@ const es = {
     personal_care: 'Cuidado personal',
     other: 'Otros',
   },
+  // Storage advice, keyed on the item's glyph — see lib/item-tip.ts.
+  // Storage only: never a word about nutrition or health.
+  tips: {
+    greens: 'Las verduras duran más sin lavar en la nevera, en una bolsa con papel de cocina seco.',
+    tomato: 'Los tomates pierden sabor en la nevera; mejor en un bol sobre la encimera.',
+    potato: 'Las patatas quieren oscuridad, fresco y sequedad, y brotan antes junto a las cebollas.',
+    onion: 'Las cebollas quieren un sitio seco y aireado, y no la misma cesta que las patatas.',
+    mushroom: 'Los champiñones sudan en plástico; una bolsa de papel en la nevera los mantiene firmes.',
+    avocado: 'Madura el aguacate en la encimera y luego pásalo a la nevera para mantenerlo.',
+    banana: 'Los plátanos maduran lo que tienen al lado, así que dales su propio sitio.',
+    herbs: 'Trata las hierbas frescas como flores: los tallos en un vaso de agua, tapadas.',
+    carrot: 'Quita las hojas a las zanahorias antes de guardarlas: siguen robando humedad.',
+    citrus: 'Los cítricos se mantienen jugosos casi el doble de tiempo en la nevera.',
+    berries: 'Lava los frutos rojos justo antes de comerlos; húmedos se enmohecen en un día.',
+    apple: 'Las manzanas duran semanas en la nevera y maduran lo que guardas al lado.',
+    bread: 'El pan se pone duro antes en la nevera; mejor una panera o el congelador.',
+    cheese: 'El queso aguanta mejor en papel que en plástico; necesita respirar un poco.',
+    butter: 'La mantequilla coge el olor de lo que tiene al lado: guárdala envuelta y tapada.',
+    eggs: 'Elige un sitio para los huevos y déjalos ahí; moverlos hace sudar la cáscara.',
+    coffee: 'El café quiere hermético y oscuro a temperatura ambiente, no la nevera.',
+    chocolate: 'Un armario fresco le va bien al chocolate; la nevera lo vuelve blanquecino.',
+    honey: 'La miel no necesita nevera; el frío la vuelve granulosa y dura.',
+    oil: 'Guarda el aceite en un armario oscuro lejos del fuego; calor y luz lo estropean.',
+    fish: 'El pescado fresco va en el estante más frío y al plato el mismo día.',
+  },
   status: {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Aprendiendo tu ritmo',

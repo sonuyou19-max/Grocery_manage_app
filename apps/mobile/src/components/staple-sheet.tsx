@@ -25,6 +25,7 @@ import {
   type ItemStat,
 } from "@/lib/pantry-intel";
 import { storageTipFor } from "@/lib/item-lexicon";
+import { tipKeyFor } from "@/lib/item-tip";
 import { listTint } from "@/lib/list-tint";
 import { historyFor, type Purchase } from "@/lib/purchase-log";
 import { useT } from "@/store/locale";
@@ -150,13 +151,23 @@ export function StapleSheet({
   );
 
   /*
-   * The storage tip, from the shared dictionary — learned once for a term and
-   * free for every household after.
+   * The storage tip: the curated table first, the shared dictionary second.
    *
-   * Null far more often than not, and a missing tip renders nothing rather than
-   * a placeholder. See the note in lib/item-lexicon on where tips come from.
+   * The table is why this shows at all. The AI path was wired to `categorize`,
+   * which by design only runs for terms the app does NOT already know — so
+   * milk, spinach and bread, the items advice is actually for, never reached
+   * it, and never would have. The table answers the common vocabulary offline,
+   * instantly, in seven languages, for nothing.
+   *
+   * The dictionary stays as the fallback, which is where it earns its keep: a
+   * term nobody has a curated tip for is exactly the term the model was asked
+   * about, so the two cover opposite halves of the same problem.
+   *
+   * Null far more often than not, and a missing tip renders nothing. Most of a
+   * pantry keeps perfectly well in a cupboard.
    */
-  const tip = displayName ? storageTipFor(displayName) : null;
+  const tipKey = displayName ? tipKeyFor(displayName, snapshot?.item.category ?? 'other') : null;
+  const tip = tipKey ? t(tipKey) : displayName ? storageTipFor(displayName) : null;
 
   // The cadence footnote, which was permanent prose under the chips nobody
   // read. Behind a tap it is there when the question actually occurs.

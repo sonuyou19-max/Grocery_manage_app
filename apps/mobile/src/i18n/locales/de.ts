@@ -603,6 +603,31 @@ const de = {
     personal_care: 'Körperpflege',
     other: 'Sonstiges',
   },
+  // Storage advice, keyed on the item's glyph — see lib/item-tip.ts.
+  // Storage only: never a word about nutrition or health.
+  tips: {
+    greens: 'Gemüse hält am längsten ungewaschen im Kühlschrank, im Beutel mit einem trockenen Küchentuch.',
+    tomato: 'Tomaten verlieren im Kühlschrank ihr Aroma — eine Schale auf der Arbeitsfläche ist besser.',
+    potato: 'Kartoffeln mögen dunkel, kühl und trocken — neben Zwiebeln keimen sie schneller.',
+    onion: 'Zwiebeln mögen es trocken und luftig — und nicht denselben Korb wie die Kartoffeln.',
+    mushroom: 'Pilze schwitzen in Plastik; eine Papiertüte im Kühlschrank hält sie fest.',
+    avocado: 'Avocado auf der Arbeitsfläche reifen lassen, dann im Kühlschrank halten.',
+    banana: 'Bananen lassen alles in der Nähe schneller reifen — gib ihnen einen eigenen Platz.',
+    herbs: 'Weiche Kräuter wie Blumen behandeln: Stiele ins Wasserglas, locker abgedeckt.',
+    carrot: 'Das Grün von Karotten vor dem Lagern abdrehen — es zieht weiter Feuchtigkeit.',
+    citrus: 'Zitrusfrüchte bleiben im Kühlschrank etwa doppelt so lange saftig.',
+    berries: 'Beeren erst beim Essen waschen; feuchte schimmeln innerhalb eines Tages.',
+    apple: 'Äpfel halten sich wochenlang im Kühlschrank und lassen Nachbarn schneller reifen.',
+    bread: 'Brot wird im Kühlschrank schneller altbacken — Brotkasten oder Gefrierfach ist besser.',
+    cheese: 'Käse hält sich in Papier besser als in Folie; er muss ein wenig atmen.',
+    butter: 'Butter nimmt an, was daneben liegt — also eingewickelt und abgedeckt lagern.',
+    eggs: 'Eier an einem Ort lassen; ständiges Umlagern lässt die Schale schwitzen.',
+    coffee: 'Kaffee mag luftdicht und dunkel bei Raumtemperatur, nicht Kühl- oder Gefrierschrank.',
+    chocolate: 'Ein kühler Schrank passt zu Schokolade; im Kühlschrank wird sie weiß.',
+    honey: 'Honig braucht nie den Kühlschrank; Kälte macht ihn körnig und fest.',
+    oil: 'Öl im dunklen Schrank fern vom Herd lagern; Hitze und Licht verderben es.',
+    fish: 'Frischer Fisch gehört ins kälteste Fach und noch am selben Tag auf den Teller.',
+  },
   status: {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Lerne dein Tempo',

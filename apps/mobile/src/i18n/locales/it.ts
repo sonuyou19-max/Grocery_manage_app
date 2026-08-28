@@ -602,6 +602,31 @@ const it = {
     personal_care: 'Cura della persona',
     other: 'Altro',
   },
+  // Storage advice, keyed on the item's glyph — see lib/item-tip.ts.
+  // Storage only: never a word about nutrition or health.
+  tips: {
+    greens: 'Le verdure durano di più non lavate in frigo, in un sacchetto con carta da cucina asciutta.',
+    tomato: 'I pomodori perdono sapore in frigo: meglio una ciotola sul piano di lavoro.',
+    potato: 'Le patate vogliono buio, fresco e asciutto, e germogliano prima accanto alle cipolle.',
+    onion: 'Le cipolle vogliono un posto asciutto e arieggiato, non lo stesso cesto delle patate.',
+    mushroom: 'I funghi sudano nella plastica; un sacchetto di carta in frigo li tiene sodi.',
+    avocado: 'Fai maturare l\'avocado sul piano, poi mettilo in frigo per fermarlo lì.',
+    banana: 'Le banane fanno maturare ciò che hanno accanto: dai loro un posto tutto loro.',
+    herbs: 'Tratta le erbe fresche come fiori: gambi in un bicchiere d\'acqua, coperte.',
+    carrot: 'Togli le foglie alle carote prima di riporle: continuano a tirare umidità.',
+    citrus: 'Gli agrumi restano succosi circa il doppio del tempo in frigo.',
+    berries: 'Lava i frutti di bosco solo al momento; bagnati ammuffiscono in un giorno.',
+    apple: 'Le mele durano settimane in frigo e fanno maturare ciò che sta accanto.',
+    bread: 'Il pane rafferma prima in frigo: meglio un portapane o il congelatore.',
+    cheese: 'Il formaggio si conserva meglio nella carta che nella plastica: deve respirare.',
+    butter: 'Il burro assorbe ciò che ha accanto: tienilo incartato e coperto.',
+    eggs: 'Scegli un posto per le uova e lasciale lì: spostarle fa sudare il guscio.',
+    coffee: 'Il caffè vuole ermetico e buio a temperatura ambiente, non il frigo.',
+    chocolate: 'Una dispensa fresca va bene per il cioccolato; il frigo lo fa sbiancare.',
+    honey: 'Il miele non ha mai bisogno del frigo; il freddo lo rende granuloso e duro.',
+    oil: 'Tieni l\'olio in una dispensa buia lontano dai fornelli; calore e luce lo rovinano.',
+    fish: 'Il pesce fresco va sul ripiano più freddo e nel piatto lo stesso giorno.',
+  },
   status: {
     // Kept short: this renders in a fixed 104pt column in the pantry list.
     learning: 'Imparo il tuo ritmo',
