@@ -94,7 +94,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { planCommit, purchaseInstant, storeIdFor } = mod;
+const { planCommit, purchaseInstant, storeIdFor, listAmount } = mod;
 
 /* --------------------------------------------------------------- fixtures */
 
@@ -148,6 +148,93 @@ eq('an unparseable date falls back to now', purchaseInstant('sometime tuesday', 
 eq('a receipt from 1970 falls back to now', purchaseInstant('1970-01-04T00:00:00Z', NOW), NOW);
 eq('a receipt from 2087 falls back to now', purchaseInstant('2087-01-01T00:00:00Z', NOW), NOW);
 eq('yesterday is kept', purchaseInstant('2026-08-23T09:00:00Z', NOW), Date.parse('2026-08-23T09:00:00Z'));
+
+/* ------------------------------------------------------- units cross over */
+
+console.log('\nlistAmount');
+
+/*
+ * THE BUG THIS EXISTS FOR.
+ *
+ * A receipt is transcribed in the units tills print — g, kg, ml, l, cl, pcs —
+ * and a list row is stored in the units the app offers: g, kg, ml, L, pcs.
+ * Four coincide, which is why nothing noticed the other two.
+ *
+ * list_items.unit has carried a CHECK constraint since migration 0001, so a
+ * lowercase "l" is not displayed oddly, it is REJECTED — and Postgres rejects
+ * the whole UPDATE. quantity, unit, packs and price_cents go in one statement,
+ * so a litre item lost its price and its pack count as well, then the
+ * optimistic local write reverted and the row read exactly as before the
+ * import. Spinach in grams landed; the milk in litres did not.
+ */
+eq('a printed litre becomes the list’s L', listAmount(1, 'l'), { quantity: 1, unit: 'L' });
+eq('...and keeps its amount', listAmount(1.5, 'l').quantity, 1.5);
+
+// The four that already agreed must not move.
+eq('grams are grams', listAmount(450, 'g'), { quantity: 450, unit: 'g' });
+eq('kilos are kilos', listAmount(1, 'kg'), { quantity: 1, unit: 'kg' });
+eq('millilitres are millilitres', listAmount(500, 'ml'), { quantity: 500, unit: 'ml' });
+eq('pieces are pieces', listAmount(6, 'pcs'), { quantity: 6, unit: 'pcs' });
+
+/*
+ * Centilitres are all over Belgian drinks labelling and the list has no such
+ * unit, so they are CONVERTED rather than dropped — and the quantity scales
+ * with the unit, or the conversion would quietly change the amount.
+ */
+eq('centilitres become millilitres', listAmount(33, 'cl'), { quantity: 330, unit: 'ml' });
+eq('...and the amount scales with them', listAmount(1.5, 'cl'), { quantity: 15, unit: 'ml' });
+/*
+ * Scaling is a multiplication and multiplication in binary floating point
+ * leaves dust: 0.07 × 10 is 0.7000000000000001, and that reaches the screen as
+ * the quantity. The first version of this assertion used 33.3, which happens to
+ * multiply exactly — so it passed with the rounding deleted and proved nothing.
+ */
+eq('...without floating-point dust', listAmount(0.07, 'cl').quantity, 0.7);
+
+/*
+ * A line with no size at all — the coconut drink — breaks no constraint and
+ * never did. Its price and pack count imported correctly while the litre items
+ * lost theirs, which is the detail that identified the cause.
+ */
+eq('no unit is not a problem to solve', listAmount(null, null), { quantity: null, unit: null });
+eq('...and a bare pack size survives it', listAmount(2, null), { quantity: 2, unit: null });
+
+/*
+ * A unit from neither vocabulary takes the quantity with it: a bare number in
+ * the quantity field renders as an amount of nothing, which is a claim.
+ */
+eq('an unknown unit takes its quantity with it', listAmount(12, 'oz'), { quantity: null, unit: null });
+
+/* --------------------------------------------- and through the planner -- */
+
+{
+  // The milk, exactly as the Delhaize scan produced it: four packs of one litre.
+  const milk = [buy('m', '1L DLL VOLLE MELK', 356, { packs: 4, quantity: 1, unit: 'l' })];
+  const rows = [{ id: 'i9', name: 'Milk', category: 'dairy_eggs', checked: false }];
+  const decisions = new Map([['m', { include: true, priceCents: 356, itemId: 'i9' }]]);
+  const plan = planCommit(RECEIPT, milk, decisions, rows, NOW);
+
+  const patch = plan.patches.find((x) => x.itemId === 'i9').patch;
+  eq('the list row gets a unit the database accepts', patch.unit, 'L');
+  eq('...with the price that came down with it', patch.priceCents, 356);
+  eq('...and the pack count', patch.packs, 4);
+
+  /*
+   * The purchase log is deliberately NOT converted. price_entries.unit is plain
+   * text with no constraint, "l" is what the receipt said, and the history card
+   * renders "€0.89 / l" from it.
+   */
+  eq('the log keeps the receipt’s own wording', plan.purchases[0].detail.unit, 'l');
+}
+
+{
+  // The same crossing on the other path: a line that matched nothing becomes a
+  // new row, and a new row is a list row with the same constraint on it.
+  const drink = [buy('d', 'COLA 33CL', 199, { quantity: 33, unit: 'cl' })];
+  const plan = planCommit(RECEIPT, drink, new Map([['d', { include: true, priceCents: 199, itemId: null }]]), [], NOW);
+  eq('a created row is converted too', plan.adds[0].detail.unit, 'ml');
+  eq('...with its amount scaled', plan.adds[0].detail.quantity, 330);
+}
 
 /* -------------------------------------------------------------- the name */
 

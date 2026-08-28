@@ -1,4 +1,4 @@
-import type { ItemCategory } from '@korb/shared';
+import type { ItemCategory, ItemUnit } from '@korb/shared';
 
 import {
   displayName,
@@ -151,7 +151,15 @@ export interface NewBoughtRow {
  */
 export interface ItemRowPatch {
   quantity: number | null;
-  unit: string | null;
+  /**
+   * A LIST unit, not the receipt's own — see listAmount.
+   *
+   * Typed as ItemUnit rather than string because that is what stopped this
+   * being caught: the receipt's units and the list's units are different
+   * vocabularies that overlap in four of six places, and a `string` field let
+   * one be assigned to the other with nothing to say otherwise.
+   */
+  unit: ItemUnit | null;
   packs: number;
   priceCents: number;
   /**
@@ -184,6 +192,76 @@ export interface ListRow {
  * 1970 or 2087 would put a purchase somewhere the history cannot show it, and
  * silently — which is worse than the smudge.
  */
+/**
+ * The receipt's own measurement, as a list row can store it.
+ *
+ * ---------------------------------------------------------------------------
+ * Two vocabularies that are not the same vocabulary
+ * ---------------------------------------------------------------------------
+ *
+ * A receipt is transcribed in the units tills print: g, kg, ml, l, cl, pcs. A
+ * list row is stored in the units the app offers: g, kg, ml, L, pcs. Four of
+ * them coincide, which is exactly why nothing noticed the other two.
+ *
+ * `list_items.unit` has carried a CHECK constraint since migration 0001, so a
+ * lowercase "l" is not merely displayed oddly — Postgres rejects the row. And
+ * it rejects the whole UPDATE, which is why a litre item lost its PRICE and its
+ * PACK COUNT too: quantity, unit, packs and price_cents travel in one statement,
+ * and one bad value takes all four down. The optimistic local write then reverts
+ * and the row reads exactly as it did before the import.
+ *
+ * Every symptom follows from that. Spinach in grams imported; the milk in
+ * litres did not. The coconut drink, whose line carried no size at all, kept
+ * its price and its pack count — a null unit breaks no constraint.
+ *
+ * The purchase log is untouched by this and must stay so: price_entries.unit is
+ * plain text with no constraint, "l" is what the receipt said, and the history
+ * card renders "€0.89 / l" from it.
+ *
+ * ---------------------------------------------------------------------------
+ * cl is converted, not dropped
+ * ---------------------------------------------------------------------------
+ *
+ * Centilitres are all over Belgian drinks labelling and the list has no such
+ * unit, so 33 cl becomes 330 ml rather than nothing. The quantity scales with
+ * the unit or the conversion would silently change the amount — the failure
+ * this whole function exists to stop, in a subtler form.
+ */
+const LIST_UNIT: Record<string, { unit: ItemUnit; scale: number }> = {
+  g: { unit: 'g', scale: 1 },
+  kg: { unit: 'kg', scale: 1 },
+  ml: { unit: 'ml', scale: 1 },
+  // The one that broke it: the till prints a lowercase litre, the list stores L.
+  l: { unit: 'L', scale: 1 },
+  // No centilitre on the list, so it becomes the millilitres it is.
+  cl: { unit: 'ml', scale: 10 },
+  pcs: { unit: 'pcs', scale: 1 },
+};
+
+export function listAmount(
+  quantity: number | null,
+  unit: string | null,
+): { quantity: number | null; unit: ItemUnit | null } {
+  // No unit is not a problem to solve. A counted line has none, it breaks no
+  // constraint, and its quantity is a pack size that stands on its own.
+  if (unit == null) return { quantity, unit: null };
+
+  const known = LIST_UNIT[unit] ?? LIST_UNIT[unit.toLowerCase()];
+  /*
+   * A unit from neither vocabulary takes the quantity with it. A bare number in
+   * the quantity field renders as an amount of nothing, which is a claim, and
+   * the honest answer to "how much" here is that we do not know.
+   */
+  if (!known) return { quantity: null, unit: null };
+
+  return {
+    // Rounded because the scale is a multiplication: 33.3 cl times ten is
+    // 332.99999999999994 in floating point, and that reaches the screen.
+    quantity: quantity == null ? null : Math.round(quantity * known.scale * 1000) / 1000,
+    unit: known.unit,
+  };
+}
+
 export function purchaseInstant(purchasedAt: string | null, now: number): number {
   if (!purchasedAt) return now;
   const parsed = Date.parse(purchasedAt);
@@ -262,6 +340,12 @@ export function planCommit(
      */
     const name = row?.name ?? productName(p);
     const category = row?.category ?? p.category ?? 'other';
+    /*
+     * Once, for both the patch and the add, and NOT for the purchase detail
+     * below: the log keeps the receipt's own wording ("€0.89 / l") and has no
+     * constraint to satisfy, while a list row has both.
+     */
+    const amount = listAmount(p.quantity, p.unit);
 
     planned.push({
       key: p.key,
@@ -289,8 +373,8 @@ export function planCommit(
       patches.push({
         itemId: row.id,
         patch: {
-          quantity: p.quantity,
-          unit: p.unit,
+          quantity: amount.quantity,
+          unit: amount.unit,
           packs: p.packs,
           priceCents: d.priceCents,
           store,
@@ -318,8 +402,8 @@ export function planCommit(
         name,
         category,
         detail: {
-          quantity: p.quantity,
-          unit: p.unit,
+          quantity: amount.quantity,
+          unit: amount.unit,
           packs: p.packs,
           priceCents: d.priceCents,
           store,
