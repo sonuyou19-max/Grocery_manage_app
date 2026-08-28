@@ -45,6 +45,7 @@ const de = {
     groupMissingBody: 'Entweder hast du das nicht gekauft, oder der Scan hat es übersehen. Tippe oben auf eine Zeile, um sie zuzuordnen.',
     onList: 'Auf deiner Liste · %{name}',
     notOnList: 'Nicht auf deiner Liste',
+    heldBy: 'Schon bei %{line} — Tippen verschiebt es',
     editAmount: 'Betrag bearbeiten',
     importing: { one: '%{count} Artikel wird übernommen', other: '%{count} Artikel werden übernommen' },
     import: 'Übernehmen',

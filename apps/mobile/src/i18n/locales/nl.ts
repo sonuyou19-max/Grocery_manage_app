@@ -45,6 +45,7 @@ const nl = {
     groupMissingBody: 'Of je hebt ze niet gekocht, of de scan heeft ze gemist. Tik hierboven op een regel om die eraan te koppelen.',
     onList: 'Op je lijst · %{name}',
     notOnList: 'Niet op je lijst',
+    heldBy: 'Staat al bij %{line} — tikken verplaatst het',
     editAmount: 'Bedrag aanpassen',
     importing: { one: '%{count} artikel importeren', other: '%{count} artikelen importeren' },
     import: 'Importeren',

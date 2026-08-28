@@ -714,22 +714,47 @@ export default function ReceiptReviewScreen() {
               <Ionicons name="add-circle-outline" size={20} color={colors.muted} />
               <Text style={[type.body, { color: colors.ink }]}>{t('receipt.notOnList')}</Text>
             </Pressable>
-            {pickerOptions(candidates, decisions, picking).map((c) => (
-              <Pressable
-                key={c.id}
-                onPress={() => {
-                  haptics.tick();
-                  if (picking) setDecisions((d) => assign(d, picking, c.id));
-                  setPicking(null);
-                }}
-                style={[styles.pickRow, { borderColor: colors.line }]}
-              >
-                <Ionicons name="cart-outline" size={20} color={colors.accent} />
-                <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                  {c.name}
-                </Text>
-              </Pressable>
-            ))}
+            {pickerOptions(candidates, decisions, picking).map((c) => {
+              const mine = picking != null && decisions.get(picking)?.itemId === c.id;
+              /*
+                A row another line holds is offered, not hidden — see
+                pickerOptions. What it must not be is silent about it: tapping
+                here MOVES the row, and the line that had it becomes "not on
+                your list", so the shopper is told which line that is before
+                they choose rather than discovering it afterwards.
+              */
+              const heldBy =
+                c.takenBy == null
+                  ? null
+                  : run.purchases.find((p) => p.key === c.takenBy)?.raw[0] ?? null;
+              return (
+                <Pressable
+                  key={c.id}
+                  onPress={() => {
+                    haptics.tick();
+                    if (picking) setDecisions((d) => assign(d, picking, c.id));
+                    setPicking(null);
+                  }}
+                  style={[styles.pickRow, { borderColor: colors.line }]}
+                >
+                  <Ionicons
+                    name={mine ? 'checkmark-circle' : 'cart-outline'}
+                    size={20}
+                    color={mine ? colors.accent : c.takenBy ? colors.muted : colors.accent}
+                  />
+                  <View style={styles.pickBody}>
+                    <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                    {heldBy != null && (
+                      <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                        {t('receipt.heldBy', { line: heldBy })}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </GlassView>
       </Sheet>
@@ -957,4 +982,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  // Takes the width so the "already on ..." line wraps to one truncated line
+  // under the name rather than pushing the name out of the row.
+  pickBody: { flex: 1 },
 });

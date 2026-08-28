@@ -45,6 +45,7 @@ const fr = {
     groupMissingBody: 'Soit tu ne les as pas achetés, soit le scan les a manqués. Touche une ligne ci-dessus pour l’y associer.',
     onList: 'Sur ta liste · %{name}',
     notOnList: 'Pas sur ta liste',
+    heldBy: 'Déjà sur %{line} — appuyer le déplace',
     editAmount: 'Modifier le montant',
     importing: { one: 'Import de %{count} article', other: 'Import de %{count} articles' },
     import: 'Importer',

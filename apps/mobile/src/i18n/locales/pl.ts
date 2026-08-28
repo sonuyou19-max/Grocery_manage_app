@@ -55,6 +55,7 @@ const pl = {
     groupMissingBody: 'Albo tego nie kupiłeś, albo skan tego nie zauważył. Dotknij linii powyżej, żeby ją przypisać.',
     onList: 'Na twojej liście · %{name}',
     notOnList: 'Nie ma na twojej liście',
+    heldBy: 'Już przy %{line} — dotknięcie przeniesie',
     editAmount: 'Zmień kwotę',
     importing: { one: 'Import %{count} pozycji', few: 'Import %{count} pozycji', many: 'Import %{count} pozycji', other: 'Import %{count} pozycji' },
     import: 'Importuj',

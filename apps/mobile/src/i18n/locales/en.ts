@@ -54,6 +54,7 @@ const en = {
     groupMissingBody: 'Either you did not buy these, or the scan missed them. Tap a line above to point it at one.',
     onList: 'On your list · %{name}',
     notOnList: 'Not on your list',
+    heldBy: 'Already on %{line} — tapping moves it',
     editAmount: 'Edit amount',
     importing: { one: 'Importing %{count} item', other: 'Importing %{count} items' },
     import: 'Import',

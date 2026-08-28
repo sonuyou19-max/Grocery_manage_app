@@ -237,11 +237,68 @@ if (pickerOptions(LIST, d0, 'a').some((c) => c.id === 'i1')) {
   console.log('        the current one, which reads as the app having lost it)');
 }
 
+/*
+ * EVERY row is offered, claimed ones included.
+ *
+ * Hiding them was the wrong lesson drawn from a real rule. One list row can be
+ * claimed once — but `assign` is what holds that, by MOVING the row rather than
+ * copying it. Leaving claimed rows out protected nothing and removed the
+ * correction shoppers most need: the scan puts the eggs on the line above where
+ * they belong, you open the right line, and Eggs is not there, because the
+ * wrong line has it. The only way through was to fix the wrong line FIRST.
+ */
 eq(
-  'another line is not offered a taken row',
+  'another line is offered a taken row too',
   pickerOptions(LIST, d0, 'c').map((c) => c.id),
-  ['i2', 'i3'],
+  ['i1', 'i2', 'i3'],
 );
+/*
+ * ...and is told which line has it, because the tap MOVES it. A silent steal
+ * leaves the shopper to discover afterwards that a line they had already
+ * checked has become "not on your list".
+ */
+eq(
+  '...and told which line has it',
+  pickerOptions(LIST, d0, 'c').map((c) => c.takenBy),
+  ['a', null, null],
+);
+// A line holding its own row is the current choice, not a row to steal.
+eq(
+  'the row a line already holds is not marked as taken',
+  pickerOptions(LIST, d0, 'a').map((c) => c.takenBy),
+  [null, null, null],
+);
+/*
+ * Include state is not consulted, exactly as `unclaimed` does not consult it:
+ * what a line IS and whether to import it are separate questions, and an
+ * unticked line still holds its row.
+ */
+eq(
+  'an unticked line still holds its row here',
+  pickerOptions(LIST, setInclude(d0, 'a', false), 'c').map((c) => c.takenBy),
+  ['a', null, null],
+);
+
+/*
+ * And the whole point of offering them: choosing a taken row moves it, in one
+ * gesture, with the previous holder released rather than duplicated.
+ */
+{
+  const moved = assign(d0, 'c', 'i1');
+  eq('choosing a taken row gives it to the new line', moved.get('c').itemId, 'i1');
+  eq('...and takes it off the old one', moved.get('a').itemId, null);
+  /*
+   * And the move is visible from the other side. Re-opening the line that LOST
+   * the row shows it held by the line that took it — the same fact the shopper
+   * was warned about before they tapped, now stated from where they are.
+   */
+  eq(
+    '...and the old line now sees it held by the new one',
+    pickerOptions(LIST, moved, 'a').map((c) => c.takenBy),
+    ['c', null, null],
+  );
+  eq('...with the old line itself holding nothing', moved.get('a').itemId, null);
+}
 
 /* ----------------------------------------------------------- the totals -- */
 
@@ -336,6 +393,39 @@ console.log('\noffBy — the last comparison');
 console.log('\nreview sheet');
 
 const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8');
+
+/*
+ * THE PICKER WARNS BEFORE IT STEALS.
+ *
+ * Claimed rows are offered now (see pickerOptions), and choosing one MOVES it —
+ * the line that had it becomes "not on your list". That is the right behaviour
+ * and it must not be silent: a shopper who has already checked that line would
+ * otherwise have to notice, unprompted, that it had changed under them.
+ */
+assert(
+  /t\('receipt\.heldBy', \{ line: heldBy \}\)/.test(sheet),
+  'a row another line holds says so before it is tapped',
+  'choosing it moves the row, and the line that had it silently becomes "not on your list"',
+);
+assert(
+  /run\.purchases\.find\(\(p\) => p\.key === c\.takenBy\)/.test(sheet),
+  '...and names that line rather than saying "taken"',
+  'the shopper needs to know WHICH line their tap is about to empty',
+);
+/*
+ * The picker is capped well under the window and scrolls. It answers "which
+ * item is this?" about a row the shopper was just looking at, so a picker that
+ * covers that row has hidden its own question. check-modal-nav pins the
+ * ScrollView and the maxHeight; this pins the fraction.
+ */
+{
+  const cap = sheet.match(/const pickerCap = Math\.round\(windowHeight \* ([\d.]+)\)/);
+  assert(
+    cap != null && Number(cap[1]) > 0 && Number(cap[1]) <= 0.7,
+    'the picker is capped at no more than 70% of the window',
+    'a full-height picker hides the row it is asking about, and the context behind it',
+  );
+}
 
 assert(
   /\{p\.raw\.map\(\(raw\) => \(/.test(sheet),

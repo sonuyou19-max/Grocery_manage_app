@@ -45,6 +45,7 @@ const es = {
     groupMissingBody: 'O no los compraste, o el escaneo no los vio. Toca una línea de arriba para asignarla.',
     onList: 'En tu lista · %{name}',
     notOnList: 'No está en tu lista',
+    heldBy: 'Ya está en %{line}: al tocar se mueve',
     editAmount: 'Editar importe',
     importing: { one: 'Importando %{count} artículo', other: 'Importando %{count} artículos' },
     import: 'Importar',

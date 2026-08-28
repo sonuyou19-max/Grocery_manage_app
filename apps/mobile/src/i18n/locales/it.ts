@@ -45,6 +45,7 @@ const it = {
     groupMissingBody: 'O non li hai comprati, o la scansione non li ha visti. Tocca una riga qui sopra per abbinarla.',
     onList: 'Nella tua lista · %{name}',
     notOnList: 'Non nella tua lista',
+    heldBy: 'Già su %{line}: toccando si sposta',
     editAmount: 'Modifica l’importo',
     importing: { one: 'Importo %{count} articolo', other: 'Importo %{count} articoli' },
     import: 'Importa',

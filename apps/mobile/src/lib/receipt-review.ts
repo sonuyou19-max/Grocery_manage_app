@@ -237,22 +237,67 @@ export function includedCount(
   return n;
 }
 
+/** A list row as the picker offers it, and who has it already. */
+export interface PickerOption extends ListCandidate {
+  /**
+   * The OTHER receipt line holding this row, or null when it is free or ours.
+   *
+   * A key rather than a boolean because the picker names the line: "already on
+   * DLZ VOLLE MELK" tells the shopper what their tap is about to move, and
+   * "already taken" does not.
+   */
+  takenBy: string | null;
+}
+
 /**
- * The rows this line may be pointed at.
+ * The rows this line may be pointed at — which is all of them.
  *
- * Free rows, plus the one it already holds. Exported for the guard, because the
- * second half is the part that looks redundant and is not: drop it and the
- * picker on a matched line shows every option except the current one, which
- * reads as the app having lost it.
+ * ---------------------------------------------------------------------------
+ * Why claimed rows are offered too
+ * ---------------------------------------------------------------------------
+ *
+ * This used to return free rows plus the one the line already held, and hiding
+ * the rest was the wrong lesson drawn from a real rule. One list row can be
+ * claimed once, and that rule holds — but it is `assign` that holds it, by
+ * MOVING a row rather than copying it. Leaving the claimed rows out of the
+ * picker did not protect anything; it just removed the correction the shopper
+ * most needs to make.
+ *
+ * That correction is the common one. The scan puts the eggs on the line above
+ * where they belong, the shopper opens the right line, and Eggs is not there —
+ * because the wrong line has it. The only route through was to open the wrong
+ * line first, set it to "not on your list", then come back: two corrections to
+ * express one intention, and no sign anywhere that this was what to do.
+ *
+ * So every row is offered, and each says whether another line holds it. Tapping
+ * one moves it, `assign` unassigns the line that had it, and that line shows up
+ * as "not on your list" to be corrected in turn. Nothing is duplicated, and
+ * nothing has to be undone first.
  */
 export function pickerOptions(
   candidates: readonly ListCandidate[],
   decisions: Decisions,
   key: string | null,
-): ListCandidate[] {
-  const mine = key != null ? decisions.get(key)?.itemId ?? null : null;
-  const free = new Set(unclaimed(candidates, decisions).map((c) => c.id));
-  return candidates.filter((c) => free.has(c.id) || c.id === mine);
+): PickerOption[] {
+  /*
+   * Built from the decisions rather than from `unclaimed`, because the picker
+   * needs to know WHICH line holds a row and not merely that one does.
+   *
+   * Include state is deliberately not consulted, exactly as `unclaimed` does not
+   * consult it: what a line IS and whether to import it are separate questions,
+   * and an unticked line still holds its row.
+   */
+  const holder = new Map<string, string>();
+  for (const [k, d] of decisions) {
+    if (d.itemId != null && !holder.has(d.itemId)) holder.set(d.itemId, k);
+  }
+
+  return candidates.map((c) => {
+    const by = holder.get(c.id) ?? null;
+    // Ours is not "taken" — a line holding its own row must read as the current
+    // choice, not as a row it would have to steal from itself.
+    return { ...c, takenBy: by === null || by === key ? null : by };
+  });
 }
 
 /**
