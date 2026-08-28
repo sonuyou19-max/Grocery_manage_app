@@ -374,6 +374,68 @@ export function refutes(p: ReceiptPurchase, candidate: ListCandidate): string | 
   return null;
 }
 
+/** The three readings of a line, widest first. */
+const namesOf = (p: ReceiptPurchase): string[] =>
+  [p.name, p.expanded, p.translated].filter((n): n is string => !!n);
+
+/**
+ * The free rows the FIRST of a line's readings can reach.
+ *
+ * Name order is priority, not a union: the till's own wording is tried against
+ * every row before the expansion is tried against any, and the expansion before
+ * the translation. Unioning them would let a translation's match compete with a
+ * raw-line match as though the two were equally good evidence, when the whole
+ * reason for keeping three readings is that they are not.
+ *
+ * Within ONE reading, everything it reaches comes back — including more than
+ * one row, which is what lets the caller refuse instead of guessing.
+ */
+function reachedByName(
+  p: ReceiptPurchase,
+  free: readonly ListCandidate[],
+  test: (name: string, candidate: ListCandidate) => boolean,
+): ListCandidate[] {
+  for (const n of namesOf(p)) {
+    const hit = free.filter((l) => test(n, l));
+    if (hit.length > 0) return hit;
+  }
+  return [];
+}
+
+/** One rung of the ladder: how strong the evidence is, and what it reaches. */
+interface Rung {
+  how: (p: ReceiptPurchase) => string;
+  reach: (p: ReceiptPurchase, free: readonly ListCandidate[]) => ListCandidate[];
+}
+
+/**
+ * The rungs, strongest evidence first. Order in this array IS the priority.
+ */
+const RUNGS: readonly Rung[] = [
+  {
+    how: () => 'exact',
+    reach: (p, free) => reachedByName(p, free, (n, l) => normalizeKey(n) === normalizeKey(l.name)),
+  },
+  {
+    how: () => 'plural',
+    reach: (p, free) => reachedByName(p, free, (n, l) => samePlural(n, l.name)),
+  },
+  {
+    // canonicalize strips marketing and provenance words — organic, premium,
+    // free-range — which is most of what a brand-heavy receipt line is.
+    how: () => 'canonical',
+    reach: (p, free) =>
+      reachedByName(p, free, (n, l) => canonicalize(fold(n)) === canonicalize(fold(l.name))),
+  },
+  {
+    how: (p) => `glyph ${purchaseGlyph(p)}`,
+    reach: (p, free) => {
+      const g = purchaseGlyph(p);
+      return g ? free.filter((l) => glyph(l.name, l.category) === g) : [];
+    },
+  },
+];
+
 /**
  * Which list row is this purchase, if any.
  *
@@ -394,18 +456,43 @@ export function refutes(p: ReceiptPurchase, candidate: ListCandidate): string | 
  * line never would.
  *
  * ---------------------------------------------------------------------------
- * Why the glyph rung refuses to guess
+ * A RUNG AT A TIME, NOT A LINE AT A TIME
  * ---------------------------------------------------------------------------
  *
- * The curated table maps a word to an EMOJI, not to a concept. It knows
- * `komkommer` and `cucumber` are both 🥒; it does not know that `spinach` and
- * `lettuce` are different things that share 🥬. Against a whole vocabulary that
- * would be far too loose — but the candidate set here is one shopping list, a
- * dozen rows, and within that a shared glyph is strong evidence.
+ * The outer loop is the rung and the inner loop is the purchase, and that way
+ * round is the whole point. It used to be the other way: every rung ran for one
+ * line before the next line was looked at, which meant the ORDER LINES WERE
+ * PRINTED IN decided who got a row, and a weak match reached first beat a strong
+ * one reached later.
  *
- * Strong, not conclusive. Two list rows sharing a glyph — `Paneer` and
- * `Cheese`, both 🧀 — is a question, so it returns `ambiguous` and lets the
- * model decide rather than picking whichever sorted first.
+ * Concretely, with `Milk` on the list: `CHOCOLATE MILK DRINK` printed first has
+ * no exact, plural or canonical match, but its glyph is 🥛 and only one row
+ * shares it — so it claimed Milk. `MILK`, printed fifth, then found the row
+ * gone and fell through to the model or to "also bought". A receipt's print
+ * order is not evidence about anything.
+ *
+ * Now every exact match is settled before any plural is considered, every
+ * plural before any canonical, and so on. Within one rung the two lines are
+ * equally good evidence and first-come still wins — that is a genuine tie, and
+ * the loser drops to the next rung rather than out of the ladder.
+ *
+ * ---------------------------------------------------------------------------
+ * EVERY RUNG CAN SAY "I DON'T KNOW"
+ * ---------------------------------------------------------------------------
+ *
+ * Only the glyph rung used to return `ambiguous`; the other three took the
+ * FIRST row they found and moved on, which is list order deciding a question
+ * nobody answered.
+ *
+ * It bit on the canonical rung, which strips `salted` and `unsalted` alike. A
+ * list with both `Salted butter` and `Unsalted butter` gives a bare `BOTER` two
+ * equally good canonical matches, and one was picked by whichever came first —
+ * with no way to tell afterwards, since 🧈 and dairy are identical on both and
+ * the veto has nothing to object to.
+ *
+ * So a rung that reaches more than one row asks instead of picking, exactly as
+ * the glyph rung always did. Ambiguity claims nothing, which leaves both rows
+ * free for the model or for the shopper.
  */
 export function matchPurchases(
   purchases: readonly ReceiptPurchase[],
@@ -417,64 +504,38 @@ export function matchPurchases(
    *
    * Two receipt lines that both look like "Eggs" are two purchases, not one
    * matched twice — and letting the second overwrite the first would silently
-   * discard a real purchase. First claim wins; the rest fall through to the
-   * model, or arrive as new items, which is the honest outcome.
+   * discard a real purchase. First claim wins; the rest fall through.
    */
   const claimed = new Set<string>();
 
-  for (const p of purchases) {
-    // Widest first: the till's own wording, then what it means, then what it
-    // means in the reader's language.
-    const names = [p.name, p.expanded, p.translated].filter((n): n is string => !!n);
-    const free = list.filter((l) => !claimed.has(l.id));
+  // Still looking. A purchase leaves this list the moment it is settled, either
+  // by a match or by an ambiguity the model has to resolve.
+  let open: ReceiptPurchase[] = [...purchases];
 
-    let hit: { itemId: string; how: string } | null = null;
+  for (const rung of RUNGS) {
+    const still: ReceiptPurchase[] = [];
+    for (const p of open) {
+      const free = list.filter((l) => !claimed.has(l.id));
+      const reach = rung.reach(p, free);
 
-    for (const n of names) {
-      const exact = free.find((l) => normalizeKey(n) === normalizeKey(l.name));
-      if (exact) { hit = { itemId: exact.id, how: 'exact' }; break; }
-    }
-    if (!hit) {
-      for (const n of names) {
-        const plural = free.find((l) => samePlural(n, l.name));
-        if (plural) { hit = { itemId: plural.id, how: 'plural' }; break; }
-      }
-    }
-    if (!hit) {
-      for (const n of names) {
-        // canonicalize strips marketing and provenance words — organic, premium,
-        // free-range — which is most of what a brand-heavy receipt line is.
-        const key = canonicalize(fold(n));
-        const canon = free.find((l) => canonicalize(fold(l.name)) === key);
-        if (canon) { hit = { itemId: canon.id, how: 'canonical' }; break; }
-      }
-    }
-
-    if (hit) {
-      claimed.add(hit.itemId);
-      out.set(p.key, { kind: 'matched', ...hit });
-      continue;
-    }
-
-    // Rung four. The purchase's own glyph — from the extractor when it offered
-    // one, else resolved from its names.
-    const g = purchaseGlyph(p);
-
-    if (g) {
-      const sharing = free.filter((l) => glyph(l.name, l.category) === g);
-      if (sharing.length === 1) {
-        claimed.add(sharing[0]!.id);
-        out.set(p.key, { kind: 'matched', itemId: sharing[0]!.id, how: `glyph ${g}` });
+      if (reach.length === 0) {
+        still.push(p);
         continue;
       }
-      if (sharing.length > 1) {
-        out.set(p.key, { kind: 'ambiguous', itemIds: sharing.map((l) => l.id) });
+      if (reach.length > 1) {
+        // A question, not an answer — and it claims nothing, so both rows stay
+        // available to whoever can actually tell them apart.
+        out.set(p.key, { kind: 'ambiguous', itemIds: reach.map((l) => l.id) });
         continue;
       }
-    }
 
-    out.set(p.key, { kind: 'unmatched' });
+      claimed.add(reach[0]!.id);
+      out.set(p.key, { kind: 'matched', itemId: reach[0]!.id, how: rung.how(p) });
+    }
+    open = still;
   }
+
+  for (const p of open) out.set(p.key, { kind: 'unmatched' });
 
   return out;
 }

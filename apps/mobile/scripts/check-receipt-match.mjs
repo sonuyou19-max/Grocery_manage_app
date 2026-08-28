@@ -333,7 +333,146 @@ eq(
 {
   const got = matchOne({ raw: 'paneer nvf', emoji: '🧀' });
   eq('two list rows sharing a glyph is a question, not an answer', got.kind, 'ambiguous');
-  eq('...and both candidates are offered', got.itemIds.sort(), ['cheese', 'paneer']);
+  eq('...and both candidates are offered', (got.itemIds ?? []).sort(), ['cheese', 'paneer']);
+}
+
+/* ------------------------------------- ambiguity on every rung, not one --- */
+
+/*
+ * THE BUTTER BUG.
+ *
+ * canonicalize strips `salted` and `unsalted` alike — both reduce to "butter".
+ * A list carrying both variants gives a bare `BOTER` two equally good canonical
+ * matches, and the rung used to take whichever came FIRST in list order. Nothing
+ * downstream could catch it: 🧈 and dairy_eggs are identical on both, so the
+ * veto has nothing to object to, and a price on the wrong butter looks exactly
+ * like a price on the right one.
+ *
+ * Only the glyph rung ever said "I don't know". Now every rung can.
+ */
+{
+  const BUTTERS = [
+    { id: 'salted', name: 'Salted butter', category: 'dairy_eggs' },
+    { id: 'unsalted', name: 'Unsalted butter', category: 'dairy_eggs' },
+  ];
+  const one = (raw, over = {}) => {
+    const [p] = groupLines([line(raw, over)]);
+    return matchPurchases([p], BUTTERS).get(p.key);
+  };
+
+  const bare = one('BOTER', { translated: 'butter' });
+  eq('a canonical tie is a question, not list order', bare.kind, 'ambiguous');
+  eq('...with both variants offered', (bare.itemIds ?? []).sort(), ['salted', 'unsalted']);
+
+  /*
+   * And the stronger rung still settles it when it genuinely can. This is the
+   * half that matters: refusing everything would be safe and useless.
+   */
+  const exact = one('GEZOUTEN BOTER', { translated: 'salted butter' });
+  eq('an exact reading still wins outright', exact.itemId, 'salted');
+  eq('...on the exact rung', exact.how, 'exact');
+}
+
+/*
+ * AMBIGUITY CLAIMS NOTHING.
+ *
+ * "I don't know which of these two" must leave BOTH rows free — for the model,
+ * and for the shopper in the picker. An ambiguous line that quietly took one of
+ * its candidates would be a guess wearing a question's clothes, and it would
+ * starve the next line of the row it actually needed.
+ */
+{
+  const AMB = [
+    { id: 'cheese', name: 'Cheese', category: 'dairy_eggs' },
+    { id: 'paneer', name: 'Paneer', category: 'dairy_eggs' },
+  ];
+  const ps = groupLines([
+    line('PANEER NVF', { emoji: '🧀', totalCents: 437 }),
+    line('GEITENKAAS', { emoji: '🧀', totalCents: 389 }),
+  ]);
+  const got = matchPurchases(ps, AMB);
+  eq('the first ambiguous line settles nothing', got.get(ps[0].key).kind, 'ambiguous');
+  eq('...so the second still sees both rows', got.get(ps[1].key).kind, 'ambiguous');
+  eq(
+    '...and is offered both, not the leftover one',
+    (got.get(ps[1].key).itemIds ?? []).sort(),
+    ['cheese', 'paneer'],
+  );
+}
+
+/* ----------------------------------------- a rung at a time, not a line --- */
+
+/*
+ * PRINT ORDER IS NOT EVIDENCE.
+ *
+ * The ladder used to run all four rungs for one line before looking at the
+ * next, so whoever was printed first got the row. With `Milk` on the list,
+ * `CHOCOLATE MILK DRINK` printed first has no exact, plural or canonical match
+ * — but its glyph is 🥛 and only one row shares it, so it claimed Milk. `MILK`,
+ * printed fifth, then found the row gone.
+ *
+ * Now every exact match is settled before any glyph is considered.
+ */
+{
+  /*
+   * `Cheese`, not `Milk`: 🥛 IS the dairy_eggs fallback, so a list row called
+   * Milk has no confident glyph and the glyph rung can never claim it. The
+   * first version of this test used Milk and therefore proved nothing — it
+   * passed against a line-major ladder because the race it describes could not
+   * happen. 🧀 is a real glyph on a dairy row, so this one can.
+   */
+  const CHEESE_ONLY = [{ id: 'cheese', name: 'Cheese', category: 'dairy_eggs' }];
+  const ps = groupLines([
+    line('PANEER NVF', { emoji: '🧀', totalCents: 437 }),
+    line('Cheese', { totalCents: 299 }),
+  ]);
+  const got = matchPurchases(ps, CHEESE_ONLY);
+
+  eq('the exact match takes the row, though printed second', got.get(ps[1].key).itemId, 'cheese');
+  eq('...on the exact rung', got.get(ps[1].key).how, 'exact');
+  eq('...and the glyph-only line printed first does not', got.get(ps[0].key).kind, 'unmatched');
+  if (got.get(ps[1].key).itemId === 'cheese') {
+    console.log('       (a receipt prints in the order things came off the belt —');
+    console.log('        that is not evidence about which line is which item)');
+  }
+}
+
+/*
+ * Within ONE rung the two lines are equally good evidence, so first-come still
+ * decides — a genuine tie — and the loser drops to the NEXT rung rather than
+ * out of the ladder entirely.
+ */
+{
+  const ONE_ROW = [{ id: 'milk', name: 'Milk', category: 'dairy_eggs' }];
+  /*
+   * Two DIFFERENT printings that both read as milk. Identical raws would be
+   * folded into one purchase of two by groupLines — which is correct, and would
+   * have made this assert nothing.
+   */
+  const ps = groupLines([
+    line('DLZ VOLLE MELK', { translated: 'Milk', totalCents: 129 }),
+    line('BONI HALFVOLLE', { translated: 'Milk', totalCents: 131 }),
+  ]);
+  const got = matchPurchases(ps, ONE_ROW);
+  eq('a tie within a rung goes to the first line', got.get(ps[0].key).itemId, 'milk');
+  eq('...and the second is not silently given the same row', got.get(ps[1].key).kind, 'unmatched');
+}
+
+/*
+ * Name priority survives the rewrite. The till's own wording is tried against
+ * every row before the expansion is tried against any — unioning the three
+ * readings would let a translation compete with a raw-line match as if they
+ * were equal evidence, when keeping three readings apart is the whole point.
+ */
+{
+  const TWO = [
+    { id: 'raw-row', name: 'Melk', category: 'dairy_eggs' },
+    { id: 'translated-row', name: 'Milk', category: 'dairy_eggs' },
+  ];
+  const [p] = groupLines([line('Melk', { translated: 'Milk', totalCents: 129 })]);
+  const got = matchPurchases([p], TWO).get(p.key);
+  eq('the till’s own wording is tried first', got.itemId, 'raw-row');
+  eq('...rather than reading as an ambiguity', got.kind, 'matched');
 }
 
 eq(
