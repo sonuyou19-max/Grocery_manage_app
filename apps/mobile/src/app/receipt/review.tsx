@@ -42,8 +42,13 @@ import {
   initialDecisions,
   mergeLateMatches,
   offBy,
+  collapseRaw,
+  parseAmount,
+  setAmount,
   setInclude,
-  setPrice,
+  setPacks,
+  setUnitPrice,
+  unitPriceOf,
   pickerOptions,
   unclaimed,
   type Decisions,
@@ -108,8 +113,15 @@ import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
  * histories, neither of which is the price history of almond milk.
  */
 
-/** How the row's amount is displayed while it is not being edited. */
-type Editing = { key: string; text: string } | null;
+/**
+ * Which chip is open, and what has been typed into it.
+ *
+ * The field is part of the state rather than three separate states because only
+ * one chip is ever open: opening a second must close the first, and two booleans
+ * can disagree about that in a way one discriminated value cannot.
+ */
+type EditField = 'price' | 'packs' | 'size';
+type Editing = { key: string; field: EditField; text: string } | null;
 
 export default function ReceiptReviewScreen() {
   const { t, money, currency } = useLocale();
@@ -256,13 +268,41 @@ export default function ReceiptReviewScreen() {
     { key: 'extra' as const, title: t('receipt.groupExtra'), data: extra },
   ].filter((s) => s.data.length > 0);
 
-  /** Commit the field that is open, if any. Called on blur and on submit. */
+  /**
+   * Commit the chip that is open, if any. Called on blur and on submit.
+   *
+   * Every branch fails the same way: an unparseable field leaves the value
+   * alone rather than zeroing it. A half-typed price is a price mid-thought,
+   * not a decision to pay nothing — and the same is true of a pack count
+   * somebody has just cleared in order to retype.
+   */
   const commitEdit = () => {
     if (!editing) return;
-    const cents = parsePriceToCents(editing.text);
-    // An unparseable field leaves the amount alone rather than zeroing it: a
-    // half-typed price is a price mid-thought, not a decision to pay nothing.
-    if (cents != null) setDecisions((d) => setPrice(d, editing.key, cents));
+    const { key, field, text } = editing;
+
+    if (field === 'price') {
+      const cents = parsePriceToCents(text);
+      // The PER-PACK price. setUnitPrice multiplies it back up, so the total —
+      // which is what gets imported and summed — follows the shopper's edit.
+      if (cents != null) setDecisions((d) => setUnitPrice(d, key, cents));
+    } else if (field === 'packs') {
+      const n = Number(text.replace(',', '.'));
+      if (Number.isFinite(n) && n >= 1) setDecisions((d) => setPacks(d, key, n));
+    } else {
+      /*
+       * "750g", "1 L", "33cl" — the shapes printed on packaging, which is what
+       * people are copying from. A bare number keeps the unit the row already
+       * had, so correcting 1L to 2L does not mean retyping the unit.
+       */
+      const parsed = parseAmount(text);
+      if (parsed) {
+        setDecisions((d) => {
+          const current = d.get(key);
+          const unit = parsed.quantity == null ? null : parsed.unit ?? current?.unit ?? null;
+          return setAmount(d, key, parsed.quantity, unit);
+        });
+      }
+    }
     setEditing(null);
   };
 
@@ -349,6 +389,12 @@ export default function ReceiptReviewScreen() {
     if (!d) return null;
     const target = d.itemId != null ? byId.get(d.itemId) : null;
     const isEditing = editing?.key === p.key;
+    /*
+     * Derived, never stored. Three packs at €2.09 are 69.67 cents each, the
+     * chip says €0.70, and three times seventy is €2.10 — so the total stays
+     * the stored figure and this is what the chip shows.
+     */
+    const unitCents = unitPriceOf(d);
 
     return (
       <Animated.View
@@ -397,27 +443,29 @@ export default function ReceiptReviewScreen() {
             purchase, not part of what the thing is". The size and count follow
             it as plain text — they are measurements, not identities.
           */}
-          {(p.brand || sizeOf(p)) && (
+          {p.brand && (
             <View style={styles.factRow}>
-              {p.brand && (
-                <View style={[styles.brand, { borderColor: colors.line }]}>
-                  <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
-                    {p.brand}
-                  </Text>
-                </View>
-              )}
-              {sizeOf(p) !== '' && (
-                <Text style={[type.label, styles.shrink, { color: colors.muted }]} numberOfLines={1}>
-                  {sizeOf(p)}
+              <View style={[styles.brand, { borderColor: colors.line }]}>
+                <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+                  {p.brand}
                 </Text>
-              )}
+              </View>
             </View>
           )}
 
-          {/* The till's own words, always. */}
-          {p.raw.map((raw) => (
-            <Text key={raw} style={[type.label, { color: colors.muted }]} numberOfLines={1}>
-              {raw}
+          {/*
+            The till's own words, always — but each distinct line once.
+
+            Four cartons of milk print four identical rows, and showing all four
+            spent sixty pixels saying one thing on the screen where height is
+            what lets you hold the paper beside the phone. The printing is the
+            only thing here that is not an interpretation, so it stays; the
+            repetition does not, and the count says what was dropped.
+          */}
+          {collapseRaw(p.raw).map(({ text, count }) => (
+            <Text key={text} style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+              {text}
+              {count > 1 ? `  ×${count}` : ''}
             </Text>
           ))}
 
@@ -450,51 +498,92 @@ export default function ReceiptReviewScreen() {
           </View>
         </View>
 
-        {/* Editable, because the one number worth correcting is this one. A
-            weighed line the model read as 1,67 when the paper says 16,7 is
-            invisible in the name and obvious in the amount. */}
-        {/* A column of its OWN, fixed width, that never shrinks.
-            This is the overlap. The amount used to be a bare sibling of a text
-            column that had nothing stopping it growing, so a long product name
-            ran straight under the price and the two painted on top of each
-            other. Reserving the width means the name has a real boundary to
-            wrap against — and the row does not jump when you tap into the
-            field, because both states are the same size. */}
+        {/*
+          THE EDITABLE GROUP: price, size, pack count, then the total.
+
+          A column of its OWN, fixed width, that never shrinks. This is the
+          overlap that bit before — the amount used to be a bare sibling of a
+          text column with nothing stopping it growing, so a long product name
+          ran under the price and the two painted on top of each other.
+          Reserving the width gives the name a real boundary to wrap against,
+          and the row does not jump when a chip opens because every state is the
+          same size.
+
+          A dashed outline means "typing here changes this". Nothing else on the
+          row borrows it — the match pill is the row's only green thing, so
+          green keeps meaning "matched to your list" and dashes keep meaning
+          "editable". Two signals, two jobs.
+        */}
         <View style={styles.amountCol}>
-          {isEditing ? (
-            <View style={[styles.amountBox, { borderColor: colors.accent }]}>
-              <Text style={[type.label, { color: colors.muted }]}>
-                {currencySymbolFor(currency)}
-              </Text>
-              <TextInput
-                value={editing.text}
-                onChangeText={(text) => setEditing({ key: p.key, text })}
-                onBlur={commitEdit}
-                onSubmitEditing={commitEdit}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                autoFocus
-                selectTextOnFocus
-                style={[styles.amountInput, { color: colors.ink }]}
-              />
-            </View>
-          ) : (
-            <Pressable
-              onPress={() => {
-                haptics.tick();
-                setEditing({ key: p.key, text: (d.priceCents / 100).toFixed(2) });
-              }}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('receipt.editAmount')}
+          <View style={styles.chipRow}>
+            <EditChip
+              accessibilityLabel={t('receipt.editPrice')}
+              open={isEditing && editing.field === 'price'}
+              text={editing?.text ?? ''}
+              onChangeText={(text) => setEditing({ key: p.key, field: 'price', text })}
+              onOpen={() => setEditing({ key: p.key, field: 'price', text: (unitCents / 100).toFixed(2) })}
+              onDone={commitEdit}
+              keyboardType="decimal-pad"
+              colors={colors}
             >
-              <Text
-                style={[type.body, styles.amountText, { color: colors.ink }]}
-                numberOfLines={1}
-              >
-                {money(d.priceCents)}
-              </Text>
-            </Pressable>
+              {money(unitCents)}
+            </EditChip>
+
+            {/*
+              The size. Empty is a real state and looks different: no fill, grey
+              dashes, an ellipsis — a gap you may fill rather than a value you
+              might mistake for one.
+            */}
+            <EditChip
+              accessibilityLabel={t('receipt.editSize')}
+              open={isEditing && editing.field === 'size'}
+              empty={d.quantity == null}
+              text={editing?.text ?? ''}
+              onChangeText={(text) => setEditing({ key: p.key, field: 'size', text })}
+              onOpen={() =>
+                setEditing({
+                  key: p.key,
+                  field: 'size',
+                  text: d.quantity == null ? '' : `${d.quantity}${d.unit ?? ''}`,
+                })
+              }
+              onDone={commitEdit}
+              colors={colors}
+            >
+              {d.quantity == null ? '···' : `${d.quantity} ${d.unit ?? ''}`.trim()}
+            </EditChip>
+
+            {/*
+              A pack count of one is not missing — the receipt said one — so it
+              gets a real chip rather than the placeholder. Only a genuine
+              unknown earns the ellipsis, or every row of every receipt would
+              carry one.
+            */}
+            <EditChip
+              accessibilityLabel={t('receipt.editPacks')}
+              open={isEditing && editing.field === 'packs'}
+              text={editing?.text ?? ''}
+              onChangeText={(text) => setEditing({ key: p.key, field: 'packs', text })}
+              onOpen={() => setEditing({ key: p.key, field: 'packs', text: String(d.packs) })}
+              onDone={commitEdit}
+              keyboardType="number-pad"
+              colors={colors}
+            >
+              {`× ${d.packs}`}
+            </EditChip>
+          </View>
+
+          {/*
+            The total: arithmetic, so no outline, no fill, nothing that invites a
+            tap a tap could not honour. Only when the product arrived as more
+            than one pack — below that the price chip already IS the total, and
+            printing it twice says nothing.
+          */}
+          {d.packs > 1 && (
+            <View style={styles.totalRow}>
+              <Text style={[type.label, { color: colors.muted }]}>{t('receipt.lineTotal')}</Text>
+              <Text style={[type.price, { color: colors.ink }]}>{money(d.priceCents)}</Text>
+            </View>
           )}
         </View>
       </Animated.View>
@@ -785,24 +874,92 @@ export default function ReceiptReviewScreen() {
  * disagree about whether four cartons of milk are four articles or one, and a
  * message naming a single expected figure would be wrong for half of them.
  */
+
 /**
- * Size and count — the measurements that are not the product.
+ * A number you can tap and type over.
  *
- * Assembled here rather than folded into the name, which is the correction this
- * whole change is: a pantry called "1 litre Delhaize full fat milk" cannot
- * match next month's Alpro, and "Provital toast 50 pieces" is not a thing
- * anybody buys again. Keeping these beside the name loses nothing and makes the
- * comparison possible.
+ * ---------------------------------------------------------------------------
+ * The dashed outline is the whole feature
+ * ---------------------------------------------------------------------------
  *
- * Returns '' rather than null so the caller's `&&` reads naturally; most loose
- * produce has none of these.
+ * Every figure on this screen was already editable and nothing said so: the
+ * price was rendered as text in the same weight and colour as the name beside
+ * it, and people do not tap text. The outline is the only thing that changed
+ * about the affordance — the tap target, the parsing and the commit were all
+ * already there.
+ *
+ * Dashed rather than solid because solid reads as a field that is already
+ * yours, and most of these are the till's reading, correct as printed. A dashed
+ * edge says "you may" rather than "you must".
+ *
+ * ---------------------------------------------------------------------------
+ * One size in every state
+ * ---------------------------------------------------------------------------
+ *
+ * Closed, open and empty are the same box. The chips sit in a row of three and
+ * a row of three that reflows when one of them gains a cursor is a row that
+ * moves under the finger arriving at it. So the border width does not change
+ * between states either — only its colour and its dash.
  */
-function sizeOf(p: ReceiptPurchase): string {
-  const bits: string[] = [];
-  if (p.quantity != null) bits.push(`${p.quantity}${p.unit ?? ''}`);
-  // Only when it is more than one — "× 1" is noise on every single row.
-  if (p.packs > 1) bits.push(`× ${p.packs}`);
-  return bits.join(' · ');
+function EditChip({
+  children,
+  open,
+  empty,
+  text,
+  onChangeText,
+  onOpen,
+  onDone,
+  keyboardType,
+  accessibilityLabel,
+  colors,
+}: {
+  children: string;
+  open: boolean;
+  empty?: boolean;
+  text: string;
+  onChangeText: (text: string) => void;
+  onOpen: () => void;
+  onDone: () => void;
+  keyboardType?: 'decimal-pad' | 'number-pad';
+  accessibilityLabel: string;
+  colors: { ink: string; muted: string; line: string; accent: string };
+}) {
+  if (open) {
+    return (
+      <View style={[styles.editChip, styles.editChipOpen, { borderColor: colors.accent }]}>
+        <TextInput
+          value={text}
+          onChangeText={onChangeText}
+          onBlur={onDone}
+          onSubmitEditing={onDone}
+          keyboardType={keyboardType}
+          returnKeyType="done"
+          autoFocus
+          selectTextOnFocus
+          style={[styles.chipInput, { color: colors.ink }]}
+        />
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.tick();
+        onOpen();
+      }}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.editChip, { borderColor: empty ? colors.line : colors.accent }]}
+    >
+      <Text
+        style={[styles.chipText, { color: empty ? colors.muted : colors.ink }]}
+        numberOfLines={1}
+      >
+        {children}
+      </Text>
+    </Pressable>
+  );
 }
 
 function phrase(
@@ -934,16 +1091,55 @@ const styles = StyleSheet.create({
    * how a name ended up painted across a price. Wide enough for €1 234,56 in
    * the longest of the seven locales' formats.
    */
-  amountCol: { width: 96, flexShrink: 0, alignItems: 'flex-end' },
-  amountText: { textAlign: 'right' },
-  amountBox: {
+  /*
+   * Wide enough for three chips, fixed so it never shrinks.
+   *
+   * Fixed is the important half. The amount used to be a bare sibling of a text
+   * column that had nothing stopping it growing, so a long product name ran
+   * under the price and the two painted over each other. A reserved width gives
+   * the name a boundary to wrap against.
+   */
+  amountCol: { width: 164, flexShrink: 0, alignItems: 'flex-end', gap: 5 },
+  // Wraps rather than overflows: on a narrow phone the pack chip drops to a
+  // second line and the group stays right-aligned, which still reads.
+  chipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 5,
+  },
+  totalRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  /*
+   * One box in every state — closed, open and empty. The chips sit in a row of
+   * three, and a row that reflows when one of them gains a cursor is a row that
+   * moves out from under the finger arriving at it. So the padding and the
+   * border WIDTH are constant here; only colour and dash change.
+   */
+  editChip: {
+    minWidth: 44,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 2,
-    borderWidth: 1,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm,
-    alignSelf: 'stretch',
+  },
+  // Open: the dashes resolve to a solid ring. Same width, same padding.
+  editChipOpen: { borderStyle: 'solid' },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  chipInput: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+    minWidth: 32,
+    padding: 0,
   },
   amountInput: { flex: 1, fontSize: 16, paddingVertical: spacing.sm, textAlign: 'right' },
   missing: { gap: spacing.sm, paddingTop: spacing.lg },

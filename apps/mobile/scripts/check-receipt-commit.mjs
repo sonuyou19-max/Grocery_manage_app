@@ -131,10 +131,27 @@ const ROWS = [
   { id: 'i2', name: 'Bread', category: 'bakery', checked: true },
 ];
 
+/*
+ * Decisions carry the size and the pack count now, because every one of those
+ * is editable on the review sheet and planCommit reads the DECISION rather than
+ * the scan — a corrected pack size that never reaches the write is a correction
+ * the shopper watched do nothing. `seed` mirrors initialDecisions so a fixture
+ * cannot drift from the shape the screen actually produces.
+ */
+const seed = (p, over = {}) => ({
+  include: true,
+  priceCents: p.priceCents,
+  packs: p.packs,
+  quantity: p.quantity,
+  unit: p.unit,
+  itemId: null,
+  ...over,
+});
+
 const decide = (over = {}) =>
   new Map([
-    ['a', { include: true, priceCents: 299, itemId: 'i1' }],
-    ['b', { include: true, priceCents: 249, itemId: null }],
+    ['a', seed(PURCHASES[0], { itemId: 'i1' })],
+    ['b', seed(PURCHASES[1])],
     ...Object.entries(over),
   ]);
 
@@ -211,7 +228,7 @@ eq('an unknown unit takes its quantity with it', listAmount(12, 'oz'), { quantit
   // The milk, exactly as the Delhaize scan produced it: four packs of one litre.
   const milk = [buy('m', '1L DLL VOLLE MELK', 356, { packs: 4, quantity: 1, unit: 'l' })];
   const rows = [{ id: 'i9', name: 'Milk', category: 'dairy_eggs', checked: false }];
-  const decisions = new Map([['m', { include: true, priceCents: 356, itemId: 'i9' }]]);
+  const decisions = new Map([['m', seed(milk[0], { itemId: 'i9' })]]);
   const plan = planCommit(RECEIPT, milk, decisions, rows, NOW);
 
   const patch = plan.patches.find((x) => x.itemId === 'i9').patch;
@@ -231,7 +248,7 @@ eq('an unknown unit takes its quantity with it', listAmount(12, 'oz'), { quantit
   // The same crossing on the other path: a line that matched nothing becomes a
   // new row, and a new row is a list row with the same constraint on it.
   const drink = [buy('d', 'COLA 33CL', 199, { quantity: 33, unit: 'cl' })];
-  const plan = planCommit(RECEIPT, drink, new Map([['d', { include: true, priceCents: 199, itemId: null }]]), [], NOW);
+  const plan = planCommit(RECEIPT, drink, new Map([['d', seed(drink[0])]]), [], NOW);
   eq('a created row is converted too', plan.adds[0].detail.unit, 'ml');
   eq('...with its amount scaled', plan.adds[0].detail.quantity, 330);
 }
@@ -707,7 +724,7 @@ console.log('\na multipack keeps its count');
     product: 'milk', expanded: 'Delhaize volle melk 1L',
   });
   const rows = [{ id: 'i9', name: 'Milk', category: 'dairy', checked: false }];
-  const decisions = new Map([['m', { include: true, priceCents: 668, itemId: 'i9' }]]);
+  const decisions = new Map([['m', seed(four, { itemId: 'i9' })]]);
   const plan = planCommit(RECEIPT, [four], decisions, rows, NOW);
 
   eq('the list row is patched with the pack count', plan.patches[0].patch.packs, 4);
@@ -720,6 +737,35 @@ console.log('\na multipack keeps its count');
   eq('...under the list’s own name', plan.purchases[0].name, 'Milk');
   eq('...with the till’s wording kept as the description', plan.purchases[0].detail.description, 'Delhaize volle melk 1L');
   eq('...and the brand kept apart from it', plan.purchases[0].detail.brand, 'Delhaize');
+}
+
+/* --------------------------------------------- the shopper's edits win -- */
+
+/*
+ * Every number on the review sheet is editable now, and planCommit reads the
+ * DECISION rather than the scan. This asserts it behaviourally rather than by
+ * reading the source: the decision here disagrees with the purchase on all
+ * three fields, so a planner that reached for the scan would return the scan's
+ * answers and be caught.
+ *
+ * A correction that never reaches the write is a correction the shopper watched
+ * do nothing — the worst outcome available, because the screen said it worked.
+ */
+console.log('\ncorrections reach the write');
+{
+  // The scan read three packs of 500ml at €4.50. The shopper fixed all of it.
+  const scanned = buy('e', 'DRINK', 450, { packs: 3, quantity: 500, unit: 'ml' });
+  const rows = [{ id: 'i7', name: 'Drink', category: 'drinks', checked: false }];
+  const corrected = new Map([
+    ['e', { include: true, priceCents: 450, packs: 4, quantity: 1, unit: 'l', itemId: 'i7' }],
+  ]);
+  const plan = planCommit(RECEIPT, [scanned], corrected, rows, NOW);
+
+  eq('the corrected pack count is imported', plan.patches[0].patch.packs, 4);
+  eq('...and the corrected size', plan.patches[0].patch.quantity, 1);
+  eq('...converted to a unit the database accepts', plan.patches[0].patch.unit, 'L');
+  eq('the purchase log takes the correction too', plan.purchases[0].detail.packs, 4);
+  eq('...keeping the receipt vocabulary it was typed in', plan.purchases[0].detail.unit, 'l');
 }
 
 /* ------------------------------------ a line nobody wrote down gets a row -- */

@@ -345,7 +345,7 @@ export function planCommit(
      * below: the log keeps the receipt's own wording ("€0.89 / l") and has no
      * constraint to satisfy, while a list row has both.
      */
-    const amount = listAmount(p.quantity, p.unit);
+    const amount = listAmount(d.quantity, d.unit);
 
     planned.push({
       key: p.key,
@@ -354,9 +354,18 @@ export function planCommit(
       detail: {
         priceCents: d.priceCents,
         store,
-        quantity: p.quantity,
-        unit: p.unit,
-        packs: p.packs,
+        /*
+         * From the DECISION, not the purchase. Every one of these is editable
+         * on the review sheet now, and reading the scan here would import the
+         * numbers the model read rather than the ones the shopper corrected —
+         * which is the whole purpose of the screen they were corrected on.
+         *
+         * The unit stays in the receipt's own vocabulary here: price_entries
+         * has no constraint and the history card renders "€0.89 / l" from it.
+         */
+        quantity: d.quantity,
+        unit: d.unit,
+        packs: d.packs,
         brand: p.brand,
         // Only when it differs from the name we are filing under. For an
         // unmatched line those are the same string, and storing it twice would
@@ -375,7 +384,7 @@ export function planCommit(
         patch: {
           quantity: amount.quantity,
           unit: amount.unit,
-          packs: p.packs,
+          packs: d.packs,
           priceCents: d.priceCents,
           store,
         },
@@ -404,7 +413,7 @@ export function planCommit(
         detail: {
           quantity: amount.quantity,
           unit: amount.unit,
-          packs: p.packs,
+          packs: d.packs,
           priceCents: d.priceCents,
           store,
         },

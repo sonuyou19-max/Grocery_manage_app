@@ -58,9 +58,15 @@ const {
   initialDecisions,
   offBy,
   pickerOptions,
+  collapseRaw,
+  parseAmount,
+  setAmount,
   setInclude,
+  setPacks,
   setPrice,
+  setUnitPrice,
   unclaimed,
+  unitPriceOf,
 } = mod;
 
 /* --------------------------------------------------------------- fixtures */
@@ -222,6 +228,130 @@ eq(
   unclaimed(LIST, assign(d0, 'a', null)).map((c) => c.id),
   ['i1', 'i2', 'i3'],
 );
+
+/* ------------------------------------------------- price, packs and size -- */
+
+console.log('\nthe editable numbers');
+
+/*
+ * THE TOTAL IS STORED; THE PER-PACK PRICE IS DERIVED.
+ *
+ * The screen now offers a per-pack price to edit, which is what the shelf label
+ * says and what a shopper can check. It is NOT what gets stored, because it
+ * cannot be added up without drift: €2.09 over three packs is 69.67 cents each,
+ * the chip has to say €0.70, and three seventy-cent packs are €2.10. Storing
+ * the unit price would make the import a penny out for reasons nobody could see.
+ */
+{
+  const four = initialDecisions([{ ...buy('m', 'milk', 356), packs: 4 }], new Map());
+  eq('a pack price is the total over the packs', unitPriceOf(four.get('m')), 89);
+
+  const odd = initialDecisions([{ ...buy('x', 'thing', 209), packs: 3 }], new Map());
+  eq('...rounded to a cent for the chip', unitPriceOf(odd.get('x')), 70);
+  eq(
+    '...while the total stays exactly what was paid',
+    odd.get('x').priceCents,
+    209,
+  );
+  if (odd.get('x').priceCents === 209) {
+    console.log('       (three seventy-cent packs are €2.10 — storing the unit price');
+    console.log('        would import a penny that was never on the receipt)');
+  }
+}
+
+// A single pack has no separate unit price; the chip IS the total.
+eq('one pack: the price is the price', unitPriceOf(d0.get('a')), 299);
+
+/*
+ * Editing the PRICE means the shelf price was wrong, so the total follows it.
+ * Editing the PACKS means the count was miscounted, and the till charged what
+ * it charged — so the total is untouched and the per-pack chip re-derives.
+ * Those are opposite directions and getting them the same way round is the
+ * whole point.
+ */
+{
+  const four = initialDecisions([{ ...buy('m', 'milk', 356), packs: 4 }], new Map());
+  const cheaper = setUnitPrice(four, 'm', 80);
+  eq('a new pack price multiplies up', cheaper.get('m').priceCents, 320);
+  eq('...over the packs it actually has', cheaper.get('m').packs, 4);
+
+  const recounted = setPacks(four, 'm', 2);
+  eq('a corrected pack count leaves the money alone', recounted.get('m').priceCents, 356);
+  eq('...and the pack price re-derives from it', unitPriceOf(recounted.get('m')), 178);
+}
+
+eq('packs never fall below one', setPacks(d0, 'a', 0).get('a').packs, 1);
+eq('...and are whole', setPacks(d0, 'a', 2.6).get('a').packs, 3);
+
+/* ---------------------------------------------------------- typed sizes -- */
+
+console.log('\nparseAmount');
+
+// The shapes printed on packaging, because that is what people copy from.
+eq('grams', parseAmount('750g'), { quantity: 750, unit: 'g' });
+eq('a space is fine', parseAmount('1 L'), { quantity: 1, unit: 'l' });
+eq('so is upper case', parseAmount('500ML'), { quantity: 500, unit: 'ml' });
+eq('centilitres are accepted', parseAmount('33cl'), { quantity: 33, unit: 'cl' });
+eq('pieces', parseAmount('6 pcs'), { quantity: 6, unit: 'pcs' });
+// Half of Europe writes 1,5.
+eq('a comma decimal', parseAmount('1,5l'), { quantity: 1.5, unit: 'l' });
+eq('and a full stop', parseAmount('1.5l'), { quantity: 1.5, unit: 'l' });
+
+/*
+ * A bare number keeps the unit the row already had — correcting 1L to 2L should
+ * not mean retyping the unit. Null here means "unchanged", and the screen
+ * supplies the old one.
+ */
+eq('a bare number leaves the unit to the caller', parseAmount('2'), { quantity: 2, unit: null });
+
+// Emptying the chip is a real answer, and a different one: it clears the size.
+eq('an empty chip clears the size', parseAmount(''), { quantity: null, unit: null });
+eq('...and so does whitespace', parseAmount('   '), { quantity: null, unit: null });
+
+/*
+ * Everything else is refused, and refusing means the OLD value stays on screen.
+ * A half-typed size is a size mid-thought, not an instruction to forget one.
+ */
+eq('an unknown unit is refused', parseAmount('12oz'), null);
+eq('...as is nonsense', parseAmount('abc'), null);
+eq('...and zero', parseAmount('0kg'), null);
+eq('...and a negative', parseAmount('-1kg'), null);
+
+eq('a size can be set', setAmount(d0, 'a', 750, 'g').get('a').quantity, 750);
+eq('...with its unit', setAmount(d0, 'a', 750, 'g').get('a').unit, 'g');
+eq('...and cleared again', setAmount(d0, 'a', null, null).get('a').quantity, null);
+
+/* ------------------------------------------------------ the printed rows -- */
+
+console.log('\ncollapseRaw');
+
+/*
+ * Four cartons print four identical lines. The printing stays — it is the only
+ * thing on the row that is not an interpretation — but sixty pixels to say one
+ * thing is height taken from the comparison the screen exists for.
+ */
+eq(
+  'repeats fold, with a count',
+  collapseRaw(['1L DLL VOLLE MELK', '1L DLL VOLLE MELK', '1L DLL VOLLE MELK', '1L DLL VOLLE MELK']),
+  [{ text: '1L DLL VOLLE MELK', count: 4 }],
+);
+eq('a single line is untouched', collapseRaw(['RODE AJUIN 750G']), [{ text: 'RODE AJUIN 750G', count: 1 }]);
+eq(
+  'different lines all survive',
+  collapseRaw(['A', 'B']).map((r) => r.text),
+  ['A', 'B'],
+);
+/*
+ * Counted, not run-length encoded: a till can print the same line twice with
+ * something else between them, and a run-length pass would report it as two
+ * separate ones.
+ */
+eq(
+  'repeats are counted even when separated',
+  collapseRaw(['A', 'B', 'A']),
+  [{ text: 'A', count: 2 }, { text: 'B', count: 1 }],
+);
+eq('...keeping first-appearance order', collapseRaw(['B', 'A', 'B']).map((r) => r.text), ['B', 'A']);
 
 /* -------------------------------------------------------- pickerOptions -- */
 
@@ -427,10 +557,23 @@ assert(
   );
 }
 
+/*
+ * The printing is still unconditional — it is just no longer repeated.
+ *
+ * Four cartons of milk print four identical rows and the sheet showed all four.
+ * What collapses is the REPETITION; the line itself must stay visible, because
+ * it is the only thing on the row that is not an interpretation, and behind a
+ * tap it becomes an optional check that nobody performs.
+ */
 assert(
-  /\{p\.raw\.map\(\(raw\) => \(/.test(sheet),
+  /\{collapseRaw\(p\.raw\)\.map\(/.test(sheet),
   'the printed line is rendered unconditionally',
   'behind a tap it becomes an optional check, and a check nobody performs is decoration',
+);
+assert(
+  /count > 1 \? `  ×\$\{count\}` : ''/.test(sheet),
+  '...and says how many times it was printed',
+  'collapsing four lines to one without saying "×4" hides evidence rather than tidying it',
 );
 
 assert(
@@ -582,10 +725,111 @@ assert(
   'this is the one that actually bit: unmatched lines were filed under the full description, so the pantry filled with "Provital toast 50 pieces"',
 );
 
+/*
+ * The size still shows and is still not part of the name — it has moved from
+ * muted text under the name to an editable chip on the right, beside the money
+ * it describes. What must never happen is a size or a brand INSIDE the name,
+ * because the name is what becomes the pantry item.
+ */
 assert(
-  /sizeOf\(p\)/.test(sheet) && !/name.*sizeOf|sizeOf.*productName\(p\)/.test(sheet),
-  'the size is shown BESIDE the name, never inside it',
+  /\$\{d\.quantity\} \$\{d\.unit \?\? ''\}/.test(sheet),
+  'the size is shown beside the name, never inside it',
+  'a size folded into the name makes "milk 1L" a different item from "milk" forever',
 );
+assert(
+  !/productName\(p\)\}[^\n]*d\.quantity|d\.quantity[^\n]*productName\(p\)/.test(sheet),
+  '...and the name is drawn on its own',
+);
+
+/*
+ * THE DASHED OUTLINE IS THE FEATURE.
+ *
+ * Every figure here was already editable and nothing said so — the price was
+ * rendered as text in the same weight and colour as the name beside it, and
+ * people do not tap text. The tap target, the parsing and the commit were all
+ * already there; the outline is what changed.
+ */
+assert(
+  /borderStyle: 'dashed'/.test(sheet),
+  'editable numbers are drawn as dashed chips',
+  'a figure styled exactly like the text around it does not read as an input',
+);
+assert(
+  /editChipOpen: \{ borderStyle: 'solid' \}/.test(sheet),
+  '...resolving to a solid ring while open',
+);
+/*
+ * One box in every state. The chips sit in a row of three, and a row that
+ * reflows when one of them gains a cursor moves out from under the finger
+ * arriving at it — so only colour and dash may change, never the geometry.
+ */
+assert(
+  /editChip: \{\s*minWidth: 44,\s*borderWidth: 1\.5,/.test(sheet),
+  '...at one size in every state',
+  'a chip that grows when tapped moves the two beside it',
+);
+
+// Three chips, and the placeholder for a size the receipt never gave.
+assert(
+  /t\('receipt\.editPrice'\)/.test(sheet) &&
+    /t\('receipt\.editSize'\)/.test(sheet) &&
+    /t\('receipt\.editPacks'\)/.test(sheet),
+  'price, size and pack count are each their own chip',
+);
+assert(
+  /d\.quantity == null \? '···'/.test(sheet),
+  'a size the receipt never gave shows a placeholder',
+  'an empty chip has to look different from a value, or a gap reads as a number',
+);
+/*
+ * A pack count of ONE is not missing — the receipt said one. It gets a real
+ * chip, or every row of every receipt would carry a placeholder.
+ */
+assert(
+  /\{`× \$\{d\.packs\}`\}/.test(sheet) && !/d\.packs === 1 \? '···'/.test(sheet),
+  '...but a pack count of one is a value, not a gap',
+);
+
+/*
+ * The total is arithmetic. No outline, no fill, nothing that invites a tap a
+ * tap could not honour — and only when there is more than one pack, since below
+ * that the price chip already IS the total.
+ */
+assert(
+  /\{d\.packs > 1 && \(\s*<View style=\{styles\.totalRow\}>/.test(sheet),
+  'the computed total appears only for more than one pack',
+  'printing the total beside an identical price chip says nothing twice',
+);
+assert(
+  !/totalRow[\s\S]{0,400}borderStyle: 'dashed'/.test(sheet),
+  '...and is never drawn as an editable chip',
+  'it is arithmetic — an outline would promise an edit that does nothing',
+);
+
+/*
+ * THE EDITS HAVE TO REACH THE IMPORT.
+ *
+ * The chips write into the decision map; planCommit used to read the raw scan.
+ * Reading the scan would import the numbers the model read rather than the ones
+ * the shopper corrected — which is the entire purpose of the screen they were
+ * corrected on.
+ */
+{
+  const commit = readFileSync(join(SRC, 'lib', 'receipt-commit.ts'), 'utf8');
+  assert(
+    /listAmount\(d\.quantity, d\.unit\)/.test(commit),
+    'the import takes the size from the decision, not the scan',
+    'a corrected pack size that never reaches the write is a correction the shopper watched do nothing',
+  );
+  assert(
+    /packs: d\.packs,/.test(commit) && !/packs: p\.packs,/.test(commit),
+    '...and the pack count too',
+  );
+  assert(
+    /quantity: d\.quantity,\s*unit: d\.unit,/.test(commit),
+    '...including in the purchase log',
+  );
+}
 
 assert(
   /purchaseInstant\(receipt\.purchasedAt, Date\.now\(\)\)/.test(sheet),

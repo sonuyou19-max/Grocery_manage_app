@@ -25,12 +25,34 @@ export interface Decision {
   /**
    * What was paid, in cents, across every pack of it.
    *
-   * The printed total rather than a unit price, because the printed total is
-   * the part the receipt is actually evidence of. A unit price is arithmetic we
-   * would be doing on the shopper's behalf and then storing as if they had
-   * checked it.
+   * THE TOTAL, and it stays the total even though the screen now offers a
+   * per-pack price to edit. The printed total is the part the receipt is
+   * actually evidence of, and it is the only figure that can be added up
+   * without drift: €2.09 over three packs is 69.67 cents each, and three
+   * seventy-cent packs are €2.10. Storing the unit price would make the import
+   * a penny out for reasons no one could see.
+   *
+   * So the unit price is derived for display and for editing — see unitPriceOf
+   * and setUnitPrice — and this is what the footer, the reconciliation and the
+   * import all read.
    */
   priceCents: number;
+  /**
+   * How many packs, and editable now: the scan reads it off the multiplier and
+   * a till that prints "3" for four bottles is exactly the kind of thing the
+   * review screen exists to catch.
+   */
+  packs: number;
+  /** The size of ONE pack, as printed. Null when the line carried no size. */
+  quantity: number | null;
+  /**
+   * That size's unit, in the RECEIPT's vocabulary — g, kg, ml, l, cl, pcs.
+   *
+   * Not the list's five. The chip shows what the shopper typed or what the till
+   * printed, and listAmount converts at the commit boundary, which is the one
+   * place that has to satisfy the database's constraint.
+   */
+  unit: string | null;
   /**
    * The list row this is, or null for "not on the list".
    *
@@ -60,6 +82,9 @@ export function initialDecisions(
     out.set(p.key, {
       include: true,
       priceCents: p.priceCents,
+      packs: p.packs,
+      quantity: p.quantity,
+      unit: p.unit,
       itemId: m?.kind === 'matched' ? m.itemId : null,
     });
   }
@@ -120,6 +145,131 @@ export function setPrice(d: Decisions, key: string, priceCents: number): Map<str
   const current = out.get(key);
   if (current) out.set(key, { ...current, priceCents });
   return out;
+}
+
+/**
+ * The price of ONE pack, derived rather than stored.
+ *
+ * Rounded to the nearest cent because that is what a price chip can show, and
+ * the rounding is exactly why this is not the stored value: three packs at
+ * €2.09 are 69.67 cents each, the chip says €0.70, and three times seventy is
+ * €2.10. The total is what gets imported, so the penny stays where the receipt
+ * put it.
+ */
+export function unitPriceOf(d: Decision): number {
+  return d.packs > 1 ? Math.round(d.priceCents / d.packs) : d.priceCents;
+}
+
+/**
+ * Set the per-pack price: the total becomes that price times the packs.
+ *
+ * This direction is a real edit — the shopper is saying the shelf price was
+ * wrong — so the total follows it. The opposite direction (setPacks) does not
+ * touch the total, because correcting a miscounted pack does not change what
+ * the till charged.
+ */
+export function setUnitPrice(d: Decisions, key: string, unitCents: number): Map<string, Decision> {
+  const out = new Map(d);
+  const current = out.get(key);
+  if (current) out.set(key, { ...current, priceCents: unitCents * Math.max(1, current.packs) });
+  return out;
+}
+
+/**
+ * Correct the pack count, keeping the money.
+ *
+ * "It was four bottles, not three" is a statement about the count and not about
+ * the price: the till charged what it charged. So the total is untouched and
+ * the per-pack chip re-derives from it — which is the visible effect, and the
+ * right one.
+ *
+ * At least one, always. Zero packs would make unitPriceOf divide by nothing and
+ * would mean a purchase of no items, which is what excluding a line is for.
+ */
+export function setPacks(d: Decisions, key: string, packs: number): Map<string, Decision> {
+  const out = new Map(d);
+  const current = out.get(key);
+  if (current) out.set(key, { ...current, packs: Math.max(1, Math.round(packs)) });
+  return out;
+}
+
+/** Set the size of one pack, or clear it back to unknown. */
+export function setAmount(
+  d: Decisions,
+  key: string,
+  quantity: number | null,
+  unit: string | null,
+): Map<string, Decision> {
+  const out = new Map(d);
+  const current = out.get(key);
+  if (current) out.set(key, { ...current, quantity, unit });
+  return out;
+}
+
+/**
+ * The units a size chip accepts, in the receipt's own vocabulary.
+ *
+ * Wider than the list's five on purpose: a shopper copying "33CL" off the
+ * bottle in front of them should not have to convert it in their head, and
+ * listAmount already turns centilitres into millilitres at the commit boundary.
+ */
+const TYPED_UNITS = ['g', 'kg', 'ml', 'l', 'cl', 'pcs'] as const;
+
+/**
+ * What somebody typed into a size chip.
+ *
+ * "750g", "1 L", "33cl", "6 pcs" — the shapes printed on packaging, because
+ * that is what people are copying from. Returns null for anything it cannot
+ * read, which the caller treats as "leave it as it was" rather than as a clear.
+ *
+ * An empty string is a real answer and a different one: it clears the size,
+ * which is how a wrong reading gets removed rather than replaced.
+ */
+export function parseAmount(
+  text: string,
+): { quantity: number | null; unit: string | null } | null {
+  const clean = text.trim().toLowerCase();
+  if (clean === '') return { quantity: null, unit: null };
+
+  // Comma decimals, because half of Europe writes 1,5 l.
+  const m = clean.match(/^([\d]+(?:[.,][\d]+)?)\s*([a-z]*)$/);
+  if (!m) return null;
+
+  const quantity = Number(m[1]!.replace(',', '.'));
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+
+  const raw = m[2] ?? '';
+  // A bare number keeps whatever unit the row already had; the caller supplies
+  // it, so an empty unit here means "unchanged", not "none".
+  if (raw === '') return { quantity, unit: null };
+
+  const unit = (TYPED_UNITS as readonly string[]).includes(raw) ? raw : null;
+  // A unit nobody recognises is a typo, not an instruction. Refusing the whole
+  // edit leaves the old value on screen, which is the honest failure.
+  return unit ? { quantity, unit } : null;
+}
+
+/**
+ * The till's printed lines, with repeats folded together.
+ *
+ * Four cartons of milk print four identical rows, and the review sheet showed
+ * all four — sixty pixels of height to say one thing, on the screen where
+ * height is what lets you compare a row against the paper in your hand.
+ *
+ * The printing itself is never dropped. It is the only thing on the row that is
+ * not an interpretation, so it stays visible and checkable; what goes is the
+ * repetition. Consecutive runs are NOT what is counted — a till can print the
+ * same line twice with something else between — so this counts occurrences and
+ * keeps first appearance order.
+ */
+export function collapseRaw(raw: readonly string[]): { text: string; count: number }[] {
+  const order: string[] = [];
+  const counts = new Map<string, number>();
+  for (const line of raw) {
+    if (!counts.has(line)) order.push(line);
+    counts.set(line, (counts.get(line) ?? 0) + 1);
+  }
+  return order.map((text) => ({ text, count: counts.get(text) ?? 1 }));
 }
 
 /**
