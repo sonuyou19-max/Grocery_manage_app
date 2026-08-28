@@ -14,6 +14,7 @@ import {
   fingerprint,
   MONEY_CODES,
   reconcile,
+  type Problem,
   type ReceiptLine,
 } from '../_shared/receipt-reconcile.ts';
 
@@ -309,6 +310,46 @@ RULES.
   printed AFTER the total are not lines. Do not include them.
 - Never invent a line, a price or a total. A field you cannot read is null.`;
 
+/**
+ * What to tell the repair about what failed.
+ *
+ * Both halves, when there are both. The rows that do not multiply out are one
+ * kind of evidence; the size of the shortfall against the printed total is
+ * another, and it is the more useful one — a totals mismatch names no row, but
+ * it names the AMOUNT, and an amount is something a person or a model can scan
+ * a column of figures for.
+ *
+ * They are not alternatives, which is what the first version had them as. A
+ * receipt can have one row whose arithmetic is broken AND a different row read
+ * wrongly; sending only the first sends the model to the wrong place.
+ */
+function repairBrief(disputed: readonly number[], details: readonly Problem[]): string {
+  const lines: string[] = [];
+
+  if (disputed.length > 0) {
+    lines.push(
+      `Rows ${disputed.join(', ')} do not multiply out: look at those rows again.`,
+    );
+  }
+
+  for (const d of details) {
+    if (d.code !== 'goods' && d.code !== 'paid') continue;
+    const gap = d.printed - d.got;
+    const where = d.code === 'goods' ? 'your item lines' : 'your lines after discounts and deposits';
+    lines.push(
+      `${gap > 0 ? 'TOO LOW' : 'TOO HIGH'}: ${where} add up to ${d.got}, ` +
+        `but the receipt prints ${d.printed} — a difference of ${Math.abs(gap)} cents. ` +
+        `Most often ONE row's amount is wrong by exactly that much, so look for a ` +
+        `figure that could be ${Math.abs(gap)} cents ${gap > 0 ? 'higher' : 'lower'} ` +
+        `than you read it. A whole missing or duplicated row is the other cause.`,
+    );
+  }
+
+  return lines.length > 0
+    ? lines.join('\n')
+    : 'The receipt does not reconcile. Check every amount against the photographs.';
+}
+
 const MODEL_FAST = 'claude-haiku-4-5-20251001';
 /**
  * The escalation, and the only place a second model earns its keep.
@@ -354,8 +395,14 @@ const REPAIR_TOKENS = 1024;
 const REPAIR_PROMPT = `You are correcting ONE READING of a supermarket receipt.
 
 You are given the photographs, the lines somebody already transcribed from them,
-and the rows whose arithmetic does not work. Their transcription is mostly
-right. Your job is the rows in dispute and nothing else.
+and what does not add up: rows whose arithmetic fails, and how far the lines are
+from the total printed on the paper. Their transcription is mostly right.
+
+Your job is the NUMBERS, and only the numbers. The rows named to you are where
+to start, not where to stop: when you are told the lines fall short of the
+printed total by an amount, the row responsible is very often one nobody has
+named, and finding it means scanning the column of amounts for the figure that
+is out by that much.
 
 Return ONLY a JSON object of this exact shape:
 
@@ -496,6 +543,7 @@ Deno.serve(async (req) => {
   const repair = async (
     parsed: z.infer<typeof receiptSchema>,
     disputed: readonly number[],
+    details: readonly Problem[],
   ) => {
     const soFar = parsed.lines.map((l, i) => ({
       i,
@@ -525,20 +573,31 @@ Deno.serve(async (req) => {
                 lines: soFar,
                 goodsCents: parsed.goodsCents,
                 paidCents: parsed.paidCents,
-                // Named rather than left to be deduced. A totals mismatch names
-                // no row, so `disputed` is empty there and the instruction is
-                // "the totals do not add up" — a different search from "row 3
-                // does not multiply out", and the model should not have to
-                // guess which one it is being asked.
+                // The rows whose own arithmetic fails, named rather than left
+                // to be deduced. Often empty — a totals mismatch names no row —
+                // which is why the text block beside this carries the shortfall
+                // as well, and why the two are sent together rather than one or
+                // the other.
                 disputed,
               }),
             },
             {
               type: 'text',
-              text:
-                disputed.length > 0
-                  ? `Rows ${disputed.join(', ')} do not multiply out. Look at those rows in the photographs.`
-                  : 'The lines do not add up to the printed total. Find the row that was read wrongly, or correct the printed total.',
+              /*
+               * THE GAP, in cents, and it is the strongest hint available.
+               *
+               * The first version of this sent only the rows that failed to
+               * multiply out. On a real Delhaize receipt that pointed at one
+               * row while the actual damage was a different line read sixty
+               * cents light — the repair looked exactly where it was told and
+               * found nothing wrong, at a cost of three seconds.
+               *
+               * A totals mismatch names no row, but it names the AMOUNT, and an
+               * amount is something you can search a column of figures for. "You
+               * are 60 short" turns a re-read of twenty rows into a scan for a
+               * number ending in the right digits.
+               */
+              text: repairBrief(disputed, details),
             },
           ],
         },
@@ -667,7 +726,7 @@ Deno.serve(async (req) => {
      */
     const retryAt = Date.now();
     try {
-      const fixed = applyFixes(parsed, await repair(parsed, result.badLines));
+      const fixed = applyFixes(parsed, await repair(parsed, result.badLines, result.details));
       const better = check(fixed);
       /*
        * Kept only if it is actually better. A repair that fixes one row and

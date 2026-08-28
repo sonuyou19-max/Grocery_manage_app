@@ -451,6 +451,55 @@ check_(
   /const repair = async \(/.test(fn) && /max_tokens: REPAIR_TOKENS/.test(fn),
 );
 /*
+ * THE REPAIR IS TOLD THE SIZE OF THE GAP.
+ *
+ * The first version sent only the rows that failed to multiply out, as an
+ * either/or against the totals case. On a real Delhaize receipt that pointed at
+ * one row while the damage was a different line read sixty cents light: the
+ * repair looked exactly where it was told, found nothing, and cost three
+ * seconds to change nothing.
+ *
+ * A totals mismatch names no row, but it names the AMOUNT — and an amount is
+ * something you can scan a column of figures for. Both halves go now, because a
+ * receipt can have one row whose arithmetic is broken AND a different row read
+ * wrongly.
+ */
+check_(
+  '...told which rows do not multiply out',
+  /Rows \$\{disputed\.join\(', '\)\} do not multiply out/.test(fn),
+);
+check_(
+  '...AND by how much the totals are out',
+  /a difference of \$\{Math\.abs\(gap\)\} cents/.test(fn),
+);
+check_(
+  '...with the direction stated, not left to be worked out',
+  /gap > 0 \? 'TOO LOW' : 'TOO HIGH'/.test(fn),
+);
+/*
+ * Not an either/or. `if` twice, never a ternary between them — the ternary is
+ * exactly what shipped and exactly what failed.
+ */
+check_(
+  '...and the two are not alternatives',
+  /if \(disputed\.length > 0\)/.test(fn) && /for \(const d of details\)/.test(fn),
+);
+check_(
+  '...the reconciler’s own numbers reaching it',
+  /await repair\(parsed, result\.badLines, result\.details\)/.test(fn),
+);
+/*
+ * And the prompt must not undo it. It used to read "your job is the rows in
+ * dispute and nothing else" — precisely the wrong instruction when the evidence
+ * is a shortfall against the printed total, because the row responsible for that
+ * is usually one nobody named. A better hint and a prompt that forbids acting on
+ * it is no better than the old hint.
+ */
+check_(
+  '...and the prompt does not fence it into those rows',
+  !/rows in dispute and nothing else/.test(fn) && /not where to stop/.test(fn),
+);
+/*
  * A repair big enough to re-transcribe is a repair that has not understood the
  * question. Capping it means such an answer fails to parse and the first
  * reading stands, rather than costing a second full read to arrive there.
