@@ -154,9 +154,22 @@ export default function ShoppingModeScreen() {
                   </View>
                   <View style={styles.grow}>
                     <View style={styles.nameRow}>
-                      {/* Bigger here than on the list screen — this is the
-                          arm's-length, one-glance-per-aisle view. */}
-                      <ItemEmoji name={it.name} category={it.category} size={22} dim={it.checked} />
+                      {/*
+                        Tiled, like the list this screen IS.
+                        
+                        Tapping "start shopping" should not change what an item
+                        looks like — it is the same list, the same rows, read at
+                        arm's length instead of at a desk. Bigger than the list
+                        screen's 18 for exactly that reason, and the tile scales
+                        with it.
+                      */}
+                      <ItemEmoji
+                        name={it.name}
+                        category={it.category}
+                        size={22}
+                        tile
+                        dim={it.checked}
+                      />
                       <Text
                         style={[
                           styles.name,

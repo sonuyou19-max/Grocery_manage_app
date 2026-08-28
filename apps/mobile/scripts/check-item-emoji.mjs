@@ -239,10 +239,10 @@ check('no category emoji is empty', values.every((v) => typeof v === 'string' &&
 /* -------------------------------------------------------------- the tile -- */
 
 /*
- * ONE TILE, THREE PLACES.
+ * ONE TILE, FOUR PLACES.
  *
- * The pantry row, a list row and the item sheet all draw the same object at
- * different sizes — so the thing you tap in a list and the thing you land on in
+ * The pantry row, a list row, Shopping Mode and the item sheet all draw the
+ * same object at different sizes — so the thing you tap in a list and the thing you land on in
  * the sheet are the same, and there is one place to change it. The sheet used
  * to roll its own 64pt pad, which is how two of them drift.
  *
@@ -279,15 +279,23 @@ check('no category emoji is empty', values.every((v) => typeof v === 'string' &&
    * height, where a pantry row is three lines and the tile costs nothing.
    */
   want('...smaller, because there it sets the row height', !/size=\{20\}\s*tile/.test(list));
+  /*
+   * And Shopping Mode, which IS the list. Tapping "start shopping" must not
+   * change what an item looks like — same rows, read at arm's length rather
+   * than at a desk, so bigger and tiled rather than bare.
+   */
+  const shop = read('app', 'shop', '[id].tsx');
+  want('shopping mode draws the tile too', /size=\{22\}\s*tile/.test(shop));
+
   want('the sheet draws the same object', /<ItemEmoji name=\{item\.display\} category=\{item\.category\} size=\{38\} tile \/>/.test(sheet));
   want('...rather than a pad of its own', !/glyphPad/.test(sheet));
 
   if (failed.length) {
     failures += 1;
-    console.log('FAIL the item tile is one object in three places');
+    console.log('FAIL the item tile is one object in four places');
     for (const f of failed) console.log(`  ${f}`);
   } else {
-    console.log('ok   the item tile is one object in three places');
+    console.log('ok   the item tile is one object in four places');
   }
 
   if (failed.length) {
