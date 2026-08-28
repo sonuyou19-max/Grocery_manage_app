@@ -225,5 +225,27 @@ check('spelling drift still groups as one item', drift.length, 1);
   check('...and Insights actually sends it', /packs: p\.packs,/.test(screen), true);
 }
 
+/*
+ * The unit rides on the SECOND figure only.
+ *
+ * "€5.09 vs €6.04 / kg" says what both numbers are per without printing it
+ * twice, and it leaves moveUp/moveDown untouched in all seven languages. What
+ * it must never do is go back to bare cents: the reported bug rendered a real
+ * 16% fall as "€0.01 vs €0.01", because a per-gram price rounds to a penny.
+ */
+{
+  const src = readFileSync(join(HERE, '..', 'src', 'app', '(tabs)', 'insights.tsx'), 'utf8');
+  const ok =
+    /const usual = move\.unit\s*\?\s*`\$\{money\(move\.baselineCents\)\} \/ \$\{move\.unit\}`/.test(src) &&
+    /usual,\n/.test(src);
+  if (!ok) {
+    failures += 1;
+    console.log('FAIL the price-change row quotes the unit its figures are in');
+    console.log('  without it the card says "€0.01 vs €0.01" for a per-gram price');
+  } else {
+    console.log('ok   the price-change row quotes the unit its figures are in');
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

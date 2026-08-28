@@ -59,6 +59,8 @@ const buy = (name, priceCents, iso, extra = {}) => ({
   at: at(iso),
   quantity: extra.quantity ?? null,
   unit: extra.unit ?? null,
+  packs: extra.packs ?? 1,
+  category: extra.category ?? null,
 });
 
 /* ------------------------------------------------------------ week boundaries */
@@ -185,6 +187,69 @@ const rise = mod.priceMoves([
 check('detects a 50% rise', [rise.length, rise[0].change], [1, 0.5]);
 check('baseline is the usual price', rise[0].baselineCents, 100);
 check('latest price reported', rise[0].latestCents, 150);
+
+/*
+ * THE FIGURES ARE QUOTED IN A UNIT SOMEBODY USES.
+ *
+ * Reported from the app: spinach showed "16% down · €0.01 vs €0.01". The
+ * percentage was right and the evidence for it was destroyed — unitPrice
+ * answers in cents per whatever `unit` is, and 450g at €2.29 is 0.509 cents per
+ * GRAM, which Math.round turns into 1. Both figures became a penny.
+ *
+ * unitPriceParts had already solved this for the item sheet, which is why the
+ * same spinach read "€5.09 / kg" one screen away. The scale is shared now.
+ */
+{
+  const spinach = mod.priceMoves([
+    buy('Spinach', 229, '2026-05-12T10:00:00', { quantity: 450, unit: 'g', category: 'fruit_veg' }),
+    buy('Spinach', 315, '2026-06-12T10:00:00', { quantity: 450, unit: 'g', category: 'fruit_veg' }),
+    buy('Spinach', 229, '2026-08-12T10:00:00', { quantity: 450, unit: 'g', category: 'fruit_veg' }),
+  ]);
+  check('the reported spinach still reads as a fall', spinach.length, 1);
+  check('...at the price the purchase sheet shows', spinach[0].latestCents, 509);
+  check('...against a usual price in the same unit', spinach[0].baselineCents, 604);
+  check('...quoted per kilo, not per gram', spinach[0].unit, 'kg');
+  // The ratio never depended on the scale, and must not start to.
+  check('...with the percentage unchanged', Math.round(spinach[0].change * 100), -16);
+  // Carried so the card can draw the item's own glyph, as the staples card does.
+  check('...carrying its category for the glyph', spinach[0].category, 'fruit_veg');
+}
+
+// Millilitres scale the same way; centilitres are a hundred to the litre.
+{
+  const drink = mod.priceMoves([
+    buy('Juice', 100, '2026-05-12T10:00:00', { quantity: 500, unit: 'ml' }),
+    buy('Juice', 100, '2026-06-12T10:00:00', { quantity: 500, unit: 'ml' }),
+    buy('Juice', 150, '2026-08-12T10:00:00', { quantity: 500, unit: 'ml' }),
+  ]);
+  check('millilitres are quoted per litre', [drink[0].latestCents, drink[0].unit], [300, 'l']);
+}
+
+/*
+ * Units that are ALREADY quotable are left alone — scaling a per-kilo price by
+ * a thousand would be the same bug pointing the other way.
+ */
+{
+  const meat = mod.priceMoves([
+    buy('Beef', 800, '2026-05-12T10:00:00', { quantity: 1, unit: 'kg' }),
+    buy('Beef', 800, '2026-06-12T10:00:00', { quantity: 1, unit: 'kg' }),
+    buy('Beef', 1000, '2026-08-12T10:00:00', { quantity: 1, unit: 'kg' }),
+  ]);
+  check('kilos are not scaled again', [meat[0].latestCents, meat[0].unit], [1000, 'kg']);
+}
+
+/*
+ * And a comparison between whole packs quotes no unit at all. There is no
+ * per-unit measure, so "/ kg" would be a claim about an amount nobody recorded.
+ */
+{
+  const flat = mod.priceMoves([
+    buy('Pizza', 300, '2026-05-12T10:00:00'),
+    buy('Pizza', 300, '2026-06-12T10:00:00'),
+    buy('Pizza', 400, '2026-08-12T10:00:00'),
+  ]);
+  check('a pack-to-pack comparison quotes no unit', [flat[0].latestCents, flat[0].unit], [400, null]);
+}
 
 // Median baseline: one outlier multipack must not become the baseline.
 const withOutlier = mod.priceMoves([

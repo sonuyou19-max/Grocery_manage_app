@@ -907,6 +907,14 @@ function MoveRow({ move }: { move: PriceMove }) {
   const { colors } = useTheme();
   const { t, money } = useLocale();
   const up = move.change > 0;
+  /*
+    The unit rides on the SECOND figure only: "€5.09 vs €6.05 / kg" says what
+    both numbers are per without printing it twice, and it keeps the existing
+    moveUp/moveDown strings unchanged in all seven languages.
+  */
+  const usual = move.unit
+    ? `${money(move.baselineCents)} / ${move.unit}`
+    : money(move.baselineCents);
   return (
     <View style={styles.row}>
       <Ionicons
@@ -914,6 +922,10 @@ function MoveRow({ move }: { move: PriceMove }) {
         size={18}
         color={up ? colors.warn : colors.accent}
       />
+      {/* The item's own glyph, resolved from the name and its category exactly
+          as the staples card does — these are items, and a row of them should
+          read the same wherever it appears. */}
+      <ItemEmoji name={move.name} category={move.category ?? "other"} />
       <Text
         style={[type.body, styles.grow, { color: colors.ink }]}
         numberOfLines={1}
@@ -924,7 +936,7 @@ function MoveRow({ move }: { move: PriceMove }) {
         {t(up ? "insights.moveUp" : "insights.moveDown", {
           percent: Math.abs(Math.round(move.change * 100)),
           price: money(move.latestCents),
-          usual: money(move.baselineCents),
+          usual,
         })}
       </Text>
     </View>

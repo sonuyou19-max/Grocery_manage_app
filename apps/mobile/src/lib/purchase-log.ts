@@ -324,10 +324,31 @@ export function spendTrend(purchases: Purchase[], now: number, weeks = 8): Spend
 export interface PriceMove {
   key: string;
   name: string;
-  /** Most recent unit price, in cents. */
+  /**
+   * Most recent unit price, in cents, scaled to a unit somebody would quote.
+   *
+   * Scaled is the operative word. This used to be cents per whatever `unit`
+   * happened to be, and for grams that is a number no shop has printed: 450g of
+   * spinach at €2.29 is 0.509 cents per gram, which rounds to 1 — so a real 16%
+   * fall was reported as "€0.01 vs €0.01". The percentage was right the whole
+   * time, because it is computed before the rounding; only the evidence for it
+   * was destroyed.
+   */
   latestCents: number;
-  /** Median unit price of the earlier purchases it's compared against. */
+  /** Median of the earlier purchases, in the same scaled unit. */
   baselineCents: number;
+  /**
+   * What those cents are per — 'kg', 'l', 'pcs' — or null when the comparison
+   * is between whole packs and there is no per-unit measure to quote.
+   */
+  unit: string | null;
+  /**
+   * The category at the time of purchase, carried so the card can draw the
+   * item's own glyph rather than a generic one — the same thing the staples
+   * card does. "Spinach" has a leaf of its own; fruit_veg's fallback is also a
+   * leaf, and telling the two apart needs the category.
+   */
+  category: ItemCategory | null;
   /** Signed fraction: 0.25 = a quarter dearer than usual. */
   change: number;
   store: string | null;
@@ -437,17 +458,32 @@ export interface UnitPriceParts {
   unit: string;
 }
 
+/**
+ * How to turn a per-unit price into one somebody would quote.
+ *
+ * Only the sub-units need it; kg, l and pcs are already quotable. Shared rather
+ * than written twice, because the two callers are the item sheet's history and
+ * the insights tab's price-change card, and they had drifted: the sheet scaled
+ * and the card did not, so the same spinach read "€5.09 / kg" in one place and
+ * "€0.01" in the other.
+ */
+const QUOTABLE: Record<string, { factor: number; unit: string }> = {
+  g: { factor: 1000, unit: 'kg' },
+  ml: { factor: 1000, unit: 'l' },
+  cl: { factor: 100, unit: 'l' },
+};
+
+export function quotableScale(unit: string | null): { factor: number; unit: string | null } {
+  if (!unit) return { factor: 1, unit: null };
+  const scaled = QUOTABLE[unit];
+  return scaled ? scaled : { factor: 1, unit };
+}
+
 export function unitPriceParts(p: Priceable): UnitPriceParts | null {
   const per = unitPrice(p);
   if (per == null || !p.unit) return null;
-  // Only the sub-units need scaling; kg, l and pcs are already quotable.
-  const SCALE: Record<string, { factor: number; unit: string }> = {
-    g: { factor: 1000, unit: 'kg' },
-    ml: { factor: 1000, unit: 'l' },
-    cl: { factor: 100, unit: 'l' },
-  };
-  const scaled = SCALE[p.unit];
-  const cents = Math.round(per * (scaled?.factor ?? 1));
+  const scaled = quotableScale(p.unit);
+  const cents = Math.round(per * scaled.factor);
   /*
    * Nothing useful left to say. A unit price that rounds to zero even after
    * scaling — a few cents of something sold by the kilo — is not a comparison,
@@ -455,7 +491,7 @@ export function unitPriceParts(p: Priceable): UnitPriceParts | null {
    * makes the whole row look wrong.
    */
   if (cents <= 0) return null;
-  return { cents, unit: scaled?.unit ?? p.unit };
+  return { cents, unit: scaled.unit ?? p.unit };
 }
 
 /**
@@ -535,11 +571,24 @@ export function priceMoves(
     const change = (latestUnit - baseline) / baseline;
     if (Math.abs(change) < threshold) continue;
 
+    /*
+     * Scaled for DISPLAY only, and after `change` has been computed — the ratio
+     * is unaffected by the scale, and computing it from rounded cents is what
+     * would make a 16% fall look like no change at all.
+     *
+     * The unit comes from the latest purchase, which is safe because
+     * comparisonBucket has already required every comparable purchase to share
+     * it: litres are never being averaged against kilos here.
+     */
+    const scale = quotableScale(latest.quantity == null ? null : latest.unit);
+
     moves.push({
       key,
       name: latest.name,
-      latestCents: Math.round(latestUnit),
-      baselineCents: Math.round(baseline),
+      latestCents: Math.round(latestUnit * scale.factor),
+      baselineCents: Math.round(baseline * scale.factor),
+      unit: scale.unit,
+      category: latest.category,
       change,
       store: latest.store,
       at: latest.at,

@@ -226,6 +226,14 @@ check('no category emoji is empty', values.every((v) => typeof v === 'string' &&
 
   want('a spending row draws one too', /glyph=\{CATEGORY_EMOJI\[x\.category\]\}/.test(src));
   want('...and imports the map to do it', /import \{ CATEGORY_EMOJI \} from "@\/lib\/item-emoji"/.test(src));
+  /*
+   * And the price-change row, which was the odd one out — a bare name in a card
+   * whose neighbours above and below both carry a glyph. Resolved from the name
+   * AND the recorded category, like the staple row: "Spinach" has a leaf of its
+   * own and fruit_veg's fallback is also a leaf, so the category is what tells
+   * the item's glyph from the aisle's.
+   */
+  want('a price change draws one as well', /<ItemEmoji name=\{move\.name\} category=\{move\.category \?\? "other"\}/.test(src));
 
   if (failed.length) {
     failures += 1;
