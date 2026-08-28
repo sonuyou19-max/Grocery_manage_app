@@ -235,11 +235,19 @@ export function StapleSheet({
         style={[styles.sheet, { maxHeight: cardCap }]}
       >
         <SheetHandle />
-        <ScrollView
-          {...scrollIndicator}
-          style={styles.scrollArea}
-          contentContainerStyle={styles.content}
-        >
+        {/*
+          PINNED, outside the ScrollView, for the same reason Done is.
+
+          This sheet is tall enough to scroll, and the first thing to leave the
+          screen was the name of the thing it is about — leaving a category, a
+          gauge and a set of chips with nothing saying which item they belong
+          to. It is also where the two ways out of an item live, and a
+          destructive control that scrolls past is a control people hunt for.
+
+          A hairline under it, drawn only while there is something above the
+          fold, so a short sheet has no rule floating over its own whitespace.
+        */}
+        <View style={[styles.pinnedHead, { borderColor: colors.line }]}>
           <View style={styles.headRow}>
             {/*
               The item's own glyph, given room.
@@ -331,6 +339,12 @@ export function StapleSheet({
             </Pressable>
           </View>
 
+        </View>
+        <ScrollView
+          {...scrollIndicator}
+          style={styles.scrollArea}
+          contentContainerStyle={styles.content}
+        >
           {/*
             WHAT THE ITEM IS DOING, before any setting about it.
 
@@ -486,53 +500,63 @@ export function StapleSheet({
               onOpenHistory={onOpenHistory}
               style={[styles.insight, { backgroundColor: colors.accentSoft }]}
             >
-              <View style={[styles.badge, { backgroundColor: colors.accent + '28' }]}>
-                <Ionicons name="stats-chart" size={17} color={colors.accent} />
-              </View>
-
-              <View style={styles.insightBody}>
-                <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                  {t("staple.insightsTitle")}
-                </Text>
-                <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-                  {t("staple.typicalCycle")}
-                </Text>
-                <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
-                  {t("staple.cycleDays", { count: learned })}
-                </Text>
-              </View>
-
               {/*
-                Two reasons not to draw it, and neither is a failure.
+                TWO ROWS, because one cannot survive a long language.
 
-                Below two intervals there is no rhythm to plot, and an empty
-                frame reads as a broken chart rather than as an item with little
-                history. On a narrow phone the row cannot hold five things
-                without crushing one, and the chart is the only one whose
-                absence loses no FACT — the cycle and the last-bought date are
-                both still there in words.
+                Badge, text, chart, date box and chevron on a single line leaves
+                the text 16 points on a 390pt phone — and the box is wide
+                because of its LABEL, not its value: "ZULETZT GEKAUFT" is 111
+                points at 11px/800 with letter-spacing, wider than the date it
+                introduces. German truncated the card's own title to
+                "Kauf-Einblic…", which is a heading that has run out of room to
+                say what it is.
+
+                No amount of flex tuning fixes five things competing for one
+                line. Split, the text gets the full width and the chart gets
+                more room to be legible than it had.
               */}
-              {windowWidth >= 360 && intervals.length >= 2 && (
-                <IntervalChart days={intervals} />
-              )}
-
-              <View style={[styles.lastBuy, { borderColor: colors.line, backgroundColor: colors.surface }]}>
-                <Ionicons name="calendar-outline" size={15} color={colors.muted} />
-                <View style={styles.lastBuyText}>
-                  <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
-                    {t("staple.lastBoughtLabel")}
+              <View style={styles.insightTop}>
+                <View style={[styles.badge, { backgroundColor: colors.accent + '28' }]}>
+                  <Ionicons name="stats-chart" size={17} color={colors.accent} />
+                </View>
+                <View style={styles.insightBody}>
+                  <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                    {t("staple.insightsTitle")}
                   </Text>
-                  {/* The RELATIVE form. lastBoughtLabel is a whole sentence and
-                      under this label it read "LAST BOUGHT / Last bought a week
-                      ago" — the fact three times over, counting the one that
-                      used to sit in the freshness card above. */}
-                  <Text style={[type.sub, { color: colors.ink }]} numberOfLines={1}>
-                    {sinceBoughtLabel(item.lastPurchasedAt, now, t)}
+                  <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                    {t("staple.typicalCycle")}
+                  </Text>
+                  <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
+                    {t("staple.cycleDays", { count: learned })}
                   </Text>
                 </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </View>
 
-              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              <View style={styles.insightBottom}>
+                {/*
+                  Below two intervals there is no rhythm to plot, and an empty
+                  frame reads as a broken chart rather than as an item with
+                  little history. On its own row it no longer has to earn its
+                  place against the text, so the narrow-screen rule is gone.
+                */}
+                {intervals.length >= 2 && <IntervalChart days={intervals} />}
+                <View style={styles.grow} />
+                <View style={[styles.lastBuy, { borderColor: colors.line, backgroundColor: colors.surface }]}>
+                  <Ionicons name="calendar-outline" size={15} color={colors.muted} />
+                  <View style={styles.lastBuyText}>
+                    <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+                      {t("staple.lastBoughtLabel")}
+                    </Text>
+                    {/* The RELATIVE form. lastBoughtLabel is a whole sentence
+                        and under this label it read "LAST BOUGHT / Last bought a
+                        week ago" — the fact twice in one box. */}
+                    <Text style={[type.sub, { color: colors.ink }]} numberOfLines={1}>
+                      {sinceBoughtLabel(item.lastPurchasedAt, now, t)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </HistoryRow>
           )}
 
@@ -772,6 +796,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   trash: { paddingTop: 2 },
+  /*
+   * The pinned header's own padding, because it is no longer inside the
+   * ScrollView's contentContainer and would otherwise sit flush to the edges.
+   */
+  pinnedHead: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   // The glyph's own ground. Square-ish rather than round: a circle around an
   // emoji reads as an avatar, and this is a thing, not a person.
   glyphPad: {
@@ -786,7 +819,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     padding: spacing.md,
     gap: spacing.md,
-    marginTop: spacing.md,
   },
   freshTop: {
     flexDirection: 'row',
@@ -809,11 +841,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radii.lg,
-    marginTop: spacing.lg,
   },
   sectTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  actions: { flexDirection: 'row', gap: spacing.sm },
   action: {
     flex: 1,
     minWidth: 0,
@@ -842,14 +873,15 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
 
+  // A column now: see the note at the call site for why one row could not hold
+  // five things in German.
   insight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     borderRadius: radii.lg,
     padding: spacing.md,
-    marginTop: spacing.md,
   },
+  insightTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  insightBottom: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   badge: {
     width: 38,
     height: 38,
@@ -857,19 +889,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /*
-   * The TEXT absorbs the slack, not the chart.
-   *
-   * It was the other way round, and the chart is the one element that is often
-   * absent — an item with two purchases has one interval and nothing to plot.
-   * With the flex on the chart, hiding it left a hole nobody filled and the
-   * last-bought box drifted into the middle of the row. Putting it here means
-   * the layout is the same shape whether or not there is a rhythm to draw.
-   */
+  // Takes the whole top row now, so a heading no longer truncates itself.
   insightBody: { flex: 1, minWidth: 0 },
+  // Wider than it was, because it no longer competes with the text for a line.
   chart: {
     flexShrink: 0,
-    width: 76,
+    width: 104,
     height: 38,
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -883,7 +908,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.lg,
     padding: spacing.md,
-    marginTop: spacing.md,
   },
   /*
    * SHRINKABLE, because React Native's default is not.
@@ -940,7 +964,14 @@ const styles = StyleSheet.create({
   // flexGrow 0 so a short item sizes the sheet to its own content instead of
   // stretching to the cap; flexShrink 1 so a long one gives way to it.
   scrollArea: { flexGrow: 0, flexShrink: 1 },
-  content: { padding: spacing.lg, gap: spacing.lg },
+  /*
+   * ONE spacing system, not two.
+   *
+   * This gap and a marginTop on every card were both in play, so each seam was
+   * the sum of the two — which is most of the empty space the sheet was
+   * carrying. The gap owns the rhythm now and no card adds to it.
+   */
+  content: { padding: spacing.lg, gap: spacing.md },
   section: { gap: spacing.sm },
   row: {
     flexDirection: "row",

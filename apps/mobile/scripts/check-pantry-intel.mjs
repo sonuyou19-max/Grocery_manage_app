@@ -774,7 +774,7 @@ check(
    * Below two intervals there is no rhythm to draw, and an empty frame reads as
    * a broken chart rather than as an item with no history yet.
    */
-  check('the chart needs two gaps to draw', has(/intervals\.length >= 2 && \(\s*<IntervalChart/), true);
+  check('the chart needs two gaps to draw', has(/intervals\.length >= 2 && <IntervalChart/), true);
   /*
    * Bars are scaled to the LONGEST gap, not to the learned cycle: the question
    * is "how regular am I", and anchoring to the average flattens exactly the
@@ -856,11 +856,35 @@ check(
   check('the boxed date can shrink', has(/lastBuy: \{\s*flexShrink: 1,\s*minWidth: 0,/), true);
   check('...and its text can truncate', has(/lastBuyText: \{ flexShrink: 1, minWidth: 0 \}/), true);
   /*
-   * And the chart steps aside on a narrow phone. It is the only element in that
-   * row whose absence loses no fact — the cycle and the date are both still
-   * there in words.
+   * TWO ROWS. Badge, text, chart, date box and chevron on one line leaves the
+   * text 16 points on a 390pt phone — and the box is wide because of its LABEL
+   * rather than its value, so German truncated the card's own heading. The
+   * narrow-screen rule went with the split: on its own row the chart no longer
+   * has to earn its place against the text.
    */
-  check('the chart yields on a narrow screen', has(/windowWidth >= 360 && intervals\.length >= 2/), true);
+  check('the insights card is two rows', has(/insightTop: \{ flexDirection: 'row'/) && has(/insightBottom: \{ flexDirection: 'row'/), true);
+  check('...with the chart on the lower one', has(/insightBottom[\s\S]{0,400}IntervalChart/), true);
+
+  /*
+   * ONE spacing system. The content gap and per-card marginTops were both in
+   * play, so every seam was the sum of the two — most of the empty space the
+   * sheet was carrying.
+   */
+  check('the gap owns the rhythm', has(/content: \{ padding: spacing\.lg, gap: spacing\.md \}/), true);
+  check('...and no card adds a margin of its own', /marginTop: spacing\./.test(sheet), false);
+
+  /*
+   * The header is pinned. The sheet is tall enough to scroll and the first
+   * thing to leave was the name of the item it is about — along with the two
+   * ways out of it, and a destructive control that scrolls past is one people
+   * hunt for.
+   */
+  check(
+    'the header sits outside the scroll area',
+    sheet.indexOf('styles.pinnedHead') > 0 &&
+      sheet.indexOf('styles.pinnedHead') < sheet.indexOf('<ScrollView'),
+    true,
+  );
 
   check('the tip is read from the lexicon', has(/storageTipFor\(displayName\)/), true);
   /*
