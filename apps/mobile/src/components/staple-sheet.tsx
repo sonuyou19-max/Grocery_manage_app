@@ -259,9 +259,7 @@ export function StapleSheet({
               seven languages, resolves offline and instantly, and is never
               missing. What it lacked was scale, which is free.
             */}
-            <View style={[styles.glyphPad, { backgroundColor: colors.accentSoft }]}>
-              <ItemEmoji name={item.display} category={item.category} size={38} />
-            </View>
+            <ItemEmoji name={item.display} category={item.category} size={38} tile />
             <View style={styles.grow}>
             {/* Name and list tags share one row, the tags reading as a suffix
                 to the name rather than as a separate fact below it — "Pizza,
@@ -804,15 +802,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  // The glyph's own ground. Square-ish rather than round: a circle around an
-  // emoji reads as an avatar, and this is a thing, not a person.
-  glyphPad: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   fresh: {

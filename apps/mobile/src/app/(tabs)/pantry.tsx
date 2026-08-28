@@ -867,8 +867,22 @@ function PantrySwipeRow({
             accessibilityRole="button"
             accessibilityLabel={t('staple.openFor', { item: item.display })}
           >
+            {/*
+              THE ROW'S LEADING COLUMN, not a character in the name.
+
+              A 36pt tile does not belong inside a 14pt sentence, so it steps
+              out of the name row and leads the whole thing — which also gives a
+              scrolled column a straight rail to follow, where bare glyphs of
+              varying ink and width read as a ragged left edge.
+
+              The tile is a neutral wash on purpose. Everything else coloured on
+              this row already means something — green on track, amber on a
+              list, red overdue — and a tinted tile would either repeat one of
+              those or borrow a hue that had a job.
+            */}
+            <ItemEmoji name={item.display} category={item.category} size={20} tile />
+            <View style={styles.bodyText}>
             <View style={styles.nameRow}>
-              <ItemEmoji name={item.display} category={item.category} />
               {/* Staples carry a mark, and the accessible name says so too —
                   never colour or icon alone. */}
               {item.keepStocked && (
@@ -909,6 +923,7 @@ function PantrySwipeRow({
               </Text>
             </View>
             <StockBar geo={geo} />
+            </View>
           </Pressable>
 
           {/*
@@ -1010,7 +1025,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   grow: { flex: 1, minWidth: 0 },
-  body: { flex: 1, minWidth: 0, gap: spacing.xs },
+  /*
+   * A row now, because the glyph tile leads it. `alignItems: center` rather than
+   * flex-start: the tile is taller than one line and shorter than the three the
+   * text column holds, so centring is what keeps it level with the block rather
+   * than hanging off its first line.
+   */
+  body: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // The text column, which owns the vertical rhythm the row used to own.
+  bodyText: { flex: 1, minWidth: 0, gap: spacing.xs },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   metaRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   // Never squeezed to nothing by a long category or a long item name: it is the

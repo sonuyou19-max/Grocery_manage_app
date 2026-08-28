@@ -234,6 +234,61 @@ check('no category emoji is empty', values.every((v) => typeof v === 'string' &&
    * the item's glyph from the aisle's.
    */
   want('a price change draws one as well', /<ItemEmoji name=\{move\.name\} category=\{move\.category \?\? "other"\}/.test(src));
+}
+
+/* -------------------------------------------------------------- the tile -- */
+
+/*
+ * ONE TILE, THREE PLACES.
+ *
+ * The pantry row, a list row and the item sheet all draw the same object at
+ * different sizes — so the thing you tap in a list and the thing you land on in
+ * the sheet are the same, and there is one place to change it. The sheet used
+ * to roll its own 64pt pad, which is how two of them drift.
+ *
+ * The wash is NEUTRAL and that is the whole decision. Everything else coloured
+ * on those rows already means something — green on track or ticked, amber due
+ * or listed, red overdue — so a tinted tile either repeats a fact or borrows a
+ * hue that had a job.
+ */
+{
+  const read = (...p) => readFileSync(join(here, '..', 'src', ...p), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const emoji = read('components', 'item-emoji.tsx');
+  const pantry = read('app', '(tabs)', 'pantry.tsx');
+  const list = read('app', 'list', '[id].tsx');
+  const sheet = read('components', 'staple-sheet.tsx');
+  const failed = [];
+  const want = (name, ok) => { if (!ok) failed.push(name); };
+
+  want('the tile is a neutral wash, not a tint', /backgroundColor: colors\.muted \+ '1F'/.test(emoji));
+  want('...and never the accent', !/backgroundColor: colors\.accent/.test(emoji));
+  // Derived from the glyph, so a caller asks for a picture and gets a frame.
+  want('...sized from the glyph it holds', /width: size \* 1\.8,\s*height: size \* 1\.8,/.test(emoji));
+
+  want('the pantry row leads with a tile', /<ItemEmoji name=\{item\.display\} category=\{item\.category\} size=\{20\} tile \/>/.test(pantry));
+  /*
+   * OUTSIDE the name row. A 36pt tile does not belong inside a 14pt sentence,
+   * and leading the row is what gives a scrolled column a straight rail.
+   */
+  want('...outside the name row', pantry.indexOf('size={20} tile') < pantry.indexOf('styles.nameRow'));
+  want('a list row draws one too', /size=\{18\}\s*tile/.test(list));
+  /*
+   * Smaller on a list, because a list row is one line and the tile IS its
+   * height, where a pantry row is three lines and the tile costs nothing.
+   */
+  want('...smaller, because there it sets the row height', !/size=\{20\}\s*tile/.test(list));
+  want('the sheet draws the same object', /<ItemEmoji name=\{item\.display\} category=\{item\.category\} size=\{38\} tile \/>/.test(sheet));
+  want('...rather than a pad of its own', !/glyphPad/.test(sheet));
+
+  if (failed.length) {
+    failures += 1;
+    console.log('FAIL the item tile is one object in three places');
+    for (const f of failed) console.log(`  ${f}`);
+  } else {
+    console.log('ok   the item tile is one object in three places');
+  }
 
   if (failed.length) {
     failures += 1;

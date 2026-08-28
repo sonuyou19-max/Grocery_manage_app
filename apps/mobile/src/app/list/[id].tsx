@@ -1124,9 +1124,24 @@ function SwipeableItemRow({
               entirely would make the count in the header unexplainable. */}
           <Pressable style={styles.grow} onPress={guard(onEdit)}>
             <View style={styles.nameRow}>
+              {/*
+                A SMALLER TILE THAN THE PANTRY'S, and the difference is the row.
+
+                A pantry row is three lines tall — name, meta, gauge — so a 36pt
+                tile sits inside its existing height and costs nothing. A list
+                row is deliberately ONE line (see the note below on why two
+                heights are wrong for a list of names), so here the tile IS the
+                row height, and every point of it is density lost on the screen
+                you scan while walking round a shop.
+
+                18 rather than 20 keeps the rail and the presence while adding
+                about six points to a row instead of twelve.
+              */}
               <ItemEmoji
                 name={it.name}
                 category={it.category}
+                size={18}
+                tile
                 dim={it.checked}
               />
               <Text
