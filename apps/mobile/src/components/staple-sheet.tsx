@@ -27,6 +27,7 @@ import {
   stockGeometry,
   type ItemStat,
 } from "@/lib/pantry-intel";
+import { storageTipFor } from "@/lib/item-lexicon";
 import { listTint } from "@/lib/list-tint";
 import { historyFor, type Purchase } from "@/lib/purchase-log";
 import { useT } from "@/store/locale";
@@ -166,6 +167,17 @@ export function StapleSheet({
     }
     return days.slice(-8);
   }, [history]);
+
+  /*
+   * The storage tip, from the shared dictionary — learned once for "spinach"
+   * and free for every household after.
+   *
+   * Null far more often than not, and that is the intended shape: most staples
+   * keep perfectly well in a cupboard, and "store in a cool dry place" on forty
+   * items is noise a reader learns to skip past. A missing tip renders nothing
+   * rather than a placeholder.
+   */
+  const tip = displayName ? storageTipFor(displayName) : null;
 
   // The cadence footnote, which was permanent prose under the chips nobody
   // read. Behind a tap it is there when the question actually occurs.
@@ -483,6 +495,26 @@ export function StapleSheet({
             </HistoryRow>
           )}
 
+          {/*
+            KEEPING IT. Advice about the product, never a claim about the
+            shopper's own item — hence "Keeping spinach" rather than a sentence
+            that sounds like it was measured in their fridge.
+
+            Storage only, and that boundary is enforced three deep: the prompt
+            forbids nutrition and health words, isShareableTip refuses any tip
+            containing them, and the column's CHECK bounds the shape. "High in
+            iron" is a regulated claim under EU 1924/2006; where to keep a bag
+            of leaves is not.
+          */}
+          {tip != null && (
+            <View style={[styles.tip, { borderColor: colors.line }]}>
+              <Ionicons name="bulb-outline" size={18} color={colors.accent} />
+              <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
+                {tip}
+              </Text>
+            </View>
+          )}
+
         </ScrollView>
 
         {/* Outside the ScrollView, like the list's item sheet: the way out of a
@@ -741,6 +773,15 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   bar: { flex: 1, minWidth: 3, borderRadius: 2 },
+  tip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
   lastBuy: {
     flexDirection: 'row',
     alignItems: 'center',

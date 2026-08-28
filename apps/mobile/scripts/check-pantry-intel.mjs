@@ -797,6 +797,20 @@ check(
    */
   check('...and no nutrition claims',
     /high in iron|low calorie|rich in vitamins/i.test(sheet), false);
+
+  /*
+   * The storage tip comes from the SHARED dictionary, never from a call this
+   * sheet makes. It is learned once for a term and free for every household
+   * afterwards; a per-open request would be an AI call behind a tap that most
+   * people make to change a cadence.
+   */
+  check('the tip is read from the lexicon', has(/storageTipFor\(displayName\)/), true);
+  /*
+   * Absent is the ordinary case — most staples keep fine in a cupboard, and
+   * "store in a cool dry place" on forty items is noise. Nothing renders rather
+   * than a placeholder saying there is nothing.
+   */
+  check('...and nothing renders when there is none', has(/\{tip != null && \(/), true);
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

@@ -10,6 +10,7 @@ import {
   type ItemUnit,
 } from '@korb/shared';
 
+import { fold } from '@/lib/item-emoji';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -47,6 +48,14 @@ interface LexiconEntry {
    * group, so an absent value here is routine rather than a gap.
    */
   carbon: CarbonTier | null;
+  /**
+   * One short sentence on keeping the item well, or null.
+   *
+   * The only free text this table carries. Shown as advice about the PRODUCT,
+   * never as a fact about the user's own item — see the pantry sheet — and
+   * null far more often than not, because most staples need no advice.
+   */
+  tip: string | null;
   /**
    * The coarse food group, or null when not established.
    *
@@ -132,6 +141,19 @@ export function lexiconLookup(foldedTerm: string): LexiconEntry | undefined {
  * twice. This is why the local cache is written from the response rather than
  * waiting for the term to come back down through the sync.
  */
+/**
+ * The storage tip for an item, by its display name.
+ *
+ * A lookup of its own rather than callers reaching for `lexiconLookup(...)?.tip`,
+ * because it folds the name — which every other consumer of this module already
+ * does upstream and the pantry sheet does not. A caller passing a raw name to a
+ * folded-key map gets undefined and no error, which is the quietest possible
+ * way for a feature to be missing.
+ */
+export function storageTipFor(name: string): string | null {
+  return lexiconLookup(fold(name))?.tip ?? null;
+}
+
 export function learnLexiconEntry(
   foldedTerm: string,
   emoji: string,
@@ -151,7 +173,15 @@ export function learnLexiconEntry(
   ) {
     return;
   }
-  entries.set(foldedTerm, { emoji, category, unit, carbon, group });
+  /*
+   * `tip` is CARRIED, not cleared.
+   *
+   * This is the local write for an answer the categorize endpoint just gave,
+   * and that endpoint does not return a tip — the tip only exists in the shared
+   * table. Writing `tip: null` here would erase a sentence the sync had already
+   * fetched, every time the same item was categorised again.
+   */
+  entries.set(foldedTerm, { emoji, category, unit, carbon, group, tip: existing?.tip ?? null });
   changed();
   void persist();
 }
@@ -161,11 +191,26 @@ function persist(): Promise<void> {
   if (saveTimer) clearTimeout(saveTimer);
   return new Promise((resolve) => {
     saveTimer = setTimeout(() => {
+      /*
+       * A positional tuple, and the tip is appended rather than inserted — a
+       * cache written by the previous version is five long, and reading it back
+       * simply leaves the sixth undefined, which becomes null below. No
+       * migration, no version stamp, no cleared cache on upgrade.
+       */
       const flat: Record<
         string,
-        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null, FoodGroup | null]
+        [
+          string,
+          ItemCategory | null,
+          ItemUnit | null,
+          CarbonTier | null,
+          FoodGroup | null,
+          string | null,
+        ]
       > = {};
-      for (const [term, e] of entries) flat[term] = [e.emoji, e.category, e.unit, e.carbon, e.group];
+      for (const [term, e] of entries) {
+        flat[term] = [e.emoji, e.category, e.unit, e.carbon, e.group, e.tip];
+      }
       AsyncStorage.setItem(CACHE_KEY, JSON.stringify(flat)).catch(() => {}).finally(resolve);
     }, 400);
   });
@@ -184,16 +229,25 @@ export async function hydrateLexicon(): Promise<void> {
     if (raw) {
       const flat = JSON.parse(raw) as Record<
         string,
-        [string, ItemCategory | null, ItemUnit | null, CarbonTier | null, FoodGroup | null]
+        [
+          string,
+          ItemCategory | null,
+          ItemUnit | null,
+          CarbonTier | null,
+          FoodGroup | null,
+          (string | null)?,
+        ]
       >;
       const next = new Map<string, LexiconEntry>();
-      for (const [term, [emoji, category, unit, carbon, group]] of Object.entries(flat)) {
+      for (const [term, [emoji, category, unit, carbon, group, tip]] of Object.entries(flat)) {
         next.set(term, {
           emoji,
           category,
           unit: unit ?? null,
           carbon: carbon ?? null,
           group: group ?? null,
+          // Absent in a cache written before 0040, which reads as no tip.
+          tip: tip ?? null,
         });
       }
       entries = next;
@@ -226,7 +280,7 @@ export async function syncLexicon(): Promise<void> {
     for (let page = 0; page < 25; page += 1) {
       let q = supabase
         .from('item_lexicon')
-        .select('term, emoji, category, unit, carbon, food_group, updated_at')
+        .select('term, emoji, category, unit, carbon, food_group, storage_tip, updated_at')
         .order('updated_at', { ascending: true })
         .limit(PAGE);
       if (cursor) q = q.gt('updated_at', cursor);
@@ -241,6 +295,7 @@ export async function syncLexicon(): Promise<void> {
         unit: string | null;
         carbon: string | null;
         food_group: string | null;
+        storage_tip: string | null;
         updated_at: string;
       }>) {
         if (entries.size >= MAX_ENTRIES && !entries.has(row.term)) continue;
@@ -257,6 +312,14 @@ export async function syncLexicon(): Promise<void> {
           carbon: asCarbonTier(row.carbon),
           // asFoodGroup for the same reason as the two above.
           group: asFoodGroup(row.food_group),
+          /*
+           * No narrowing function for this one, because there is no vocabulary
+           * to narrow to — it is a sentence. The gates are the column's CHECK
+           * (0040) and isShareableTip in the edge function; by the time a row
+           * reaches here it has passed both, and a client-side re-judgement
+           * would be a third opinion with no more information than the first.
+           */
+          tip: typeof row.storage_tip === 'string' ? row.storage_tip : null,
         });
         cursor = row.updated_at;
         moved = true;

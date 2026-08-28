@@ -50,7 +50,7 @@ type Carbon = (typeof CARBONS)[number];
 const SYSTEM_PROMPT = `You classify a single grocery item. The name may be in ANY
 language — Hindi, Turkish, Arabic, anything — not only the ones this app ships in.
 Return ONLY a JSON object, no prose, no code fences. EVERY key is required:
-{"category": "...", "group": "...", "emoji": "...", "generic": true, "unit": "...", "carbon": "..."}
+{"category": "...", "group": "...", "emoji": "...", "generic": true, "unit": "...", "carbon": "...", "tip": "..."}
 category is one of: ${CATEGORIES.join(', ')}.
 - produce/herbs -> fruit_veg; milk/cheese/eggs -> dairy_eggs; fresh meat/fish -> meat_fish;
   bread/pastries -> bakery; dry/canned/staples/condiments -> pantry; frozen goods -> frozen;
@@ -92,7 +92,22 @@ Use null for anything not eaten or drunk — cleaning products, toiletries, pet
 food, a note to self — and for anything you genuinely cannot place. Do not
 guess: the app has its own table for the items that matter and falls back to
 the food group, so null costs nothing and a wrong band is a wrong number in a
-score people are trying to improve.`;
+score people are trying to improve.
+tip is ONE short sentence on how to keep this item well at home, or null.
+
+- Storage only. Where it lives, what it likes, what shortens its life. "Keep
+  spinach unwashed in the fridge with a dry paper towel." "Bananas brown faster
+  next to apples." "Once opened, olive oil is happiest in a dark cupboard."
+- NEVER say anything about nutrition or health. Not what it contains, not what
+  it is good for, not vitamins, minerals, protein, calories, fibre, immunity,
+  digestion or wellbeing. Those are regulated claims in Europe and this is a
+  sentence about a fridge. A tip that mentions any of it is thrown away.
+- Under 140 characters, one sentence, plain text. No links, no lists, no
+  markup, no brand names.
+- null whenever there is nothing specific worth saying. Most pantry staples
+  keep perfectly well in a cupboard and need no advice at all, and "store in a
+  cool dry place" on forty items is noise the reader learns to skip. null is a
+  good answer and is expected often.`;
 
 /** Pull the outermost JSON object out of a possibly-noisy model response. */
 function extractJson(raw: string): string {
@@ -139,6 +154,9 @@ Deno.serve(async (req) => {
   let generic = false;
   let unit: Unit | null = null;
   let carbon: Carbon | null = null;
+  // Never returned to this caller — it exists only to be offered to the shared
+  // dictionary, which is the one place a tip is any use to anybody.
+  let tip: string | null = null;
   try {
     const parsed = JSON.parse(extractJson(raw)) as {
       category?: string;
@@ -173,6 +191,13 @@ Deno.serve(async (req) => {
     if (typeof parsed.carbon === 'string' && (CARBONS as readonly string[]).includes(parsed.carbon)) {
       carbon = parsed.carbon as Carbon;
     }
+    /*
+     * The tip is the one field with no list to be a member of, so it is taken
+     * as given here and judged by isShareableTip on the way into the table. The
+     * judging happens THERE rather than here because the table is what publishes
+     * it — this endpoint's own caller never sees the tip at all.
+     */
+    if (typeof parsed.tip === 'string') tip = parsed.tip;
   } catch {
     // leave defaults
   }
@@ -183,7 +208,7 @@ Deno.serve(async (req) => {
   // where it isn't available the promise is simply left to run.
   if (emoji) {
     const write = offerToLexicon(
-      { term: name.trim(), emoji, category, generic, unit, carbon, group },
+      { term: name.trim(), emoji, category, generic, unit, carbon, group, tip },
       `ip:${clientIp(req)}`,
     );
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })

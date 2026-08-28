@@ -32,6 +32,7 @@ const SERVER_FOLD = join(here, '..', '..', '..', 'supabase', 'functions', '_shar
 const ALLOWLIST = join(
   here, '..', '..', '..', 'supabase', 'functions', '_shared', 'emoji-allowlist.ts',
 );
+const LEXICON = join(here, '..', '..', '..', 'supabase', 'functions', '_shared', 'lexicon.ts');
 
 async function load(path, strip = []) {
   let source = readFileSync(path, 'utf8');
@@ -240,6 +241,101 @@ check('the response is findable', returned.length > 0, true);
 for (const f of returned) {
   if (f === 'group') continue;
   check(`"${f}" is parsed before it is returned`, fields.includes(f), true);
+}
+
+/* ------------------------------------------------------- the storage tip -- */
+
+/*
+ * THE ONLY FREE TEXT THIS TABLE PUBLISHES.
+ *
+ * Every other shared column comes from a closed set — the emoji is copied from
+ * an allowlist, unit and carbon and food_group are enums with CHECKs — so a bad
+ * generation can only ever be a wrong value from a known vocabulary, and the
+ * worst case is a carrot wearing the wrong icon.
+ *
+ * A sentence has no vocabulary to check against. One bad generation reaches
+ * every customer, and unlike a wrong emoji nobody can glance at it and see it.
+ * isShareableTip is what stands in for the missing allowlist, so it is tested
+ * directly rather than through a network call.
+ */
+{
+  // Only the guard is wanted; the module's supabase-js import will not resolve
+  // here and nothing below needs the writer itself.
+  const src = readFileSync(LEXICON, 'utf8');
+  const fn = src.slice(src.indexOf('const CLAIM_WORDS'), src.indexOf('export async function offerToLexicon'));
+  const foldSrc = readFileSync(SERVER_FOLD, 'utf8').replace(/^export /gm, '');
+  const { outputText } = ts.transpileModule(
+    foldSrc + '\n' + fn.replace('export function isShareableTip', 'export function isShareableTip'),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } },
+  );
+  const { isShareableTip } = await import(
+    'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
+  );
+
+  const ok = (name, tip) => check(name, isShareableTip(tip), true);
+  const no = (name, tip) => check(name, isShareableTip(tip), false);
+
+  // What a tip is FOR. Refusing everything would be safe and useless.
+  ok('a real storage tip passes', 'Keep spinach unwashed in the fridge with a dry paper towel.');
+  ok('...and one without a full stop', 'Bananas brown faster next to apples');
+  ok('...and one about a cupboard', 'Once opened, olive oil keeps best in a dark cupboard.');
+
+  /*
+   * THE REGULATED ONES. "High in iron" is a nutrition claim under EU
+   * 1924/2006 — only claims on the authorised list may be made at all, and each
+   * has a legal threshold. Publishing one to every customer, about an item
+   * somebody typed, is a compliance problem whose failure nobody would notice.
+   */
+  no('a vitamin claim is refused', 'Spinach is rich in vitamins, so eat it fresh.');
+  no('...an iron claim', 'High in iron — keep it cool and eat within days.');
+  no('...a calorie claim', 'Low calorie and best kept in the fridge door.');
+  no('...a health claim', 'Good for your immune system; store in the fridge.');
+  no('...a digestion claim', 'Aids digestion, so keep a bag in the freezer.');
+  no('...and a cure claim', 'A remedy for colds; keep it somewhere dark.');
+  /*
+   * Matched on word boundaries, so an ordinary word that merely CONTAINS a
+   * claim word is not caught. "Heart" is a claim word; "hearty" is not a claim.
+   */
+  check('a word that merely contains one is fine', isShareableTip('Store the hearts of the lettuce in the fridge.'), true);
+
+  // SHAPE. Each of these is also a CHECK on the column; both refuse, and
+  // neither is the other's excuse.
+  /*
+   * Each shape rule gets a fixture that trips ONLY it. Three of these first
+   * caught nothing when the rule they were written for was deleted, because
+   * they also broke a different rule: a 280-character tip built by repeating a
+   * sentence is refused for having twenty sentences whether or not there is a
+   * length ceiling, and a two-line tip is refused for being two sentences.
+   * A test that passes for the wrong reason is not a test.
+   */
+  no('too short to say anything', 'Fridge.');
+  no('too long to be a tip', `Keep it ${'very '.repeat(40)}cold`);
+  no('a link', 'Storage advice at https://example.com/spinach keeps it fresh');
+  no('...even without a scheme', 'See www.example.com for how to store spinach well');
+  no('markup', 'Keep it <b>cold</b> and dry in the fridge drawer');
+  no('a template brace', 'Keep ${item} in the fridge, unwashed and dry');
+  no('a newline', 'Keep it cold\nand dry in the drawer');
+  no('two sentences', 'Keep it cold. Then eat it within three days please.');
+
+  /*
+   * And the gate is actually wired: a candidate whose tip fails must reach the
+   * table as null rather than as itself.
+   */
+  check(
+    'a refused tip is stored as null, not as text',
+    /typeof candidate\.tip === 'string' && isShareableTip\(candidate\.tip\)/.test(src),
+    true,
+  );
+  /*
+   * Fill-once, like unit and carbon and food_group. A sentence that a later
+   * generation can overwrite has no settled version, which defeats the whole
+   * point of the three-caller threshold.
+   */
+  check(
+    '...and never rewritten once set',
+    /\.update\(\{ storage_tip: tip \}\)[\s\S]{0,120}\.is\('storage_tip', null\)/.test(src),
+    true,
+  );
 }
 
 console.log(failures === 0 ? 'ALL PASS' : `\n${failures} FAILURE(S)`);

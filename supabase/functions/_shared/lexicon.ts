@@ -79,6 +79,71 @@ export interface LexiconCandidate {
    * counting it as "other".
    */
   group?: string | null;
+  /**
+   * One short sentence on keeping the item well, or null.
+   *
+   * The only FREE TEXT this table publishes, and the only field whose value
+   * cannot be checked against a vocabulary — see isShareableTip for the gates
+   * that replace one.
+   */
+  tip?: string | null;
+}
+
+/**
+ * Words that turn a storage tip into a regulated claim.
+ *
+ * "High in iron" is a nutrition claim under EU Regulation 1924/2006: only
+ * claims on the authorised list may be made at all, and each has a legal
+ * threshold behind it. A shared table that publishes one to every customer is
+ * making that claim on behalf of all of them, about an item somebody typed.
+ *
+ * Storage advice is not a health claim and is not regulated — it is the same
+ * category of statement as the printing on the bag. So the rule is not "no
+ * claims about food", it is: say how to keep it, and nothing about what it does
+ * to you.
+ *
+ * Matched on word boundaries against the folded tip. Deliberately broad: a tip
+ * refused for containing "healthy" costs a sentence, and one published for
+ * lacking the exact phrase costs a compliance problem nobody will notice.
+ */
+const CLAIM_WORDS = [
+  'vitamin', 'vitamins', 'mineral', 'minerals', 'protein', 'calcium', 'iron',
+  'omega', 'antioxidant', 'antioxidants', 'fibre', 'fiber', 'calorie',
+  'calories', 'nutrient', 'nutrients', 'nutritious', 'nutrition', 'healthy',
+  'health', 'immune', 'immunity', 'digestion', 'digestive', 'cholesterol',
+  'diabetes', 'cancer', 'heart', 'detox', 'superfood', 'metabolism',
+  'weight', 'slimming', 'cure', 'cures', 'heals', 'remedy', 'medicinal',
+];
+
+/**
+ * Is this sentence safe to publish to every customer?
+ *
+ * Shape first, then meaning. The shape rules are duplicated in the CHECK on the
+ * column (0040) on purpose: this is the function refusing to send it, and that
+ * is the database refusing to store it, and neither is the other's excuse.
+ *
+ * Exported so scripts/check-lexicon can exercise it directly. It is the only
+ * gate on the only free-text column in a table every customer reads, and a gate
+ * that is only tested through a network call is a gate nobody tests.
+ */
+export function isShareableTip(tip: string): boolean {
+  const trimmed = tip.trim();
+  // Long enough to say something, short enough not to be a paragraph.
+  if (trimmed.length < 12 || trimmed.length > 140) return false;
+  // A sentence, not a list or a document.
+  if (/[\n\r\t]/.test(trimmed)) return false;
+  // No links, ever. A published sentence that can carry a URL can carry
+  // somebody else's URL.
+  if (/(https?:\/\/|www\.)/i.test(trimmed)) return false;
+  // No markup: angle brackets, braces and backticks have no business in a
+  // sentence about a fridge, and their presence means something upstream went
+  // wrong rather than that the tip is unusual.
+  if (/[<>{}`\[\]|]/.test(trimmed)) return false;
+  // One sentence. Two is a paragraph pretending to be a tip.
+  if ((trimmed.match(/[.!?](\s|$)/g) ?? []).length > 1) return false;
+
+  const folded = fold(trimmed);
+  return !CLAIM_WORDS.some((w) => new RegExp(`\\b${w}\\b`).test(folded));
 }
 
 /**
@@ -125,6 +190,16 @@ export async function offerToLexicon(
     ['produce', 'protein', 'carbs', 'fats', 'other', 'nonfood'].includes(candidate.group)
       ? candidate.group
       : null;
+  /*
+   * And the tip, which has no vocabulary to be checked against — so it is
+   * checked for shape and for claims instead. Anything that does not pass is
+   * dropped silently: a term with no tip is the ordinary case, and refusing one
+   * sentence costs a reader nothing.
+   */
+  const tip =
+    typeof candidate.tip === 'string' && isShareableTip(candidate.tip)
+      ? candidate.tip.trim()
+      : null;
 
   try {
     // Ensure the row exists without disturbing an existing one. ignoreDuplicates
@@ -141,6 +216,7 @@ export async function offerToLexicon(
           unit,
           carbon,
           food_group: group,
+          storage_tip: tip,
           sightings: 0,
           published: false,
         },
@@ -169,6 +245,21 @@ export async function offerToLexicon(
         .update({ food_group: group })
         .eq('term', term)
         .is('food_group', null);
+    }
+    /*
+     * And the tip, on the same fill-once rule as the three above: every term
+     * published before 0040 can acquire one, and none of them becomes
+     * rewritable. That matters more here than anywhere else — a sentence that
+     * can be overwritten by a later generation is a sentence with no settled
+     * version, and the whole point of the three-caller threshold is that one
+     * consensus stands.
+     */
+    if (tip) {
+      await db
+        .from('item_lexicon')
+        .update({ storage_tip: tip })
+        .eq('term', term)
+        .is('storage_tip', null);
     }
 
     const hash = await callerHash(caller, salt);
