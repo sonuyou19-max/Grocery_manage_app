@@ -331,6 +331,14 @@ const en = {
     cadencePinned: { one: 'Set to every %{count} day', other: 'Set to every %{count} days' },
     cadenceLearned: { one: 'Korb learned about %{count} day', other: 'Korb learned about %{count} days' },
     cadenceNote: 'Your setting wins over what Korb learned, everywhere it’s used.',
+    actionBuy: 'Add purchase',
+    actionList: 'Add to list',
+    actionUsed: 'Mark as used',
+    whyThese: 'Why these?',
+    insightsTitle: 'Purchase insights',
+    typicalCycle: 'Your typical cycle',
+    cycleDays: { one: '%{count} day', other: '%{count} days' },
+    lastBoughtLabel: 'Last bought',
   },
   climate: {
     seeAll: 'See your heavy hitters',
@@ -591,6 +599,7 @@ const en = {
     trackTitle: 'Track a pantry item',
     trackPlaceholder: 'e.g. Olive oil',
     trackConfirm: 'Track',
+    loggedOne: 'Logged a purchase of %{item}',
     addTo: 'Add %{item} to',
   },
   category: {

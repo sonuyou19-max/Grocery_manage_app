@@ -585,6 +585,42 @@ function SignedInPantry() {
           const item = stapleKey ? stats[stapleKey] : null;
           if (item) onDelete(item);
         }}
+        /*
+         * The three verbs, wired to what this screen already does.
+         *
+         * Every one of them existed and none was reachable from the sheet:
+         * "still good" and "add to list" were swipe gestures on the row behind
+         * it, and logging a purchase was a text prompt on the tab. A sheet that
+         * reports a shortage and offers a toggle sends the reader somewhere
+         * else to act on what it just told them.
+         *
+         * The sheet CLOSES on all three. Each one changes the reading the sheet
+         * is showing — a purchase resets the cycle, using it up brings the due
+         * date forward — so staying open would leave a stale set of numbers on
+         * screen with no sign they had moved.
+         */
+        onAddPurchase={() => {
+          const item = stapleKey ? stats[stapleKey] : null;
+          if (!item) return;
+          setStapleKey(null);
+          logPurchase(item.display, item.category);
+          haptics.success();
+          showToast(t('pantry.loggedOne', { item: item.display }));
+        }}
+        onAddToList={() => {
+          const item = stapleKey ? stats[stapleKey] : null;
+          if (!item) return;
+          setStapleKey(null);
+          // The same path the swipe takes, list picker and all.
+          onAddToList(item);
+        }}
+        onMarkUsed={() => {
+          const item = stapleKey ? stats[stapleKey] : null;
+          if (!item) return;
+          setStapleKey(null);
+          markAlmostOut(item.key);
+          haptics.tick();
+        }}
         purchases={purchases}
         /* Plus gates this by PROMPTING, not hiding.
            The row stays in the settings sheet because an item visibly HAS a

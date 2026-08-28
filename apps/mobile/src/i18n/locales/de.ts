@@ -320,6 +320,14 @@ const de = {
     cadencePinned: { one: 'Auf alle %{count} Tag gesetzt', other: 'Auf alle %{count} Tage gesetzt' },
     cadenceLearned: { one: 'Korb hat etwa %{count} Tag gelernt', other: 'Korb hat etwa %{count} Tage gelernt' },
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
+    actionBuy: 'Kauf erfassen',
+    actionList: 'Auf die Liste',
+    actionUsed: 'Als verbraucht markieren',
+    whyThese: 'Warum diese?',
+    insightsTitle: 'Kauf-Einblicke',
+    typicalCycle: 'Dein üblicher Rhythmus',
+    cycleDays: { one: '%{count} Tag', other: '%{count} Tage' },
+    lastBoughtLabel: 'Zuletzt gekauft',
   },
   climate: {
     seeAll: 'Deine größten Posten ansehen',
@@ -580,6 +588,7 @@ const de = {
     trackTitle: 'Vorratsartikel verfolgen',
     trackPlaceholder: 'z. B. Olivenöl',
     trackConfirm: 'Verfolgen',
+    loggedOne: '%{item} als Kauf erfasst',
     addTo: '%{item} hinzufügen zu',
   },
   category: {

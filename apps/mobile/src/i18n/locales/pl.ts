@@ -364,6 +364,19 @@ const pl = {
       other: 'Korb nauczył się około %{count} dni',
     },
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
+    actionBuy: 'Dodaj zakup',
+    actionList: 'Dodaj do listy',
+    actionUsed: 'Oznacz jako zużyte',
+    whyThese: 'Dlaczego te?',
+    insightsTitle: 'Wgląd w zakupy',
+    typicalCycle: 'Twój zwykły rytm',
+    cycleDays: {
+      one: '%{count} dzień',
+      few: '%{count} dni',
+      many: '%{count} dni',
+      other: '%{count} dni',
+    },
+    lastBoughtLabel: 'Ostatnio kupione',
   },
   climate: {
     seeAll: 'Zobacz swoje najcięższe produkty',
@@ -643,6 +656,7 @@ const pl = {
     trackTitle: 'Śledź produkt ze spiżarni',
     trackPlaceholder: 'np. Oliwa z oliwek',
     trackConfirm: 'Śledź',
+    loggedOne: 'Zapisano zakup: %{item}',
     addTo: 'Dodaj %{item} do',
   },
   category: {

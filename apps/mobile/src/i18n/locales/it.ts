@@ -319,6 +319,14 @@ const it = {
     cadencePinned: { one: 'Impostato ogni %{count} giorno', other: 'Impostato ogni %{count} giorni' },
     cadenceLearned: { one: 'Korb ha imparato circa %{count} giorno', other: 'Korb ha imparato circa %{count} giorni' },
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
+    actionBuy: 'Aggiungi acquisto',
+    actionList: 'Aggiungi alla lista',
+    actionUsed: 'Segna come finito',
+    whyThese: 'Perché queste?',
+    insightsTitle: 'Analisi degli acquisti',
+    typicalCycle: 'Il tuo ritmo abituale',
+    cycleDays: { one: '%{count} giorno', other: '%{count} giorni' },
+    lastBoughtLabel: 'Ultimo acquisto',
   },
   climate: {
     seeAll: 'Vedi i tuoi articoli più pesanti',
@@ -579,6 +587,7 @@ const it = {
     trackTitle: 'Monitora un articolo della dispensa',
     trackPlaceholder: 'es. Olio d’oliva',
     trackConfirm: 'Monitora',
+    loggedOne: 'Acquisto di %{item} registrato',
     addTo: 'Aggiungi %{item} a',
   },
   category: {

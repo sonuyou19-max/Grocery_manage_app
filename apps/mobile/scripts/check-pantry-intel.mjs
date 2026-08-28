@@ -706,5 +706,98 @@ check(
   );
 }
 
+/* ------------------------------------------------- the pantry item sheet -- */
+
+/*
+ * The sheet you reach by tapping a pantry row used to be settings only: a
+ * toggle, some cadence chips, a link to history. It is opened FROM a row that
+ * says "19 days left", and it owed the reader that fact and something to do
+ * about it.
+ */
+{
+  /*
+   * Comments stripped before anything is matched.
+   *
+   * Both of the assertions below failed on their first run against correct
+   * code: one counted `Date.now()` twice because the comment above it explains
+   * why there is only one, and one missed a handler because a comment sits
+   * between the close and the call. Matching prose is this repo's most
+   * repeated guard bug, and the fix is always the same.
+   */
+  const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const sheet = code(readFileSync(join(here, '..', 'src', 'components', 'staple-sheet.tsx'), 'utf8'));
+  const pantry = code(readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8'));
+  const has = (re) => re.test(sheet);
+
+  /*
+   * THE STATE, BEFORE ANY SETTING ABOUT IT — and drawn with the ROW'S OWN
+   * gauge. One instrument in two places is what stops the sheet disagreeing
+   * with the row that opened it.
+   */
+  check('the sheet reports what the item is doing', has(/statusLabel\(item, now, t\)/), true);
+  check('...on the same gauge the row draws', has(/<StockBar geo=\{geo\} \/>/), true);
+  /*
+   * One `now` for the whole sheet. Three Date.now() calls a millisecond apart
+   * can straddle a day boundary and print a state that contradicts its own bar.
+   */
+  check('...against one clock reading', (sheet.match(/Date\.now\(\)/g) ?? []).length, 1);
+
+  // THE THREE VERBS. All three existed; none was reachable from here.
+  check('the sheet offers all three actions',
+    has(/t\("staple\.actionBuy"\)/) && has(/t\("staple\.actionList"\)/) && has(/t\("staple\.actionUsed"\)/),
+    true);
+  /*
+   * Wired to what the Pantry already does, and every one CLOSES the sheet —
+   * each changes the reading on screen, so staying open would leave stale
+   * numbers with nothing saying they had moved.
+   */
+  check('buying is logged through the store',
+    /onAddPurchase=\{\(\) => \{[\s\S]{0,320}?logPurchase\(item\.display, item\.category\)/.test(pantry), true);
+  check('...listing takes the same path as the swipe',
+    /onAddToList=\{\(\) => \{[\s\S]{0,320}?onAddToList\(item\)/.test(pantry), true);
+  check('...and using it up teaches the interval',
+    /onMarkUsed=\{\(\) => \{[\s\S]{0,320}?markAlmostOut\(item\.key\)/.test(pantry), true);
+  check('all three close the sheet first',
+    (pantry.match(/setStapleKey\(null\);\s*(logPurchase|onAddToList\(item\)|markAlmostOut)/g) ?? []).length, 3);
+
+  /*
+   * The cadence footnote is behind a tap. It was permanent prose under controls
+   * everybody uses, which is where prose goes to be unread.
+   */
+  check('the cadence note is behind a tap', has(/\{whyOpen && \(/), true);
+  check('...with something to tap', has(/t\("staple\.whyThese"\)/), true);
+
+  // The insights row, which replaced a bare "3 purchases" count.
+  check('history leads with the rhythm', has(/t\("staple\.typicalCycle"\)/), true);
+  check('...and the cycle in days', has(/t\("staple\.cycleDays", \{ count: learned \}\)/), true);
+  /*
+   * Below two intervals there is no rhythm to draw, and an empty frame reads as
+   * a broken chart rather than as an item with no history yet.
+   */
+  check('the chart needs two gaps to draw', has(/intervals\.length >= 2 && <IntervalChart/), true);
+  /*
+   * Bars are scaled to the LONGEST gap, not to the learned cycle: the question
+   * is "how regular am I", and anchoring to the average flattens exactly the
+   * variation worth seeing.
+   */
+  check('...scaled to the longest gap', has(/const longest = Math\.max\(\.\.\.days\)/), true);
+
+  /*
+   * A glyph, never a photograph. There is no image source in the app, and the
+   * failure mode decides it: right for "Spinach", blank for the receipt-fed
+   * names that make up much of a real pantry.
+   */
+  check('the header draws the item glyph', has(/<ItemEmoji name=\{item\.display\} category=\{item\.category\} size=\{38\}/), true);
+  check('...and no photograph', /<Image|source=\{\{ uri/.test(sheet), false);
+
+  /*
+   * And no nutrition claims. "High in iron" is a regulated claim in the EU with
+   * a legal threshold behind it; generating one from a model, about an item
+   * somebody typed, is a compliance problem whose failure nobody would notice.
+   */
+  check('...and no nutrition claims',
+    /high in iron|low calorie|rich in vitamins/i.test(sheet), false);
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

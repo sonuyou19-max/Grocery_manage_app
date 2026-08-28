@@ -319,6 +319,14 @@ const es = {
     cadencePinned: { one: 'Ajustado a cada %{count} día', other: 'Ajustado a cada %{count} días' },
     cadenceLearned: { one: 'Korb ha aprendido unos %{count} día', other: 'Korb ha aprendido unos %{count} días' },
     cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
+    actionBuy: 'Añadir compra',
+    actionList: 'Añadir a la lista',
+    actionUsed: 'Marcar como gastado',
+    whyThese: '¿Por qué estas?',
+    insightsTitle: 'Análisis de compras',
+    typicalCycle: 'Tu ritmo habitual',
+    cycleDays: { one: '%{count} día', other: '%{count} días' },
+    lastBoughtLabel: 'Última compra',
   },
   climate: {
     seeAll: 'Ver tus artículos más pesados',
@@ -579,6 +587,7 @@ const es = {
     trackTitle: 'Seguir un artículo de la despensa',
     trackPlaceholder: 'p. ej. Aceite de oliva',
     trackConfirm: 'Seguir',
+    loggedOne: 'Compra de %{item} registrada',
     addTo: 'Añadir %{item} a',
   },
   category: {

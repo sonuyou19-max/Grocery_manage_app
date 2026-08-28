@@ -319,6 +319,14 @@ const nl = {
     cadencePinned: { one: 'Ingesteld op elke %{count} dag', other: 'Ingesteld op elke %{count} dagen' },
     cadenceLearned: { one: 'Korb heeft ongeveer %{count} dag geleerd', other: 'Korb heeft ongeveer %{count} dagen geleerd' },
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
+    actionBuy: 'Aankoop toevoegen',
+    actionList: 'Op lijst zetten',
+    actionUsed: 'Markeer als op',
+    whyThese: 'Waarom deze?',
+    insightsTitle: 'Aankoopinzichten',
+    typicalCycle: 'Je gebruikelijke ritme',
+    cycleDays: { one: '%{count} dag', other: '%{count} dagen' },
+    lastBoughtLabel: 'Laatst gekocht',
   },
   climate: {
     seeAll: 'Bekijk je zwaarste producten',
@@ -579,6 +587,7 @@ const nl = {
     trackTitle: 'Voorraaditem volgen',
     trackPlaceholder: 'bijv. Olijfolie',
     trackConfirm: 'Volgen',
+    loggedOne: 'Aankoop van %{item} vastgelegd',
     addTo: '%{item} toevoegen aan',
   },
   category: {

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRef, type PropsWithChildren } from "react";
+import { useMemo, useRef, useState, type PropsWithChildren } from "react";
 import {
   Pressable,
   ScrollView,
@@ -15,11 +15,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Sheet, SheetHandle, useSheetDismiss } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
+import { ItemEmoji } from "@/components/item-emoji";
+import { StockBar } from "@/components/stock-bar";
 import { categoryLabel } from "@/lib/categorize";
 import {
   CADENCE_PRESETS,
   effectiveInterval,
   hasUserCadence,
+  lastBoughtLabel,
+  statusLabel,
+  stockGeometry,
   type ItemStat,
 } from "@/lib/pantry-intel";
 import { listTint } from "@/lib/list-tint";
@@ -67,6 +72,18 @@ interface StapleSheetProps {
   purchases: Purchase[];
   onOpenHistory: () => void;
   /**
+   * The three things a person can actually do about an item, from the screen
+   * that told them it is running out.
+   *
+   * Handlers rather than behaviour, for the same reason `lists` is a prop: this
+   * component draws a pantry item and the Pantry owns what buying, listing and
+   * using one MEAN. All three already existed on that screen — two of them
+   * behind swipes nobody discovers, and one only reachable from a text prompt.
+   */
+  onAddPurchase: () => void;
+  onAddToList: () => void;
+  onMarkUsed: () => void;
+  /**
    * The lists this item is currently on, tagged under its name.
    *
    * Answering "where did I put this?" without leaving the Pantry — the moment
@@ -85,6 +102,9 @@ export function StapleSheet({
   onDelete,
   purchases,
   onOpenHistory,
+  onAddPurchase,
+  onAddToList,
+  onMarkUsed,
   lists: openLists,
 }: StapleSheetProps) {
   const { colors, scheme } = useTheme();
@@ -115,13 +135,58 @@ export function StapleSheet({
   if (openItem) last.current = { item: openItem, lists: openLists };
 
   const snapshot = last.current;
+
+  /*
+   * EVERY HOOK ABOVE THE GATE.
+   *
+   * `snapshot` is null only before this sheet has ever opened, so the early
+   * return below is real and unavoidable — which makes everything hook-shaped
+   * have to come first, derived from a name that may not exist yet. Written the
+   * other way round it reads fine and breaks the moment the sheet opens for the
+   * first time, because the hook order changes between renders.
+   */
+  const displayName = snapshot?.item.display ?? null;
+  const history = useMemo(
+    () => (displayName ? historyFor(purchases, displayName) : []),
+    [purchases, displayName],
+  );
+
+  /*
+   * The gaps between purchases, newest last, for the little chart.
+   *
+   * Intervals rather than prices: this row answers "how often", and the sheet
+   * around it is entirely about rhythm. `historyFor` returns newest first, so
+   * this walks backwards to put time's direction left to right.
+   */
+  const intervals = useMemo(() => {
+    const days: number[] = [];
+    for (let i = history.length - 1; i > 0; i -= 1) {
+      const gap = (history[i - 1]!.at - history[i]!.at) / 86_400_000;
+      if (gap > 0) days.push(gap);
+    }
+    return days.slice(-8);
+  }, [history]);
+
+  // The cadence footnote, which was permanent prose under the chips nobody
+  // read. Behind a tap it is there when the question actually occurs.
+  const [whyOpen, setWhyOpen] = useState(false);
+
   if (!snapshot) return null;
   const { item, lists } = snapshot;
 
-  const history = historyFor(purchases, item.display);
-
   const learned = Math.round(effectiveInterval(item));
   const pinned = hasUserCadence(item);
+
+  /*
+   * One `now` for the whole sheet.
+   *
+   * Read once per render rather than per call site, so the status line, the
+   * gauge and the last-bought label are all describing the same instant — three
+   * Date.now() calls a millisecond apart can straddle a day boundary and print
+   * a state that disagrees with its own bar.
+   */
+  const now = Date.now();
+  const geo = stockGeometry(item, now);
 
   /*
    * A real pixel ceiling, replacing `maxHeight: '85%'`.
@@ -161,6 +226,19 @@ export function StapleSheet({
           contentContainerStyle={styles.content}
         >
           <View style={styles.headRow}>
+            {/*
+              The item's own glyph, given room.
+
+              Not a photograph. There is no image source in the app, and the
+              failure mode decides it: a photo is right for "Spinach" and blank
+              for "Provital toast 50 pieces" or "Kawa", which is a large share
+              of a receipt-fed pantry. The emoji table covers 646 words across
+              seven languages, resolves offline and instantly, and is never
+              missing. What it lacked was scale, which is free.
+            */}
+            <View style={[styles.glyphPad, { backgroundColor: colors.accentSoft }]}>
+              <ItemEmoji name={item.display} category={item.category} size={38} />
+            </View>
             <View style={styles.grow}>
             {/* Name and list tags share one row, the tags reading as a suffix
                 to the name rather than as a separate fact below it — "Pizza,
@@ -238,6 +316,59 @@ export function StapleSheet({
             </Pressable>
           </View>
 
+          {/*
+            WHAT THE ITEM IS DOING, before any setting about it.
+
+            The sheet opened on a toggle. It is reached by tapping a row that
+            says "19 days left", and the first thing it owed the reader was that
+            same fact in full — the state in words, the number, and where the
+            marker sits along the cycle.
+
+            One reading of the clock, not three. The reference drawing carried a
+            ring, a bar AND a date; the bar is the one that also shows how far
+            through you are, so it is the one that stays, with the day count
+            beside the state.
+          */}
+          <View style={[styles.fresh, { backgroundColor: colors.accentSoft }]}>
+            <View style={styles.freshTop}>
+              <Text style={[type.body, { color: toneInk(geo.tone, colors) }]}>
+                {statusLabel(item, now, t)}
+              </Text>
+              <Text style={[type.label, { color: colors.muted }]}>
+                {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+              </Text>
+            </View>
+            {/* The same gauge the row draws — one instrument, two places, so
+                the sheet can never disagree with the row that opened it. */}
+            <StockBar geo={geo} />
+          </View>
+
+          {/*
+            THE THREE VERBS.
+
+            All three already existed and none was findable from here: buying
+            was a text prompt on the tab, listing and using were swipe gestures.
+            A sheet that reports a shortage and offers only a toggle is asking
+            the reader to go somewhere else to act on what it just told them.
+          */}
+          <View style={styles.actions}>
+            <ActionButton
+              icon="cart-outline"
+              label={t("staple.actionBuy")}
+              onPress={onAddPurchase}
+            />
+            <ActionButton
+              icon="add-circle-outline"
+              label={t("staple.actionList")}
+              onPress={onAddToList}
+            />
+            <ActionButton
+              icon="checkmark-circle-outline"
+              label={t("staple.actionUsed")}
+              onPress={onMarkUsed}
+            />
+          </View>
+
           {/* Staple toggle */}
           <View style={[styles.row, { borderColor: colors.line }]}>
             <Ionicons name="bookmark-outline" size={22} color={colors.accent} />
@@ -258,9 +389,25 @@ export function StapleSheet({
 
           {/* Cadence */}
           <View style={styles.section}>
-            <Text style={[type.label, { color: colors.muted }]}>
-              {t("staple.cadenceTitle")}
-            </Text>
+            <View style={styles.sectHead}>
+              <Text style={[type.label, { color: colors.muted }]}>
+                {t("staple.cadenceTitle")}
+              </Text>
+              {/* The note used to sit under the chips permanently: prose nobody
+                  reads, under controls everybody uses. */}
+              <Pressable
+                onPress={() => setWhyOpen((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: whyOpen }}
+                style={[styles.why, { borderColor: colors.line }]}
+              >
+                <Text style={[type.label, { color: colors.muted }]}>
+                  {t("staple.whyThese")}
+                </Text>
+                <Ionicons name="information-circle-outline" size={13} color={colors.muted} />
+              </Pressable>
+            </View>
             <Text style={[type.sub, { color: colors.muted }]}>
               {pinned
                 ? t("staple.cadencePinned", { count: item.cadenceDays ?? 0 })
@@ -283,9 +430,11 @@ export function StapleSheet({
                 />
               ))}
             </View>
-            <Text style={[type.sub, { color: colors.muted }]}>
-              {t("staple.cadenceNote")}
-            </Text>
+            {whyOpen && (
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {t("staple.cadenceNote")}
+              </Text>
+            )}
           </View>
 
           {/* Every time you bought this. The pantry knows the rhythm; the
@@ -294,21 +443,42 @@ export function StapleSheet({
           {history.length > 0 && (
             <HistoryRow
               onOpenHistory={onOpenHistory}
-              style={[styles.row, { borderColor: colors.line }]}
+              style={[styles.insight, { backgroundColor: colors.accentSoft }]}
             >
-              <Ionicons
-                name="receipt-outline"
-                size={22}
-                color={colors.accent}
-              />
-              <View style={styles.grow}>
-                <Text style={[type.body, { color: colors.ink }]}>
-                  {t("ledger.openTitle")}
+              <View style={[styles.badge, { backgroundColor: colors.accent + '28' }]}>
+                <Ionicons name="stats-chart" size={17} color={colors.accent} />
+              </View>
+
+              <View style={styles.insightBody}>
+                <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
+                  {t("staple.insightsTitle")}
                 </Text>
-                <Text style={[type.sub, { color: colors.muted }]}>
-                  {t("ledger.subtitle", { count: history.length })}
+                <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                  {t("staple.typicalCycle")}
+                </Text>
+                <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
+                  {t("staple.cycleDays", { count: learned })}
                 </Text>
               </View>
+
+              {/* The chart is the flexible element: the two text blocks either
+                  side carry facts and hold their size, and this absorbs the
+                  slack. Below two intervals there is no rhythm to draw, and an
+                  empty frame reads as a broken chart rather than as no data. */}
+              {intervals.length >= 2 && <IntervalChart days={intervals} />}
+
+              <View style={[styles.lastBuy, { borderColor: colors.line, backgroundColor: colors.surface }]}>
+                <Ionicons name="calendar-outline" size={15} color={colors.muted} />
+                <View>
+                  <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+                    {t("staple.lastBoughtLabel")}
+                  </Text>
+                  <Text style={[type.sub, { color: colors.ink }]} numberOfLines={1}>
+                    {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+                  </Text>
+                </View>
+              </View>
+
               <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </HistoryRow>
           )}
@@ -411,6 +581,79 @@ function HistoryRow({
   );
 }
 
+/** One of the three verbs. Equal thirds, so no action reads as the main one. */
+function ActionButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.action, { borderColor: colors.line }]}
+    >
+      <Ionicons name={icon} size={17} color={colors.accent} />
+      {/* Two lines allowed: "Mark as used" is one word longer in German and
+          three characters wider in Polish, and a truncated verb is not a verb. */}
+      <Text style={[type.label, styles.actionText, { color: colors.ink }]} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The gaps between purchases, as bars.
+ *
+ * Heights are relative to the LONGEST gap rather than to the learned cycle: the
+ * question this answers is "how regular am I", and a scale anchored to the
+ * average would flatten exactly the variation worth seeing. A floor of 15%
+ * keeps a very short gap visible as a bar rather than as a line.
+ *
+ * The most recent two are drawn solid and the rest dimmed — recency is the part
+ * that tells you whether the rhythm is holding, and it is the part the eye
+ * should land on first.
+ */
+function IntervalChart({ days }: { days: number[] }) {
+  const { colors } = useTheme();
+  const longest = Math.max(...days);
+  return (
+    <View style={styles.chart} accessibilityRole="image">
+      {days.map((d, i) => (
+        <View
+          key={`${i}-${d}`}
+          style={[
+            styles.bar,
+            {
+              height: `${Math.max(15, (d / longest) * 100)}%`,
+              backgroundColor: colors.accent,
+              opacity: i >= days.length - 2 ? 1 : 0.38,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** Which ink the freshness line wears — the same four tones the gauge uses. */
+function toneInk(
+  tone: 'learning' | 'ok' | 'low' | 'crit',
+  colors: { muted: string; accent: string; warn: string; crit: string },
+): string {
+  if (tone === 'learning') return colors.muted;
+  if (tone === 'low') return colors.warn;
+  if (tone === 'crit') return colors.crit;
+  return colors.accent;
+}
+
 const styles = StyleSheet.create({
   // Name block and the delete control, top-aligned so the icon stays level
   // with the first line of a name that wraps to two.
@@ -420,6 +663,93 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   trash: { paddingTop: 2 },
+  // The glyph's own ground. Square-ish rather than round: a circle around an
+  // emoji reads as an avatar, and this is a thing, not a person.
+  glyphPad: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  fresh: {
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  freshTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  action: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  actionText: { textAlign: 'center' },
+
+  sectHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  why: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+
+  insight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
+  badge: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Holds its size; the chart beside it is what yields on a narrow phone.
+  insightBody: { flexShrink: 0 },
+  chart: {
+    flex: 1,
+    minWidth: 0,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  bar: { flex: 1, minWidth: 3, borderRadius: 2 },
+  lastBuy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
   titleRow: {
     flexDirection: "row",
     flexWrap: "wrap",
