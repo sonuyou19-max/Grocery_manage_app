@@ -544,6 +544,49 @@ check_(
  */
 check_('...and not what was bought', !/badRows[\s\S]{0,300}raw:/.test(logCall));
 
+/*
+ * THE REPAIR MAY CORRECT FIGURES, NOT CLASSIFICATIONS.
+ *
+ * A scan came back with the same 1,09 reduction counted twice. Reclassifying a
+ * row moves money between the goods column and the discount column without
+ * altering a digit — so it can close any gap the repair is told about, and
+ * nothing can contradict it: a wrong figure still has to multiply out, a wrong
+ * kind has no check but the totals it was asked to fix.
+ *
+ * Handing the model the size of the gap is what made that the cheapest move
+ * available, so the lever comes off rather than being asked for restraint.
+ */
+check_('a repair cannot reclassify a row', !/kind: z\.enum\(LINE_KINDS\)[\s\S]{0,40}\n\}\);\n\nconst repairSchema/.test(fn));
+check_('...and applyFixes cannot either', !/line\.kind = f\.kind/.test(fn));
+check_(
+  '...and the prompt says so rather than leaving it implied',
+  /WHAT IS NOT YOURS TO CHANGE/.test(fn) &&
+    /Do not reclassify a row to make the totals agree/.test(fn),
+);
+
+/*
+ * And the read is told that the same reduction is printed twice — once beside
+ * its item and once in a savings block — because that is the other way one
+ * discount becomes two, and it happens before the repair ever runs.
+ */
+check_(
+  'the read is warned about the savings block',
+  /THE SAME REDUCTION IS OFTEN PRINTED TWICE/.test(fn) &&
+    /Count each reduction ONCE/.test(fn),
+);
+
+/*
+ * A doubled discount is invisible in the numbers already logged: goods and paid
+ * both move, so it reads as two ordinary total mismatches. The tally is what
+ * makes it a fact rather than a hypothesis.
+ */
+check_('the log tallies the columns', /kinds: parsed\.lines\.reduce/.test(logCall));
+check_('...and lists every non-item amount', /nonItems: parsed\.lines/.test(logCall));
+check_(
+  '...still without naming anything bought',
+  !/nonItems[\s\S]{0,200}raw:/.test(logCall) && !/nonItems[\s\S]{0,200}product:/.test(logCall),
+);
+
 /* --------------------------------------------- the matcher's own prompt -- */
 
 /*

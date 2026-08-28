@@ -122,7 +122,6 @@ const fixSchema = z.object({
   unitPriceCents: z.coerce.number().finite().nullable().optional().catch(null),
   unitPriceDp: z.coerce.number().int().min(0).max(4).nullable().optional().catch(null),
   totalCents: z.coerce.number().finite().nullable().optional().catch(null),
-  kind: z.enum(LINE_KINDS).nullable().optional().catch(null),
 });
 
 const repairSchema = z.object({
@@ -308,6 +307,12 @@ RULES.
   not, you have read one of the three wrongly — look again before answering.
 - Points balances, loyalty totals, VAT breakdowns, card numbers and anything
   printed AFTER the total are not lines. Do not include them.
+- THE SAME REDUCTION IS OFTEN PRINTED TWICE. Belgian tills show a discount
+  beside the item it came off AND again in a savings block lower down — "TOTAAL
+  VOORDEEL", "U BESPAARDE", "TOTALE KORTING". That block is a restatement, not a
+  second reduction. Count each reduction ONCE, on the row where it was taken,
+  and never from the summary. Two discount rows are two discounts only if the
+  paper takes the money off twice.
 - Never invent a line, a price or a total. A field you cannot read is null.`;
 
 /**
@@ -447,8 +452,13 @@ numbers moves with it.
 So when you change one of the three, read the other two off the paper and send
 whichever of them also changed. Sending a total alone is right only when the
 quantity and unit price you were given already multiply out to it.
-- A DISCOUNT or DEPOSIT counted as an item, or an item counted as neither.
-  Negative amounts are never items.`;
+WHAT IS NOT YOURS TO CHANGE.
+
+Whether a row is an item, a discount, a deposit or a rounding is settled and is
+not in dispute. Do not reclassify a row to make the totals agree: moving a row
+from one column to another changes the sums without changing a digit, so it can
+close any gap and can be checked by nothing. If a row genuinely looks
+misclassified, leave it and correct the figures you CAN see.`;
 
 /** Roughly 1.6k tokens per image, plus the prompt, plus a long receipt's JSON. */
 const MAX_TOKENS = 8192;
@@ -641,7 +651,20 @@ Deno.serve(async (req) => {
       if (f.unitPriceCents != null) line.unitPriceCents = f.unitPriceCents;
       if (f.unitPriceDp != null) line.unitPriceDp = f.unitPriceDp;
       if (f.totalCents != null) line.totalCents = f.totalCents;
-      if (f.kind != null) line.kind = f.kind;
+      /*
+       * FIGURES ONLY. `kind` used to be repairable and is not any more.
+       *
+       * A wrong figure has an independent check — the row still has to multiply
+       * out — so a repair that invents one is caught. A wrong KIND has no check
+       * at all: it moves money between the goods bucket and the discount bucket
+       * without altering a single digit, and the only thing that would notice is
+       * the totals, which is precisely what the repair is being asked to fix.
+       *
+       * That makes reclassification the one move that can always close a gap and
+       * can never be contradicted. Handing the model the size of the gap made it
+       * the cheapest move available, and an unfalsifiable fix is worse than none:
+       * the sums agree afterwards whether or not the receipt does.
+       */
     }
     return {
       ...parsed,
@@ -787,6 +810,24 @@ Deno.serve(async (req) => {
        * in the response the device already has.
        */
       badLines: result.badLines,
+      /*
+       * A tally per column, and every non-item amount.
+       *
+       * A doubled discount is invisible in the numbers already logged: goods and
+       * paid both move, so it reads as two ordinary total mismatches. What gives
+       * it away is a second reduction of the same size, which is one line of log
+       * and no way to see otherwise.
+       *
+       * Amounts and classifications only — no names. What somebody bought does
+       * not belong in a function log.
+       */
+      kinds: parsed.lines.reduce<Record<string, number>>((acc, l) => {
+        acc[l.kind] = (acc[l.kind] ?? 0) + 1;
+        return acc;
+      }, {}),
+      nonItems: parsed.lines
+        .filter((l) => l.kind !== 'item')
+        .map((l) => ({ kind: l.kind, total: l.totalCents })),
       badRows: result.badLines.map((i) => {
         const l = parsed.lines[i];
         return l
