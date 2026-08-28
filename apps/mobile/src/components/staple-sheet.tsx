@@ -16,18 +16,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Sheet, SheetHandle, useSheetDismiss } from "@/components/sheet";
 import { GlassView } from "@/components/glass";
 import { ItemEmoji } from "@/components/item-emoji";
-import { StockBar } from "@/components/stock-bar";
 import { categoryLabel } from "@/lib/categorize";
 import {
   CADENCE_PRESETS,
   effectiveInterval,
   hasUserCadence,
   lastBoughtLabel,
-  sinceBoughtLabel,
-  statusLabel,
-  stockGeometry,
   type ItemStat,
-  type StockTone,
 } from "@/lib/pantry-intel";
 import { storageTipFor } from "@/lib/item-lexicon";
 import { listTint } from "@/lib/list-tint";
@@ -155,29 +150,11 @@ export function StapleSheet({
   );
 
   /*
-   * The gaps between purchases, newest last, for the little chart.
+   * The storage tip, from the shared dictionary — learned once for a term and
+   * free for every household after.
    *
-   * Intervals rather than prices: this row answers "how often", and the sheet
-   * around it is entirely about rhythm. `historyFor` returns newest first, so
-   * this walks backwards to put time's direction left to right.
-   */
-  const intervals = useMemo(() => {
-    const days: number[] = [];
-    for (let i = history.length - 1; i > 0; i -= 1) {
-      const gap = (history[i - 1]!.at - history[i]!.at) / 86_400_000;
-      if (gap > 0) days.push(gap);
-    }
-    return days.slice(-8);
-  }, [history]);
-
-  /*
-   * The storage tip, from the shared dictionary — learned once for "spinach"
-   * and free for every household after.
-   *
-   * Null far more often than not, and that is the intended shape: most staples
-   * keep perfectly well in a cupboard, and "store in a cool dry place" on forty
-   * items is noise a reader learns to skip past. A missing tip renders nothing
-   * rather than a placeholder.
+   * Null far more often than not, and a missing tip renders nothing rather than
+   * a placeholder. See the note in lib/item-lexicon on where tips come from.
    */
   const tip = displayName ? storageTipFor(displayName) : null;
 
@@ -192,16 +169,11 @@ export function StapleSheet({
   const pinned = hasUserCadence(item);
 
   /*
-   * One `now` for the whole sheet.
-   *
-   * Read once per render rather than per call site, so the status line, the
-   * gauge and the last-bought label are all describing the same instant — three
-   * Date.now() calls a millisecond apart can straddle a day boundary and print
-   * a state that disagrees with its own bar.
+   * One `now` for the sheet. Only the history row reads it since the status
+   * card came out, but read-once stays the rule: two Date.now() calls a
+   * millisecond apart can straddle a day boundary.
    */
   const now = Date.now();
-  const geo = stockGeometry(item, now);
-  const tone = toneOf(geo.tone, colors);
 
   /*
    * A real pixel ceiling, replacing `maxHeight: '85%'`.
@@ -344,33 +316,6 @@ export function StapleSheet({
           contentContainerStyle={styles.content}
         >
           {/*
-            WHAT THE ITEM IS DOING, before any setting about it.
-
-            The sheet opened on a toggle. It is reached by tapping a row that
-            says "19 days left", and the first thing it owed the reader was that
-            same fact in full — the state in words, the number, and where the
-            marker sits along the cycle.
-
-            One reading of the clock, not three. The reference drawing carried a
-            ring, a bar AND a date; the bar is the one that also shows how far
-            through you are, so it is the one that stays, with the day count
-            beside the state.
-          */}
-          <View style={[styles.fresh, { backgroundColor: tone.soft }]}>
-            <View style={styles.freshTop}>
-              <View style={[styles.toneDot, { backgroundColor: tone.ink }]}>
-                <Ionicons name={tone.icon} size={15} color={tone.on} />
-              </View>
-              <Text style={[type.h2, styles.grow, { color: tone.ink }]} numberOfLines={1}>
-                {statusLabel(item, now, t)}
-              </Text>
-            </View>
-            {/* The same gauge the row draws — one instrument, two places, so
-                the sheet can never disagree with the row that opened it. */}
-            <StockBar geo={geo} />
-          </View>
-
-          {/*
             THE THREE VERBS.
 
             All three already existed and none was findable from here: buying
@@ -493,76 +438,40 @@ export function StapleSheet({
           {/* Every time you bought this. The pantry knows the rhythm; the
                   ledger is the evidence behind it, and the place a wrong price
                   or a purchase at the wrong shop becomes visible. */}
+          {/*
+            ONE LINE, AND IT CAN NEVER BE EMPTY.
+
+            This was a card with slots — a cycle, a chart, a date box — and most
+            items in a real pantry have too little history to fill them. A slot
+            with no data is a hole, which is what the card kept developing.
+
+            A calendar rather than a receipt: what is behind the chevron is a
+            history of DATES as much as of prices, and the date is the half this
+            row now carries on its own second line.
+          */}
           {history.length > 0 && (
             <HistoryRow
               onOpenHistory={onOpenHistory}
-              style={[styles.insight, { backgroundColor: colors.accentSoft }]}
+              style={[styles.row, { borderColor: colors.line }]}
             >
-              {/*
-                TWO ROWS, because one cannot survive a long language.
-
-                Badge, text, chart, date box and chevron on a single line leaves
-                the text 16 points on a 390pt phone — and the box is wide
-                because of its LABEL, not its value: "ZULETZT GEKAUFT" is 111
-                points at 11px/800 with letter-spacing, wider than the date it
-                introduces. German truncated the card's own title to
-                "Kauf-Einblic…", which is a heading that has run out of room to
-                say what it is.
-
-                No amount of flex tuning fixes five things competing for one
-                line. Split, the text gets the full width and the chart gets
-                more room to be legible than it had.
-              */}
-              <View style={styles.insightTop}>
-                <View style={[styles.badge, { backgroundColor: colors.accent + '28' }]}>
-                  <Ionicons name="stats-chart" size={17} color={colors.accent} />
-                </View>
-                <View style={styles.insightBody}>
-                  <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
-                    {t("staple.insightsTitle")}
-                  </Text>
-                  <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-                    {t("staple.typicalCycle")}
-                  </Text>
-                  <Text style={[type.h2, { color: colors.ink }]} numberOfLines={1}>
-                    {t("staple.cycleDays", { count: learned })}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-              </View>
-
-              <View style={styles.insightBottom}>
+              <Ionicons name="calendar-outline" size={22} color={colors.accent} />
+              <View style={styles.grow}>
+                <Text style={[type.body, { color: colors.ink }]}>
+                  {t("ledger.openTitle")}
+                </Text>
                 {/*
-                  Below two intervals there is no rhythm to plot, and an empty
-                  frame reads as a broken chart rather than as an item with
-                  little history. On its own row it no longer has to earn its
-                  place against the text, so the narrow-screen rule is gone.
+                  Both facts, one line. The count alone was never the reason to
+                  open this — when you last bought the thing is. The SENTENCE
+                  form of the label is right here, unlike inside the old card,
+                  because nothing precedes it saying "last bought" already.
                 */}
-                {intervals.length >= 2 && <IntervalChart days={intervals} />}
-                {/*
-                  NO SPACER. The row is space-between, so the box pushes right
-                  only when there is a chart to push away FROM.
-
-                  A hard spacer pinned it right in both cases, and most items in
-                  a real pantry have one interval or none — which left a lone
-                  box in the corner with a rectangle of nothing beside it. The
-                  card looked broken exactly where it had the least to say.
-                */}
-                <View style={[styles.lastBuy, { borderColor: colors.line, backgroundColor: colors.surface }]}>
-                  <Ionicons name="calendar-outline" size={15} color={colors.muted} />
-                  <View style={styles.lastBuyText}>
-                    <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
-                      {t("staple.lastBoughtLabel")}
-                    </Text>
-                    {/* The RELATIVE form. lastBoughtLabel is a whole sentence
-                        and under this label it read "LAST BOUGHT / Last bought a
-                        week ago" — the fact twice in one box. */}
-                    <Text style={[type.sub, { color: colors.ink }]} numberOfLines={1}>
-                      {sinceBoughtLabel(item.lastPurchasedAt, now, t)}
-                    </Text>
-                  </View>
-                </View>
+                <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
+                  {t("ledger.subtitle", { count: history.length })}
+                  {" · "}
+                  {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+                </Text>
               </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </HistoryRow>
           )}
 
@@ -726,72 +635,7 @@ function ActionButton({
   );
 }
 
-/**
- * The gaps between purchases, as bars.
- *
- * Heights are relative to the LONGEST gap rather than to the learned cycle: the
- * question this answers is "how regular am I", and a scale anchored to the
- * average would flatten exactly the variation worth seeing. A floor of 15%
- * keeps a very short gap visible as a bar rather than as a line.
- *
- * The most recent two are drawn solid and the rest dimmed — recency is the part
- * that tells you whether the rhythm is holding, and it is the part the eye
- * should land on first.
- */
-function IntervalChart({ days }: { days: number[] }) {
-  const { colors } = useTheme();
-  const longest = Math.max(...days);
-  return (
-    <View style={styles.chart} accessibilityRole="image">
-      {days.map((d, i) => (
-        <View
-          key={`${i}-${d}`}
-          style={[
-            styles.bar,
-            {
-              height: `${Math.max(15, (d / longest) * 100)}%`,
-              backgroundColor: colors.accent,
-              opacity: i >= days.length - 2 ? 1 : 0.38,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
 
-/**
- * The freshness card's whole palette, from the tone the gauge is already using.
- *
- * The card used to be accent-tinted whatever the item was doing, so an overdue
- * mango sat in a calm green card with red text inside it — the surface saying
- * one thing and its contents another. A card that carries the state is the
- * cheapest way to make a sheet readable before it is read: green, amber and red
- * are legible from arm's length and the words are not.
- *
- * `on` is the ink that goes ON the solid dot, which is why it is a separate
- * value rather than a fixed white: in dark mode the accent is a light green and
- * white on it is unreadable.
- */
-function toneOf(
-  tone: StockTone,
-  colors: {
-    muted: string; line: string; surface: string;
-    accent: string; accentSoft: string; accentInk: string;
-    warn: string; warnSoft: string; crit: string; critSoft: string;
-  },
-): { ink: string; soft: string; on: string; icon: keyof typeof Ionicons.glyphMap } {
-  if (tone === 'learning') {
-    return { ink: colors.muted, soft: colors.line, on: colors.surface, icon: 'hourglass-outline' };
-  }
-  if (tone === 'crit') {
-    return { ink: colors.crit, soft: colors.critSoft, on: colors.critSoft, icon: 'alert-circle' };
-  }
-  if (tone === 'low') {
-    return { ink: colors.warn, soft: colors.warnSoft, on: colors.warnSoft, icon: 'time' };
-  }
-  return { ink: colors.accent, soft: colors.accentSoft, on: colors.accentInk, icon: 'leaf' };
-}
 
 const styles = StyleSheet.create({
   // Name block and the delete control, top-aligned so the icon stays level
@@ -812,25 +656,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 
-  fresh: {
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  freshTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   // A solid disc of the tone's own colour. The card is a wash; this is the one
   // saturated mark on it, which is what stops a pale tint reading as decoration.
-  toneDot: {
-    width: 26,
-    height: 26,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   keep: {
     flexDirection: 'row',
@@ -872,37 +699,8 @@ const styles = StyleSheet.create({
 
   // A column now: see the note at the call site for why one row could not hold
   // five things in German.
-  insight: {
-    gap: spacing.md,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-  },
-  insightTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  insightBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  badge: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   // Takes the whole top row now, so a heading no longer truncates itself.
-  insightBody: { flex: 1, minWidth: 0 },
   // Wider than it was, because it no longer competes with the text for a line.
-  chart: {
-    flexShrink: 0,
-    width: 104,
-    height: 38,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 3,
-  },
-  bar: { flex: 1, minWidth: 3, borderRadius: 2 },
   tip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -921,18 +719,6 @@ const styles = StyleSheet.create({
    * inside it is what lets numberOfLines actually truncate rather than the box
    * simply refusing to be narrower than its content.
    */
-  lastBuy: {
-    flexShrink: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  lastBuyText: { flexShrink: 1, minWidth: 0 },
   titleRow: {
     flexDirection: "row",
     flexWrap: "wrap",

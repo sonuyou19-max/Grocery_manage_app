@@ -730,17 +730,19 @@ check(
   const has = (re) => re.test(sheet);
 
   /*
-   * THE STATE, BEFORE ANY SETTING ABOUT IT — and drawn with the ROW'S OWN
-   * gauge. One instrument in two places is what stops the sheet disagreeing
-   * with the row that opened it.
+   * NO STATUS ON THIS SHEET, AND THAT IS THE POINT.
+   *
+   * It carried the state twice over — the words, the day count and the row's
+   * own gauge — one gesture after you tapped a row that already said all three.
+   * A sheet repeating what you just read is not orientation, it is noise.
+   *
+   * The consequence is real and worth keeping written down: this sheet now says
+   * nothing about whether an item is due. That is free while the only way in is
+   * from a pantry row, and stops being free the first time there is a second
+   * entry point.
    */
-  check('the sheet reports what the item is doing', has(/statusLabel\(item, now, t\)/), true);
-  check('...on the same gauge the row draws', has(/<StockBar geo=\{geo\} \/>/), true);
-  /*
-   * One `now` for the whole sheet. Three Date.now() calls a millisecond apart
-   * can straddle a day boundary and print a state that contradicts its own bar.
-   */
-  check('...against one clock reading', (sheet.match(/Date\.now\(\)/g) ?? []).length, 1);
+  check('the sheet does not repeat the row it was opened from',
+    has(/statusLabel\(/) || has(/<StockBar/), false);
 
   // THE THREE VERBS. All three existed; none was reachable from here.
   check('the sheet offers all three actions',
@@ -767,20 +769,29 @@ check(
   check('the cadence note is behind a tap', has(/\{whyOpen && \(/), true);
   check('...with something to tap', has(/t\("staple\.whyThese"\)/), true);
 
-  // The insights row, which replaced a bare "3 purchases" count.
-  check('history leads with the rhythm', has(/t\("staple\.typicalCycle"\)/), true);
-  check('...and the cycle in days', has(/t\("staple\.cycleDays", \{ count: learned \}\)/), true);
   /*
-   * Below two intervals there is no rhythm to draw, and an empty frame reads as
-   * a broken chart rather than as an item with no history yet.
+   * ONE LINE, AND IT CAN NEVER BE EMPTY.
+   *
+   * The insights card was a set of slots — cycle, chart, date box — and most
+   * items in a real pantry have too little history to fill them. A slot with no
+   * data is a hole, which is what the card kept developing however it was
+   * arranged.
+   *
+   * A calendar rather than a receipt: what is behind the chevron is a history
+   * of DATES as much as of prices.
    */
-  check('the chart needs two gaps to draw', has(/intervals\.length >= 2 && <IntervalChart/), true);
+  check('history is one row again', has(/t\("ledger\.openTitle"\)/), true);
+  check('...led by a calendar', has(/name="calendar-outline" size=\{22\}/), true);
+  check('...and not by a receipt', has(/name="receipt-outline"/), false);
   /*
-   * Bars are scaled to the LONGEST gap, not to the learned cycle: the question
-   * is "how regular am I", and anchoring to the average flattens exactly the
-   * variation worth seeing.
+   * Both facts on the second line. The count alone was never the reason to open
+   * it — when you last bought the thing is — and the SENTENCE form of the label
+   * is right here, because nothing precedes it already saying "last bought".
    */
-  check('...scaled to the longest gap', has(/const longest = Math\.max\(\.\.\.days\)/), true);
+  check('...carrying the count and the date together',
+    has(/t\("ledger\.subtitle", \{ count: history\.length \}\)[\s\S]{0,80}lastBoughtLabel\(item\.lastPurchasedAt/), true);
+  // Nothing left that can be a slot with no data in it.
+  check('...with no card around it', has(/IntervalChart|insightBody|styles\.badge/), false);
 
   /*
    * A glyph, never a photograph. There is no image source in the app, and the
@@ -813,19 +824,6 @@ check(
    * short form exists so the mistake is a compile-time choice rather than a
    * thing to remember.
    */
-  check('the boxed date uses the short form', has(/sinceBoughtLabel\(item\.lastPurchasedAt/), true);
-  check('...and the sentence form is not in the sheet at all',
-    /lastBoughtLabel\(/.test(sheet), false);
-
-  /*
-   * THE CARD CARRIES THE STATE. It was accent-tinted whatever the item was
-   * doing, so an overdue mango sat in a calm green card with red text inside
-   * it — the surface saying one thing and its contents another.
-   */
-  check('the freshness card is tinted by tone', has(/backgroundColor: tone\.soft/), true);
-  check('...from the same tone the gauge uses', has(/toneOf\(geo\.tone, colors\)/), true);
-  check('...and never a fixed accent tint', /styles\.fresh, \{ backgroundColor: colors\.accentSoft/.test(sheet), false);
-
   /*
    * The three verbs are buttons, not a legend. type.label is 11px/800,
    * letter-spaced and uppercase — three of those side by side read as shouting.
@@ -837,37 +835,7 @@ check(
   // from a foot away, and this strip exists to answer "which one" at a glance.
   check('the chosen cadence chip is filled', has(/backgroundColor: active \? colors\.accent :/), true);
 
-  /*
-   * The text absorbs the slack, not the chart — the chart is the element that
-   * is often absent, and flexing it left a hole when there was no rhythm to
-   * draw.
-   */
-  check('the insights text takes the slack', has(/insightBody: \{ flex: 1, minWidth: 0 \}/), true);
 
-  /*
-   * SHRINKABLE, because React Native's default is not.
-   *
-   * On the web flexShrink defaults to 1; in React Native it defaults to 0, so a
-   * fixed box beside flexible content does not give — it overflows. In German
-   * the last-bought box ran off the right edge of the screen and took the
-   * chevron with it. Shortening the text hides that; it does not fix it, and
-   * the next language undoes the hiding.
-   */
-  check('the boxed date can shrink', has(/lastBuy: \{\s*flexShrink: 1,\s*minWidth: 0,/), true);
-  check('...and its text can truncate', has(/lastBuyText: \{ flexShrink: 1, minWidth: 0 \}/), true);
-  /*
-   * TWO ROWS. Badge, text, chart, date box and chevron on one line leaves the
-   * text 16 points on a 390pt phone — and the box is wide because of its LABEL
-   * rather than its value, so German truncated the card's own heading. The
-   * narrow-screen rule went with the split: on its own row the chart no longer
-   * has to earn its place against the text.
-   */
-  check(
-    'the insights card is two rows',
-    has(/insightTop: \{\s*flexDirection: 'row'/) && has(/insightBottom: \{\s*flexDirection: 'row'/),
-    true,
-  );
-  check('...with the chart on the lower one', has(/insightBottom[\s\S]{0,400}IntervalChart/), true);
   /*
    * AND NO SPACER. The lower row is space-between, so the date box pushes right
    * only when there is a chart to push away from. A hard spacer pinned it right
@@ -875,21 +843,6 @@ check(
    * which left a lone box in the corner with a rectangle of nothing beside it.
    * The card looked broken exactly where it had the least to say.
    */
-  {
-    /*
-     * The BLOCK, extracted rather than a `[\s\S]{0,N}` window after the style's
-     * name. `sectHead` two declarations earlier is also space-between, so a
-     * window here would be one style's rule vouching for another's — which is
-     * how this file's guards have gone wrong before, and is worth avoiding even
-     * when the window happens to be short enough today.
-     */
-    const block = sheet.slice(sheet.indexOf('insightBottom: {'));
-    const body = block.slice(0, block.indexOf('},') + 2);
-    check('the date box only pushes right when there is a chart',
-      /justifyContent: 'space-between'/.test(body), true);
-  }
-  check('...rather than being pinned there by a spacer',
-    /IntervalChart days=\{intervals\} \/>\}\s*<View style=\{styles\.grow\} \/>/.test(sheet), false);
 
   /*
    * ONE spacing system. The content gap and per-card marginTops were both in
