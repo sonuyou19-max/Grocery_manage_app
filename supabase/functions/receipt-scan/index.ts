@@ -202,7 +202,7 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   abbreviations opened out. "DOUWE EGBERTS oplosk. dessert glas 200g" stays
   recognisable as all of that. This is what the purchase history shows beside
   the price months later, so completeness is what matters here — the opposite
-  of `product` above, and the reason they are two fields rather than one.
+  of "product" above, and the reason they are two fields rather than one.
   This is also where you FIX what the camera got wrong. Till printing is small
   and receipts crease, so the raw line will contain scanning slips — DOUNE for
   DOUWE, opiosk for oplosk., rn for m. You know what real products are called;
