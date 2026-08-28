@@ -321,7 +321,7 @@ const nl = {
     cadenceNote: 'Jouw instelling gaat voor op wat Korb heeft geleerd — overal.',
     actionBuy: 'Aankoop toevoegen',
     actionList: 'Op lijst zetten',
-    actionUsed: 'Markeer als op',
+    actionUsed: 'Verbruikt',
     whyThese: 'Waarom deze?',
     insightsTitle: 'Aankoopinzichten',
     typicalCycle: 'Je gebruikelijke ritme',

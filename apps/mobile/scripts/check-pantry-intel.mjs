@@ -774,7 +774,7 @@ check(
    * Below two intervals there is no rhythm to draw, and an empty frame reads as
    * a broken chart rather than as an item with no history yet.
    */
-  check('the chart needs two gaps to draw', has(/intervals\.length >= 2 && <IntervalChart/), true);
+  check('the chart needs two gaps to draw', has(/intervals\.length >= 2 && \(\s*<IntervalChart/), true);
   /*
    * Bars are scaled to the LONGEST gap, not to the learned cycle: the question
    * is "how regular am I", and anchoring to the average flattens exactly the
@@ -843,6 +843,24 @@ check(
    * draw.
    */
   check('the insights text takes the slack', has(/insightBody: \{ flex: 1, minWidth: 0 \}/), true);
+
+  /*
+   * SHRINKABLE, because React Native's default is not.
+   *
+   * On the web flexShrink defaults to 1; in React Native it defaults to 0, so a
+   * fixed box beside flexible content does not give — it overflows. In German
+   * the last-bought box ran off the right edge of the screen and took the
+   * chevron with it. Shortening the text hides that; it does not fix it, and
+   * the next language undoes the hiding.
+   */
+  check('the boxed date can shrink', has(/lastBuy: \{\s*flexShrink: 1,\s*minWidth: 0,/), true);
+  check('...and its text can truncate', has(/lastBuyText: \{ flexShrink: 1, minWidth: 0 \}/), true);
+  /*
+   * And the chart steps aside on a narrow phone. It is the only element in that
+   * row whose absence loses no fact — the cycle and the date are both still
+   * there in words.
+   */
+  check('the chart yields on a narrow screen', has(/windowWidth >= 360 && intervals\.length >= 2/), true);
 
   check('the tip is read from the lexicon', has(/storageTipFor\(displayName\)/), true);
   /*

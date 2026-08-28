@@ -321,7 +321,7 @@ const it = {
     cadenceNote: 'La tua impostazione vale più di quanto ha imparato Korb, in tutta l’app.',
     actionBuy: 'Aggiungi acquisto',
     actionList: 'Aggiungi alla lista',
-    actionUsed: 'Segna come finito',
+    actionUsed: 'Finito',
     whyThese: 'Perché queste?',
     insightsTitle: 'Analisi degli acquisti',
     typicalCycle: 'Il tuo ritmo abituale',

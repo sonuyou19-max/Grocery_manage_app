@@ -321,7 +321,7 @@ const es = {
     cadenceNote: 'Tu ajuste manda sobre lo que Korb ha aprendido, en todas partes.',
     actionBuy: 'Añadir compra',
     actionList: 'Añadir a la lista',
-    actionUsed: 'Marcar como gastado',
+    actionUsed: 'Gastado',
     whyThese: '¿Por qué estas?',
     insightsTitle: 'Análisis de compras',
     typicalCycle: 'Tu ritmo habitual',

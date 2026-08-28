@@ -322,7 +322,7 @@ const fr = {
     cadenceNote: 'Ton réglage prime sur ce que Korb a appris, partout.',
     actionBuy: 'Ajouter un achat',
     actionList: 'Ajouter à la liste',
-    actionUsed: 'Marquer comme fini',
+    actionUsed: 'Terminé',
     whyThese: 'Pourquoi ces choix ?',
     insightsTitle: 'Aperçu des achats',
     typicalCycle: 'Ton rythme habituel',

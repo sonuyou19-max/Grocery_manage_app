@@ -322,7 +322,7 @@ const de = {
     cadenceNote: 'Deine Einstellung gilt vor dem, was Korb gelernt hat — überall.',
     actionBuy: 'Kauf erfassen',
     actionList: 'Auf die Liste',
-    actionUsed: 'Als verbraucht markieren',
+    actionUsed: 'Verbraucht',
     whyThese: 'Warum diese?',
     insightsTitle: 'Kauf-Einblicke',
     typicalCycle: 'Dein üblicher Rhythmus',

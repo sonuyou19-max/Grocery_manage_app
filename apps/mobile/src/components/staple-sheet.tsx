@@ -113,7 +113,7 @@ export function StapleSheet({
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const t = useT();
 
   /*
@@ -502,15 +502,23 @@ export function StapleSheet({
                 </Text>
               </View>
 
-              {/* The chart is the flexible element: the two text blocks either
-                  side carry facts and hold their size, and this absorbs the
-                  slack. Below two intervals there is no rhythm to draw, and an
-                  empty frame reads as a broken chart rather than as no data. */}
-              {intervals.length >= 2 && <IntervalChart days={intervals} />}
+              {/*
+                Two reasons not to draw it, and neither is a failure.
+
+                Below two intervals there is no rhythm to plot, and an empty
+                frame reads as a broken chart rather than as an item with little
+                history. On a narrow phone the row cannot hold five things
+                without crushing one, and the chart is the only one whose
+                absence loses no FACT — the cycle and the last-bought date are
+                both still there in words.
+              */}
+              {windowWidth >= 360 && intervals.length >= 2 && (
+                <IntervalChart days={intervals} />
+              )}
 
               <View style={[styles.lastBuy, { borderColor: colors.line, backgroundColor: colors.surface }]}>
                 <Ionicons name="calendar-outline" size={15} color={colors.muted} />
-                <View>
+                <View style={styles.lastBuyText}>
                   <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
                     {t("staple.lastBoughtLabel")}
                   </Text>
@@ -877,7 +885,19 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginTop: spacing.md,
   },
+  /*
+   * SHRINKABLE, because React Native's default is not.
+   *
+   * On the web flexShrink defaults to 1; in React Native it defaults to 0, so a
+   * box like this does not give — it overflows. In German the row ran off the
+   * right edge of the screen and took the chevron with it, and no amount of
+   * shortening the text fixes the cause. minWidth 0 on both this and the column
+   * inside it is what lets numberOfLines actually truncate rather than the box
+   * simply refusing to be narrower than its content.
+   */
   lastBuy: {
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -886,6 +906,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
+  lastBuyText: { flexShrink: 1, minWidth: 0 },
   titleRow: {
     flexDirection: "row",
     flexWrap: "wrap",

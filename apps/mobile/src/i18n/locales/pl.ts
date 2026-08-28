@@ -366,7 +366,7 @@ const pl = {
     cadenceNote: 'Twoje ustawienie ma pierwszeństwo nad tym, czego nauczył się Korb — wszędzie.',
     actionBuy: 'Dodaj zakup',
     actionList: 'Dodaj do listy',
-    actionUsed: 'Oznacz jako zużyte',
+    actionUsed: 'Zużyte',
     whyThese: 'Dlaczego te?',
     insightsTitle: 'Wgląd w zakupy',
     typicalCycle: 'Twój zwykły rytm',
