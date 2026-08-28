@@ -608,6 +608,17 @@ const nl = {
     daysOver: { one: '%{count} dag te laat', other: '%{count} dagen te laat' },
     daysLeft: { one: 'nog ~%{count} dag', other: 'nog ~%{count} dagen' },
   },
+  // Just the relative part. lastBought.* is a whole sentence, which
+  // reads as "LAST BOUGHT / Last bought a week ago" under a label.
+  since: {
+    never: 'Nooit',
+    today: 'Vandaag',
+    yesterday: 'Gisteren',
+    days: { one: '%{count} dag geleden', other: '%{count} dagen geleden' },
+    weekAgo: 'Een week geleden',
+    weeks: { one: '%{count} week geleden', other: '%{count} weken geleden' },
+    months: { one: '%{count} maand geleden', other: '%{count} maanden geleden' },
+  },
   lastBought: {
     never: 'Nog nooit gekocht',
     today: 'Vandaag gekocht',

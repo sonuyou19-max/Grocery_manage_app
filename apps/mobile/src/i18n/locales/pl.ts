@@ -687,6 +687,17 @@ const pl = {
       other: 'zostało ~%{count} dni',
     },
   },
+  // Just the relative part. lastBought.* is a whole sentence, which
+  // reads as "LAST BOUGHT / Last bought a week ago" under a label.
+  since: {
+    never: 'Nigdy',
+    today: 'Dziś',
+    yesterday: 'Wczoraj',
+    days: { one: '%{count} dzień temu', few: '%{count} dni temu', many: '%{count} dni temu', other: '%{count} dni temu' },
+    weekAgo: 'Tydzień temu',
+    weeks: { one: '%{count} tydzień temu', few: '%{count} tygodni temu', many: '%{count} tygodni temu', other: '%{count} tygodni temu' },
+    months: { one: '%{count} miesiąc temu', few: '%{count} miesięcy temu', many: '%{count} miesięcy temu', other: '%{count} miesięcy temu' },
+  },
   lastBought: {
     never: 'Nigdy nie kupione',
     today: 'Kupione dzisiaj',

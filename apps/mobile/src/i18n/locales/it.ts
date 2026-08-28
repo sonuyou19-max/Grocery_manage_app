@@ -609,6 +609,17 @@ const it = {
     daysOver: { one: 'in ritardo di %{count} giorno', other: 'in ritardo di %{count} giorni' },
     daysLeft: { one: '~%{count} giorno rimasto', other: '~%{count} giorni rimasti' },
   },
+  // Just the relative part. lastBought.* is a whole sentence, which
+  // reads as "LAST BOUGHT / Last bought a week ago" under a label.
+  since: {
+    never: 'Mai',
+    today: 'Oggi',
+    yesterday: 'Ieri',
+    days: { one: '%{count} giorno fa', other: '%{count} giorni fa' },
+    weekAgo: 'Una settimana fa',
+    weeks: { one: '%{count} settimana fa', other: '%{count} settimane fa' },
+    months: { one: '%{count} mese fa', other: '%{count} mesi fa' },
+  },
   lastBought: {
     never: 'Mai comprato',
     today: 'Comprato oggi',

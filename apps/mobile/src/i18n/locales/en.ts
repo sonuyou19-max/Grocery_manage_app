@@ -620,6 +620,17 @@ const en = {
     daysOver: { one: '%{count} day over', other: '%{count} days over' },
     daysLeft: { one: '~%{count} day left', other: '~%{count} days left' },
   },
+  // Just the relative part. lastBought.* is a whole sentence, which
+  // reads as "LAST BOUGHT / Last bought a week ago" under a label.
+  since: {
+    never: 'Never',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    days: { one: '%{count} day ago', other: '%{count} days ago' },
+    weekAgo: 'A week ago',
+    weeks: { one: '%{count} week ago', other: '%{count} weeks ago' },
+    months: { one: '%{count} month ago', other: '%{count} months ago' },
+  },
   lastBought: {
     never: 'Never bought yet',
     today: 'Last bought today',

@@ -23,9 +23,11 @@ import {
   effectiveInterval,
   hasUserCadence,
   lastBoughtLabel,
+  sinceBoughtLabel,
   statusLabel,
   stockGeometry,
   type ItemStat,
+  type StockTone,
 } from "@/lib/pantry-intel";
 import { storageTipFor } from "@/lib/item-lexicon";
 import { listTint } from "@/lib/list-tint";
@@ -199,6 +201,7 @@ export function StapleSheet({
    */
   const now = Date.now();
   const geo = stockGeometry(item, now);
+  const tone = toneOf(geo.tone, colors);
 
   /*
    * A real pixel ceiling, replacing `maxHeight: '85%'`.
@@ -341,13 +344,13 @@ export function StapleSheet({
             through you are, so it is the one that stays, with the day count
             beside the state.
           */}
-          <View style={[styles.fresh, { backgroundColor: colors.accentSoft }]}>
+          <View style={[styles.fresh, { backgroundColor: tone.soft }]}>
             <View style={styles.freshTop}>
-              <Text style={[type.body, { color: toneInk(geo.tone, colors) }]}>
+              <View style={[styles.toneDot, { backgroundColor: tone.ink }]}>
+                <Ionicons name={tone.icon} size={15} color={tone.on} />
+              </View>
+              <Text style={[type.h2, styles.grow, { color: tone.ink }]} numberOfLines={1}>
                 {statusLabel(item, now, t)}
-              </Text>
-              <Text style={[type.label, { color: colors.muted }]}>
-                {lastBoughtLabel(item.lastPurchasedAt, now, t)}
               </Text>
             </View>
             {/* The same gauge the row draws — one instrument, two places, so
@@ -382,8 +385,29 @@ export function StapleSheet({
           </View>
 
           {/* Staple toggle */}
-          <View style={[styles.row, { borderColor: colors.line }]}>
-            <Ionicons name="bookmark-outline" size={22} color={colors.accent} />
+          {/*
+            A promise, and it looks like one once it has been made.
+
+            OFF this is a plain row among settings, because that is what it is —
+            one option of several. ON it is a commitment the app will act on
+            every week without asking again, and the warm card is the app
+            acknowledging that rather than leaving a switch to carry the whole
+            meaning. Amber rather than accent green so it does not read as
+            another "this is fine" surface beside the freshness card.
+          */}
+          <View
+            style={[
+              styles.keep,
+              item.keepStocked
+                ? { backgroundColor: colors.warnSoft }
+                : { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.line },
+            ]}
+          >
+            <Ionicons
+              name={item.keepStocked ? "bookmark" : "bookmark-outline"}
+              size={22}
+              color={item.keepStocked ? colors.warn : colors.muted}
+            />
             <View style={styles.grow}>
               <Text style={[type.body, { color: colors.ink }]}>
                 {t("staple.keepTitle")}
@@ -395,16 +419,21 @@ export function StapleSheet({
             <Switch
               value={item.keepStocked ?? false}
               onValueChange={(v) => onChange({ keepStocked: v })}
-              trackColor={{ true: colors.accent, false: colors.line }}
+              trackColor={{ true: colors.warn, false: colors.line }}
             />
           </View>
 
           {/* Cadence */}
           <View style={styles.section}>
             <View style={styles.sectHead}>
-              <Text style={[type.label, { color: colors.muted }]}>
-                {t("staple.cadenceTitle")}
-              </Text>
+              {/* An icon per section, so the sheet has a rhythm to scan down
+                  rather than four indistinguishable blocks of text. */}
+              <View style={styles.sectTitle}>
+                <Ionicons name="repeat" size={15} color={colors.muted} />
+                <Text style={[type.label, { color: colors.muted }]}>
+                  {t("staple.cadenceTitle")}
+                </Text>
+              </View>
               {/* The note used to sit under the chips permanently: prose nobody
                   reads, under controls everybody uses. */}
               <Pressable
@@ -485,8 +514,12 @@ export function StapleSheet({
                   <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
                     {t("staple.lastBoughtLabel")}
                   </Text>
+                  {/* The RELATIVE form. lastBoughtLabel is a whole sentence and
+                      under this label it read "LAST BOUGHT / Last bought a week
+                      ago" — the fact three times over, counting the one that
+                      used to sit in the freshness card above. */}
                   <Text style={[type.sub, { color: colors.ink }]} numberOfLines={1}>
-                    {lastBoughtLabel(item.lastPurchasedAt, now, t)}
+                    {sinceBoughtLabel(item.lastPurchasedAt, now, t)}
                   </Text>
                 </View>
               </View>
@@ -550,16 +583,21 @@ function CadenceChip({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
+      /*
+        Chosen means FILLED. Tinted-with-a-coloured-border is the same weight as
+        the four beside it from more than a foot away, and this strip's whole
+        job is to answer "which one is on" at a glance.
+      */
       style={[
         styles.chip,
         {
           borderColor: active ? colors.accent : colors.line,
-          backgroundColor: active ? colors.accentSoft : colors.surface,
+          backgroundColor: active ? colors.accent : colors.surface,
         },
       ]}
     >
       <Text
-        style={[type.sub, { color: active ? colors.accent : colors.ink }]}
+        style={[type.sub, { color: active ? colors.accentInk : colors.ink }]}
         numberOfLines={1}
       >
         {label}
@@ -629,12 +667,21 @@ function ActionButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[styles.action, { borderColor: colors.line }]}
+      style={[styles.action, { backgroundColor: colors.accentSoft }]}
     >
-      <Ionicons name={icon} size={17} color={colors.accent} />
-      {/* Two lines allowed: "Mark as used" is one word longer in German and
-          three characters wider in Polish, and a truncated verb is not a verb. */}
-      <Text style={[type.label, styles.actionText, { color: colors.ink }]} numberOfLines={2}>
+      <Ionicons name={icon} size={19} color={colors.accent} />
+      {/*
+        Sentence case at body weight, not the uppercase label style.
+
+        `type.label` is 11px, weight 800, letter-spaced and capitalised — it is
+        built for a section heading, and three of them side by side read as
+        SHOUTING rather than as buttons. These are the sheet's primary verbs and
+        should look like something you press, not like a legend.
+
+        Two lines allowed: "Mark as used" is a word longer in German and wider
+        in Polish, and a truncated verb is not a verb.
+      */}
+      <Text style={[styles.actionText, { color: colors.ink }]} numberOfLines={2}>
         {label}
       </Text>
     </Pressable>
@@ -675,15 +722,37 @@ function IntervalChart({ days }: { days: number[] }) {
   );
 }
 
-/** Which ink the freshness line wears — the same four tones the gauge uses. */
-function toneInk(
-  tone: 'learning' | 'ok' | 'low' | 'crit',
-  colors: { muted: string; accent: string; warn: string; crit: string },
-): string {
-  if (tone === 'learning') return colors.muted;
-  if (tone === 'low') return colors.warn;
-  if (tone === 'crit') return colors.crit;
-  return colors.accent;
+/**
+ * The freshness card's whole palette, from the tone the gauge is already using.
+ *
+ * The card used to be accent-tinted whatever the item was doing, so an overdue
+ * mango sat in a calm green card with red text inside it — the surface saying
+ * one thing and its contents another. A card that carries the state is the
+ * cheapest way to make a sheet readable before it is read: green, amber and red
+ * are legible from arm's length and the words are not.
+ *
+ * `on` is the ink that goes ON the solid dot, which is why it is a separate
+ * value rather than a fixed white: in dark mode the accent is a light green and
+ * white on it is unreadable.
+ */
+function toneOf(
+  tone: StockTone,
+  colors: {
+    muted: string; line: string; surface: string;
+    accent: string; accentSoft: string; accentInk: string;
+    warn: string; warnSoft: string; crit: string; critSoft: string;
+  },
+): { ink: string; soft: string; on: string; icon: keyof typeof Ionicons.glyphMap } {
+  if (tone === 'learning') {
+    return { ink: colors.muted, soft: colors.line, on: colors.surface, icon: 'hourglass-outline' };
+  }
+  if (tone === 'crit') {
+    return { ink: colors.crit, soft: colors.critSoft, on: colors.critSoft, icon: 'alert-circle' };
+  }
+  if (tone === 'low') {
+    return { ink: colors.warn, soft: colors.warnSoft, on: colors.warnSoft, icon: 'time' };
+  }
+  return { ink: colors.accent, soft: colors.accentSoft, on: colors.accentInk, icon: 'leaf' };
 }
 
 const styles = StyleSheet.create({
@@ -708,28 +777,46 @@ const styles = StyleSheet.create({
   fresh: {
     borderRadius: radii.lg,
     padding: spacing.md,
-    gap: spacing.sm,
-    marginTop: spacing.lg,
+    gap: spacing.md,
+    marginTop: spacing.md,
   },
   freshTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  // A solid disc of the tone's own colour. The card is a wash; this is the one
+  // saturated mark on it, which is what stops a pale tint reading as decoration.
+  toneDot: {
+    width: 26,
+    height: 26,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  keep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    marginTop: spacing.lg,
+  },
+  sectTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   action: {
     flex: 1,
     minWidth: 0,
-    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
     gap: spacing.xs,
   },
-  actionText: { textAlign: 'center' },
+  // 13/600 rather than the 11/800 uppercase label style: a button, not a legend.
+  actionText: { textAlign: 'center', fontSize: 13, fontWeight: '600' },
 
   sectHead: {
     flexDirection: 'row',
@@ -753,7 +840,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.lg,
     padding: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
   badge: {
     width: 38,
@@ -762,12 +849,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Holds its size; the chart beside it is what yields on a narrow phone.
-  insightBody: { flexShrink: 0 },
+  /*
+   * The TEXT absorbs the slack, not the chart.
+   *
+   * It was the other way round, and the chart is the one element that is often
+   * absent — an item with two purchases has one interval and nothing to plot.
+   * With the flex on the chart, hiding it left a hole nobody filled and the
+   * last-bought box drifted into the middle of the row. Putting it here means
+   * the layout is the same shape whether or not there is a rhythm to draw.
+   */
+  insightBody: { flex: 1, minWidth: 0 },
   chart: {
-    flex: 1,
-    minWidth: 0,
-    height: 40,
+    flexShrink: 0,
+    width: 76,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 3,
@@ -780,7 +875,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.lg,
     padding: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
   lastBuy: {
     flexDirection: 'row',

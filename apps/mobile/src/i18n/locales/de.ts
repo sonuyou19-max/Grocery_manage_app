@@ -610,6 +610,17 @@ const de = {
     daysOver: { one: 'seit %{count} Tag fällig', other: 'seit %{count} Tagen fällig' },
     daysLeft: { one: 'noch ~%{count} Tag', other: 'noch ~%{count} Tage' },
   },
+  // Just the relative part. lastBought.* is a whole sentence, which
+  // reads as "LAST BOUGHT / Last bought a week ago" under a label.
+  since: {
+    never: 'Nie',
+    today: 'Heute',
+    yesterday: 'Gestern',
+    days: { one: 'vor %{count} Tag', other: 'vor %{count} Tagen' },
+    weekAgo: 'Vor einer Woche',
+    weeks: { one: 'vor %{count} Woche', other: 'vor %{count} Wochen' },
+    months: { one: 'vor %{count} Monat', other: 'vor %{count} Monaten' },
+  },
   lastBought: {
     never: 'Noch nie gekauft',
     today: 'Heute gekauft',

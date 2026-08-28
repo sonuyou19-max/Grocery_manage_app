@@ -804,6 +804,46 @@ check(
    * afterwards; a per-open request would be an AI call behind a tap that most
    * people make to change a cadence.
    */
+  /*
+   * THE SAME FACT, THREE TIMES.
+   *
+   * lastBoughtLabel returns a whole sentence — "Last bought a week ago" — and it
+   * was under a LAST BOUGHT label, inside a card that also carried it in the
+   * corner. Reads perfectly well in code; reads as a stutter on screen. The
+   * short form exists so the mistake is a compile-time choice rather than a
+   * thing to remember.
+   */
+  check('the boxed date uses the short form', has(/sinceBoughtLabel\(item\.lastPurchasedAt/), true);
+  check('...and the sentence form is not in the sheet at all',
+    /lastBoughtLabel\(/.test(sheet), false);
+
+  /*
+   * THE CARD CARRIES THE STATE. It was accent-tinted whatever the item was
+   * doing, so an overdue mango sat in a calm green card with red text inside
+   * it — the surface saying one thing and its contents another.
+   */
+  check('the freshness card is tinted by tone', has(/backgroundColor: tone\.soft/), true);
+  check('...from the same tone the gauge uses', has(/toneOf\(geo\.tone, colors\)/), true);
+  check('...and never a fixed accent tint', /styles\.fresh, \{ backgroundColor: colors\.accentSoft/.test(sheet), false);
+
+  /*
+   * The three verbs are buttons, not a legend. type.label is 11px/800,
+   * letter-spaced and uppercase — three of those side by side read as shouting.
+   */
+  check('the actions are set as buttons, not labels',
+    /actionText: \{ textAlign: 'center', fontSize: 13, fontWeight: '600' \}/.test(sheet), true);
+
+  // Chosen means filled: tint-plus-border is the same weight as its neighbours
+  // from a foot away, and this strip exists to answer "which one" at a glance.
+  check('the chosen cadence chip is filled', has(/backgroundColor: active \? colors\.accent :/), true);
+
+  /*
+   * The text absorbs the slack, not the chart — the chart is the element that
+   * is often absent, and flexing it left a hole when there was no rhythm to
+   * draw.
+   */
+  check('the insights text takes the slack', has(/insightBody: \{ flex: 1, minWidth: 0 \}/), true);
+
   check('the tip is read from the lexicon', has(/storageTipFor\(displayName\)/), true);
   /*
    * Absent is the ordinary case — most staples keep fine in a cupboard, and

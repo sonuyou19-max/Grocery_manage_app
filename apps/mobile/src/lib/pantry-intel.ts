@@ -532,14 +532,36 @@ export function statusLabel(stat: ItemStat, now: number, t: Translate): string {
 
 /** Human "last bought" label for the card subtitle. */
 export function lastBoughtLabel(lastPurchasedAt: number, now: number, t: Translate): string {
-  if (!lastPurchasedAt) return t('lastBought.never');
+  return whenBought(lastPurchasedAt, now, t, 'lastBought');
+}
+
+/**
+ * The same reading, without the "Last bought" in front of it.
+ *
+ * For the places that already carry a LAST BOUGHT label of their own, where the
+ * sentence form reads "Last bought — Last bought a week ago". The bug is easy
+ * to make and invisible in code review, so the short form is a function rather
+ * than a note asking callers to remember.
+ */
+export function sinceBoughtLabel(lastPurchasedAt: number, now: number, t: Translate): string {
+  return whenBought(lastPurchasedAt, now, t, 'since');
+}
+
+/** One set of thresholds, two vocabularies. They must never drift apart. */
+function whenBought(
+  lastPurchasedAt: number,
+  now: number,
+  t: Translate,
+  ns: 'lastBought' | 'since',
+): string {
+  if (!lastPurchasedAt) return t(`${ns}.never`);
   const days = Math.floor((now - lastPurchasedAt) / DAY);
-  if (days <= 0) return t('lastBought.today');
-  if (days === 1) return t('lastBought.yesterday');
-  if (days < 7) return t('lastBought.days', { count: days });
-  if (days < 14) return t('lastBought.weekAgo');
-  if (days < 56) return t('lastBought.weeks', { count: Math.round(days / 7) });
-  return t('lastBought.months', { count: Math.round(days / 30) });
+  if (days <= 0) return t(`${ns}.today`);
+  if (days === 1) return t(`${ns}.yesterday`);
+  if (days < 7) return t(`${ns}.days`, { count: days });
+  if (days < 14) return t(`${ns}.weekAgo`);
+  if (days < 56) return t(`${ns}.weeks`, { count: Math.round(days / 7) });
+  return t(`${ns}.months`, { count: Math.round(days / 30) });
 }
 
 /**
