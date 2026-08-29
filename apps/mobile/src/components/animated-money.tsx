@@ -73,8 +73,10 @@ export function AnimatedMoney({
   value: number;
   style?: StyleProp<TextStyle>;
 }) {
-  const { currency, language } = useLocale();
-  const parts = useMemo(() => moneyParts(currency, language), [currency, language]);
+  const { currency, region } = useLocale();
+  // The REGION, not the language. A Belgian reading the app in English still
+  // shops where money is written € 2,49 — see Region.decimal.
+  const parts = useMemo(() => moneyParts(currency, region), [currency, region]);
 
   const shown = useSharedValue(value);
 
@@ -101,7 +103,7 @@ export function AnimatedMoney({
   }));
 
   return (
-    <View accessible accessibilityRole="text" accessibilityLabel={formatMoney(value, currency, language)}>
+    <View accessible accessibilityRole="text" accessibilityLabel={formatMoney(value, currency, region)}>
       <AnimatedTextInput
         editable={false}
         // Never focusable, never a tap target: it is a label that happens to be
@@ -109,7 +111,7 @@ export function AnimatedMoney({
         pointerEvents="none"
         importantForAccessibility="no-hide-descendants"
         accessibilityElementsHidden
-        defaultValue={formatMoney(value, currency, language)}
+        defaultValue={formatMoney(value, currency, region)}
         animatedProps={animatedProps}
         style={[styles.reset, style]}
       />

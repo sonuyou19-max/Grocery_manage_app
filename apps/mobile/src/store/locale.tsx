@@ -105,7 +105,9 @@ export function LocaleProvider({ children }: PropsWithChildren) {
       currency,
       setLocale,
       t: (key, options) => i18n.t(key, { locale: language, ...options }),
-      money: (minor) => formatMoney(minor, currency, language),
+      // The REGION, not the language: a Belgian reading the app in English
+      // still shops in a country that writes € 2,49. See Region.decimal.
+      money: (minor) => formatMoney(minor, currency, region),
     };
   }, [state, setLocale]);
 

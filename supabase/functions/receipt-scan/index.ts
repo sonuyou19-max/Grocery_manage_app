@@ -133,6 +133,15 @@ const repairSchema = z.object({
 const receiptSchema = z.object({
   store: z.string().max(120).nullable().optional().default(null).catch(null),
   purchasedAt: z.string().max(40).nullable().optional().default(null).catch(null),
+  /*
+   * Which mark this PAPER writes decimals with.
+   *
+   * Read off the receipt rather than assumed from the reader: a Belgian on
+   * holiday scanning a British till gets a receipt where "1.50" means one
+   * fifty, and their own convention would read it as one and a half thousand.
+   * The paper is the evidence; the phone's country is a guess about it.
+   */
+  decimalComma: z.boolean().nullable().optional().default(null).catch(null),
   currency: z.string().length(3).catch('EUR'),
   language: z.string().min(2).max(12).nullable().optional().default(null).catch(null),
   goodsCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
@@ -151,7 +160,7 @@ appear twice. Do not tidy, merge or reorder anything else.
 Return ONLY a JSON object of this exact shape:
 
 {"store":"...","purchasedAt":"...","currency":"EUR","language":"nl",
- "goodsCents":6110,"paidCents":6110,"articleCount":23,
+ "goodsCents":6110,"paidCents":6110,"articleCount":23,"decimalComma":true,
  "lines":[
   {"raw":"4 X 1L DLL VOLLE MELK","kind":"item","product":"milk",
    "translated":"full fat milk 1L","brand":"Delhaize","multiplier":4,
@@ -240,6 +249,11 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
 - store: the shop's name from the header, as printed. "Carrefour Market
   Heverlee", "ALDI SÜD", "EVEREST BVBA". Not the street, not the company number.
 - purchasedAt: the date and time PRINTED on the receipt, as ISO 8601. Not today.
+- decimalComma: true when THIS receipt writes decimals with a comma, false when
+  it writes them with a point. Judge it from the amounts printed on the paper,
+  not from the language: a British or Irish till prints 1.67 and groups with a
+  comma, and most of the continent does the opposite. If nothing printed
+  settles it, answer null.
   This is what decides which of the shopper's purchases the receipt amends, so a
   receipt scanned the next morning still lands on yesterday's shop.
   A receipt cannot be dated in the future, and today's date is given to you in

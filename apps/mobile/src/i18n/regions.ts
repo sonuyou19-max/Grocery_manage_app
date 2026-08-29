@@ -17,10 +17,26 @@ export function flagFor(code: string): string {
     .replace(/[A-Z]/g, (c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65));
 }
 
+/** Which mark a country writes decimals with. */
+export type DecimalMark = ',' | '.';
+
 export interface Region {
   /** ISO 3166-1 alpha-2 country code. */
   code: string;
   name: string;
+  /**
+   * The decimal mark used here — a property of the COUNTRY, not the language.
+   *
+   * It lived on the language, which is wrong in exactly the case this app is
+   * built for: a Belgian household running the interface in English got UK
+   * formatting for Belgian money, because the language was English. Somebody's
+   * country decides whether €2,49 or €2.49 looks right on a shelf edge;
+   * whichever language they read the app in does not.
+   *
+   * The one that surprises people: Switzerland writes decimals with a POINT,
+   * unlike every one of its neighbours.
+   */
+  decimal: DecimalMark;
   /** Suggested UI language code (must be a shipped language or 'en'). */
   suggestedLanguage: string;
   /** ISO 4217 currency code. */
@@ -29,26 +45,26 @@ export interface Region {
 
 // Ordered roughly by population so the common cases are near the top.
 export const REGIONS: Region[] = [
-  { code: 'DE', name: 'Germany', suggestedLanguage: 'de', currency: 'EUR' },
-  { code: 'FR', name: 'France', suggestedLanguage: 'fr', currency: 'EUR' },
-  { code: 'IT', name: 'Italy', suggestedLanguage: 'it', currency: 'EUR' },
-  { code: 'ES', name: 'Spain', suggestedLanguage: 'es', currency: 'EUR' },
-  { code: 'PL', name: 'Poland', suggestedLanguage: 'pl', currency: 'PLN' },
-  { code: 'NL', name: 'Netherlands', suggestedLanguage: 'nl', currency: 'EUR' },
-  { code: 'BE', name: 'Belgium', suggestedLanguage: 'nl', currency: 'EUR' },
-  { code: 'AT', name: 'Austria', suggestedLanguage: 'de', currency: 'EUR' },
-  { code: 'PT', name: 'Portugal', suggestedLanguage: 'en', currency: 'EUR' },
-  { code: 'IE', name: 'Ireland', suggestedLanguage: 'en', currency: 'EUR' },
-  { code: 'GR', name: 'Greece', suggestedLanguage: 'en', currency: 'EUR' },
-  { code: 'CH', name: 'Switzerland', suggestedLanguage: 'de', currency: 'CHF' },
-  { code: 'SE', name: 'Sweden', suggestedLanguage: 'en', currency: 'SEK' },
-  { code: 'DK', name: 'Denmark', suggestedLanguage: 'en', currency: 'DKK' },
-  { code: 'NO', name: 'Norway', suggestedLanguage: 'en', currency: 'NOK' },
-  { code: 'FI', name: 'Finland', suggestedLanguage: 'en', currency: 'EUR' },
-  { code: 'CZ', name: 'Czechia', suggestedLanguage: 'en', currency: 'CZK' },
-  { code: 'RO', name: 'Romania', suggestedLanguage: 'en', currency: 'RON' },
-  { code: 'HU', name: 'Hungary', suggestedLanguage: 'en', currency: 'HUF' },
-  { code: 'GB', name: 'United Kingdom', suggestedLanguage: 'en', currency: 'GBP' },
+  { code: 'DE', name: 'Germany', suggestedLanguage: 'de', currency: 'EUR' , decimal: ',' },
+  { code: 'FR', name: 'France', suggestedLanguage: 'fr', currency: 'EUR' , decimal: ',' },
+  { code: 'IT', name: 'Italy', suggestedLanguage: 'it', currency: 'EUR' , decimal: ',' },
+  { code: 'ES', name: 'Spain', suggestedLanguage: 'es', currency: 'EUR' , decimal: ',' },
+  { code: 'PL', name: 'Poland', suggestedLanguage: 'pl', currency: 'PLN' , decimal: ',' },
+  { code: 'NL', name: 'Netherlands', suggestedLanguage: 'nl', currency: 'EUR' , decimal: ',' },
+  { code: 'BE', name: 'Belgium', suggestedLanguage: 'nl', currency: 'EUR' , decimal: ',' },
+  { code: 'AT', name: 'Austria', suggestedLanguage: 'de', currency: 'EUR' , decimal: ',' },
+  { code: 'PT', name: 'Portugal', suggestedLanguage: 'en', currency: 'EUR' , decimal: ',' },
+  { code: 'IE', name: 'Ireland', suggestedLanguage: 'en', currency: 'EUR' , decimal: '.' },
+  { code: 'GR', name: 'Greece', suggestedLanguage: 'en', currency: 'EUR' , decimal: ',' },
+  { code: 'CH', name: 'Switzerland', suggestedLanguage: 'de', currency: 'CHF' , decimal: '.' },
+  { code: 'SE', name: 'Sweden', suggestedLanguage: 'en', currency: 'SEK' , decimal: ',' },
+  { code: 'DK', name: 'Denmark', suggestedLanguage: 'en', currency: 'DKK' , decimal: ',' },
+  { code: 'NO', name: 'Norway', suggestedLanguage: 'en', currency: 'NOK' , decimal: ',' },
+  { code: 'FI', name: 'Finland', suggestedLanguage: 'en', currency: 'EUR' , decimal: ',' },
+  { code: 'CZ', name: 'Czechia', suggestedLanguage: 'en', currency: 'CZK' , decimal: ',' },
+  { code: 'RO', name: 'Romania', suggestedLanguage: 'en', currency: 'RON' , decimal: ',' },
+  { code: 'HU', name: 'Hungary', suggestedLanguage: 'en', currency: 'HUF' , decimal: ',' },
+  { code: 'GB', name: 'United Kingdom', suggestedLanguage: 'en', currency: 'GBP' , decimal: '.' },
 ];
 
 export const DEFAULT_REGION = 'DE';
@@ -56,8 +72,17 @@ export const DEFAULT_REGION = 'DE';
 export const regionByCode = (code: string | null | undefined): Region | undefined =>
   REGIONS.find((r) => r.code === code);
 
-/** Locales that write money as "€ 2,49" (comma decimal). English/UK use "£2.49". */
-const COMMA_DECIMAL = new Set(['de', 'fr', 'it', 'es', 'pl', 'nl']);
+/**
+ * The decimal mark for a region, defaulting to the comma.
+ *
+ * A comma default rather than a point: every country this app ships to uses one
+ * except the British Isles and Switzerland, so an unknown code is far likelier
+ * to be a comma country, and a wrong guess should be wrong for as few people as
+ * possible.
+ */
+export function decimalMarkFor(region: string | null | undefined): DecimalMark {
+  return regionByCode(region)?.decimal ?? ',';
+}
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   EUR: '€',
@@ -93,10 +118,11 @@ export interface MoneyParts {
  * caller animating a number can look these up on the JS thread and hand the
  * results — plain strings and booleans — to a worklet.
  */
-export function moneyParts(currency: string, language: string): MoneyParts {
+export function moneyParts(currency: string, region: string): MoneyParts {
   return {
     symbol: CURRENCY_SYMBOL[currency] ?? '€',
-    comma: COMMA_DECIMAL.has(language),
+    // From the REGION. See Region.decimal for why the language was wrong.
+    comma: decimalMarkFor(region) === ',',
     suffix: SUFFIX_CURRENCIES.includes(currency),
   };
 }
@@ -127,6 +153,6 @@ export function assembleMoney(minor: number, p: MoneyParts): string {
  * stored currency-agnostically, so this only changes the symbol and separators
  * — it does not convert amounts.
  */
-export function formatMoney(minor: number, currency: string, language: string): string {
-  return assembleMoney(minor, moneyParts(currency, language));
+export function formatMoney(minor: number, currency: string, region: string): string {
+  return assembleMoney(minor, moneyParts(currency, region));
 }

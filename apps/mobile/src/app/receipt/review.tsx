@@ -26,6 +26,7 @@ import { Sheet } from '@/components/sheet';
 import { currencySymbolFor } from '@/i18n';
 import { cascade } from '@/lib/cascade';
 import { haptics } from '@/lib/haptics';
+import { decimalMarkFor } from '@/i18n/regions';
 import { parsePriceToCents } from '@/lib/money';
 import {
   displayName,
@@ -124,7 +125,7 @@ type EditField = 'price' | 'packs' | 'size';
 type Editing = { key: string; field: EditField; text: string } | null;
 
 export default function ReceiptReviewScreen() {
-  const { t, money, currency } = useLocale();
+  const { t, money, currency, region } = useLocale();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const scrollIndicator = useScrollIndicator();
@@ -161,6 +162,25 @@ export default function ReceiptReviewScreen() {
       alive = false;
     };
   }, [run]);
+
+  /*
+   * THE RECEIPT'S CONVENTION, NOT THE READER'S.
+   *
+   * Everything typed on this screen is a correction to a number printed on
+   * paper, so the paper decides what a comma means. A Belgian scanning a
+   * British till would otherwise read a corrected "1.50" as one and a half
+   * thousand — their own convention applied to somebody else's receipt.
+   *
+   * The device's country is the fallback and only that: it is used when the
+   * model could not tell from the paper, or when the scan came from a
+   * deployment that predates the field.
+   */
+  const decimal =
+    run?.receipt.decimalComma == null
+      ? decimalMarkFor(region)
+      : run.receipt.decimalComma
+        ? ','
+        : '.';
 
   const [editing, setEditing] = useState<Editing>(null);
   const [picking, setPicking] = useState<string | null>(null);
@@ -281,7 +301,7 @@ export default function ReceiptReviewScreen() {
     const { key, field, text } = editing;
 
     if (field === 'price') {
-      const cents = parsePriceToCents(text);
+      const cents = parsePriceToCents(text, decimal);
       // The PER-PACK price. setUnitPrice multiplies it back up, so the total —
       // which is what gets imported and summed — follows the shopper's edit.
       if (cents != null) setDecisions((d) => setUnitPrice(d, key, cents));
@@ -294,7 +314,7 @@ export default function ReceiptReviewScreen() {
        * people are copying from. A bare number keeps the unit the row already
        * had, so correcting 1L to 2L does not mean retyping the unit.
        */
-      const parsed = parseAmount(text);
+      const parsed = parseAmount(text, decimal);
       if (parsed) {
         setDecisions((d) => {
           const current = d.get(key);

@@ -38,14 +38,22 @@ const eq = (what, actual, expected) => {
 const assert = (cond, what, detail) => (cond ? ok(what) : fail(what, detail ? [detail] : []));
 
 /*
- * receipt-review's only import is a type-only one, so stripping it leaves a
- * module that stands on its own — which is the reason the decision rules live
- * in a lib and not in the screen.
+ * receipt-review carries one real import — normaliseNumber, which parseAmount
+ * uses to read a typed size in the receipt's own convention — so money.ts is
+ * CONCATENATED rather than stripped.
+ *
+ * Stripping it would leave parseAmount calling an undefined function: every
+ * separator case below would crash rather than assert, which is the shape of
+ * test that reports a passing suite while testing nothing. Everything else this
+ * module imports is type-only and does go.
  */
-const source = readFileSync(join(SRC, 'lib', 'receipt-review.ts'), 'utf8').replace(
-  /^import\s+type\s[^;]*?;/gm,
-  '',
-);
+const source =
+  readFileSync(join(SRC, 'lib', 'money.ts'), 'utf8')
+    .replace(/^import\s+type\s[^;]*?;/gm, '') +
+  '\n' +
+  readFileSync(join(SRC, 'lib', 'receipt-review.ts'), 'utf8')
+    .replace(/^import\s+type\s[^;]*?;/gm, '')
+    .replace(/^import\s\{ normaliseNumber \}[^;]*?;/gm, '');
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
@@ -288,34 +296,63 @@ eq('...and are whole', setPacks(d0, 'a', 2.6).get('a').packs, 3);
 console.log('\nparseAmount');
 
 // The shapes printed on packaging, because that is what people copy from.
-eq('grams', parseAmount('750g'), { quantity: 750, unit: 'g' });
-eq('a space is fine', parseAmount('1 L'), { quantity: 1, unit: 'l' });
-eq('so is upper case', parseAmount('500ML'), { quantity: 500, unit: 'ml' });
-eq('centilitres are accepted', parseAmount('33cl'), { quantity: 33, unit: 'cl' });
-eq('pieces', parseAmount('6 pcs'), { quantity: 6, unit: 'pcs' });
+eq('grams', parseAmount('750g', ','), { quantity: 750, unit: 'g' });
+eq('a space is fine', parseAmount('1 L', ','), { quantity: 1, unit: 'l' });
+eq('so is upper case', parseAmount('500ML', ','), { quantity: 500, unit: 'ml' });
+eq('centilitres are accepted', parseAmount('33cl', ','), { quantity: 33, unit: 'cl' });
+eq('pieces', parseAmount('6 pcs', ','), { quantity: 6, unit: 'pcs' });
 // Half of Europe writes 1,5.
-eq('a comma decimal', parseAmount('1,5l'), { quantity: 1.5, unit: 'l' });
-eq('and a full stop', parseAmount('1.5l'), { quantity: 1.5, unit: 'l' });
+/*
+ * THE SEPARATOR, WHICH BELONGS TO THE RECEIPT AND NOT THE READER.
+ *
+ * This read both marks as a decimal point. That is right on a Belgian receipt
+ * and wrong on a British one, where "1,500g" means fifteen hundred grams and
+ * was read as one and a half — a size out by a factor of a thousand, from a
+ * correction somebody typed to make the import right.
+ *
+ * The mark comes from the paper now, through the same normaliser the price chip
+ * uses, so the two chips on one row can never disagree about what a comma is.
+ */
+eq('a comma decimal on a comma receipt', parseAmount('1,5l', ','), { quantity: 1.5, unit: 'l' });
+eq('a point decimal on a point receipt', parseAmount('1.5l', '.'), { quantity: 1.5, unit: 'l' });
+
+/*
+ * Grouping has a shape — exactly three digits after the mark — and that shape
+ * is what decides the cases that look ambiguous from the string alone.
+ */
+eq('a British grouped size', parseAmount('1,500g', '.'), { quantity: 1500, unit: 'g' });
+eq('a Belgian grouped size', parseAmount('1.500g', ','), { quantity: 1500, unit: 'g' });
+
+/*
+ * And the mark somebody's other keyboard uses, typed once, with nothing to
+ * conflict with: they meant the point. Stripping it instead is how "1,5"
+ * became fifteen.
+ */
+eq('the wrong mark, read as they meant it', parseAmount('1,5l', '.'), { quantity: 1.5, unit: 'l' });
+eq('...and the other way round', parseAmount('1.5l', ','), { quantity: 1.5, unit: 'l' });
+
+// Two decimal marks is not a number in either convention.
+eq('two marks is refused', parseAmount('1,2,3kg', ','), null);
 
 /*
  * A bare number keeps the unit the row already had — correcting 1L to 2L should
  * not mean retyping the unit. Null here means "unchanged", and the screen
  * supplies the old one.
  */
-eq('a bare number leaves the unit to the caller', parseAmount('2'), { quantity: 2, unit: null });
+eq('a bare number leaves the unit to the caller', parseAmount('2', ','), { quantity: 2, unit: null });
 
 // Emptying the chip is a real answer, and a different one: it clears the size.
-eq('an empty chip clears the size', parseAmount(''), { quantity: null, unit: null });
-eq('...and so does whitespace', parseAmount('   '), { quantity: null, unit: null });
+eq('an empty chip clears the size', parseAmount('', ','), { quantity: null, unit: null });
+eq('...and so does whitespace', parseAmount('   ', ','), { quantity: null, unit: null });
 
 /*
  * Everything else is refused, and refusing means the OLD value stays on screen.
  * A half-typed size is a size mid-thought, not an instruction to forget one.
  */
-eq('an unknown unit is refused', parseAmount('12oz'), null);
-eq('...as is nonsense', parseAmount('abc'), null);
-eq('...and zero', parseAmount('0kg'), null);
-eq('...and a negative', parseAmount('-1kg'), null);
+eq('an unknown unit is refused', parseAmount('12oz', ','), null);
+eq('...as is nonsense', parseAmount('abc', ','), null);
+eq('...and zero', parseAmount('0kg', ','), null);
+eq('...and a negative', parseAmount('-1kg', ','), null);
 
 eq('a size can be set', setAmount(d0, 'a', 750, 'g').get('a').quantity, 750);
 eq('...with its unit', setAmount(d0, 'a', 750, 'g').get('a').unit, 'g');
@@ -523,6 +560,36 @@ console.log('\noffBy — the last comparison');
 console.log('\nreview sheet');
 
 const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8');
+
+/*
+ * THE RECEIPT'S CONVENTION WINS, AND THE DEVICE IS ONLY THE FALLBACK.
+ *
+ * Everything typed on this screen is a correction to a number printed on paper,
+ * so the paper decides what a comma means. A Belgian scanning a British till
+ * would otherwise read a corrected "1.50" as one and a half thousand — their
+ * own convention applied to somebody else's receipt.
+ *
+ * The device's country is used only when the model could not tell from the
+ * paper, or when the scan came from a deployment predating the field.
+ */
+assert(
+  /run\?\.receipt\.decimalComma == null\s*\?\s*decimalMarkFor\(region\)/.test(sheet),
+  'the receipt decides the decimal mark, not the phone',
+  'a Belgian scanning a British receipt would read a corrected 1.50 as fifteen hundred',
+);
+assert(
+  /run\.receipt\.decimalComma\s*\?\s*','\s*:\s*'\.'/.test(sheet),
+  '...with the device only as the fallback',
+);
+// Both typed fields on this screen read through it, so they cannot disagree.
+assert(
+  /parsePriceToCents\(text, decimal\)/.test(sheet),
+  'the price chip reads in that convention',
+);
+assert(
+  /parseAmount\(text, decimal\)/.test(sheet),
+  '...and so does the size chip',
+);
 
 /*
  * THE PICKER WARNS BEFORE IT STEALS.

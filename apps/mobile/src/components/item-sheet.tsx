@@ -35,6 +35,7 @@ import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
+import { decimalMarkFor, type DecimalMark } from '@/i18n/regions';
 import { parsePriceToCents } from '@/lib/money';
 import { amountLabel, historyFor, totalCents, unitPrice, unitPriceParts } from '@/lib/purchase-log';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
@@ -65,13 +66,25 @@ interface ItemSheetProps {
  * change the total — editing the price, stepping the count — goes through here,
  * so there is one expression to be right rather than three that must agree.
  */
-const totalFor = (priceText: string, packs: number): number | null => {
-  const each = parsePriceToCents(priceText);
+const totalFor = (priceText: string, packs: number, decimal: DecimalMark): number | null => {
+  const each = parsePriceToCents(priceText, decimal);
   return each == null ? null : totalCents(each, packs);
 };
 
-const parseQuantity = (text: string): number | null => {
-  const value = Number.parseFloat(text.replace(',', '.'));
+/**
+ * A typed quantity, read in the shopper's own convention.
+ *
+ * This did `text.replace(',', '.')` and nothing else, which reads "1,5" as one
+ * and a half — right in Belgium — and "1,500" as one and a half too, when a
+ * British shopper typing it means fifteen hundred. Same class of bug as the
+ * price field had, one function below it, and found only because the compiler
+ * dragged this file into the change.
+ */
+const parseQuantity = (text: string, decimal: DecimalMark): number | null => {
+  const group = decimal === ',' ? '.' : ',';
+  const cleaned = text.replace(/[\s\u00A0\u202F]/g, '').split(group).join('').replace(decimal, '.');
+  if ((cleaned.match(/\./g) ?? []).length > 1) return null;
+  const value = Number.parseFloat(cleaned);
   return Number.isNaN(value) || value <= 0 ? null : value;
 };
 
@@ -84,7 +97,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const insets = useSafeAreaInsets();
-  const { t, currency, money } = useLocale();
+  const { t, currency, money, region } = useLocale();
   const { updateItem, renameItem } = useGroceries();
   const liveItem = useItem(listId, itemId ?? undefined);
   const storePrefs = useStorePrefs();
@@ -340,7 +353,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                   value={qtyText}
                   onChangeText={(t) => {
                     setQtyText(t);
-                    patch({ quantity: parseQuantity(t) });
+                    patch({ quantity: parseQuantity(t, decimalMarkFor(region)) });
                   }}
                   placeholder="—"
                   placeholderTextColor={colors.muted}
@@ -402,7 +415,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                     value={priceText}
                     onChangeText={(t) => {
                       setPriceText(t);
-                      const each = parsePriceToCents(t);
+                      const each = parsePriceToCents(t, decimalMarkFor(region));
                       patch({
                         priceCents: each == null ? null : totalCents(each, itemObj.packs),
                       });
@@ -423,7 +436,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                       const next = Math.max(1, itemObj.packs - 1);
                       // Recomputed from the FIELD, not from the stored total:
                       // changing the count must not change the unit price.
-                      patch({ packs: next, priceCents: totalFor(priceText, next) });
+                      patch({ packs: next, priceCents: totalFor(priceText, next, decimalMarkFor(region)) });
                     }}
                     disabled={itemObj.packs <= 1}
                     accessibilityRole="button"
@@ -439,7 +452,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                     onPress={() => {
                       haptics.tick();
                       const next = Math.min(999, itemObj.packs + 1);
-                      patch({ packs: next, priceCents: totalFor(priceText, next) });
+                      patch({ packs: next, priceCents: totalFor(priceText, next, decimalMarkFor(region)) });
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={t('itemSheet.packsMore')}
@@ -461,7 +474,7 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                     minimumFontScale={0.7}
                     style={[type.body, styles.totalText, { color: colors.ink }]}
                   >
-                    {money(totalFor(priceText, itemObj.packs) ?? 0)}
+                    {money(totalFor(priceText, itemObj.packs, decimalMarkFor(region)) ?? 0)}
                   </Text>
                 </View>
               </View>

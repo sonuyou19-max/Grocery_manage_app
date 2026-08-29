@@ -61,6 +61,15 @@ export type ReceiptProblem =
 export interface ScannedReceipt {
   store: string | null;
   purchasedAt: string | null;
+  /**
+   * Whether this PAPER writes decimals with a comma, or null when nothing
+   * printed settled it.
+   *
+   * The receipt's convention, not the reader's — see the note in the extractor.
+   * Null falls back to the device's country, which is a guess but the only one
+   * available.
+   */
+  decimalComma: boolean | null;
   currency: string;
   language: string | null;
   fingerprint: string;

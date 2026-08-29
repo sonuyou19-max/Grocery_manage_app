@@ -143,18 +143,32 @@ const js = ts.transpileModule(raw, {
 const mod = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
 const { formatMoney: fmt, assembleMoney: asm, moneyParts: parts } = mod;
 
-// Point-decimal prefix, comma-decimal prefix, and a suffix currency — the
-// three shapes, in the languages the app ships.
-check('en/EUR', fmt(1250, 'EUR', 'en'), '€12.50');
-check('de/EUR uses a decimal comma and a space', fmt(1250, 'EUR', 'de'), '€ 12,50');
-check('fr/EUR', fmt(1250, 'EUR', 'fr'), '€ 12,50');
-check('nl/EUR', fmt(1250, 'EUR', 'nl'), '€ 12,50');
-check('pl/PLN puts the symbol after', fmt(1250, 'PLN', 'pl'), '12,50 zł');
-check('en/GBP', fmt(1250, 'GBP', 'en'), '£12.50');
-check('an unknown currency falls back to the euro', fmt(100, 'XYZ', 'en'), '€1.00');
-check('zero', fmt(0, 'EUR', 'en'), '€0.00');
-check('a negative amount keeps its sign', fmt(-550, 'EUR', 'en'), '€-5.50');
-check('rounding is to two places', fmt(1, 'EUR', 'en'), '€0.01');
+/*
+ * REGIONS, not languages — which is the change these fixtures caught.
+ *
+ * The decimal mark used to be looked up by UI language, so a Belgian household
+ * reading the app in English got British formatting for Belgian money. It is a
+ * property of the country somebody shops in, and nothing to do with the
+ * language they read.
+ *
+ * Point-decimal prefix, comma-decimal prefix, and a suffix currency — the three
+ * shapes, in countries the app ships to.
+ */
+check('IE/EUR', fmt(1250, 'EUR', 'IE'), '€12.50');
+check('DE/EUR uses a decimal comma and a space', fmt(1250, 'EUR', 'DE'), '€ 12,50');
+check('FR/EUR', fmt(1250, 'EUR', 'FR'), '€ 12,50');
+check('NL/EUR', fmt(1250, 'EUR', 'NL'), '€ 12,50');
+check('PL/PLN puts the symbol after', fmt(1250, 'PLN', 'PL'), '12,50 zł');
+check('GB/GBP', fmt(1250, 'GBP', 'GB'), '£12.50');
+/*
+ * The case the language lookup got wrong, pinned directly: same money, same
+ * country, and it must not matter what language the app is being read in.
+ */
+check('BE/EUR is Belgian however the app is read', fmt(1250, 'EUR', 'BE'), '€ 12,50');
+check('an unknown currency falls back to the euro', fmt(100, 'XYZ', 'GB'), '€1.00');
+check('zero', fmt(0, 'EUR', 'GB'), '€0.00');
+check('a negative amount keeps its sign', fmt(-550, 'EUR', 'GB'), '€-5.50');
+check('rounding is to two places', fmt(1, 'EUR', 'GB'), '€0.01');
 
 /*
  * The two paths must agree on every combination, not just the ones spot-checked
@@ -196,7 +210,7 @@ if (mismatch) {
  * way. Those must format cleanly rather than showing a float — a total reading
  * "€12.4999999" for one frame is worse than not animating at all.
  */
-const midFlight = asm(1249.6837, parts('EUR', 'en'));
+const midFlight = asm(1249.6837, parts('EUR', 'GB'));
 if (!/^€\d+\.\d{2}$/.test(midFlight)) {
   fail('a mid-animation value does not format to two places', [
     `assembleMoney(1249.6837) gave ${midFlight}`,
@@ -204,6 +218,106 @@ if (!/^€\d+\.\d{2}$/.test(midFlight)) {
   ]);
 } else {
   console.log(`ok   a mid-animation value formats cleanly (${midFlight})`);
+}
+
+/* ================================================================== reading */
+
+/*
+ * READING A TYPED NUMBER — which had no coverage here at all, and was wrong.
+ *
+ * parsePriceToCents did `input.replace(',', '.')` — one comma, no count — then
+ * stripped everything but digits and dots. "1.234,56" became "1.234.56", which
+ * parseFloat reads as 1.234, so a €1234.56 shop was entered as €1.23. The same
+ * for "1,234.56". EVERY four-figure amount typed with a thousands separator was
+ * out by a factor of a thousand, in every country, and nothing looked.
+ *
+ * The rules below are the ones that make the ambiguous cases decidable rather
+ * than guessed. They are the whole feature, so they are all pinned.
+ */
+{
+  const load = async (rel, ...strip) => {
+    let src = readFileSync(join(here, '..', 'src', rel), 'utf8')
+      .replace(/^import\s+type\s[^;]*?;/gm, '');
+    for (const d of strip) {
+      src = src.replace(new RegExp(`^import\\s[^;]*?from '${d.replace(/[/@]/g, '\\$&')}';`, 'gm'), '');
+    }
+    const { outputText } = ts.transpileModule(src, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    });
+    return import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
+  };
+  const money = await load('lib/money.ts', '@korb/shared', '@/i18n/regions');
+  const regions = await load('i18n/regions.ts');
+
+  const cents = (input, mark) => money.parsePriceToCents(input, mark);
+
+  /* --------------------------------------------- the mark belongs to a country */
+
+  /*
+   * The decimal mark is a property of the COUNTRY, not the language. It lived
+   * on the language, which is wrong in exactly the case this app is built for:
+   * a Belgian household running the interface in English got British formatting
+   * for Belgian money.
+   */
+  check('Belgium writes a comma', regions.decimalMarkFor('BE'), ',');
+  check('Britain writes a point', regions.decimalMarkFor('GB'), '.');
+  check('Ireland too', regions.decimalMarkFor('IE'), '.');
+  // The one that surprises people: unlike all of its neighbours.
+  check('and so does Switzerland', regions.decimalMarkFor('CH'), '.');
+  check('an unknown country falls back to the comma', regions.decimalMarkFor('ZZ'), ',');
+  check('...and so does no country at all', regions.decimalMarkFor(null), ',');
+
+  /* ------------------------------------------------------------ the simple case */
+
+  check('a comma country reads 3,50', cents('3,50', ','), 350);
+  check('a point country reads 3.50', cents('3.50', '.'), 350);
+
+  /* -------------------------------------------------- THE BUG: grouped numbers */
+
+  check('1.234,56 is twelve hundred euros in Belgium', cents('1.234,56', ','), 123456);
+  check('1,234.56 is the same in Britain', cents('1,234.56', '.'), 123456);
+  // France groups with a space, which must not survive into the number either.
+  check('a space group is stripped', cents('1 234,56', ','), 123456);
+  /*
+   * A space INSIDE a grouped number, which is where stripping them earns its
+   * keep. Without it "1. 234" reads as one euro twenty-three rather than twelve
+   * hundred, because the grouping mark is no longer followed by three digits —
+   * it is followed by a space. Mutation testing said the strip did not matter;
+   * it said that because no case here had a space in that position.
+   */
+  check('a space inside the grouping is stripped too', cents('1. 234', ','), 123400);
+  check('...in either convention', cents('1, 234', '.'), 123400);
+
+  /* ------------------------------------------ one mark, decided by its shape */
+
+  /*
+   * Grouping has a shape — exactly three digits follow it — and that shape is
+   * what settles the cases that look ambiguous from the string alone.
+   */
+  check('1,234 in Belgium is one euro twenty-three', cents('1,234', ','), 123);
+  check('1,234 in Britain is one thousand two hundred and thirty four', cents('1,234', '.'), 123400);
+  check('1.234 in Belgium is the thousand', cents('1.234', ','), 123400);
+  check('1.234 in Britain is the euro twenty-three', cents('1.234', '.'), 123);
+
+  /*
+   * THE ONE THAT WAS SILENTLY DANGEROUS. "1,5" is not a number in British
+   * notation at all — it is somebody typing the mark their other keyboard uses.
+   * The old parser stripped the comma and returned FIFTEEN EUROS.
+   */
+  check('1,5 typed in Britain means one fifty', cents('1,5', '.'), 150);
+  check('...and 1.5 typed in Belgium means the same', cents('1.5', ','), 150);
+
+  /* ----------------------------------------------------- refusing, not guessing */
+
+  /*
+   * The whole lesson of the bug this replaces: the old version reached an
+   * answer for every input, and was silently wrong for a class of them.
+   */
+  check('two decimal marks is not a number', cents('1,2,3', ','), null);
+  check('...in either country', cents('1.2.3', '.'), null);
+  check('a group of the wrong length is refused', cents('1,23,456', '.'), null);
+  check('empty is refused', cents('', ','), null);
+  check('letters alone are refused', cents('abc', ','), null);
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

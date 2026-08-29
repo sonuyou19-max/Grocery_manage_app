@@ -1,3 +1,5 @@
+import type { DecimalMark } from '@/i18n/regions';
+import { normaliseNumber } from '@/lib/money';
 import type { ListCandidate, MatchOutcome, ReceiptPurchase } from '@/lib/receipt';
 
 /**
@@ -227,15 +229,27 @@ const TYPED_UNITS = ['g', 'kg', 'ml', 'l', 'cl', 'pcs'] as const;
  */
 export function parseAmount(
   text: string,
+  decimal: DecimalMark,
 ): { quantity: number | null; unit: string | null } | null {
   const clean = text.trim().toLowerCase();
   if (clean === '') return { quantity: null, unit: null };
 
-  // Comma decimals, because half of Europe writes 1,5 l.
-  const m = clean.match(/^([\d]+(?:[.,][\d]+)?)\s*([a-z]*)$/);
+  // Marks are validated by normaliseNumber, so this only has to find where
+  // the number ends and the unit begins.
+  const m = clean.match(/^([\d.,\s]+?)\s*([a-z]*)$/);
   if (!m) return null;
 
-  const quantity = Number(m[1]!.replace(',', '.'));
+  /*
+   * The RECEIPT's convention, through the same normaliser the price field uses.
+   *
+   * This read both marks as a decimal point, which is right in Belgium and
+   * wrong in Britain, where "1,500g" means fifteen hundred grams and was read
+   * as one and a half. Sharing normaliseNumber means the size chip and the
+   * price chip can never disagree about what a comma is on the same receipt.
+   */
+  const cleaned = normaliseNumber(m[1]!, decimal);
+  if (cleaned == null) return null;
+  const quantity = Number(cleaned);
   if (!Number.isFinite(quantity) || quantity <= 0) return null;
 
   const raw = m[2] ?? '';
