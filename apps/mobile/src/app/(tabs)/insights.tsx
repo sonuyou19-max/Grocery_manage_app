@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   LayoutAnimation,
   Pressable,
@@ -63,6 +63,8 @@ import {
 } from "@/lib/purchase-log";
 import { supermarketLabel } from "@/lib/supermarkets";
 import { usePlusGate } from "@/lib/plus-gate";
+import { ReceiptRow } from "@/components/receipt-row";
+import { useReceipts } from "@/lib/use-receipts";
 import { useAuth } from "@/store/auth";
 import { useEntitlement } from "@/store/entitlement";
 import { useGroceries } from "@/store/groceries";
@@ -151,6 +153,23 @@ function SignedInInsights() {
   // The one definition, shared with the Pantry, the dashboard and the Vibe
   // Check. See lib/plus-gate.ts for why it is not two lines written here.
   const { locked } = usePlusGate();
+  /*
+   * The five most recent, and five is the whole reason there is a "See all".
+   * A card is a glance; the receipt somebody wants to correct is nearly always
+   * the one they just scanned, and a household's full history belongs on a
+   * screen of its own rather than unrolled down a tab about spending.
+   */
+  const { receipts: recentReceipts, reload: reloadReceipts } = useReceipts(5);
+  /*
+   * Re-read when this tab comes back, because the change worth catching is the
+   * one made two screens away: correct a receipt, come back, and a list held
+   * from the last render would still call it uncorrected.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      reloadReceipts();
+    }, [reloadReceipts]),
+  );
 
   // The purchase log outlives the lists it came from, so these are the only
   // figures here that describe weeks rather than what's on a list right now.
@@ -668,13 +687,58 @@ function SignedInInsights() {
           rendered on every account that had never entered a price, the empty
           state two branches down was unreachable, and the header read "1 priced"
           above a total of €0.00. */}
+        {/*
+          THE RECEIPTS, above the spending they are the evidence for.
+
+          Placed here and not lower because of what it is for: everything below
+          this card is arithmetic over the purchase log, and this is the only
+          card on the tab from which a wrong number in that log can be fixed. A
+          shopper who looks at a spending figure and thinks "that is not right"
+          should find the way to check it in the same glance, not three screens
+          further down.
+
+          Hidden entirely when the household has never scanned one. An empty
+          state here would be advertising a feature on a tab about numbers, and
+          the place that offers scanning is the list screen where the receipt is
+          actually in somebody's hand.
+        */}
+        {recentReceipts.length > 0 && (
+          <Card order={7}>
+            <CardHead
+              icon="receipt-outline"
+              title={t("receipts.title")}
+              action={
+                <Pressable
+                  onPress={() => {
+                    haptics.tick();
+                    router.push("/receipts");
+                  }}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                >
+                  <Text style={[type.sub, { color: colors.accent }]}>
+                    {t("receipts.seeAll")}
+                  </Text>
+                </Pressable>
+              }
+            />
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t("receipts.cardHint")}
+            </Text>
+            {recentReceipts.map((r) => (
+              <ReceiptRow key={r.id} receipt={r} />
+            ))}
+          </Card>
+        )}
+
+
       {/* Two different empty states, and only one of them means "there is
           nothing to show here". No price has EVER been logged is the teaser
           below. This range happens to be empty is NOT: the card stays, with its
           picker, because unmounting it took away the only control that could
           get back to a range with data in it. */}
       {pricedItems.length > 0 ? (
-        <Card order={7}>
+        <Card order={8}>
           <CardHead
             icon="cash-outline"
             title={t("insights.spendingTitle")}
@@ -724,7 +788,7 @@ function SignedInInsights() {
           </Recalc>
         </Card>
       ) : (
-        <Card order={8}>
+        <Card order={9}>
           <CardHead
             icon="pricetag-outline"
             title={t("insights.spendingTitle")}
@@ -739,7 +803,7 @@ function SignedInInsights() {
       {/* Spend per store — whenever a store has ever been priced. Scoped to the
           chosen range inside, so an empty range says so rather than vanishing. */}
       {hasStoreSpendEver && (
-        <Card order={9}>
+        <Card order={10}>
           <CardHead
             icon="storefront-outline"
             title={t("insights.whereTitle")}
@@ -772,7 +836,7 @@ function SignedInInsights() {
           and somebody who logged a 2 L bottle has to be able to tell which one
           they are reading. */}
       {!locked && cheaper.length > 0 && (
-        <Card order={10}>
+        <Card order={11}>
           <CardHead
             icon="trending-down-outline"
             title={t("insights.cheaperTitle")}
@@ -794,7 +858,7 @@ function SignedInInsights() {
           missing here IS the weeks — a locked shell would be an empty chart
           with a price on it. */}
       {!locked && ecoScored.length >= 2 && (
-        <Card order={11}>
+        <Card order={12}>
           <CardHead
             icon="trending-up-outline"
             title={t("eco.trendTitle")}

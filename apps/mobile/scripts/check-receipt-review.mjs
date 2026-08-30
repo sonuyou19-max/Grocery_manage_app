@@ -573,12 +573,12 @@ const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8');
  * paper, or when the scan came from a deployment predating the field.
  */
 assert(
-  /run\?\.receipt\.decimalComma == null\s*\?\s*decimalMarkFor\(region\)/.test(sheet),
+  /source\?\.receipt\.decimalComma == null\s*\?\s*decimalMarkFor\(region\)/.test(sheet),
   'the receipt decides the decimal mark, not the phone',
   'a Belgian scanning a British receipt would read a corrected 1.50 as fifteen hundred',
 );
 assert(
-  /run\.receipt\.decimalComma\s*\?\s*','\s*:\s*'\.'/.test(sheet),
+  /source\.receipt\.decimalComma\s*\?\s*','\s*:\s*'\.'/.test(sheet),
   '...with the device only as the fallback',
 );
 // Both typed fields on this screen read through it, so they cannot disagree.
@@ -589,6 +589,55 @@ assert(
 assert(
   /parseAmount\(text, decimal\)/.test(sheet),
   '...and so does the size chip',
+);
+
+/*
+ * ONE SCREEN, TWO SOURCES.
+ *
+ * `source` is the fresh run or the reopened scan, and every derivation below it
+ * — the decimal mark, the lines, the reconciliation gap, what gets written — is
+ * written once against that rather than once per mode. Reaching for `run` past
+ * this point is the bug this names: it is null on every reopened receipt, so
+ * the branch would be dead in exactly the mode it was meant to serve.
+ */
+assert(/const source = run \?\? saved;/.test(sheet), 'both ways in resolve to one source');
+assert(
+  !/\brun[.?]/.test(sheet.slice(sheet.indexOf('const source = run'))),
+  '...and nothing below it reads the run directly',
+  'a reopened receipt has no run, so any such read is dead code on the path it matters for',
+);
+
+/*
+ * A CORRECTION REPLACES; IT DOES NOT IMPORT AGAIN.
+ *
+ * The receipt was claimed the first time and its fingerprint is unique per
+ * household, so claiming again would tell the shopper their own correction was
+ * a duplicate. `amendReceipt` deletes every row this receipt wrote and writes
+ * the corrected set in its place — without which a fixed price would ADD a
+ * second copy of the shop, which is the damage migration 0038 exists to
+ * prevent, through a door its fingerprint does not cover.
+ */
+assert(
+  /if \(amending && receiptId\) \{[\s\S]{0,200}?amendReceipt\(receiptId, plan\.purchases\)/.test(sheet),
+  'a reopened receipt is amended, never re-imported',
+  'logging the corrected lines on top of the originals doubles the shop',
+);
+assert(
+  /amending \? 'amend' : 'import'/.test(sheet),
+  '...and the planner is told which it is',
+  "amend mode is what keeps the plan off the shopping list — see CommitMode",
+);
+/*
+ * The list is untouched by a correction, and that is not caution. The rows this
+ * receipt ticked were swept days ago; today's list belongs to next week's shop,
+ * and ticking or adding to it would be acting on the wrong trip.
+ */
+const amendBlock = /if \(amending && receiptId\) \{[\s\S]*?return;\n\s*\}/.exec(sheet)?.[0] ?? '';
+assert(amendBlock.length > 0, '...in a block of its own');
+assert(
+  !/toggleItem|addBoughtItem|updateItem/.test(amendBlock),
+  '...that touches no shopping list',
+  'the rows it once ticked no longer exist, and the rows that do belong to a different shop',
 );
 
 /*
@@ -605,7 +654,7 @@ assert(
   'choosing it moves the row, and the line that had it silently becomes "not on your list"',
 );
 assert(
-  /run\.purchases\.find\(\(p\) => p\.key === c\.takenBy\)/.test(sheet),
+  /purchases\.find\(\(p\) => p\.key === c\.takenBy\)/.test(sheet),
   '...and names that line rather than saying "taken"',
   'the shopper needs to know WHICH line their tap is about to empty',
 );
@@ -926,10 +975,21 @@ assert(
   'ticking starts the sweep that can take a row off the list, and it should carry its price when it goes',
 );
 
+/*
+ * Nothing ticked holds the button on a FRESH scan and must not on a
+ * correction. "This receipt should have logged nothing" is the only way to
+ * undo an import that was wrong end to end, and a disabled button would leave
+ * the shopper with no way out of it.
+ */
 assert(
-  /disabled=\{committing \|\| count === 0\}/.test(sheet),
+  /disabled=\{committing \|\| \(count === 0 && !amending\)\}/.test(sheet),
   'the Import button is held while a commit is in flight, and when nothing is ticked',
   'a second tap mid-write is the case the receipt fingerprint exists to survive; catching it here saves a round trip and a confusing "already imported" for the user\'s own tap',
+);
+assert(
+  /count === 0 && !amending/.test(sheet),
+  '...but emptying a saved receipt is allowed',
+  'removing every line is how an import that was wrong end to end gets undone',
 );
 
 /* ------------------------------------------------------------------------ */

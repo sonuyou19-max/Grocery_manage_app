@@ -198,9 +198,22 @@ assert(
 console.log('\nhand-off');
 
 assert(
-  /useState<ScanRun \| null>\(\(\) => takeRun\(\)\)/.test(review),
+  /useState<ScanRun \| null>\(\(\) =>[^)]*takeRun\(\)\)/.test(review),
   'the review screen takes the run in a useState initialiser',
   'takeRun() empties the stash, so calling it in the render body blanks the screen on the second render',
+);
+/*
+ * And it does not reach for the stash at all when reopening a SAVED receipt.
+ *
+ * The same screen serves both now. Taking the run unconditionally would empty
+ * the stash on a route that has no use for it — so a shopper who opened an old
+ * receipt while a fresh scan was still in flight would come back to a review
+ * screen with nothing in it, and four photographs' worth of work gone.
+ */
+assert(
+  /useState<ScanRun \| null>\(\(\) => \(amending \? null : takeRun\(\)\)\)/.test(review),
+  '...and only on a fresh scan',
+  'reopening a saved receipt would consume a scan that belongs to a different screen',
 );
 
 const takeRunBody = /export function takeRun[\s\S]*?\n}/.exec(run);

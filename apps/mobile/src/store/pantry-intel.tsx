@@ -65,6 +65,19 @@ import { useHousehold } from '@/store/household';
  * can show trends across weeks. All optional, because pricing an item is
  * optional in this app and most never are.
  */
+/**
+ * One corrected line, ready to be written against its receipt.
+ *
+ * The same shape `logPurchase` takes, as a value rather than as a call: an
+ * amendment has to write its rows as a SET — they are deleted and re-inserted
+ * together — and a list of calls cannot be a set.
+ */
+export interface PlannedRow {
+  name: string;
+  category: ItemCategory;
+  detail: PurchaseDetail;
+}
+
 export interface PurchaseDetail {
   priceCents?: number | null;
   store?: string | null;
@@ -169,6 +182,31 @@ interface PantryIntelContext {
    * Shopping lists are deliberately left alone — see the Pantry tab for why.
    */
   forgetItem: (key: string) => void;
+  /**
+   * Rewrite everything one receipt ever logged, from a corrected plan.
+   *
+   * ---------------------------------------------------------------------------
+   * Why this is one operation and not "log the new ones"
+   * ---------------------------------------------------------------------------
+   *
+   * A receipt reopened and corrected has already written purchases. Logging the
+   * corrected lines on top of them would double a week's shopping — which is
+   * the exact damage migration 0038's fingerprint exists to prevent, arriving
+   * through a door it does not cover: the receipt is not being imported twice,
+   * its LINES are.
+   *
+   * So a correction replaces. Every row carrying this receipt_id goes, the
+   * corrected set is written in its place, and the pantry stats of every item
+   * either set touched are rebuilt from the purchase log rather than nudged —
+   * `recordPurchase` is incremental and has no inverse, and an item whose only
+   * purchase was a line the shopper just removed has to stop existing, not sit
+   * in the pantry with a burn rate learned from a purchase that no longer does.
+   *
+   * Replacing also makes the operation idempotent, which matters more here than
+   * anywhere else in this store: the one thing a person does after an import
+   * that looked wrong is do it again.
+   */
+  amendReceipt: (receiptId: string, planned: PlannedRow[]) => void;
   /** Dev-only: inject back-dated stats so the deck is populated for testing. */
   seedDemo: () => void;
 }
@@ -241,6 +279,7 @@ function toPurchase(
     bio: detail?.bio === true,
     brand: detail?.brand ?? null,
     description: detail?.description ?? null,
+    receiptId: detail?.receiptId ?? null,
     // Recorded at purchase time rather than looked up later: the log is what
     // the pantry is rebuilt from, and a category the user corrected by hand
     // must survive that rebuild. See migration 0023.
@@ -441,6 +480,10 @@ function LocalPantryIntelProvider({ children }: PropsWithChildren) {
       setStaple: () => {},
       setStopped: () => {},
       forgetItem: () => {},
+      // Receipts are cloud-only — receipts.household_id is not null and the
+      // capture screen refuses before it opens the camera — so a signed-out
+      // device can never hold one to amend.
+      amendReceipt: () => {},
       seedDemo: () => {},
     }),
     [purchases],
@@ -526,6 +569,7 @@ interface DbPriceRow {
   category: ItemCategory | null;
   brand: string | null;
   description: string | null;
+  receipt_id: string | null;
   recorded_at: string;
 }
 
@@ -544,6 +588,7 @@ const mapPriceRow = (r: DbPriceRow): Purchase => ({
   category: r.category,
   brand: r.brand ?? null,
   description: r.description ?? null,
+  receiptId: r.receipt_id ?? null,
 });
 
 /** Marks this device's orphaned local log as re-homed. Device-wide, not
@@ -587,7 +632,7 @@ async function migrateLocalPurchases(
     const since = new Date(now - PURCHASE_WINDOW_MS).toISOString();
     const { data, error } = await supabase
       .from('price_entries')
-      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, description, recorded_at')
+      .select('id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, description, receipt_id, recorded_at')
       .eq('household_id', householdId)
       .gte('recorded_at', since)
       .limit(LOCAL_PURCHASE_CAP);
@@ -792,7 +837,7 @@ function CloudPantryIntelProvider({
        * mapPriceRow maps, or the mapping quietly invents nulls.
        */
       .select(
-        'id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, description, recorded_at',
+        'id, item_key, item_name, store, price_cents, quantity, packs, unit, category, bio, brand, description, receipt_id, recorded_at',
       )
       .eq('household_id', householdId)
       .gte('recorded_at', since)
@@ -1073,6 +1118,135 @@ function CloudPantryIntelProvider({
               reportWriteFailure('price_entries.delete', error);
               if (error) void fetchPurchases();
             });
+        }
+      },
+      amendReceipt: (receiptId, planned) => {
+        /*
+         * OUT WITH EVERY ROW THIS RECEIPT WROTE, IN WITH THE CORRECTED SET.
+         *
+         * A delete-and-reinsert rather than a per-line diff, and that is a
+         * deliberate trade of writes for certainty. A diff has to decide, for
+         * every line, whether it is the same purchase edited or a different one
+         * — across a re-match that changes the item key, an exclusion that
+         * removes it and an inclusion that brings it back. Every one of those
+         * decisions is a chance to leave an orphan, and an orphaned price_entry
+         * is a purchase nobody can see and nobody can delete: it belongs to a
+         * receipt whose screen no longer lists it.
+         *
+         * Nothing references a price_entry by id across sessions — `unlogRecent`
+         * looks one up and uses it immediately — so new ids cost nothing.
+         */
+        const previous = purchasesRef.current.filter((p) => p.receiptId === receiptId);
+        const kept = purchasesRef.current.filter((p) => p.receiptId !== receiptId);
+
+        const now = Date.now();
+        const entries = planned
+          .map((row) => toPurchase(row.name, row.category, { ...row.detail, receiptId }, now))
+          .filter((e): e is Purchase => e != null);
+
+        /*
+         * No foldPurchase here, and that is the difference between this and
+         * logPurchase. Folding exists to merge a mid-aisle correction into the
+         * transaction still open for that item; every line of one receipt shares
+         * a single timestamp, so folding them would collapse two genuinely
+         * different lines of the same shop — two bags of the same coffee, priced
+         * separately by the till — into one.
+         */
+        const next = [...entries, ...kept].sort((a, b) => b.at - a.at);
+        applyPurchases(next);
+
+        /*
+         * Then the pantry, rebuilt for every key on either side.
+         *
+         * Both sides, because a correction moves items in and OUT: a line
+         * re-matched from coffee to tea has to leave coffee's history as surely
+         * as it joins tea's, and a key that only ever appeared on a line the
+         * shopper has now removed must leave the pantry entirely rather than
+         * keep a burn rate learned from a purchase that no longer exists.
+         *
+         * Rebuilt from the log rather than adjusted, because `recordPurchase`
+         * has no inverse — see revertPurchase, which reaches for exactly this
+         * function for exactly this reason.
+         */
+        const touched = new Set<string>();
+        for (const p of previous) touched.add(p.key);
+        for (const e of entries) touched.add(e.key);
+
+        const rebuilt = { ...statsRef.current };
+        const gone: string[] = [];
+        for (const key of touched) {
+          const mine = next.filter((p) => p.key === key);
+          if (mine.length === 0) {
+            delete rebuilt[key];
+            gone.push(key);
+            continue;
+          }
+          const fresh = statsFromPurchases(mine, categorizeSync)[key];
+          // Spread the old row first so the shopper's own settings survive: a
+          // staple flag or a pinned cadence is not a consequence of a price
+          // having been typed wrong.
+          if (fresh) rebuilt[key] = { ...rebuilt[key], ...fresh };
+        }
+        apply(rebuilt);
+
+        void supabase
+          .from('price_entries')
+          .delete()
+          .eq('household_id', householdId)
+          .eq('receipt_id', receiptId)
+          .then(({ error }) => {
+            reportWriteFailure('price_entries.amendDelete', error);
+            // Bailing out before the insert, deliberately. If the delete failed
+            // the old rows are still there, and inserting on top of them is the
+            // double-count this whole method exists to prevent — far worse than
+            // a correction that did not take. The refetch puts the screen back
+            // to what the server actually holds.
+            if (error) {
+              void fetchPurchases();
+              return;
+            }
+
+            const rows = entries.map((e) => ({
+              id: e.id,
+              household_id: householdId,
+              item_key: e.key,
+              item_name: e.name,
+              store: e.store,
+              price_cents: e.priceCents,
+              bio: e.bio,
+              quantity: e.quantity,
+              packs: e.packs,
+              unit: e.unit,
+              category: e.category,
+              brand: e.brand ?? null,
+              description: e.description ?? null,
+              receipt_id: receiptId,
+              recorded_at: new Date(e.at).toISOString(),
+            }));
+
+            // Nothing left to write is a real outcome: a receipt corrected
+            // down to no included lines. The delete above is the whole of that
+            // amendment, and an insert of zero rows is a round trip to say so.
+            if (rows.length === 0) return;
+
+            void supabase
+              .from('price_entries')
+              .insert(rows)
+              .then(({ error: insertError }) => {
+                reportWriteFailure('price_entries.amendInsert', insertError);
+                if (insertError) void fetchPurchases();
+              });
+          });
+
+        // The pantry rows: the survivors updated, the emptied ones deleted.
+        upsert([...touched].filter((k) => rebuilt[k]), rebuilt);
+        if (gone.length > 0) {
+          void supabase
+            .from('pantry_items')
+            .delete()
+            .eq('household_id', householdId)
+            .in('item_key', gone)
+            .then(({ error }) => reportWriteFailure('pantry_items.amendDelete', error));
         }
       },
       seedDemo: () => {

@@ -153,9 +153,18 @@ for (const f of files) {
      */
     for (const call of stmt.matchAll(/(?:reportWriteFailure|recoverFrom)\(\s*([^,]+),/g)) {
       const arg = call[1].trim();
-      // A literal, or a ternary between two literals (insert-vs-update).
-      const literal = /^'[a-z_.]+'$/;
-      const ternary = /^[\w.!?]+\s*\?\s*'[a-z_.]+'\s*:\s*'[a-z_.]+'$/;
+      /*
+       * A literal, or a ternary between two literals (insert-vs-update).
+       *
+       * camelCase after the dot, because the codebase already writes ops that
+       * way — `pantry_items.homeList` predates this and lives in a file this
+       * scan does not reach, so the narrower pattern was not enforcing a
+       * convention, it was enforcing one on the files it happened to see. What
+       * the rule is actually for is unchanged: a CONSTANT, so Sentry has
+       * something stable to group by, never an interpolation.
+       */
+      const literal = /^'[a-zA-Z_.]+'$/;
+      const ternary = /^[\w.!?]+\s*\?\s*'[a-zA-Z_.]+'\s*:\s*'[a-zA-Z_.]+'$/;
       if (!literal.test(arg) && !ternary.test(arg)) dynamicOps.push(`${f.rel}: ${arg}`);
     }
   }

@@ -273,12 +273,34 @@ export function purchaseInstant(purchasedAt: string | null, now: number): number
   return parsed;
 }
 
+/**
+ * Which of the two things a commit is.
+ *
+ * `import` is the first pass: purchases, and the shopping list brought into
+ * line with what was actually bought — rows ticked, prices patched, unlisted
+ * lines added as already-bought.
+ *
+ * `amend` is a correction made later, and it touches NOTHING on any list. The
+ * reason is not caution, it is that there is no list left to touch: the sweep
+ * deletes checked rows once a shop is over, so the rows this receipt ticked are
+ * usually gone within days. Ticking again weeks later would either do nothing
+ * or, worse, tick a row somebody had written for NEXT week's shop — the same
+ * word, a different intention. Adding unlisted lines would put groceries bought
+ * a fortnight ago onto today's list as things to buy.
+ *
+ * The purchase log has no such problem, and it is the thing worth correcting:
+ * it is what Insights, the burn rate and every price comparison are computed
+ * from, and it outlives every list it came off.
+ */
+export type CommitMode = 'import' | 'amend';
+
 export function planCommit(
   receipt: ScannedReceipt,
   purchases: readonly ReceiptPurchase[],
   decisions: Decisions,
   list: readonly ListRow[],
   now: number,
+  mode: CommitMode = 'import',
 ): CommitPlan {
   const at = purchaseInstant(receipt.purchasedAt, now);
   const byId = new Map(list.map((r) => [r.id, r]));
@@ -377,6 +399,14 @@ export function planCommit(
         at,
       },
     });
+
+    /*
+     * The list half, and only on an import. In `amend` the candidate rows are
+     * PANTRY items standing in for list rows — they carry the name and category
+     * to file under and nothing that can be ticked — so a patch here would be
+     * addressed to an id no list has ever held.
+     */
+    if (mode === 'amend') continue;
 
     if (row) {
       patches.push({

@@ -165,6 +165,7 @@ export default function RootLayout() {
                     options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }}
                   />
                   <Stack.Screen name="receipt/review" />
+                  <Stack.Screen name="receipts" />
                   <Stack.Screen name="basket" />
                   <Stack.Screen name="pantry-mix" />
                   <Stack.Screen name="climate" />

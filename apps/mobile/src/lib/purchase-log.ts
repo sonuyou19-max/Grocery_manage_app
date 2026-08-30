@@ -103,6 +103,18 @@ export interface Purchase {
    */
   description?: string | null;
   /**
+   * The receipt this row was read from, or null when it was logged by hand.
+   *
+   * Carried on the client, not only in the column, because it is how a
+   * correction finds its own work: reopening a receipt and fixing a price has
+   * to REPLACE every row that receipt wrote, and "every row that receipt wrote"
+   * is only answerable if the device can see which ones those are. Without it
+   * the amendment could only append, which doubles a week's shopping — the
+   * exact damage migration 0038 exists to prevent, through a door its
+   * fingerprint does not cover.
+   */
+  receiptId?: string | null;
+  /**
    * When this record was last written to, as opposed to when the purchase
    * happened. Absent on anything loaded from the server or from an older
    * cache; callers fall back to `at`.

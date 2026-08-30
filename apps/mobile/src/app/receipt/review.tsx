@@ -42,6 +42,7 @@ import {
   includedTotal,
   initialDecisions,
   mergeLateMatches,
+  restoreDecisions,
   offBy,
   collapseRaw,
   parseAmount,
@@ -56,6 +57,13 @@ import {
 } from '@/lib/receipt-review';
 import { claimReceipt, planCommit, purchaseInstant, type ListRow } from '@/lib/receipt-commit';
 import { takeRun, type ScanRun } from '@/lib/receipt-run';
+import {
+  loadScan,
+  packScan,
+  saveReconciled,
+  saveScan,
+  type SavedScan,
+} from '@/lib/receipt-archive';
 import { useGroceries } from '@/store/groceries';
 import { useHousehold } from '@/store/household';
 import { useLocale } from '@/store/locale';
@@ -129,9 +137,19 @@ export default function ReceiptReviewScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const scrollIndicator = useScrollIndicator();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  /*
+   * Two ways in, and the params say which.
+   *
+   * `id` is a shopping list, and means this is a fresh scan: the run is waiting
+   * in the module stash, the candidates are that list's rows, and importing
+   * ticks them off. `receipt` is a saved one being REOPENED, and means the scan
+   * comes out of the database, the candidates are pantry items, and saving
+   * rewrites what that receipt already logged.
+   */
+  const { id, receipt: receiptId } = useLocalSearchParams<{ id?: string; receipt?: string }>();
+  const amending = receiptId != null;
   const { lists, toggleItem, updateItem, addBoughtItem } = useGroceries();
-  const { logPurchase } = usePantryIntel();
+  const { logPurchase, amendReceipt, stats } = usePantryIntel();
   const { activeId } = useHousehold();
   const { showToast } = useToast();
 
@@ -140,10 +158,42 @@ export default function ReceiptReviewScreen() {
    * the render body would hand the first paint a scan and every render after
    * it nothing, so the screen would blank on the first keystroke.
    */
-  const [run] = useState<ScanRun | null>(() => takeRun());
+  const [run] = useState<ScanRun | null>(() => (amending ? null : takeRun()));
+
+  /*
+   * The saved scan, when one is being reopened. Three states and they are all
+   * real: still loading, loaded, and loaded-but-unreadable.
+   *
+   * The third is not a hypothetical. Receipts imported before the scan was kept
+   * have no blob at all, and one written by a build whose shape has since
+   * changed will not validate — see unpackScan. Both must land on a screen that
+   * says so, because the alternative is an empty review over purchases that
+   * very much exist, and a shopper who "corrects" it to nothing.
+   */
+  const [saved, setSaved] = useState<SavedScan | null>(null);
+  const [loading, setLoading] = useState(amending);
+
   const [decisions, setDecisions] = useState<Decisions>(() =>
     run ? initialDecisions(run.purchases, run.matches) : new Map(),
   );
+
+  useEffect(() => {
+    if (!receiptId) return;
+    let alive = true;
+    void loadScan(receiptId).then((scan) => {
+      if (!alive) return;
+      setSaved(scan);
+      setLoading(false);
+      // The decisions come back with it: what was persisted is the OUTCOME of
+      // the last review, not a fresh match, so there is nothing to re-derive
+      // and nothing a matcher could add that would not overwrite a choice
+      // somebody already made.
+      if (scan) setDecisions(restoreDecisions(scan));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [receiptId]);
   /*
    * The AI matcher's answers, arriving after the sheet is already up.
    *
@@ -163,6 +213,11 @@ export default function ReceiptReviewScreen() {
     };
   }, [run]);
 
+  // Whichever source this screen has. Both carry the same two things — the
+  // receipt and its lines — which is why everything below is written once
+  // rather than once per mode.
+  const source = run ?? saved;
+
   /*
    * THE RECEIPT'S CONVENTION, NOT THE READER'S.
    *
@@ -176,9 +231,9 @@ export default function ReceiptReviewScreen() {
    * deployment that predates the field.
    */
   const decimal =
-    run?.receipt.decimalComma == null
+    source?.receipt.decimalComma == null
       ? decimalMarkFor(region)
-      : run.receipt.decimalComma
+      : source.receipt.decimalComma
         ? ','
         : '.';
 
@@ -201,17 +256,40 @@ export default function ReceiptReviewScreen() {
     setPickHeadHeight(e.nativeEvent.layout.height);
   const [committing, setCommitting] = useState(false);
 
-  const list = lists.find((l) => l.id === id);
-  const rows: ListRow[] = useMemo(
-    () =>
-      (list?.items ?? []).map((it) => ({
-        id: it.id,
-        name: it.name,
-        category: it.category,
-        checked: it.checked,
-      })),
-    [list],
-  );
+  const list = amending ? undefined : lists.find((l) => l.id === id);
+  /*
+   * WHAT A LINE CAN BE MATCHED TO, and it is not the same question in the two
+   * modes.
+   *
+   * On a fresh scan it is the shopping list, because that is what the shopper
+   * is holding and what importing will tick off.
+   *
+   * On a reopened receipt the list is gone — the sweep deletes checked rows
+   * once a shop is over — and offering today's list would be worse than
+   * offering nothing: it would invite matching a fortnight-old line to a row
+   * somebody wrote for NEXT week. What survives, and what the correction is
+   * actually about, is the PANTRY: the purchase log is keyed on item identity,
+   * so re-matching a line means moving its price from one item's history to
+   * another's. Pantry items stand in as rows, keyed by the same item key the
+   * saved decisions hold.
+   *
+   * `checked: true` on those is not a claim about anything. Nothing in amend
+   * mode reads it — planCommit skips the whole list half — and it is set so the
+   * planner could never be tempted to tick an id that no list has ever held.
+   */
+  const rows: ListRow[] = useMemo(() => {
+    if (amending) {
+      return Object.values(stats)
+        .map((s) => ({ id: s.key, name: s.display, category: s.category, checked: true }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return (list?.items ?? []).map((it) => ({
+      id: it.id,
+      name: it.name,
+      category: it.category,
+      checked: it.checked,
+    }));
+  }, [amending, stats, list]);
   // The matcher's view of the same rows. `checked` is the planner's business
   // only — which row a receipt line IS has nothing to do with whether the
   // shopper already ticked it.
@@ -219,7 +297,7 @@ export default function ReceiptReviewScreen() {
 
   const byId = useMemo(() => new Map(candidates.map((c) => [c.id, c])), [candidates]);
 
-  const purchases = run?.purchases ?? [];
+  const purchases = source?.purchases ?? [];
   const { matched, extra } = useMemo(
     () => groupPurchases(purchases, decisions),
     [purchases, decisions],
@@ -232,28 +310,52 @@ export default function ReceiptReviewScreen() {
    * The last comparison, against the number on the paper rather than against
    * the model's own arithmetic. Null when it cannot mean anything — see offBy.
    */
-  const gap = run
-    ? offBy(purchases, decisions, run.receipt.paidCents, run.receipt.depositCents, run.receipt.discountCents)
+  const gap = source
+    ? offBy(
+        purchases,
+        decisions,
+        source.receipt.paidCents,
+        source.receipt.depositCents,
+        source.receipt.discountCents,
+      )
     : null;
 
-  if (!run) {
-    // No stash: arrived by a back gesture after the run was consumed, or by a
-    // deep link. Nothing to show and nothing recoverable — the photographs are
-    // gone with the capture screen.
+  if (!source) {
+    /*
+     * Three ways to have nothing, and they are not the same thing to a reader.
+     *
+     * LOADING is a saved receipt on its way from the database — a spinner, not
+     * a verdict.
+     *
+     * UNREADABLE is a saved receipt whose scan is missing or written in a shape
+     * this build does not know: imported before the scan was kept, or by a
+     * version whose document has since changed. It matters that this does not
+     * say "nothing to review", because there IS something — the purchases are
+     * in the log and the receipt is in the list. What cannot be done is edit
+     * it, and the message says exactly that.
+     *
+     * EMPTY is a fresh scan with no stash: a back gesture after the run was
+     * consumed, or a deep link. Nothing is recoverable there — the photographs
+     * went with the capture screen.
+     */
     return (
       <View style={styles.root}>
         <MeshBackground />
         <Safe style={styles.safe} edges={['top']}>
           <Header title={t('receipt.reviewTitle')} subtitle={null} />
-          <Text style={[type.sub, styles.empty, { color: colors.muted }]}>
-            {t('receipt.nothingToReview')}
-          </Text>
+          {loading ? (
+            <ActivityIndicator style={styles.empty} color={colors.accent} />
+          ) : (
+            <Text style={[type.sub, styles.empty, { color: colors.muted }]}>
+              {t(amending ? 'receipt.cannotReopen' : 'receipt.nothingToReview')}
+            </Text>
+          )}
         </Safe>
       </View>
     );
   }
 
-  const { receipt } = run;
+  const { receipt } = source;
 
   /*
    * WHEN this shopping happened, as the import will actually record it.
@@ -349,7 +451,7 @@ export default function ReceiptReviewScreen() {
    * are the ones the app already has, not a second copy written for receipts.
    */
   const commit = async () => {
-    if (committing || !run) return;
+    if (committing || !source) return;
     if (!activeId) {
       // No household, nowhere to write: receipts.household_id is not null and
       // RLS answers to membership. Reachable by signing out mid-review.
@@ -358,7 +460,49 @@ export default function ReceiptReviewScreen() {
     }
 
     setCommitting(true);
-    const plan = planCommit(run.receipt, run.purchases, decisions, rows, Date.now());
+    const plan = planCommit(
+      source.receipt,
+      source.purchases,
+      decisions,
+      rows,
+      Date.now(),
+      amending ? 'amend' : 'import',
+    );
+
+    /*
+     * A CORRECTION REPLACES; IT DOES NOT IMPORT AGAIN.
+     *
+     * There is no claim to make — this receipt was claimed the first time — and
+     * claiming it again would collide with its own fingerprint and tell the
+     * shopper their correction was a duplicate. `amendReceipt` deletes every
+     * row this receipt wrote and writes the corrected set in its place, then
+     * rebuilds the pantry for both sides of the change.
+     *
+     * The shopping list is deliberately untouched. See CommitMode: the rows
+     * this receipt ticked were swept away days ago, and today's list belongs to
+     * next week's shop.
+     */
+    if (amending && receiptId) {
+      amendReceipt(receiptId, plan.purchases);
+      await saveScan(
+        receiptId,
+        packScan(source.receipt, source.purchases, decisions, plan.purchases),
+        true,
+      );
+      /*
+       * And whether it reconciles NOW, which is a different question from
+       * whether the scan did. Somebody who reopens a receipt to fix the price
+       * the model misread has, if they got it right, just made it add up — and
+       * a receipt that still carried its warning would be telling them their
+       * own correction had not worked.
+       */
+      await saveReconciled(receiptId, gap == null || gap === 0);
+      haptics.success();
+      showToast(t('receipt.amended', { count: plan.purchases.length }));
+      router.back();
+      return;
+    }
+
     const claim = await claimReceipt(activeId, plan.receipt);
 
     if (claim.kind !== 'ok') {
@@ -396,6 +540,21 @@ export default function ReceiptReviewScreen() {
        */
       for (const row of plan.adds) addBoughtItem(list.id, row, row.detail);
     }
+
+    /*
+     * The scan itself, last and best-effort.
+     *
+     * After every write that matters, because this is the only one whose
+     * failure is survivable: the purchases are logged and the receipt is
+     * claimed either way, and what is lost is the ability to open it again. Put
+     * before them it would be one more thing that could turn a good import into
+     * a failed one.
+     */
+    await saveScan(
+      claim.receiptId,
+      packScan(source.receipt, source.purchases, decisions, plan.purchases),
+      false,
+    );
 
     haptics.success();
     showToast(t('receipt.imported', { count: plan.purchases.length }));
@@ -694,7 +853,17 @@ export default function ReceiptReviewScreen() {
             renderRow(item, section.key === 'matched' ? index : matched.length + index)
           }
           ListFooterComponent={
-            missing.length > 0 ? (
+            /*
+              WHAT THE RECEIPT DID NOT ACCOUNT FOR — and only on a fresh scan.
+
+              On an import this is a short, useful list: rows you wrote down
+              that the receipt has no line for, which usually means you did not
+              buy them. On a reopened receipt the candidates are the whole
+              pantry, so "unclaimed" would be every item the household has ever
+              bought minus this one shop — hundreds of rows answering a question
+              nobody asked.
+            */
+            !amending && missing.length > 0 ? (
               <View style={styles.missing}>
                 <Text style={[type.label, { color: colors.muted }]}>
                   {t('receipt.groupMissing')}
@@ -728,7 +897,7 @@ export default function ReceiptReviewScreen() {
           <Frosted over="content" style={styles.footerInner}>
             <View style={styles.grow}>
               <Text style={[type.sub, { color: colors.muted }]}>
-                {t('receipt.importing', { count })}
+                {t(amending ? 'receipt.logging' : 'receipt.importing', { count })}
               </Text>
               <Text style={[type.h2, { color: colors.ink }]}>{money(total)}</Text>
               {/* Only when every line is in and the gap is real. A receipt that
@@ -741,21 +910,30 @@ export default function ReceiptReviewScreen() {
             </View>
             {/* Nothing to import is a real state — untick every row and the
                 button has no work to do. */}
+            {/*
+              Nothing to import is a dead button on a FRESH scan — untick every
+              row and there is no work to do. On a correction it is a real
+              instruction: it means "this receipt should have logged nothing",
+              which is the only way to undo an import that was wrong from end to
+              end, and refusing it would leave the shopper with no way out.
+            */}
             <PressScale
               onPress={() => void commit()}
-              disabled={committing || count === 0}
+              disabled={committing || (count === 0 && !amending)}
               accessibilityRole="button"
-              accessibilityState={{ disabled: committing || count === 0 }}
+              accessibilityState={{ disabled: committing || (count === 0 && !amending) }}
               style={[
                 styles.importBtn,
                 { backgroundColor: colors.accent },
-                (committing || count === 0) && styles.importOff,
+                (committing || (count === 0 && !amending)) && styles.importOff,
               ]}
             >
               {committing ? (
                 <ActivityIndicator color={colors.accentInk} />
               ) : (
-                <Text style={[type.body, { color: colors.accentInk }]}>{t('receipt.import')}</Text>
+                <Text style={[type.body, { color: colors.accentInk }]}>
+                  {t(amending ? 'receipt.saveChanges' : 'receipt.import')}
+                </Text>
               )}
             </PressScale>
           </Frosted>
@@ -789,7 +967,7 @@ export default function ReceiptReviewScreen() {
                 without it, and it is now behind a card. */}
             {picking && (
               <Text style={[type.sub, { color: colors.muted }]} numberOfLines={1}>
-                {run.purchases.find((p) => p.key === picking)?.raw[0] ?? ''}
+                {purchases.find((p) => p.key === picking)?.raw[0] ?? ''}
               </Text>
             )}
           </View>
@@ -835,7 +1013,7 @@ export default function ReceiptReviewScreen() {
               const heldBy =
                 c.takenBy == null
                   ? null
-                  : run.purchases.find((p) => p.key === c.takenBy)?.raw[0] ?? null;
+                  : purchases.find((p) => p.key === c.takenBy)?.raw[0] ?? null;
               return (
                 <Pressable
                   key={c.id}

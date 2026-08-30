@@ -67,6 +67,50 @@ export interface Decision {
 export type Decisions = ReadonlyMap<string, Decision>;
 
 /**
+ * The decisions a saved receipt was last imported with.
+ *
+ * The mirror of `packScan`, and the asymmetry between them is the interesting
+ * part. What is persisted is an ITEM KEY — the pantry identity a line was filed
+ * under — because a list row id would be a dangling pointer within days of the
+ * shop (the sweep deletes checked rows). What this screen's `Decision` holds is
+ * an `itemId`, whichever id the CANDIDATE LIST uses. On a reopened receipt the
+ * candidates are pantry items keyed by exactly that item key, so the two line
+ * up with nothing to translate.
+ *
+ * A purchase the saved scan has no decision for is included at its printed
+ * price and matched to nothing. That is the same starting point a fresh scan
+ * gives an unmatched line, and it is the honest reading of a line the last
+ * review did not record an opinion about.
+ */
+export function restoreDecisions(scan: {
+  purchases: readonly ReceiptPurchase[];
+  decisions: readonly {
+    key: string;
+    include: boolean;
+    priceCents: number;
+    packs: number;
+    quantity: number | null;
+    unit: string | null;
+    itemKey: string | null;
+  }[];
+}): Map<string, Decision> {
+  const byKey = new Map(scan.decisions.map((d) => [d.key, d]));
+  const out = new Map<string, Decision>();
+  for (const p of scan.purchases) {
+    const d = byKey.get(p.key);
+    out.set(p.key, {
+      include: d?.include ?? true,
+      priceCents: d?.priceCents ?? p.priceCents,
+      packs: d?.packs ?? p.packs,
+      quantity: d?.quantity ?? p.quantity,
+      unit: d?.unit ?? p.unit,
+      itemId: d?.itemKey ?? null,
+    });
+  }
+  return out;
+}
+
+/**
  * The starting point: everything in, prices as printed, matches as found.
  *
  * `ambiguous` deliberately starts UNASSIGNED. It is the matcher saying two list

@@ -612,7 +612,7 @@ assert(
 );
 
 assert(
-  /if \(committing \|\| !run\) return;/.test(sheet),
+  /if \(committing \|\| !source\) return;/.test(sheet),
   'a second tap is refused before it reaches the database',
 );
 
