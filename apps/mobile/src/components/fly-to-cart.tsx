@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { DURATION } from '@/lib/motion';
 import Animated, {
   Easing,
   runOnJS,
@@ -63,7 +64,7 @@ export interface FlyToCartHandle {
 }
 
 /** Long enough to read as a throw, short enough not to delay the next tap. */
-const FLIGHT_MS = 520;
+const FLIGHT_MS = DURATION.travel;
 
 /** Glyph size at launch and at touchdown. */
 const START_SIZE = 22;

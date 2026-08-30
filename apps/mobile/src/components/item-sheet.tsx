@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -33,7 +33,7 @@ import { TextPromptModal } from '@/components/text-prompt-modal';
 import { currencySymbolFor } from '@/i18n';
 import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
-import { rubberBand, SPRING, springTo } from '@/lib/motion';
+import { rubberBand, SPRING, springTo, useLastPresent } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
 import { decimalMarkFor } from '@/i18n/regions';
 import {
@@ -79,11 +79,9 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
   const liveItem = useItem(listId, itemId ?? undefined);
   const storePrefs = useStorePrefs();
 
-  // Keep the last-open item rendered while the modal animates out, so the
-  // sheet doesn't blank/flicker the moment itemId goes null on close.
-  const lastItemRef = useRef(liveItem ?? null);
-  if (liveItem) lastItemRef.current = liveItem;
-  const itemObj = liveItem ?? lastItemRef.current;
+  // Rendered through the exit, so the sheet doesn't blank the moment itemId
+  // goes null on close. See useLastPresent.
+  const itemObj = useLastPresent(liveItem);
 
   const [name, setName] = useState('');
   const [qtyText, setQtyText] = useState('');

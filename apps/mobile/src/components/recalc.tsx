@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { type StyleProp, type ViewStyle } from 'react-native';
+import { DURATION } from '@/lib/motion';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -47,8 +48,10 @@ import Animated, {
 /** Enough to notice, not enough to lose the content. */
 const FLOOR = 0.35;
 /** Out faster than in: the answer arriving should feel unhurried. */
-const OUT_MS = 90;
-const IN_MS = 170;
+// The asymmetry is the effect, and it is the vocabulary's: clearing fast and
+// arriving slower reads as the new value being placed rather than crossfaded.
+const OUT_MS = DURATION.swap;
+const IN_MS = DURATION.settle;
 
 export function Recalc({
   trigger,

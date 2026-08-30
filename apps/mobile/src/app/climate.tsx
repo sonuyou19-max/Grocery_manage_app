@@ -56,6 +56,7 @@ import { useToast } from "@/components/toast";
 import { useHousehold } from "@/store/household";
 import { useLocale } from "@/store/locale";
 import { usePantryIntel } from "@/store/pantry-intel";
+import { DURATION, EASE } from '@/lib/motion';
 import { radii, spacing, type, useTheme } from "@/theme";
 
 /**
@@ -462,8 +463,8 @@ function Sparkle() {
   useEffect(() => {
     pulse.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: DURATION.breathe, easing: EASE.move }),
+        withTiming(0, { duration: DURATION.breathe, easing: EASE.move }),
       ),
       -1,
       false,

@@ -24,12 +24,38 @@ import ts from 'typescript';
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, '..', 'src', 'lib', 'motion.ts');
 
-// springTo just forwards to Reanimated; the curve and the presets are what
-// this file is about, so the import is stubbed rather than mocked.
-const source = readFileSync(SRC, 'utf8').replace(
-  /^import .*from 'react-native-reanimated';$/m,
-  'const withSpring = (to, cfg) => ({ to, cfg });',
-);
+/*
+ * Both imports stubbed, and the stubs are shaped to keep the assertions honest.
+ *
+ * springTo just forwards to Reanimated, so `withSpring` becomes a recorder. The
+ * EASINGS matter more: they are opaque worklets at runtime and there is nothing
+ * to assert about their VALUES — so the stub records which family and which
+ * direction each one asked for, which is the part a person could get wrong.
+ * `Easing.out(Easing.cubic)` on an exit is a real mistake and it is exactly the
+ * kind nothing else would catch.
+ *
+ * `useRef` is stubbed because useLastPresent lives in this file: it is motion
+ * vocabulary — it exists so an exit animation is not cut off — and putting it
+ * anywhere else would mean two places to look for how this app moves.
+ */
+const source = readFileSync(SRC, 'utf8')
+  .replace(
+    /^import .*from 'react-native-reanimated';$/m,
+    `const withSpring = (to, cfg) => ({ to, cfg });
+     const named = (kind) => ({ kind });
+     const Easing = {
+       cubic: named('cubic'),
+       quad: named('quad'),
+       out: (e) => ({ dir: 'out', of: e.kind }),
+       in: (e) => ({ dir: 'in', of: e.kind }),
+       inOut: (e) => ({ dir: 'inOut', of: e.kind }),
+     };`,
+  )
+  .replace(
+    /^import \{ useRef \} from 'react';$/m,
+    `let cell = { current: null };
+     const useRef = (init) => { if (cell.current === null) cell.current = init; return cell; };`,
+  );
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
@@ -51,7 +77,7 @@ const near = (name, actual, expected, tol = 1e-9) => {
   }
 };
 
-const { rubberBand, SPRING } = mod;
+const { rubberBand, SPRING, DURATION, EASE, useLastPresent } = mod;
 
 /* ------------------------------------------- inside the limit: pass through */
 
@@ -429,6 +455,178 @@ if (faded.length) {
   if (failures === before) {
     console.log('ok   the create menu dims the page and spares the bar');
   }
+}
+
+/* ================================================== the duration vocabulary */
+
+/*
+ * Sixteen `_MS` constants in sixteen files, every one a private opinion — and
+ * two of them the same number for the same thing, which is the drift a shared
+ * vocabulary exists to prevent. The springs had been a system since they were
+ * written; durations were not, and "I have to ask for every animation" is what
+ * that looks like from the outside.
+ *
+ * The assertions below are about the RELATIONSHIPS, not the numbers. Any of
+ * these values can be retuned; what must not change is what they mean relative
+ * to each other, because that is the part a person would break without noticing.
+ */
+
+const dur = (name, actual, expected) => check(`DURATION.${name}`, actual, expected);
+dur('swap', DURATION.swap, 90);
+dur('settle', DURATION.settle, 170);
+dur('exit', DURATION.exit, 160);
+dur('scrimExit', DURATION.scrimExit, 200);
+dur('enter', DURATION.enter, 220);
+dur('travel', DURATION.travel, 480);
+dur('breathe', DURATION.breathe, 1200);
+dur('sweep', DURATION.sweep, 1800);
+
+/*
+ * LEAVING IS FASTER THAN ARRIVING.
+ *
+ * The one rule worth arguing for. An entrance is something you are being shown
+ * and can afford to be watched; an exit is something you have already decided
+ * about, and every millisecond after that decision is the app making you wait
+ * for a screen you asked for. Symmetric durations are the default anyone
+ * reaches for, which is exactly why this is asserted rather than remembered.
+ */
+check('leaving is faster than arriving', DURATION.exit < DURATION.enter, true);
+
+/*
+ * ...and the same asymmetry INSIDE a value being replaced. Clearing fast and
+ * arriving slower reads as the new figure being placed; matched halves read as
+ * a crossfade between two things, which is not what happened.
+ */
+check('a value clears faster than it arrives', DURATION.swap < DURATION.settle, true);
+
+/*
+ * A scrim needs a tail. The sheet's close eases OUT, putting the slow part at
+ * the end — and at a plain exit's length there is nowhere for that tail to
+ * happen, so the dim reads as the background light being switched. This is the
+ * one number here that was argued out in the codebase before there was a
+ * vocabulary to hold it, and the argument is what the name preserves.
+ */
+check('an exit with a dim behind it is longer', DURATION.scrimExit > DURATION.exit, true);
+check('...but still faster than arriving', DURATION.scrimExit < DURATION.enter, true);
+
+/* The classes are ordered by how much attention they ask for. */
+check(
+  'the classes stay in order',
+  DURATION.enter < DURATION.travel && DURATION.travel < DURATION.breathe &&
+    DURATION.breathe < DURATION.sweep,
+  true,
+);
+
+/* =================================================================== easing */
+
+/*
+ * There is nothing to assert about an easing's VALUE — they are opaque worklets
+ * — so the loader records which family and direction each one asked for. That
+ * is the part a person gets wrong: `Easing.out` on an exit is a real mistake,
+ * it looks fine in a diff, and it makes the thing appear to hesitate before
+ * leaving.
+ */
+check('arriving decelerates', EASE.enter, { dir: 'out', of: 'cubic' });
+check('leaving accelerates', EASE.exit, { dir: 'in', of: 'cubic' });
+check('moving between two places is eased at both ends', EASE.move, { dir: 'inOut', of: 'cubic' });
+
+/* ==================================================== rendering your own exit */
+
+/*
+ * The flicker, and the reason it is a hook rather than a habit.
+ *
+ * A sheet is opened by handing it a subject and closed by handing it null —
+ * both on the same frame, because the caller closes by clearing the key the
+ * subject is looked up by. `if (!item) return null` therefore unmounts the
+ * whole sheet before its exit can play one frame: it does not animate away, it
+ * stops existing, which on screen is a flash.
+ *
+ * Four components worked that out independently before it had a name. That is
+ * the signature of a missing abstraction — not duplicated code, duplicated
+ * REASONING — and it is exactly the class of thing nobody should have to ask
+ * for twice.
+ */
+check('it holds the value it was given', useLastPresent('a'), 'a');
+check('...and keeps it once the value is gone', useLastPresent(null), 'a');
+
+/* ----------------------------------------------- and nothing rolls its own - */
+
+// The walker and the comment stripper this file already has, rather than a
+// second copy of each — two scans of the same tree that could disagree about
+// which files they cover is the class of thing this whole file is about.
+const files = walk(APP).map((f) => ({
+  rel: relative(APP, f).split('\\').join('/'),
+  text: stripComments(readFileSync(f, 'utf8')),
+}));
+
+/*
+ * NO ANONYMOUS DURATIONS.
+ *
+ * A number typed straight into a withTiming call is a number nobody has looked
+ * at twice; one that names itself is a decision somebody took. So the rule is
+ * not "always use the vocabulary" — vibe-check's two hero reveals are
+ * deliberately slower than anything in it, and a vocabulary that swallowed them
+ * would be the system overruling the design. The rule is that a duration is
+ * either shared or NAMED, never inline.
+ */
+const anonymous = files
+  .filter((f) => f.rel !== 'lib/motion.ts')
+  .flatMap((f) =>
+    (f.text.match(/duration:\s*\d+/g) ?? []).map((hit) => `${f.rel}: ${hit}`),
+  );
+if (anonymous.length) {
+  failures += 1;
+  console.log('FAIL a duration is typed inline instead of named');
+  for (const a of anonymous) console.log(`  ${a}`);
+  console.log('  Reach for DURATION, or name a constant and say why it differs.');
+}
+
+/*
+ * ...AND A NAMED CONSTANT MUST NOT SILENTLY BE A VOCABULARY VALUE.
+ *
+ * The rule above allows a named number, because naming one is the act of taking
+ * responsibility for it. That leaves the exact hole this whole system was built
+ * for: `const SHEET_OPEN_MS = 220` is named, and it is also DURATION.enter
+ * typed out again — which is how two sheets came to close at two speeds with
+ * only one of them having a reason.
+ *
+ * Found by mutation. Restoring the literal to sheet.tsx fired nothing, because
+ * every assertion here was about the vocabulary and none about whether anybody
+ * was using it.
+ *
+ * A number that differs from every shared value is a deliberate deviation and
+ * passes; one that MATCHES is the vocabulary written out by hand, and the fix
+ * is to say so.
+ */
+const shared = new Map(Object.entries(DURATION).map(([k, v]) => [v, k]));
+const restated = files
+  .filter((f) => f.rel !== 'lib/motion.ts')
+  .flatMap((f) =>
+    [...f.text.matchAll(/const ([A-Z][A-Z0-9_]*(?:_MS)?)\s*=\s*(\d+)\s*;/g)]
+      .filter(([, , n]) => shared.has(Number(n)))
+      .map(([, name, n]) => `${f.rel}: ${name} = ${n} is DURATION.${shared.get(Number(n))}`),
+  );
+if (restated.length) {
+  failures += 1;
+  console.log('FAIL a duration restates a shared value instead of using it');
+  for (const r of restated) console.log(`  ${r}`);
+  console.log('  Two copies of one number is how the two sheets drifted apart.');
+}
+
+/*
+ * And nothing hand-rolls the render-through-exit ref any more. The pattern is
+ * `if (x) someRef.current = x` in a render body, which is what all four of them
+ * wrote, and it is the thing useLastPresent replaces.
+ */
+const handRolled = files
+  .filter((f) => f.rel !== 'lib/motion.ts')
+  .filter((f) => /if \([A-Za-z]+\) [A-Za-z]+\.current = /.test(f.text))
+  .map((f) => f.rel);
+if (handRolled.length) {
+  failures += 1;
+  console.log('FAIL a component rolls its own render-through-exit ref');
+  for (const h of handRolled) console.log(`  ${h}`);
+  console.log('  useLastPresent is that rule with a name on it.');
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

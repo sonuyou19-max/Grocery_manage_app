@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { DURATION } from '@/lib/motion';
 import { assembleMoney, formatMoney, moneyParts } from '@/i18n/regions';
 import { useLocale } from '@/store/locale';
 
@@ -63,7 +64,11 @@ const AnimatedTextInput = Animated.createAnimatedComponent(
  * Long enough to read as counting, short enough that a total is legible again
  * before the eye has finished travelling to it.
  */
-const COUNT_MS = 450;
+// The shared value, not 450. A number counting to its total is the same class
+// of motion as a glyph crossing the screen — something meant to be watched —
+// and three sites within 70ms of each other was three people agreeing without
+// ever having said so.
+const COUNT_MS = DURATION.travel;
 
 export function AnimatedMoney({
   value,

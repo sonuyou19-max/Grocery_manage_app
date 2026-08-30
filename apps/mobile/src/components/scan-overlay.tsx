@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { DURATION } from '@/lib/motion';
 import type { ScanPhase } from '@/lib/receipt-run';
 import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useTheme } from '@/theme';
@@ -70,7 +71,7 @@ import { radii, spacing, type, useTheme } from '@/theme';
  */
 
 /** How long one pass down the receipt takes. */
-const SWEEP_MS = 1800;
+const SWEEP_MS = DURATION.sweep;
 /** The preview's height. Fixed, so the sweep has a distance before layout. */
 const PREVIEW_H = 260;
 
@@ -119,7 +120,7 @@ export function ScanOverlay({ uris, phase }: { uris: readonly string[]; phase: S
      */
     travel.value = reduced
       ? // Parked mid-frame and breathing, rather than travelling.
-        withRepeat(withTiming(0.5, { duration: 1200 }), -1, true)
+        withRepeat(withTiming(0.5, { duration: DURATION.breathe }), -1, true)
       : withRepeat(
           withTiming(1, { duration: SWEEP_MS, easing: Easing.inOut(Easing.quad) }),
           -1,

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useRef, useState, type PropsWithChildren } from "react";
+import { useMemo, useState, type PropsWithChildren } from "react";
 import {
   Pressable,
   ScrollView,
@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Sheet, SheetHandle, useSheetDismiss } from "@/components/sheet";
+import { useLastPresent } from "@/lib/motion";
 import { GlassView } from "@/components/glass";
 import { ItemEmoji } from "@/components/item-emoji";
 import { categoryLabel } from "@/lib/categorize";
@@ -114,24 +115,16 @@ export function StapleSheet({
    * What to draw, which stops being "the open item" the moment it closes.
    *
    * The Pantry closes this sheet by clearing the key it looks the item up by,
-   * so `item` goes null on the same frame `visible` does — and this component
-   * used to answer that with `if (!item) return null`, tearing the whole Sheet
-   * down before it could play anything. That is why the sheet had no exit at
-   * all: it did not animate away, it simply stopped existing. Sheet's own
-   * `mounted` cannot help, because the thing being unmounted is Sheet.
-   *
-   * So the last item to have been open is kept, and rendered until the close
-   * animation is over. `lists` rides along with it for the same reason — the
-   * tags under the name are derived from the open key too, and would have
-   * blinked out a beat before the sheet did.
+   * so `item` goes null on the same frame `visible` does — and rendering null
+   * there tears the whole Sheet down before it can play a frame of its exit.
+   * `useLastPresent` is that rule, named: it was worked out independently in
+   * four components before it had a name. `lists` rides along inside the
+   * snapshot for the same reason — the tags under the name are derived from the
+   * open key too, and would blink out a beat before the sheet did.
    */
-  const last = useRef<{
-    item: ItemStat;
-    lists: { id: string; name: string }[];
-  } | null>(null);
-  if (openItem) last.current = { item: openItem, lists: openLists };
-
-  const snapshot = last.current;
+  const snapshot = useLastPresent(
+    openItem ? { item: openItem, lists: openLists } : null,
+  );
 
   /*
    * EVERY HOOK ABOVE THE GATE.

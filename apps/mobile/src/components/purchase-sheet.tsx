@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -23,6 +23,7 @@ import { UNITS } from '@korb/shared';
 import type { ItemCategory } from '@korb/shared';
 import { dayDiff, longDayLabel, noonOn } from '@/lib/calendar';
 import { haptics } from '@/lib/haptics';
+import { useLastPresent } from '@/lib/motion';
 import { parseQuantity, totalFor } from '@/lib/purchase-log';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useLocale } from '@/store/locale';
@@ -86,15 +87,9 @@ export function PurchaseSheet({
   const { height: windowHeight } = useWindowDimensions();
   const decimal = decimalMarkFor(region);
 
-  /*
-   * The last item to have been open, kept so the sheet has something to draw
-   * while it animates away. Same reason StapleSheet keeps one: the caller
-   * closes by clearing the key, so `item` goes null on the frame `visible`
-   * does, and `if (!item) return null` would tear the Sheet down mid-exit.
-   */
-  const last = useRef<{ key: string; display: string; category: ItemCategory } | null>(null);
-  if (item) last.current = item;
-  const shown = last.current;
+  // Draw the last item through the exit — see useLastPresent. Without it the
+  // sheet does not animate away, it stops existing, which on screen is a flash.
+  const shown = useLastPresent(item);
 
   const [at, setAt] = useState(() => Date.now());
   const [calendarOpen, setCalendarOpen] = useState(false);

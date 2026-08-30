@@ -16,6 +16,7 @@ import Animated, {
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/store/locale';
 import type { List } from '@/store/groceries';
+import { DURATION, EASE } from '@/lib/motion';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /** Fixed row height so drag math maps 1:1 to indices. */
@@ -95,8 +96,8 @@ function Row({ list, positions, count, onCommit, onDelete, onRename }: RowProps)
     // Gentle breathing: barely-there zoom, slow cycle.
     breathe.value = withRepeat(
       withSequence(
-        withTiming(1.012, { duration: 1200 }),
-        withTiming(0.995, { duration: 1200 }),
+        withTiming(1.012, { duration: DURATION.breathe }),
+        withTiming(0.995, { duration: DURATION.breathe }),
       ),
       -1,
       true,
@@ -149,7 +150,7 @@ function Row({ list, positions, count, onCommit, onDelete, onRename }: RowProps)
   const animStyle = useAnimatedStyle(() => {
     const slotY = (positions.value[id] ?? 0) * STEP;
     return {
-      top: dragging.value ? dragY.value : withTiming(slotY, { duration: 200 }),
+      top: dragging.value ? dragY.value : withTiming(slotY, { duration: DURATION.settle }),
       zIndex: dragging.value ? 10 : 0,
       transform: [{ scale: dragging.value ? 1.03 : breathe.value }],
     };

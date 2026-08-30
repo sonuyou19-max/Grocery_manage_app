@@ -62,6 +62,7 @@ import {
   type PriceMove,
 } from "@/lib/purchase-log";
 import { supermarketLabel } from "@/lib/supermarkets";
+import { useLastPresent } from "@/lib/motion";
 import { usePlusGate } from "@/lib/plus-gate";
 import { ReceiptRow } from "@/components/receipt-row";
 import { useReceipts } from "@/lib/use-receipts";
@@ -228,13 +229,12 @@ function SignedInInsights() {
    * closing. Sheet deliberately keeps its children mounted through the exit
    * animation so there is something to animate, so reading `expanded` directly
    * blanked the title and dropped every row on the frame the user tapped Done —
-   * the sheet then spent 160ms folding away empty.
+   * the sheet then spent its exit folding away empty.
    *
-   * A ref rather than state: this must not schedule a render of its own, and it
-   * is only ever read on a render `expanded` has already caused.
+   * The fifth place this was worked out from scratch, and the one that found
+   * the guard rather than the other way round. See useLastPresent.
    */
-  const showing = useRef<Expanded | null>(null);
-  if (expanded) showing.current = expanded;
+  const showing = useLastPresent(expanded);
 
   const cart = useMemo(
     () =>
@@ -903,24 +903,24 @@ function SignedInInsights() {
 
       <OverflowSheet
         visible={expanded !== null}
-        title={showing.current ? t(SHEET_TITLE[showing.current]) : ""}
+        title={showing ? t(SHEET_TITLE[showing]) : ""}
         onClose={() => setExpanded(null)}
       >
         {/* The sheet shows the SAME rows the card does, from the same arrays,
             just without the slice — so the two can never disagree about what a
             row says. Staples keep their rank column because that list is a
             ranking the reader is scanning by position; the others are not. */}
-        {showing.current === "staples" &&
+        {showing === "staples" &&
           staples.map((s, i) => (
             <RankedRow key={s.key} rank={i + 1}>
               <StapleRow staple={s} />
             </RankedRow>
           ))}
-        {showing.current === "moves" &&
+        {showing === "moves" &&
           moves.map((m) => <MoveRow key={m.key} move={m} />)}
-        {showing.current === "stores" &&
+        {showing === "stores" &&
           storeSpend.map((s) => <StoreRow key={s.store ?? "none"} spend={s} />)}
-        {showing.current === "cheaper" &&
+        {showing === "cheaper" &&
           cheaper.map((h) => <CheaperRow key={h.name} hint={h} />)}
       </OverflowSheet>
     </Screen>

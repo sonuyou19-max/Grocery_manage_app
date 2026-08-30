@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassView } from '@/components/glass';
 import { TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/floating-tab-bar';
+import { DURATION } from '@/lib/motion';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
@@ -63,7 +64,7 @@ const VISIBLE_MS = 3200;
  * three and rushed the fourth.
  */
 const ACTION_MS = 8000;
-const FADE_MS = 180;
+const FADE_MS = DURATION.exit;
 
 export interface ToastAction {
   label: string;

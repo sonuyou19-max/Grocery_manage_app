@@ -14,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { KorbMark, KorbWord, WORD_ASPECT } from '@/components/korb-mark';
-import { SPRING } from '@/lib/motion';
+import { SPRING, DURATION } from '@/lib/motion';
 
 /**
  * The basket, and then the name arriving beside it.
@@ -52,7 +52,7 @@ import { SPRING } from '@/lib/motion';
 /** Gap between the mark and the word, in the finished lockup. */
 const GAP = 14;
 /** Long enough to read as an arrival, short enough not to delay a launch. */
-const ENTER_MS = 480;
+const ENTER_MS = DURATION.travel;
 /** The mark lands first, alone, before the word starts. */
 const WORD_DELAY = 260;
 

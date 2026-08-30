@@ -19,6 +19,7 @@ import Animated, {
 import { useCoachMarkPortal } from '@/components/coach-mark-host';
 import type { TargetRect } from '@/lib/coach-marks';
 import { useT } from '@/store/locale';
+import { DURATION, EASE } from '@/lib/motion';
 import { radii, spacing, type, useTheme } from '@/theme';
 
 /**
@@ -132,7 +133,7 @@ export function CoachMarkOverlay({ content }: { content: CoachMarkContent }) {
 
   useEffect(() => {
     if (origin === null) return;
-    enter.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) });
+    enter.value = withTiming(1, { duration: DURATION.enter, easing: EASE.enter });
     return () => cancelAnimation(enter);
   }, [origin]); // eslint-disable-line react-hooks/exhaustive-deps
 

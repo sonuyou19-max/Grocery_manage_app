@@ -21,6 +21,25 @@ import { MeshBackground } from '@/components/mesh-background';
 import { haptics } from '@/lib/haptics';
 import { emojiFor } from '@/lib/item-emoji';
 import { SPRING, springTo } from '@/lib/motion';
+
+/*
+ * Two durations that are deliberately NOT from the shared vocabulary.
+ *
+ * Both are one-shot reveals on the app's one hero screen, and both are slower
+ * than anything in DURATION on purpose — they are meant to be watched, and the
+ * closest shared class (`travel`, 480ms) would make the deck arrive rather than
+ * unfold. A vocabulary that swallowed these would be the system overruling the
+ * design, which is the opposite of what it is for.
+ *
+ * Named rather than typed inline, which is the whole rule: a number that names
+ * itself is a decision somebody took, and an anonymous one in the middle of a
+ * withTiming call is a number nobody has ever looked at twice. check-motion
+ * bans the second and allows the first.
+ */
+/** The glow behind the deck coming up, once, as the screen settles. */
+const GLOW_MS = 700;
+/** The progress ring filling to its value. Long enough to be followed. */
+const FILL_MS = 1100;
 import { isDue, lastBoughtLabel, normalizeKey } from '@/lib/pantry-intel';
 import { useHomeListAdd } from '@/lib/use-home-list-add';
 import { useT } from '@/store/locale';
@@ -377,7 +396,7 @@ function Celebration({ empty }: { empty: boolean }) {
   const t = useT();
   const glow = useSharedValue(0);
   useEffect(() => {
-    glow.value = withTiming(1, { duration: 700 });
+    glow.value = withTiming(1, { duration: GLOW_MS });
   }, [glow]);
   const glowStyle = useAnimatedStyle(() => ({
     opacity: interpolate(glow.value, [0, 1], [0, 1], Extrapolation.CLAMP),
@@ -429,7 +448,7 @@ function Particle({ index }: { index: number }) {
   const dy = Math.sin(angle) * dist - 40;
 
   useEffect(() => {
-    p.value = withTiming(1, { duration: 1100 });
+    p.value = withTiming(1, { duration: FILL_MS });
   }, [p]);
 
   const style = useAnimatedStyle(() => ({

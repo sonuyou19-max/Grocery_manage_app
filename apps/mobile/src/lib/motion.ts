@@ -1,4 +1,5 @@
-import { withSpring, type WithSpringConfig } from 'react-native-reanimated';
+import { useRef } from 'react';
+import { Easing, withSpring, type WithSpringConfig } from 'react-native-reanimated';
 
 /**
  * The app's motion vocabulary: spring presets, and the rule for when a spring
@@ -109,6 +110,167 @@ export const SPRING: Record<string, WithSpringConfig> = {
    */
   press: { damping: 25, stiffness: 400, mass: 1 },
 };
+
+/**
+ * DURATIONS, named by what is moving rather than by how long it takes.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this exists, written down because the symptom was mine
+ * ---------------------------------------------------------------------------
+ *
+ * The springs above have been a system since they were written: chosen by what
+ * the moving thing IS, shared, and impossible to drift apart by one damping
+ * point. Durations had none of that. There were sixteen `_MS` constants in
+ * sixteen files, every one a private opinion invented at the moment it was
+ * needed — and two of them were the same number for the same thing in two
+ * files, which is the drift a vocabulary exists to prevent. A sheet closed in
+ * 200ms here and 160ms there, for no reason either file could give.
+ *
+ * That is what "I have to ask for every animation" looks like from the inside.
+ * There was nothing to reach for, so each new component reached for a number,
+ * and nothing in the codebase could tell the next person what a fade costs in
+ * this app. A design system is not a folder of components; it is the set of
+ * decisions you no longer have to make.
+ *
+ * ---------------------------------------------------------------------------
+ * The rule these encode: LEAVING IS FASTER THAN ARRIVING
+ * ---------------------------------------------------------------------------
+ *
+ * Not symmetry, and this is the one number-choice worth arguing for. An
+ * entrance is something you are being shown and it can afford to be watched. An
+ * exit is something you have already decided about — you tapped Done, you
+ * dismissed the sheet — and every millisecond after that decision is the app
+ * making you wait to see a screen you asked for. So exits are roughly two
+ * thirds of their entrance, everywhere, and check-motion asserts it rather than
+ * trusting anyone to remember.
+ */
+export const DURATION = {
+  /**
+   * The OUT half of a value being replaced in place — a figure recalculating.
+   *
+   * The shortest thing here on purpose: nothing is arriving or leaving, the
+   * same element is showing a different number, and a long fade would read as
+   * the screen being uncertain rather than as an update.
+   */
+  swap: 90,
+
+  /**
+   * ...and the IN half, deliberately almost twice as long.
+   *
+   * The asymmetry is the whole effect. Clearing fast and arriving slower reads
+   * as the new value being PLACED; matched durations read as a crossfade, which
+   * is a transition between two things rather than one thing changing.
+   */
+  settle: 170,
+
+  /** Something leaving on its own: a toast, a chip, a row. */
+  exit: 160,
+
+  /**
+   * ...and something leaving with a DIM SETTLING BEHIND IT.
+   *
+   * Longer than a plain exit, and this is the one value here that was already
+   * argued out in the codebase before there was a vocabulary to put it in. The
+   * sheet's close eases OUT, which puts the slow part at the end — and a scrim
+   * needs that tail or the dim reads as the background light being switched
+   * rather than fading. 160ms leaves the tail nowhere to happen.
+   *
+   * Two sheets disagreed about this, 200 here and 160 there, with only one of
+   * them having a reason. Naming it is how the one with the reason wins.
+   */
+  scrimExit: 200,
+
+  /** Something arriving. The default for an entrance. */
+  enter: 220,
+
+  /**
+   * Something crossing the screen, or a number counting up to its value.
+   *
+   * Long enough to be followed by eye, which is the entire point — this is the
+   * only class here meant to be WATCHED rather than merely not noticed.
+   */
+  travel: 480,
+
+  /**
+   * A loop that OSCILLATES — a glow breathing, a card rocking on a long press.
+   *
+   * Slow enough that nobody reads it as progress. The app had 1200 at three
+   * sites and 1400 at two, which is not a decision anybody made twice; it is
+   * the same idea typed out five times.
+   */
+  breathe: 1200,
+
+  /** A loop that TRAVERSES — a scanning line crossing a frame. */
+  sweep: 1800,
+} as const;
+
+/**
+ * EASINGS, and there are only three because there are only three situations.
+ *
+ * Cubic rather than quad throughout: the app had both, at eight sites and seven,
+ * with nothing distinguishing them — which is two vocabularies for one idea and
+ * the reason a screen can feel subtly inconsistent without anyone being able to
+ * point at why.
+ */
+export const EASE = {
+  /**
+   * Arriving. Fast at first, decelerating into place — the shape of something
+   * with momentum coming to rest, and the only one of the three that should
+   * ever be used on an entrance.
+   */
+  enter: Easing.out(Easing.cubic),
+  /**
+   * Leaving. Slow at first, accelerating away. It reads as the element being
+   * released rather than yanked, and it puts the fast part of the motion at the
+   * end, where nobody is looking any more.
+   */
+  exit: Easing.in(Easing.cubic),
+  /**
+   * Moving between two known places, both ends anchored: a lozenge sliding
+   * between tabs, a value recalculating. Neither end is an appearance.
+   */
+  move: Easing.inOut(Easing.cubic),
+} as const;
+
+/**
+ * Keep rendering the thing you were given, after you stop being given it.
+ *
+ * ---------------------------------------------------------------------------
+ * The flicker this exists to remove, written out because it happened four times
+ * ---------------------------------------------------------------------------
+ *
+ * Every sheet in this app is opened by handing it a subject and closed by
+ * handing it null. Both go to null on the SAME FRAME, because the caller closes
+ * by clearing the key the subject is looked up by — so the obvious
+ * `if (!item) return null` unmounts the whole sheet before its exit animation
+ * can play a single frame. The sheet does not animate away. It stops existing,
+ * which on screen is a flash.
+ *
+ * It is not a bug you can see in a diff, it is not a bug a typecheck can find,
+ * and every component that renders a nullable subject has it until somebody
+ * notices. Four of them worked it out independently — staple-sheet, item-sheet,
+ * purchase-sheet, purchase-ledger — each with its own ref, its own naming and
+ * its own paragraph explaining the same thing. That is the shape of a missing
+ * abstraction: not duplicated code, duplicated REASONING.
+ *
+ * So it has a name now. `useLastPresent(item)` returns the item while it is
+ * there and the last one afterwards, which is exactly what a component needs to
+ * draw itself out of existence.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a ref rather than state
+ * ---------------------------------------------------------------------------
+ *
+ * Writing it during render is deliberate and safe here: it is a cache of a prop,
+ * not a source of truth, and the value it returns is derived from the prop on
+ * every render. Putting it in state would need an effect, which lands a frame
+ * late — and a frame late is precisely the flash this removes.
+ */
+export function useLastPresent<T>(value: T | null | undefined): T | null {
+  const last = useRef<T | null>(null);
+  if (value != null) last.current = value;
+  return last.current;
+}
 
 /**
  * A spring that continues the gesture instead of restarting the motion.

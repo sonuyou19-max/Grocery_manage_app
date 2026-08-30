@@ -36,6 +36,7 @@ import {
 
 import { useDeferUntilClosed } from "@/lib/modal-nav";
 import { rubberBand, SPRING, springTo } from "@/lib/motion";
+import { DURATION } from '@/lib/motion';
 import { radii, spacing, useTheme } from "@/theme";
 
 /**
@@ -157,7 +158,7 @@ export function SheetHandle() {
 /** The dim itself, so the one drawn outside this file is the same black. */
 export const SCRIM_COLOR = "rgba(12,18,10,0.45)";
 
-export const SHEET_OPEN_MS = 220;
+export const SHEET_OPEN_MS = DURATION.enter;
 const OPEN_MS = SHEET_OPEN_MS;
 /*
  * The close was 160ms on `Easing.in(Easing.cubic)`, which accelerates away —
@@ -172,7 +173,7 @@ const OPEN_MS = SHEET_OPEN_MS;
  * card leaves promptly and the dim settles to nothing rather than dropping to
  * it, and 200ms gives the tail somewhere to happen.
  */
-export const SHEET_CLOSE_MS = 200;
+export const SHEET_CLOSE_MS = DURATION.scrimExit;
 const CLOSE_MS = SHEET_CLOSE_MS;
 
 export interface SheetProps {

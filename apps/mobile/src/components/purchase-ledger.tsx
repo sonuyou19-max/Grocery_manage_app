@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -21,6 +21,7 @@ import {
   unitPriceParts,
   type Purchase,
 } from "@/lib/purchase-log";
+import { useLastPresent } from "@/lib/motion";
 import { useLocale } from "@/store/locale";
 import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
 
@@ -118,12 +119,10 @@ export function PurchaseLedger({
    * nothing to animate from.
    *
    * So keep the last name to have been open, render it until the close animation
-   * is over, and let `visible` carry the actual state.
+   * is over, and let `visible` carry the actual state. `useLastPresent` is that
+   * rule with a name on it — four components had reached it separately.
    */
-  const last = useRef<{ name: string; category: ItemCategory } | null>(null);
-  if (name) last.current = { name, category };
-
-  const snapshot = last.current;
+  const snapshot = useLastPresent(name ? { name, category } : null);
   if (!snapshot) return null;
   const rows = historyFor(purchases, snapshot.name);
 

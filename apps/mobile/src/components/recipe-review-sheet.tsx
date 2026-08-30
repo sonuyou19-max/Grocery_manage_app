@@ -25,6 +25,7 @@ import {
 import { categorizeSync } from '@/lib/categorize';
 import { useT } from '@/store/locale';
 import { usePantryIntel } from '@/store/pantry-intel';
+import { DURATION } from '@/lib/motion';
 import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 
 /**
@@ -87,9 +88,14 @@ export function RecipeReviewSheet({
   const [servings, setServings] = useState<number | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
 
-  /** Long enough to read as a movement, short enough not to sit in the way. */
-  const OPEN_MS = 220;
-  const CLOSE_MS = 160;
+  /*
+   * The shared numbers, not this sheet's own. It closed in 160ms while every
+   * other sheet took 200 — the same motion, two speeds, and only one of them
+   * had a reason: this one has a scrim too, and a dim needs the tail. See
+   * DURATION.scrimExit.
+   */
+  const OPEN_MS = DURATION.enter;
+  const CLOSE_MS = DURATION.scrimExit;
   const open = recipe != null;
   const [mounted, setMounted] = useState(open);
   const progress = useSharedValue(open ? 1 : 0);
