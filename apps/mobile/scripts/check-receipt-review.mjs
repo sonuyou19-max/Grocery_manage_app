@@ -559,7 +559,22 @@ console.log('\noffBy — the last comparison');
 
 console.log('\nreview sheet');
 
-const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8');
+/*
+ * Comments stripped, once, before anything is matched.
+ *
+ * review.tsx is 1400 lines and most of them are prose explaining the 300 that
+ * are not — which makes it the single worst file in the repo to match raw text
+ * against. It bit immediately: an assertion that the screen never touches the
+ * receipt's FINGERPRINT failed against code that does not, because three
+ * comments explain why it must not.
+ *
+ * That is this repo's most repeated guard bug and the fix is always the same.
+ * Every assertion below now reads code only, so an assertion about the
+ * reasoning can no longer pass for an assertion about the thing reasoned about.
+ */
+const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
 
 /*
  * THE RECEIPT'S CONVENTION WINS, AND THE DEVICE IS ONLY THE FALLBACK.
@@ -573,12 +588,12 @@ const sheet = readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8');
  * paper, or when the scan came from a deployment predating the field.
  */
 assert(
-  /source\?\.receipt\.decimalComma == null\s*\?\s*decimalMarkFor\(region\)/.test(sheet),
+  /receipt\?\.decimalComma == null\s*\?\s*decimalMarkFor\(region\)/.test(sheet),
   'the receipt decides the decimal mark, not the phone',
   'a Belgian scanning a British receipt would read a corrected 1.50 as fifteen hundred',
 );
 assert(
-  /source\.receipt\.decimalComma\s*\?\s*','\s*:\s*'\.'/.test(sheet),
+  /receipt\.decimalComma\s*\?\s*','\s*:\s*'\.'/.test(sheet),
   '...with the device only as the fallback',
 );
 // Both typed fields on this screen read through it, so they cannot disagree.
@@ -601,6 +616,29 @@ assert(
  * the branch would be dead in exactly the mode it was meant to serve.
  */
 assert(/const source = run \?\? saved;/.test(sheet), 'both ways in resolve to one source');
+/*
+ * AND ONE RECEIPT, which is the scan with the shopper's corrections merged over
+ * it. Everything below reads that and nothing reads the raw scan: a screen that
+ * displays one value and writes another is the bug the date header had once —
+ * it showed the printed 2028 while the import quietly substituted today — and
+ * it is silent every time.
+ */
+assert(
+  /const receipt = source \? \{ \.\.\.source\.receipt, \.\.\.edits \} : null;/.test(sheet),
+  'the corrections are merged over the scan',
+);
+/*
+ * `source.receipt` in ANY form below the merge, not just followed by a dot.
+ * The narrower version missed `planCommit(source.receipt, ...)` — a comma, not
+ * a dot — which is the single most consequential place it could come back.
+ */
+const belowMerge = sheet.slice(sheet.indexOf('const receipt = source'));
+const rawReads = (belowMerge.match(/source\.receipt/g) ?? []).length;
+assert(
+  rawReads === 1,
+  '...and nothing below reads the uncorrected scan',
+  `source.receipt appears ${rawReads} times below the merge; only the merge itself may`,
+);
 assert(
   !/\brun[.?]/.test(sheet.slice(sheet.indexOf('const source = run'))),
   '...and nothing below it reads the run directly',
@@ -638,6 +676,115 @@ assert(
   !/toggleItem|addBoughtItem|updateItem/.test(amendBlock),
   '...that touches no shopping list',
   'the rows it once ticked no longer exist, and the rows that do belong to a different shop',
+);
+
+/* ------------------------ the receipt's own four facts, in one row ------- */
+
+/*
+ * THE SHOP AND THE DATE WERE A CAPTION, and they are not a caption.
+ *
+ * They sat in the header subtitle, styled like one — and both decide where
+ * every purchase on this screen gets filed: the shop is the key that every
+ * price comparison groups by, and the date is the instant each purchase is
+ * recorded at. A receipt read as the wrong Carrefour, or dated a day out, is a
+ * whole shop landing in the wrong place with nothing on screen looking wrong.
+ *
+ * So they join the two figures they belong with, wearing the same dashed
+ * outline the line chips use — which on this screen is the one thing that means
+ * "you may change this".
+ */
+/*
+ * EVERY header on this screen, not just one.
+ *
+ * There are two — the real one and the empty-state one — and asserting that a
+ * matching Header exists was satisfied by the empty state alone. The main
+ * header could have regained its subtitle with this still green. Found by
+ * mutation: the mutation replaced the first occurrence and nothing fired.
+ */
+const headers = sheet.match(/<Header[^/]*\/>/g) ?? [];
+assert(headers.length >= 2, 'both headers are findable');
+assert(
+  headers.every((h) => /subtitle=\{null\}/.test(h)),
+  'the shop and date have left the header',
+  'a caption is the one thing a person will not think to tap',
+);
+const chipRow = /<View style=\{styles\.totals\}>[\s\S]*?<\/View>/.exec(sheet)?.[0] ?? '';
+assert(chipRow.length > 0, 'the chip row is findable');
+for (const [what, re] of [
+  ['the shop', /label=\{t\('receipt\.store'\)\}/],
+  ['the date', /label=\{t\('receipt\.date'\)\}/],
+  ['what was paid', /label=\{t\('receipt\.paid'\)\}/],
+  ['what came off', /label=\{t\('receipt\.discount'\)\}/],
+]) {
+  assert(re.test(chipRow), `...and it carries ${what}`);
+}
+/* Left to right in the order a person checks a receipt. */
+assert(
+  chipRow.indexOf("receipt.store") < chipRow.indexOf("receipt.date") &&
+    chipRow.indexOf("receipt.date") < chipRow.indexOf("receipt.paid") &&
+    chipRow.indexOf("receipt.paid") < chipRow.indexOf("receipt.discount"),
+  '...in that order',
+);
+/*
+ * The deposit is NOT in the row and is not editable. It is money on the paper
+ * that is neither a purchase nor a saving, nothing downstream keys on it, and
+ * there is nothing a shopper would want to say about it that the paid total
+ * does not already carry.
+ */
+/*
+ * Asserted over the whole screen, not just the row. Putting the deposit in a
+ * FieldChip somewhere else is the same mistake in a different place, and the
+ * row-scoped version of this did not notice.
+ */
+assert(
+  !/<FieldChip[\s\S]{0,120}receipt\.deposit'/.test(sheet),
+  'the deposit stays a plain reading',
+  'it is neither a purchase nor a saving, and nothing downstream keys on it',
+);
+/*
+ * DISCOUNTS ARE SHOWN AT ZERO, unlike the deposit. The difference is what a
+ * blank means: a receipt with no deposit is ordinary, while a discount reading
+ * zero that should not is the specific fault this app has been bitten by — and
+ * a chip that disappears exactly when the number is wrong cannot be used to
+ * correct it.
+ */
+assert(
+  !/discountCents !== 0 && \(\s*<FieldChip/.test(sheet),
+  'the discount chip is there even at zero',
+);
+
+/*
+ * A CORRECTED DISCOUNT IS NEGATIVE. Every sum on both sides of this app ADDS
+ * the discount rather than subtracting it, and nobody types a minus sign into a
+ * box labelled Discounts — so a typed "2.10" read as +210 moves the total by
+ * twice the amount, in the wrong direction.
+ */
+assert(
+  /discountCents: -Math\.abs\(cents\)/.test(sheet),
+  'a typed discount is stored as money coming off',
+);
+
+/*
+ * AND THE FINGERPRINT DOES NOT MOVE.
+ *
+ * It is derived from store, paid total and printed time — the three things this
+ * row now lets somebody change — and it is what stops the same paper being
+ * imported twice. Correcting a misread total and rescanning produces the same
+ * misreading again, which still collides, which is what is wanted. A
+ * fingerprint recomputed from the corrections would let that second scan
+ * straight through, and a doubled week of spending is invisible until the
+ * comparisons start lying.
+ */
+assert(
+  !/fingerprint/.test(sheet),
+  'the screen never touches the fingerprint',
+  'it identifies the paper as scanned, not as corrected',
+);
+const editKeys = /const \[edits, setEdits\] = useState<\{[\s\S]*?\}>\(\{\}\);/.exec(sheet)?.[0] ?? '';
+assert(editKeys.length > 0, '...and the corrections are a closed set');
+assert(
+  !/fingerprint|depositCents|lines|goodsCents/.test(editKeys),
+  '...that cannot reach it',
 );
 
 /*
@@ -916,8 +1063,22 @@ assert(
   'the computed total appears only for more than one pack',
   'printing the total beside an identical price chip says nothing twice',
 );
+/*
+ * Asserted against the STYLE ITSELF rather than a window of characters after
+ * its name.
+ *
+ * This was `!/totalRow[\s\S]{0,400}borderStyle: 'dashed'/`, and it passed for
+ * the wrong reason: the four hundred characters between `totalRow` and the
+ * dashed chip below it were a COMMENT. Strip the comments — as this file now
+ * does — and the window reaches the next block, and a correct file fails.
+ *
+ * A window that only holds while the prose between two rules stays long enough
+ * is not a rule about the code. The block is extracted and read on its own.
+ */
+const totalRowStyle = /totalRow: \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+assert(totalRowStyle.length > 0, 'the total row style is findable');
 assert(
-  !/totalRow[\s\S]{0,400}borderStyle: 'dashed'/.test(sheet),
+  !/dashed|borderWidth/.test(totalRowStyle),
   '...and is never drawn as an editable chip',
   'it is arithmetic — an outline would promise an edit that does nothing',
 );

@@ -15,7 +15,7 @@ import { SUPERMARKETS, type Supermarket } from '@/lib/supermarkets';
 
 const PREFS_KEY = 'korb.storePrefs.v1';
 
-interface StorePrefs {
+export interface StorePrefs {
   custom: string[];
   lastUsed: Record<string, number>;
 }

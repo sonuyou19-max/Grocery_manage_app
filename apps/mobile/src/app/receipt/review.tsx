@@ -22,8 +22,11 @@ import { Safe } from '@/components/safe';
 import { useToast } from '@/components/toast';
 import { MeshBackground } from '@/components/mesh-background';
 import { PressScale } from '@/components/press-scale';
-import { Sheet } from '@/components/sheet';
+import { Sheet, SheetHandle } from '@/components/sheet';
 import { currencySymbolFor } from '@/i18n';
+import { supermarketLabel } from '@/lib/supermarkets';
+import { DayPicker } from '@/components/day-picker';
+import { StorePickerSheet } from '@/components/store-picker-sheet';
 import { cascade } from '@/lib/cascade';
 import { haptics } from '@/lib/haptics';
 import { decimalMarkFor } from '@/i18n/regions';
@@ -129,8 +132,20 @@ import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
  * one chip is ever open: opening a second must close the first, and two booleans
  * can disagree about that in a way one discriminated value cannot.
  */
-type EditField = 'price' | 'packs' | 'size';
+type EditField = 'price' | 'packs' | 'size' | 'paid' | 'discount';
 type Editing = { key: string; field: EditField; text: string } | null;
+
+/**
+ * The `key` the receipt's own chips edit under.
+ *
+ * The editing state is keyed by purchase, because until now every chip belonged
+ * to a line. The paid total and the discount belong to the RECEIPT, so they
+ * need a key of their own — and it has to be one no purchase can ever have, or
+ * a line would share an open chip with the header. Purchase keys are built as
+ * `${normalizeKey(raw)}|${'m'|'c'}#${index}` (see groupLines), so a leading
+ * space is unreachable: normalizeKey trims.
+ */
+const RECEIPT_KEY = ' receipt';
 
 export default function ReceiptReviewScreen() {
   const { t, money, currency, region } = useLocale();
@@ -216,7 +231,46 @@ export default function ReceiptReviewScreen() {
   // Whichever source this screen has. Both carry the same two things — the
   // receipt and its lines — which is why everything below is written once
   // rather than once per mode.
+  /*
+   * WHAT THE SHOPPER HAS CORRECTED ABOUT THE RECEIPT ITSELF.
+   *
+   * Four facts that belong to the paper rather than to any one line — which
+   * shop, which day, what was paid, what came off — held as overrides on top of
+   * the scan rather than written into it. Kept apart for two reasons.
+   *
+   * A correction has to survive being saved and reopened, and what is saved is
+   * the corrected receipt: `packScan` is handed the merged value below, so a
+   * shop fixed today is the shop the receipt shows next month.
+   *
+   * And the FINGERPRINT must not move. It is derived from store, paid total and
+   * printed time, and it is what stops the same paper being imported twice —
+   * so it stays exactly as the scan computed it. Correcting a misread total
+   * after the fact and then rescanning the same receipt produces the same
+   * misreading again, which still collides, which is the behaviour wanted. A
+   * fingerprint that tracked the corrections would let the second scan through.
+   */
+  const [edits, setEdits] = useState<{
+    store?: string | null;
+    purchasedAt?: string | null;
+    paidCents?: number;
+    discountCents?: number;
+  }>({});
+  const [pickingStore, setPickingStore] = useState(false);
+  const [pickingDate, setPickingDate] = useState(false);
+
+
   const source = run ?? saved;
+
+  /*
+   * The receipt as it will actually be imported: what was read, with what the
+   * shopper corrected on top.
+   *
+   * Everything below reads THIS and nothing reads the raw scan. A screen that
+   * displays one value and writes another is the exact bug the date header had
+   * once — it showed the printed 2028 while the import quietly substituted
+   * today — and it is silent every time.
+   */
+  const receipt = source ? { ...source.receipt, ...edits } : null;
 
   /*
    * THE RECEIPT'S CONVENTION, NOT THE READER'S.
@@ -231,9 +285,9 @@ export default function ReceiptReviewScreen() {
    * deployment that predates the field.
    */
   const decimal =
-    source?.receipt.decimalComma == null
+    receipt?.decimalComma == null
       ? decimalMarkFor(region)
-      : source.receipt.decimalComma
+      : receipt.decimalComma
         ? ','
         : '.';
 
@@ -310,17 +364,17 @@ export default function ReceiptReviewScreen() {
    * The last comparison, against the number on the paper rather than against
    * the model's own arithmetic. Null when it cannot mean anything — see offBy.
    */
-  const gap = source
+  const gap = receipt
     ? offBy(
         purchases,
         decisions,
-        source.receipt.paidCents,
-        source.receipt.depositCents,
-        source.receipt.discountCents,
+        receipt.paidCents,
+        receipt.depositCents,
+        receipt.discountCents,
       )
     : null;
 
-  if (!source) {
+  if (!source || !receipt) {
     /*
      * Three ways to have nothing, and they are not the same thing to a reader.
      *
@@ -355,7 +409,6 @@ export default function ReceiptReviewScreen() {
     );
   }
 
-  const { receipt } = source;
 
   /*
    * WHEN this shopping happened, as the import will actually record it.
@@ -401,6 +454,36 @@ export default function ReceiptReviewScreen() {
   const commitEdit = () => {
     if (!editing) return;
     const { key, field, text } = editing;
+
+    /*
+     * The receipt's own two figures, which are not about any line.
+     *
+     * Both go into `edits` rather than into `decisions`: they describe the
+     * paper, they are merged over the scan wherever it is read, and they are
+     * what gets saved and re-imported. The same refusal as every branch below
+     * applies — an unparseable field leaves the value alone rather than zeroing
+     * it, because a half-typed total is a total mid-thought.
+     */
+    if (key === RECEIPT_KEY) {
+      const cents = parsePriceToCents(text, decimal);
+      if (cents != null) {
+        setEdits((e) =>
+          field === 'paid'
+            ? { ...e, paidCents: cents }
+            : /*
+               * NEGATIVE, always. A discount is money coming off, every sum on
+               * both sides of this app adds it rather than subtracting it, and
+               * a shopper typing a correction types "2.10" — nobody types a
+               * minus sign into a box labelled Discounts. Read as +210 it
+               * would move the total by twice the amount and in the wrong
+               * direction.
+               */
+              { ...e, discountCents: -Math.abs(cents) },
+        );
+      }
+      setEditing(null);
+      return;
+    }
 
     if (field === 'price') {
       const cents = parsePriceToCents(text, decimal);
@@ -461,7 +544,7 @@ export default function ReceiptReviewScreen() {
 
     setCommitting(true);
     const plan = planCommit(
-      source.receipt,
+      receipt,
       source.purchases,
       decisions,
       rows,
@@ -486,7 +569,7 @@ export default function ReceiptReviewScreen() {
       amendReceipt(receiptId, plan.purchases);
       await saveScan(
         receiptId,
-        packScan(source.receipt, source.purchases, decisions, plan.purchases),
+        packScan(receipt, source.purchases, decisions, plan.purchases),
         true,
       );
       /*
@@ -552,7 +635,7 @@ export default function ReceiptReviewScreen() {
      */
     await saveScan(
       claim.receiptId,
-      packScan(source.receipt, source.purchases, decisions, plan.purchases),
+      packScan(receipt, source.purchases, decisions, plan.purchases),
       false,
     );
 
@@ -773,10 +856,11 @@ export default function ReceiptReviewScreen() {
     <View style={styles.root}>
       <MeshBackground />
       <Safe style={styles.safe} edges={['top']}>
-        <Header
-          title={t('receipt.reviewTitle')}
-          subtitle={`${receipt.store ?? t('receipt.unknownStore')} · ${when.label}`}
-        />
+        {/* The shop and the date have left the subtitle. They were the two
+            facts on this screen that looked like a caption and were in fact
+            editable — see the chip row below, where they now sit beside the
+            two figures they belong with. */}
+        <Header title={t('receipt.reviewTitle')} subtitle={null} />
 
         <SectionList
           sections={sections}
@@ -830,15 +914,101 @@ export default function ReceiptReviewScreen() {
                 </View>
               )}
 
+              {/*
+                WHAT THE RECEIPT IS, in one row of things you can change.
+
+                The shop and the date used to sit in the header subtitle,
+                styled as a caption — which is what they looked like and not
+                what they were: both decide where every purchase on this screen
+                gets filed. The shop is the key every price comparison groups
+                by, and the date is the instant each purchase is recorded at. A
+                receipt read as the wrong Carrefour, or dated a day out, is a
+                whole shop landing in the wrong place with nothing on screen
+                having looked wrong.
+
+                So they join the two figures they belong with, in the same
+                dashed outline the line chips use. The outline is the only
+                affordance on this screen: it means "typing here changes this",
+                and it now means it about the receipt as well as about a row.
+
+                Left to right in the order a person checks a receipt: which
+                shop, which day, what it came to, what came off.
+              */}
               <View style={styles.totals}>
-                <Total label={t('receipt.paid')} value={money(receipt.paidCents)} />
-                {receipt.depositCents !== 0 && (
-                  <Total label={t('receipt.deposit')} value={money(receipt.depositCents)} />
-                )}
-                {receipt.discountCents !== 0 && (
-                  <Total label={t('receipt.discount')} value={money(receipt.discountCents)} />
-                )}
+                <TapChip
+                  label={t('receipt.store')}
+                  value={supermarketLabel(receipt.store) ?? t('receipt.unknownStore')}
+                  empty={receipt.store == null}
+                  onPress={() => setPickingStore(true)}
+                  accessibilityLabel={t('receipt.storeChange')}
+                  colors={colors}
+                />
+                <TapChip
+                  label={t('receipt.date')}
+                  value={when.label}
+                  onPress={() => setPickingDate(true)}
+                  accessibilityLabel={t('receipt.dateChange')}
+                  colors={colors}
+                />
+                <FieldChip
+                  label={t('receipt.paid')}
+                  value={money(receipt.paidCents)}
+                  open={editing?.key === RECEIPT_KEY && editing.field === 'paid'}
+                  text={editing?.key === RECEIPT_KEY ? editing.text : ''}
+                  onChangeText={(text) =>
+                    setEditing((e) => (e ? { ...e, text } : e))
+                  }
+                  onOpen={() =>
+                    setEditing({
+                      key: RECEIPT_KEY,
+                      field: 'paid',
+                      text: (receipt.paidCents / 100).toFixed(2),
+                    })
+                  }
+                  onDone={commitEdit}
+                  accessibilityLabel={t('receipt.paidChange')}
+                  colors={colors}
+                />
+                {/*
+                  DISCOUNTS ARE ALWAYS SHOWN, even at zero — unlike the deposit
+                  beside them, which is dropped when there is none.
+
+                  The difference is what a blank means. A receipt with no
+                  deposit is ordinary and says nothing; a receipt where the
+                  discount reads zero and should not is the specific fault this
+                  household has been bitten by, and a chip that disappears
+                  exactly when the number is wrong is a chip you cannot use to
+                  correct it.
+                */}
+                <FieldChip
+                  label={t('receipt.discount')}
+                  value={money(receipt.discountCents)}
+                  open={editing?.key === RECEIPT_KEY && editing.field === 'discount'}
+                  text={editing?.key === RECEIPT_KEY ? editing.text : ''}
+                  onChangeText={(text) =>
+                    setEditing((e) => (e ? { ...e, text } : e))
+                  }
+                  onOpen={() =>
+                    setEditing({
+                      key: RECEIPT_KEY,
+                      field: 'discount',
+                      text: (receipt.discountCents / 100).toFixed(2),
+                    })
+                  }
+                  onDone={commitEdit}
+                  accessibilityLabel={t('receipt.discountChange')}
+                  colors={colors}
+                />
               </View>
+              {/* The deposit stays a plain reading. It is money on the paper
+                  that is not a purchase and not a saving, nothing downstream
+                  keys on it, and there is nothing a shopper would want to say
+                  about it that the paid total does not already carry. */}
+              {receipt.depositCents !== 0 && (
+                <View style={styles.deposit}>
+                  <Total label={t('receipt.deposit')} value={money(receipt.depositCents)} />
+                </View>
+              )}
             </View>
           }
           renderSectionHeader={({ section }) => (
@@ -945,6 +1115,46 @@ export default function ReceiptReviewScreen() {
         already holds — without that second part, re-opening the picker on a
         matched line would show every option EXCEPT the one currently chosen.
       */}
+      <StorePickerSheet
+        visible={pickingStore}
+        value={receipt.store}
+        onPick={(store) => setEdits((e) => ({ ...e, store }))}
+        onClose={() => setPickingStore(false)}
+      />
+
+      {/*
+        THE DAY, on the same calendar the pantry's purchase form uses.
+        Future days are inert there and inert here for the same reason: a
+        receipt cannot have been printed tomorrow, and a shop dated forward
+        stops the item ever coming due with nothing on screen to say why.
+
+        Stored back as an ISO string because that is what `purchasedAt` is —
+        it came off the paper that way and purchaseInstant parses it. Noon
+        local, which is what DayPicker hands back; midnight is the boundary a
+        timezone conversion moves across.
+      */}
+      <Sheet
+        visible={pickingDate}
+        onClose={() => setPickingDate(false)}
+        scrim
+        gutter={0}
+        motion="slide"
+      >
+        <GlassView over="content" radius={radii.lg} style={styles.dateSheet}>
+          <SheetHandle />
+          <View style={styles.dateBody}>
+            <Text style={[type.h2, { color: colors.ink }]}>{t('receipt.dateTitle')}</Text>
+            <DayPicker
+              value={chosen}
+              onChange={(ms) => {
+                setEdits((e) => ({ ...e, purchasedAt: new Date(ms).toISOString() }));
+                setPickingDate(false);
+              }}
+            />
+          </View>
+        </GlassView>
+      </Sheet>
+
       <Sheet visible={picking != null} onClose={() => setPicking(null)} align="end" scrim gutter={spacing.md}>
         {/*
           A CARD, which this sheet did not have.
@@ -1072,6 +1282,86 @@ export default function ReceiptReviewScreen() {
  * disagree about whether four cartons of milk are four articles or one, and a
  * message naming a single expected figure would be wrong for half of them.
  */
+
+/**
+ * A fact about the receipt you tap to CHANGE ELSEWHERE.
+ *
+ * The shop and the date are not typed — one is a picker and the other a
+ * calendar — but they are corrections in exactly the same sense as the price
+ * beside them, so they wear the same dashed outline. An affordance that meant
+ * "typing here changes this" for two chips and nothing for the two next to them
+ * would be an affordance nobody could learn.
+ *
+ * The label above the value is what makes a row of four legible. Four dashed
+ * pills reading `Colruyt` `30 Aug` `€47.60` `-€2.10` are guessable; the same
+ * four with a shop that has a date for a name are not, and this row is the one
+ * place on the screen where the values are all different KINDS of thing.
+ */
+function TapChip({
+  label,
+  value,
+  empty,
+  onPress,
+  accessibilityLabel,
+  colors,
+}: {
+  label: string;
+  value: string;
+  empty?: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+  colors: { ink: string; muted: string; line: string; accent: string };
+}) {
+  return (
+    <View style={styles.total}>
+      <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
+      <Pressable
+        onPress={() => {
+          haptics.tick();
+          onPress();
+        }}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        style={[styles.editChip, { borderColor: empty ? colors.line : colors.accent }]}
+      >
+        <Text
+          style={[styles.chipText, { color: empty ? colors.muted : colors.ink }]}
+          numberOfLines={1}
+        >
+          {value}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** A labelled EditChip, for the receipt's own two figures. */
+function FieldChip({
+  label,
+  value,
+  ...rest
+}: {
+  label: string;
+  value: string;
+  open: boolean;
+  text: string;
+  onChangeText: (text: string) => void;
+  onOpen: () => void;
+  onDone: () => void;
+  accessibilityLabel: string;
+  colors: { ink: string; muted: string; line: string; accent: string };
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.total}>
+      <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
+      <EditChip {...rest} keyboardType="decimal-pad">
+        {value}
+      </EditChip>
+    </View>
+  );
+}
 
 /**
  * A number you can tap and type over.
@@ -1217,6 +1507,8 @@ function Total({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  dateSheet: { overflow: 'hidden' },
+  dateBody: { padding: spacing.lg, gap: spacing.md },
   root: { flex: 1 },
   safe: { flex: 1 },
   grow: { flex: 1, minWidth: 0 },
@@ -1238,8 +1530,16 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
   },
-  totals: { flexDirection: 'row', gap: spacing.lg },
-  total: { gap: 2 },
+  /*
+   * Wraps, and that is not a nicety. Four labelled chips on a 390pt phone is
+   * already tight in English; "Ermäßigungen" over a euro figure in German is
+   * wider than a quarter of the screen on its own, and a row that cannot wrap
+   * pushes the last chip off the edge — which here would be the discount, the
+   * one this household most needs to correct.
+   */
+  totals: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, rowGap: spacing.sm },
+  total: { gap: 2, minWidth: 0 },
+  deposit: { marginTop: spacing.sm },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
