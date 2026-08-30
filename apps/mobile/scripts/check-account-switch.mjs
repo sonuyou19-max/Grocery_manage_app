@@ -170,6 +170,92 @@ check(
   true,
 );
 
+/* ------------------- creating one must actually switch you into it --------- */
+
+/*
+ * THE TWO CORRECT HALVES THAT UNDID EACH OTHER.
+ *
+ * Creating a household said "you're now shopping in X" and left you in the old
+ * one. `createHousehold` set the new id active and awaited a refresh; the
+ * correction effect above runs on every change to `activeId`, and at that
+ * instant `households` was still the list from before. So it asked
+ * resolveActiveId whether the new id belonged to the user, was told no — the
+ * only answer available — and did exactly what it exists for. The refresh then
+ * landed with the new household in it, by which time the id was the old one,
+ * and the old one is perfectly valid, so nothing ever corrected it back.
+ *
+ * This is the sequence, as a fact about the pure function rather than a claim
+ * about React's scheduling. It is not a hypothetical: the id is genuinely
+ * absent from the list at the moment the effect runs.
+ */
+check(
+  'a brand-new id is indistinguishable from a stale one',
+  resolveActiveId('fresh', H('old'), true),
+  'old',
+);
+
+/*
+ * Which is why the fix is not in the reconciler. It cannot tell the two apart,
+ * and teaching it to would mean giving it a mode where it declines to correct —
+ * exactly the state that let the previous user's household survive a sign-out.
+ *
+ * Instead the provider records the household it has just been handed BEFORE
+ * making it active. The RPC returned the row; the list learning about it is not
+ * an optimistic guess, it is the app not throwing away something it was told.
+ * The id is then present, there is no evidence of staleness, and the reconciler
+ * correctly leaves it alone.
+ */
+const adopt = householdSrc.match(/const adoptHousehold = useCallback\([\s\S]*?\n  \);/)?.[0] ?? '';
+check('the provider can adopt a household it was handed', adopt.length > 0, true);
+check(
+  'adopting records it in the roster first',
+  adopt.indexOf('setHouseholds(') < adopt.indexOf('setActiveHousehold('),
+  true,
+);
+check(
+  '...and only then switches to it',
+  /setActiveHousehold\(row\.id\)/.test(adopt),
+  true,
+);
+/*
+ * The signature is cleared because `households` has been changed outside
+ * refresh. Left alone, a refresh that computed the same signature would decide
+ * nothing had changed and skip applying the MEMBERS of the household just
+ * joined.
+ */
+check('...and invalidates the refresh signature', /sigRef\.current = ''/.test(adopt), true);
+
+// Both doors into a new household go through it. Join had the identical bug.
+const createBody = householdSrc.match(/createHousehold: async[\s\S]*?\n      \},/)?.[0] ?? '';
+const joinBody = householdSrc.match(/joinHousehold: async[\s\S]*?\n      \},/)?.[0] ?? '';
+check('creating adopts rather than setting the id directly',
+  /adoptHousehold\(created\)/.test(createBody) && !/setActiveHousehold\(/.test(createBody), true);
+check('joining does the same',
+  /adoptHousehold\(joined\)/.test(joinBody) && !/setActiveHousehold\(/.test(joinBody), true);
+
+/*
+ * AND THE MESSAGE REPORTS THE WRITE RATHER THAN THE FORM.
+ *
+ * The toast named the household from the text field, which is a claim about
+ * what was asked for, not about what happened — and while the switch was being
+ * undone underneath it, that claim was false. Naming the returned row means the
+ * sentence cannot outlive the thing it describes. It also gives a JOIN a name
+ * to use: nothing is typed there, so the only wording available was "you're now
+ * in your new household", which tells somebody where they are without saying
+ * where that is.
+ */
+const screen = readFileSync(join(SRC, 'app', 'auth', 'household.tsx'), 'utf8');
+check(
+  'the switch is announced from the row the server returned',
+  /const name = result\.household\?\.name\?\.trim\(\);/.test(screen),
+  true,
+);
+check(
+  '...not from what was typed into the field',
+  /nowShoppingIn', \{ name: householdName/.test(screen),
+  false,
+);
+
 /* ------------------------- signed in with no household is reported --------- */
 
 /*

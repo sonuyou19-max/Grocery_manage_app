@@ -78,15 +78,24 @@ export default function HouseholdSetupScreen() {
      * tree, above every screen, so the message survives this modal closing
      * and lands over the dashboard it is describing.
      *
-     * The name comes from what the user typed rather than from the created
-     * row, because the provider has been asked to refresh but this component
-     * is about to unmount and cannot wait to read the result back. For a join
-     * there is nothing typed to use — you enter a code, not a name — so that
-     * case gets the generic wording.
+     * The name comes from THE ROW THE SERVER RETURNED, not from what was
+     * typed. It used to come from the field, which made the message a claim
+     * about a write rather than a report of one — and while the switch was
+     * quietly being undone underneath it (see adoptHousehold), that claim was
+     * simply false: the toast named a household the app was not in.
+     *
+     * It also fixes a join. There is nothing typed there — you enter a code,
+     * not a name — so the only wording available was "you're now in your new
+     * household", which is the app telling somebody where they are without
+     * saying where that is. The RPC knew the name the whole time.
+     *
+     * The generic line survives for the case where the row came back without
+     * one, which should not happen and is not worth an empty quotation mark on
+     * screen if it does.
      */
-    const created = mode === 'create' ? householdName.trim() : '';
+    const name = result.household?.name?.trim();
     showToast(
-      created ? t('household.nowShoppingIn', { name: created }) : t('household.nowShoppingJoined'),
+      name ? t('household.nowShoppingIn', { name }) : t('household.nowShoppingJoined'),
     );
     router.back();
   };

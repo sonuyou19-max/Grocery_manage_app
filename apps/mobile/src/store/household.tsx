@@ -94,9 +94,24 @@ interface HouseholdContext {
   needsHousehold: boolean;
   refresh: () => Promise<void>;
   /** Creates and switches to it. */
-  createHousehold: (name: string, displayName: string) => Promise<{ error?: string }>;
+  /**
+   * Make a household and switch to it. Returns the row on success.
+   *
+   * The row rather than a bare ok, because the caller has something to say
+   * about it: the screen announces the switch, and announcing it from what the
+   * user TYPED is a claim about a write rather than a report of one. For a join
+   * there is nothing typed at all — you enter a code, not a name — so this is
+   * the only way that message can name the household somebody has just joined.
+   */
+  createHousehold: (
+    name: string,
+    displayName: string,
+  ) => Promise<{ error?: string; household?: Household }>;
   /** Joins and switches to it. */
-  joinHousehold: (code: string, displayName: string) => Promise<{ error?: string }>;
+  joinHousehold: (
+    code: string,
+    displayName: string,
+  ) => Promise<{ error?: string; household?: Household }>;
   renameHousehold: (householdId: string, name: string) => Promise<{ error?: string }>;
   leaveHousehold: (householdId: string) => Promise<{ error?: string }>;
   removeMember: (householdId: string, userId: string) => Promise<{ error?: string }>;
@@ -218,6 +233,59 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     setActiveId(householdId);
     AsyncStorage.setItem(ACTIVE_KEY, householdId).catch(() => {});
   }, []);
+
+  /**
+   * Take up a household we have just been handed, and switch to it.
+   *
+   * ---------------------------------------------------------------------------
+   * The bug this is
+   * ---------------------------------------------------------------------------
+   *
+   * Creating a household said "you're now shopping in X" and left you in the
+   * old one. Both halves were written correctly and they undid each other.
+   *
+   * `createHousehold` set the new id active and then awaited a refresh. But the
+   * correcting effect below runs on every change to `activeId`, and at that
+   * instant `households` was still the list from before — so it asked
+   * resolveActiveId whether the new id was one of the user's households, was
+   * told no, and did exactly what it is for: replaced it with the first one it
+   * could find. The refresh then landed with the new household in the list, the
+   * id was by then the old one, and the old one is perfectly valid, so nothing
+   * ever corrected it back. Silent, and it looked like the toast lying.
+   *
+   * ---------------------------------------------------------------------------
+   * Why the fix is here rather than in the reconciler
+   * ---------------------------------------------------------------------------
+   *
+   * The reconciler cannot tell a STALE id from a BRAND-NEW one — both are "not
+   * in the list" — and teaching it to would mean giving it a second, softer
+   * mode where it declines to act, which is precisely the state that let the
+   * previous user's household survive a sign-out (see resolveActiveId).
+   *
+   * It does not need to. `households` is this provider's belief about which
+   * households exist, the RPC has just returned a row proving one more does,
+   * and the actual mistake was throwing that away and asking the server again.
+   * Recorded first, the id is no longer absent from the list, there is no
+   * evidence of staleness, and the reconciler correctly leaves it alone.
+   *
+   * Sorted the way `refresh` sorts, so the household list does not visibly
+   * reorder a moment later when the real answer arrives.
+   */
+  const adoptHousehold = useCallback(
+    (row: Household) => {
+      setHouseholds((prev) =>
+        prev.some((h) => h.id === row.id)
+          ? prev
+          : [...prev, row].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      // The signature describes a list that no longer matches state, so the
+      // next refresh must not decide nothing has changed and skip applying the
+      // members of the household we have just joined.
+      sigRef.current = '';
+      setActiveHousehold(row.id);
+    },
+    [setActiveHousehold],
+  );
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -392,9 +460,11 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         });
         if (error) return { error: friendlyError(error.message, t) };
         const created = data as Household | null;
-        if (created?.id) setActiveHousehold(created.id);
+        // Recorded BEFORE it is made active — see adoptHousehold. Setting the
+        // id first is what the bug was.
+        if (created?.id) adoptHousehold(created);
         await refresh();
-        return {};
+        return { household: created ?? undefined };
       },
       joinHousehold: async (code, displayName) => {
         if (!user) return { error: t('householdError.signInFirst') };
@@ -404,9 +474,11 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         });
         if (error) return { error: friendlyError(error.message, t) };
         const joined = data as Household | null;
-        if (joined?.id) setActiveHousehold(joined.id);
+        // Same as create: the RPC has proved this household exists and that the
+        // user is in it, so the list learns that before the id changes.
+        if (joined?.id) adoptHousehold(joined);
         await refresh();
-        return {};
+        return { household: joined ?? undefined };
       },
       renameHousehold: async (householdId, name) => {
         const target = households.find((h) => h.id === householdId);
@@ -477,6 +549,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       activeId,
       restored,
       setActiveHousehold,
+      adoptHousehold,
       members,
       byHousehold,
       myName,
