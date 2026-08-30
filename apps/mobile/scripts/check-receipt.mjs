@@ -301,6 +301,144 @@ mustFail(
   'do not multiply out',
 );
 
+/* ------------------------------------------- the same reduction, twice --- */
+
+/*
+ * THE BUG: a saving credited to the shopper twice.
+ *
+ * Belgian and German tills print a reduction against the product AND again in
+ * a savings block near the total. Both are on the paper, both are negative, and
+ * a reader asked to transcribe what it sees reports both. Summed, the discount
+ * column is double what the shopper actually saved — and it is invisible,
+ * because the money moves in the goods and paid columns together and reads as
+ * two ordinary total mismatches.
+ *
+ * The prompt has told the model to take the reduction from the item block and
+ * never from the summary since the last attempt at this, and the receipts came
+ * back doubled anyway. Which minus sign is the duplicate is not a fact about
+ * the text — it is a fact about the arithmetic, so the arithmetic decides.
+ *
+ * Colruyt is the base for all of these because it is a real receipt that really
+ * does carry a real discount, and it reconciles above.
+ */
+const withLines = (r, extra, totals = {}) => ({
+  lines: [...r.lines.map((l) => ({ ...l })), ...extra],
+  totals: { ...r.totals, ...totals },
+});
+
+const summary = (cents) => ({ ...flat('TOTAAL KORTINGEN', cents), kind: 'discount' });
+
+// The real shape: Colruyt's own -10,00, printed again in the savings block.
+const twice = reconcile(...Object.values(withLines(COLRUYT, [summary(-1000)])));
+check_('a reduction printed twice still reconciles', twice.ok);
+check_(
+  '...crediting the saving once, not twice',
+  twice.discountCents === -1000,
+);
+check_('...and it says which line it dropped', twice.doubledDiscounts.length === 1);
+check_(
+  '...naming the summary rather than the item block',
+  twice.doubledDiscounts[0] === COLRUYT.lines.length,
+);
+
+/*
+ * THE CASE THAT MUST NOT BE TOUCHED, and the reason the printed total is the
+ * judge rather than any rule about where a line sat.
+ *
+ * Two identical reductions that BOTH really happened are indistinguishable from
+ * one printed twice by eye. They are not indistinguishable to the total: this
+ * receipt was paid 10,00 lower again, so the second -10,00 is real and dropping
+ * it would invent a tenner of spending.
+ */
+const genuine = reconcile(
+  ...Object.values(withLines(COLRUYT, [{ ...flat('Korting tweede actie', -1000), kind: 'discount' }], { paidCents: 9739 })),
+);
+check_('two reductions the total agrees with are both kept', genuine.doubledDiscounts.length === 0);
+check_('...and both are counted', genuine.discountCents === -2000);
+check_('...and the receipt still reconciles', genuine.ok);
+
+/*
+ * Nothing happens without a printed total to check against. A receipt whose
+ * total could not be read has no judge, and guessing there would be this rule
+ * deleting money on a hunch.
+ */
+const blind = reconcile(
+  ...Object.values(withLines(COLRUYT, [summary(-1000)], { goodsCents: null, paidCents: null })),
+);
+check_('with no printed total, nothing is dropped', blind.doubledDiscounts.length === 0);
+check_('...and the saving stays as read', blind.discountCents === -2000);
+
+/*
+ * ONE discount line is never a duplicate of anything. Dropping it would be this
+ * rule deciding a receipt's only reduction never happened, on the strength of a
+ * total that disagrees for some entirely different reason — a missed item, say.
+ */
+const lonely = reconcile(
+  COLRUYT.lines.map((l) => ({ ...l })),
+  { ...COLRUYT.totals, paidCents: 11739 },
+);
+check_("a receipt's only reduction is never dropped", lonely.doubledDiscounts.length === 0);
+check_('...so the mismatch is still reported', !lonely.ok);
+
+/*
+ * A gap that no discount line accounts for is left alone. This is the guard
+ * against the rule becoming "delete whatever makes the sums work": an item read
+ * 37 cents wrong is an item read wrong, and it must still be reported.
+ */
+const elsewhere = reconcile(
+  ...Object.values(withLines(COLRUYT, [summary(-1000)], { paidCents: 10702 })),
+);
+check_('a gap no reduction explains drops nothing', elsewhere.doubledDiscounts.length === 0);
+check_('...and is still reported', !elsewhere.ok);
+
+/*
+ * A gap in the other direction is a different fault. A doubled reduction can
+ * only ever subtract too MUCH, so a computed total that is too high is never
+ * this, and treating it as such would drop a line and make it worse.
+ */
+const overshoot = reconcile(
+  ...Object.values(withLines(COLRUYT, [summary(-1000)], { paidCents: 8739 })),
+);
+check_('a total that is too high is not this fault', overshoot.doubledDiscounts.length === 0);
+
+/*
+ * A POSITIVE line labelled as a discount is not this fault, and must not be
+ * deleted to make the books balance.
+ *
+ * It is a misclassification — a charge the model filed in the wrong column —
+ * and the arithmetic here would happily "fix" it by dropping the line, which
+ * would hide a real misreading behind a total that suddenly adds up. The
+ * direction check is what refuses it: a doubled reduction can only ever
+ * subtract too MUCH, so a computed total that comes out too HIGH is never this.
+ *
+ * Found by mutation. Relaxing that check changed nothing in any fixture here,
+ * because two negative lines can never sum to a positive gap — the case it
+ * actually protects needs a discount line that is not negative at all.
+ */
+const mislabelled = reconcile(
+  ...Object.values(
+    withLines(COLRUYT, [{ ...flat('SERVICEKOST', 500), kind: 'discount' }], { paidCents: 10739 }),
+  ),
+);
+check_('a positive line in the discount column is not dropped', mislabelled.doubledDiscounts.length === 0);
+check_('...and the receipt is reported as not adding up', !mislabelled.ok);
+
+/*
+ * Two savings blocks, or two products each duplicated: the pair case. Both are
+ * dropped together, because either alone leaves the total still wrong.
+ */
+const pair = reconcile(
+  ...Object.values(
+    withLines(
+      COLRUYT,
+      [summary(-1000), { ...flat('KORTING 3+1', -62), kind: 'discount' }, { ...flat('KORTING 3+1', -62), kind: 'discount' }],
+      { paidCents: 10677, goodsCents: 11739 },
+    ),
+  ),
+);
+check_('two duplicated reductions are both dropped', pair.doubledDiscounts.length === 2);
+check_('...leaving the genuine ones', pair.discountCents === -1062);
+
 /* ------------------------------------------------------ classify() ------- */
 
 const cls = (m, u, want) => {
@@ -582,6 +720,20 @@ check_(
  */
 check_('the log tallies the columns', /kinds: parsed\.lines\.reduce/.test(logCall));
 check_('...and lists every non-item amount', /nonItems: parsed\.lines/.test(logCall));
+/*
+ * And WHICH reductions were dropped as duplicates.
+ *
+ * This is a correction made to the model's answer without asking it, so it has
+ * to be countable: a rule that fires on one receipt in a thousand and a rule
+ * that fires on half of them are different situations, and only one of them
+ * says the prompt is still wrong. Unlogged, the correction is invisible in both
+ * directions — nobody can tell it is working, and nobody can tell it is
+ * over-firing.
+ */
+check_(
+  '...and which reductions it dropped as duplicates',
+  /doubledDiscounts: result\.doubledDiscounts\.map/.test(logCall),
+);
 check_(
   '...still without naming anything bought',
   !/nonItems[\s\S]{0,200}raw:/.test(logCall) && !/nonItems[\s\S]{0,200}product:/.test(logCall),

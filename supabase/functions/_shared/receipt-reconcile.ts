@@ -134,6 +134,15 @@ export interface ReconcileResult {
   details: Problem[];
   /** Indices of lines whose own arithmetic did not hold. */
   badLines: number[];
+  /**
+   * Indices of discount lines dropped as the same reduction counted twice.
+   *
+   * Reported rather than merely acted on, because this is a correction made to
+   * a model's answer without asking it: it has to be visible in the log and it
+   * has to be countable, or there is no way to know whether it fires on one
+   * receipt in a thousand or on half of them.
+   */
+  doubledDiscounts: number[];
   /** Derived, for the receipts row. */
   goodsCents: number;
   depositCents: number;
@@ -173,6 +182,125 @@ export function classify(multiplier: number | null, unit: string | null): Multip
 
 /** Cents, rounded the way a till rounds — half away from zero. */
 const round = (n: number): number => Math.sign(n) * Math.round(Math.abs(n));
+
+/**
+ * The same reduction, printed twice and read twice.
+ *
+ * ---------------------------------------------------------------------------
+ * What the receipt actually looks like
+ * ---------------------------------------------------------------------------
+ *
+ * Belgian and German tills routinely show a reduction against the product AND
+ * again in a savings block near the total:
+ *
+ *     COCA COLA 1,5L            2,49
+ *       KORTING 3+1            -0,62
+ *     ...
+ *     TOTAAL KORTINGEN         -0,62
+ *
+ * Both are printed, both are negative, and both are honestly reported by a
+ * reader asked to transcribe what it sees. Summed, the shopper is credited with
+ * twice the saving they got — and because the money moves in the goods and paid
+ * columns together it reads as two ordinary total mismatches rather than as the
+ * specific, fixable thing it is.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is arithmetic and not another sentence in the prompt
+ * ---------------------------------------------------------------------------
+ *
+ * There already is a sentence in the prompt telling the model to take the
+ * reduction from the item block and never from the summary. It shipped, and the
+ * receipts came back doubled anyway. A second, firmer sentence is the same fix
+ * again — and the model is not doing anything unreasonable: it is looking at a
+ * piece of paper with two minus signs on it and reporting two minus signs.
+ * Which of them is the duplicate is not a fact about the text. It is a fact
+ * about the ARITHMETIC, and the arithmetic is something this side can do
+ * exactly.
+ *
+ * ---------------------------------------------------------------------------
+ * The printed total is the judge, and nothing happens without it
+ * ---------------------------------------------------------------------------
+ *
+ * A doubled reduction always makes the computed total too SMALL, by exactly the
+ * amount of the duplicate. So if dropping a discount line closes that gap to
+ * the cent, that line was the duplicate; if nothing closes it, the receipt has
+ * some other problem and this leaves it alone for the existing checks to
+ * report.
+ *
+ * That is what keeps it safe. It never removes money on a hunch — only when
+ * doing so makes the parse agree with a number the shopper can read off the
+ * paper, which is a stronger claim than any heuristic about where a line sat.
+ * Two genuine identical reductions are indistinguishable from one printed twice
+ * BY EYE; they are not indistinguishable to the total, which either wants both
+ * or does not.
+ *
+ * At most two lines, deliberately. One is the real case — a summary line, or a
+ * line transcribed twice from overlapping photographs; two covers a till that
+ * prints two separate savings blocks. Past that the risk inverts: with eight
+ * discount lines some combination sums to almost any gap, and a coincidence
+ * that happens to balance the books is the kind of wrong answer nobody would
+ * ever catch.
+ *
+ * ---------------------------------------------------------------------------
+ * WHICH line was the copy is not a question that has to be answered
+ * ---------------------------------------------------------------------------
+ *
+ * This first refused to act whenever more than one line could close the gap, on
+ * the reasoning that it could not tell which was the duplicate. That was wrong,
+ * and it disabled the fix on the commonest receipt there is: one discounted
+ * item, its reduction printed against the product and again in the savings
+ * block — two lines of -0,62 that are indistinguishable to the eye.
+ *
+ * They are also indistinguishable to the arithmetic, and that is the point.
+ * Every candidate must equal the gap exactly, so every candidate holds the same
+ * amount; dropping any one of them yields the same total, the same saving on
+ * the review sheet and the same purchases. There is nothing there to get wrong.
+ *
+ * The LAST is dropped rather than the first, which is cosmetic and only reaches
+ * the log: a savings block is printed near the total, so the later of two equal
+ * reductions is more often the summary, and the logged index is then the line
+ * somebody would find if they went looking at the paper.
+ */
+function doubledDiscountsIn(
+  lines: readonly ReceiptLine[],
+  computedPaid: number,
+  printedPaid: number | null,
+): number[] {
+  if (printedPaid == null) return [];
+
+  // Too small, and by how much. A doubled reduction can only ever subtract too
+  // much, so a gap the other way is a different fault entirely.
+  const gap = round(printedPaid) - round(computedPaid);
+  if (gap <= 0) return [];
+
+  const discounts: number[] = [];
+  lines.forEach((l, i) => {
+    if (l.kind === 'discount') discounts.push(i);
+  });
+  /*
+   * One discount line cannot be a duplicate of anything. Dropping it would be
+   * this rule deciding a receipt's only reduction never happened, on the
+   * strength of a total that disagrees for some other reason entirely.
+   */
+  if (discounts.length < 2) return [];
+
+  const at = (i: number) => round(lines[i]!.totalCents);
+
+  // A single line: a summary, or a line read twice. Last match — see above.
+  const singles = discounts.filter((i) => -at(i) === gap);
+  if (singles.length > 0) return [singles[singles.length - 1]!];
+
+  // A pair: two savings blocks, or two products each duplicated.
+  for (let a = discounts.length - 1; a >= 1; a -= 1) {
+    for (let b = a - 1; b >= 0; b -= 1) {
+      if (-(at(discounts[a]!) + at(discounts[b]!)) === gap) {
+        return [discounts[b]!, discounts[a]!];
+      }
+    }
+  }
+
+  return [];
+}
 
 export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): ReconcileResult {
   const problems: string[] = [];
@@ -225,8 +353,29 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
 
   /* --------------------------------------------------- GOODS ------------- */
 
-  const sum = (kind: LineKind) =>
-    lines.filter((l) => l.kind === kind).reduce((acc, l) => acc + l.totalCents, 0);
+  const sumOf = (rows: readonly ReceiptLine[], kind: LineKind) =>
+    rows.filter((l) => l.kind === kind).reduce((acc, l) => acc + l.totalCents, 0);
+
+  /*
+   * THE SAME REDUCTION, TWICE — settled before any total below is computed.
+   *
+   * A doubled discount does not fail one check, it fails GOODS and PAID
+   * together, which reads as "the model misread two numbers" rather than as the
+   * one fixable thing it is. Correcting it here means the shopper sees the
+   * right saving on the review sheet AND stops being warned about arithmetic
+   * that is now correct.
+   */
+  const doubled = doubledDiscountsIn(
+    lines,
+    sumOf(lines, 'item') +
+      sumOf(lines, 'deposit') +
+      sumOf(lines, 'discount') +
+      sumOf(lines, 'rounding'),
+    totals.paidCents,
+  );
+  const kept = lines.filter((_, i) => !doubled.includes(i));
+
+  const sum = (kind: LineKind) => sumOf(kept, kind);
 
   const goodsCents = sum('item');
   const depositCents = sum('deposit');
@@ -274,7 +423,14 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
      * counts, which is the error this check exists to catch and the one the
      * money checks can miss when the duplicate is cheap.
      */
-    const positive = lines.filter((l) => l.totalCents > 0);
+    /*
+     * `kept`, not `lines`. It changes nothing today — a dropped duplicate is
+     * negative and this counts positives — and it is the honest expression of
+     * what is being counted: the lines this parse believes in. A later rule
+     * that dropped a positive line would otherwise leave this silently counting
+     * one that had been ruled out.
+     */
+    const positive = kept.filter((l) => l.totalCents > 0);
     // Units: multipliers for counts, one per weighed line — you cannot buy
     // 0.9 articles.
     const asUnits = positive.reduce(
@@ -296,6 +452,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
     problems,
     details,
     badLines,
+    doubledDiscounts: doubled,
     goodsCents,
     depositCents,
     discountCents,

@@ -842,6 +842,19 @@ Deno.serve(async (req) => {
       nonItems: parsed.lines
         .filter((l) => l.kind !== 'item')
         .map((l) => ({ kind: l.kind, total: l.totalCents })),
+      /*
+       * Which discount lines were dropped as the same reduction twice, and
+       * their amounts.
+       *
+       * Logged because this is a correction made to the model's answer without
+       * asking it. It has to be countable: a rule that fires on one receipt in
+       * a thousand and a rule that fires on half of them are different
+       * situations, and only one of them says the prompt is still wrong.
+       */
+      doubledDiscounts: result.doubledDiscounts.map((i) => ({
+        i,
+        total: parsed.lines[i]?.totalCents ?? null,
+      })),
       badRows: result.badLines.map((i) => {
         const l = parsed.lines[i];
         return l
