@@ -60,7 +60,29 @@ export function PendingJoins() {
             <Text style={[type.body, { color: colors.ink }]} numberOfLines={1}>
               {r.household_name}
             </Text>
-            <Text style={[type.sub, { color: colors.muted }]}>{t('join.waitingBody')}</Text>
+            {/*
+              THREE SENTENCES WHERE THERE WAS ONE.
+
+              "Waiting to be let in" was true of four completely different
+              situations — the code was wrong, the app is broken, nobody who can
+              answer has opened Korb, or somebody has seen it and not decided —
+              and a person stuck in any of them could not tell which. That is
+              the specific way an approval gate is worse than no gate: the old
+              behaviour was too permissive, but it never stranded anybody.
+
+              LAPSED is said plainly and without blame. Nobody did anything
+              wrong; the request simply stood for a fortnight, and the only
+              useful thing to say is that asking again will work.
+            */}
+            <Text
+              style={[type.sub, { color: r.lapsed ? colors.warn : colors.muted }]}
+            >
+              {r.lapsed
+                ? t('join.lapsed')
+                : r.seen_at
+                  ? t('join.waitingSeen')
+                  : t('join.waitingUnseen')}
+            </Text>
           </View>
           {busy === r.id ? (
             <ActivityIndicator color={colors.muted} />
@@ -82,7 +104,9 @@ export function PendingJoins() {
               hitSlop={8}
               style={styles.withdraw}
             >
-              <Text style={[type.sub, { color: colors.muted }]}>{t('join.withdraw')}</Text>
+              <Text style={[type.sub, { color: colors.muted }]}>
+                {r.lapsed ? t('common.close') : t('join.withdraw')}
+              </Text>
             </Pressable>
           )}
         </View>

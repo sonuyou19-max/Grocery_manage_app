@@ -63,7 +63,14 @@
           "microphonePermission": false
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      [
+        "expo-notifications",
+        {
+          "color": "#2E7442",
+          "defaultChannel": "households"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

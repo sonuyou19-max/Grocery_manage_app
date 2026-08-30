@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/card';
@@ -50,10 +50,29 @@ import { radii, spacing, type, useTheme } from '@/theme';
  */
 export function JoinRequests() {
   const { colors } = useTheme();
-  const { incomingRequests, isOwnerOf, decideRequest } = useHousehold();
+  const { incomingRequests, isOwnerOf, decideRequest, markRequestsSeen } = useHousehold();
   const { showToast } = useToast();
   const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
+
+  /*
+   * SEEING IT IS THE SIGNAL.
+   *
+   * Until push is granted — and it is asked for once, politely, and may simply
+   * be refused — this is the only thing standing between a requester and total
+   * silence. An owner with this card on screen is the event they are waiting
+   * for, and it costs one call to say so.
+   *
+   * Keyed on the households in the queue rather than on the requests, so
+   * answering one of three does not re-stamp the other two. The RPC ignores
+   * anybody who is not an owner and only ever writes a FIRST sighting, so both
+   * halves of "is this worth sending" are decided where they cannot be got
+   * wrong by a caller.
+   */
+  const queued = incomingRequests.map((r) => r.household_id).join(',');
+  useEffect(() => {
+    for (const id of new Set(queued ? queued.split(',') : [])) markRequestsSeen(id);
+  }, [queued, markRequestsSeen]);
 
   if (incomingRequests.length === 0) return null;
 

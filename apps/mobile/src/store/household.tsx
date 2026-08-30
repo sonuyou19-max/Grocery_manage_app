@@ -14,10 +14,11 @@ import { AppState } from 'react-native';
 import { setHomeListScope } from '@/lib/item-home-list';
 import { useProfileName } from '@/lib/profile-name';
 import { reportWriteFailure } from '@/lib/monitoring';
+import { nudgeJoin, registerForPush } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import { useAppActive } from '@/lib/use-app-active';
 import { useAuth } from '@/store/auth';
-import { useT } from '@/store/locale';
+import { useLocale, useT } from '@/store/locale';
 
 /**
  * The households the signed-in user belongs to, and which one is active.
@@ -63,7 +64,32 @@ export interface JoinRequest {
   display_name: string;
   status: 'pending' | 'approved' | 'declined';
   created_at: string;
+  /**
+   * When an OWNER first had it on screen, or null.
+   *
+   * The difference between "nobody who can answer this has opened the app" and
+   * "somebody has seen it and not decided" — two situations that looked
+   * identical to a requester, and the reason this column exists.
+   */
+  seen_at: string | null;
+  /**
+   * Past its fourteen days, computed rather than stored.
+   *
+   * There is no scheduler marking these; the expiry is a property of the row's
+   * age and is read that way. See migration 0043 — the one place a stale row
+   * would actually block something is asking again, and the RPC clears it there.
+   */
+  lapsed: boolean;
 }
+
+/**
+ * How long a pending request stands, mirrored from join_request_ttl().
+ *
+ * Two copies of one number, which is normally the thing this codebase refuses.
+ * The alternative is a round trip to ask the database how long a fortnight is,
+ * on every render of a card. check-join-signals asserts the two agree.
+ */
+export const JOIN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 interface HouseholdContext {
   /** Every household the user belongs to, name-sorted. */
@@ -163,6 +189,14 @@ interface HouseholdContext {
   ) => Promise<{ error?: string; status?: 'pending' | 'member'; household?: { id: string; name: string } }>;
   /** Owner only. Approving creates the membership. */
   decideRequest: (requestId: string, approve: boolean) => Promise<{ error?: string }>;
+  /**
+   * Record that an owner has had this household's queue on screen.
+   *
+   * The only thing standing between a requester and total silence when nobody
+   * has push enabled. Owners only, enforced in the RPC — a member glancing at
+   * the card is not the event the requester is waiting on.
+   */
+  markRequestsSeen: (householdId: string) => void;
   /** Withdraw one of your own. */
   cancelRequest: (requestId: string) => Promise<{ error?: string }>;
   renameHousehold: (householdId: string, name: string) => Promise<{ error?: string }>;
@@ -254,6 +288,14 @@ export function resolveActiveId(
 export function HouseholdProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const t = useT();
+  /*
+   * The language this device reads, carried to the server with the push token.
+   * LocaleProvider wraps this one, so it is available here — and it has to be,
+   * because a notification is composed after the app has closed and cannot ask
+   * then. See device_tokens.language.
+   */
+  const { language } = useLocale();
+
   const appActive = useAppActive();
   const [households, setHouseholds] = useState<Household[]>([]);
   /** Members of every household the user belongs to, keyed by household id. */
@@ -393,7 +435,9 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
            */
           supabase
             .from('household_join_requests')
-            .select('id, household_id, household_name, user_id, display_name, status, created_at')
+            .select(
+              'id, household_id, household_name, user_id, display_name, status, created_at, seen_at',
+            )
             .eq('status', 'pending')
             .order('created_at', { ascending: false }),
         ]);
@@ -410,14 +454,26 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         });
       }
 
-      const pending = (requestRows as JoinRequest[] | null) ?? [];
+      /*
+       * `lapsed` is derived here, once, rather than at each of the three places
+       * that care. A card asking "is this old?" is asking about the same
+       * fortnight the RPC clears rows against, and two spellings of that
+       * question is how they come to disagree.
+       */
+      const asOf = Date.now();
+      const pending = (
+        (requestRows as Omit<JoinRequest, 'lapsed'>[] | null) ?? []
+      ).map((r) => ({
+        ...r,
+        lapsed: asOf - Date.parse(r.created_at) > JOIN_TTL_MS,
+      }));
 
       const sig = JSON.stringify({
         h: list.map((h) => `${h.id}:${h.name}`),
         // In the signature, so a request arriving while nothing else changed
         // still re-renders. Left out, the nudge would appear on whichever poll
         // happened to coincide with a rename.
-        r: pending.map((r) => `${r.id}:${r.status}`),
+        r: pending.map((r) => `${r.id}:${r.status}:${r.seen_at ?? ''}`),
         m: Object.entries(grouped)
           .map(([id, rows]) =>
             `${id}:${rows.map((r) => `${r.user_id}:${r.role}:${r.display_name}`).sort().join(',')}`,
@@ -454,7 +510,10 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
    * is what is owner-only. See migration 0042.
    */
   const incomingRequests = useMemo(
-    () => requests.filter((r) => r.user_id !== (user?.id ?? '')),
+    // Lapsed ones are dropped from the owner's queue: they are no longer
+    // answerable, and a card offering Approve on something the requester has
+    // been told expired would let an owner admit somebody who has given up.
+    () => requests.filter((r) => r.user_id !== (user?.id ?? '') && !r.lapsed),
     [requests, user?.id],
   );
   const outgoingRequests = useMemo(
@@ -581,6 +640,14 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         // id first is what the bug was.
         if (created?.id) adoptHousehold(created);
         await refresh();
+        /*
+         * ASKED FOR HERE, and this is the whole reason the permission prompt is
+         * not on launch: you have just made a household, you are its owner, and
+         * the thing you will be notified about is somebody asking to join it.
+         * The question answers itself. On first open it is a prompt with no
+         * context, refused once and permanently — see lib/push.
+         */
+        void registerForPush(language);
         return { household: created ?? undefined };
       },
       incomingRequests,
@@ -598,6 +665,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         if (error) return { error: friendlyError(error.message, t) };
         const row = data as {
           status: 'pending' | 'member';
+          request_id: string | null;
           household_id: string;
           household_name: string;
         } | null;
@@ -616,6 +684,12 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         if (row.status === 'member') {
           const known = households.find((h) => h.id === row.household_id);
           if (known) setActiveHousehold(known.id);
+        } else if (row.request_id) {
+          // The owner is told, and this device asks to be told back. Both only
+          // when something was actually created — entering a code for a
+          // household you are already in has nobody waiting on either end.
+          nudgeJoin(row.request_id);
+          void registerForPush(language);
         }
         await refresh();
         return {
@@ -623,12 +697,26 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
           household: { id: row.household_id, name: row.household_name },
         };
       },
+      markRequestsSeen: (householdId) => {
+        /*
+         * Fire and forget, and NOT followed by a refresh. The stamp is for the
+         * other person's screen; re-reading it here would cost a round trip on
+         * every render of a card to learn something this device already knows.
+         * The requester's own poll picks it up.
+         */
+        void supabase
+          .rpc('mark_join_requests_seen', { p_household: householdId })
+          .then(({ error }) => reportWriteFailure('joinRequests.seen', error));
+      },
       decideRequest: async (requestId, approve) => {
         const { error } = await supabase.rpc('decide_join_request', {
           p_request: requestId,
           p_approve: approve,
         });
         if (error) return { error: friendlyError(error.message, t) };
+        // After the decision, never before: the notification says the answer
+        // arrived, and it must not be able to arrive before the answer has.
+        nudgeJoin(requestId);
         /*
          * The signature is cleared because approving CHANGES A MEMBERSHIP, and
          * the refresh must apply it rather than decide nothing moved. Without
@@ -718,6 +806,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       adoptHousehold,
       incomingRequests,
       outgoingRequests,
+      language,
       members,
       byHousehold,
       myName,
