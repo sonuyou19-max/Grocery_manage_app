@@ -24,7 +24,7 @@ import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
 export default function HouseholdSetupScreen() {
   const { colors } = useTheme();
   const scrollIndicator = useScrollIndicator();
-  const { createHousehold, joinHousehold, myName } = useHousehold();
+  const { createHousehold, requestJoin, myName } = useHousehold();
   const { name: savedName, ready: nameReady, remember } = useProfileName();
   const { showToast } = useToast();
   const t = useT();
@@ -35,6 +35,16 @@ export default function HouseholdSetupScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The household a request has just been sent to, or null.
+   *
+   * A screen state rather than a toast-and-close, because the outcome of a
+   * request is not immediate and the reader has to be told to expect that. A
+   * toast over the dashboard would be gone in three seconds and would leave
+   * somebody staring at a household they did not join, wondering whether it
+   * worked.
+   */
+  const [sent, setSent] = useState<string | null>(null);
 
   // On device first, then whatever the user's memberships already call them.
   const knownName = (savedName || myName || '').trim();
@@ -53,7 +63,7 @@ export default function HouseholdSetupScreen() {
     const result =
       mode === 'create'
         ? await createHousehold(householdName, finalName)
-        : await joinHousehold(code, finalName);
+        : await requestJoin(code, finalName);
     setBusy(false);
     if (result.error) {
       setError(result.error);
@@ -63,6 +73,22 @@ export default function HouseholdSetupScreen() {
     // doesn't ask again either.
     if (!knownName) await remember(finalName);
 
+    /*
+     * A REQUEST IS NOT A JOIN, and this screen must not pretend otherwise.
+     *
+     * Entering a code used to walk you straight in. It now asks, and until the
+     * owner answers there is nothing to go to: RLS gives a pending requester no
+     * household row, no lists and no members, so closing onto the dashboard
+     * would show an empty app and read as everything having been lost.
+     *
+     * So the screen stays put and says what happened. The one exception is a
+     * code for a household you are ALREADY in — nothing was asked of anybody
+     * and the only sensible reading is "take me there".
+     */
+    if ('status' in result && result.status === 'pending') {
+      setSent(result.household?.name ?? '');
+      return;
+    }
     /**
      * Say that the switch happened.
      *
@@ -99,6 +125,45 @@ export default function HouseholdSetupScreen() {
     );
     router.back();
   };
+
+  /*
+   * SENT, AND NOW YOU WAIT.
+   *
+   * A whole screen rather than a line under the form, because the form has
+   * stopped being the point: there is nothing more to type and the next thing
+   * that happens is somebody else's decision. Leaving the fields on screen
+   * would invite a second attempt at a code that worked perfectly well.
+   *
+   * It says who has to act and roughly when — "when they approve it" rather
+   * than a promise about how quickly — and it does not offer a cancel. Nothing
+   * has been created that the person is stuck with: they close this and the
+   * request sits there, and the place to withdraw it is beside the request
+   * itself, on the screen that shows their pending asks.
+   */
+  if (sent != null) {
+    return (
+      <View style={styles.root}>
+        <MeshBackground />
+        <Safe style={styles.rootTransparent} edges={['top', 'bottom']}>
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} hitSlop={12}>
+              <Ionicons name="chevron-back" size={26} color={colors.ink} />
+            </Pressable>
+          </View>
+          <View style={styles.body}>
+            <View style={[styles.sentBadge, { backgroundColor: colors.accentSoft }]}>
+              <Ionicons name="paper-plane-outline" size={30} color={colors.accent} />
+            </View>
+            <Text style={[type.h1, { color: colors.ink }]}>{t('join.sentTitle')}</Text>
+            <Text style={[type.bodyRegular, { color: colors.muted }]}>
+              {sent ? t('join.sentBody', { name: sent }) : t('join.sentBodyGeneric')}
+            </Text>
+            <PrimaryButton label={t('common.done')} onPress={() => router.back()} />
+          </View>
+        </Safe>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -178,7 +243,7 @@ export default function HouseholdSetupScreen() {
           {error ? <Text style={[type.sub, { color: colors.crit }]}>{error}</Text> : null}
 
           <PrimaryButton
-            label={mode === 'create' ? t('auth.createHousehold') : t('auth.joinHousehold')}
+            label={mode === 'create' ? t('auth.createHousehold') : t('join.ask')}
             onPress={submit}
             loading={busy}
           />
@@ -190,6 +255,13 @@ export default function HouseholdSetupScreen() {
 }
 
 const styles = StyleSheet.create({
+  sentBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   root: { flex: 1 },
   rootTransparent: { flex: 1, backgroundColor: 'transparent' },
   fill: { flex: 1 },

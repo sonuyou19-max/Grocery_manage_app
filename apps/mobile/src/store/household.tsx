@@ -45,6 +45,26 @@ export interface Member {
   display_name: string;
 }
 
+/**
+ * Somebody asking to be let into a household, or the ask you have made.
+ *
+ * One type for both directions, because it is one row read from two sides: an
+ * owner sees the requests against their households, a requester sees their own.
+ * `household_name` is copied onto the row rather than joined — until a request
+ * is approved the requester is not a member and RLS gives them nothing about
+ * the household, so this is the only way they can be told which one they asked
+ * about. See migration 0042.
+ */
+export interface JoinRequest {
+  id: string;
+  household_id: string;
+  household_name: string;
+  user_id: string;
+  display_name: string;
+  status: 'pending' | 'approved' | 'declined';
+  created_at: string;
+}
+
 interface HouseholdContext {
   /** Every household the user belongs to, name-sorted. */
   households: Household[];
@@ -107,11 +127,44 @@ interface HouseholdContext {
     name: string,
     displayName: string,
   ) => Promise<{ error?: string; household?: Household }>;
-  /** Joins and switches to it. */
-  joinHousehold: (
+  /**
+   * Pending requests to join a household this user is IN — the owner's queue.
+   *
+   * Everyone in the household can see them; only the owner can answer. That is
+   * deliberate: a household where one person is quietly admitting people is
+   * worse than one where everybody can see who is at the door, and it means a
+   * member who taps sees why the answer is not theirs to give rather than
+   * nothing at all.
+   */
+  incomingRequests: JoinRequest[];
+  /**
+   * Whether this user owns a given household.
+   *
+   * Here rather than worked out by callers, because it needs two things the
+   * provider already holds and a component should not have to assemble: who
+   * this device is signed in as, and the roster of that household. A component
+   * reaching for the auth context to answer it would be a second source of
+   * truth for "who am I" inside a screen whose actual question is "may I do
+   * this".
+   *
+   * It decides which buttons to draw and nothing else — decide_join_request
+   * checks ownership again on the way in, where it cannot be talked out of it.
+   */
+  isOwnerOf: (householdId: string) => boolean;
+  /** This user's own pending asks, waiting on somebody else's owner. */
+  outgoingRequests: JoinRequest[];
+  /**
+   * Ask to join. Returns 'member' when the code names a household this user is
+   * already in, which is a no-op rather than a request.
+   */
+  requestJoin: (
     code: string,
     displayName: string,
-  ) => Promise<{ error?: string; household?: Household }>;
+  ) => Promise<{ error?: string; status?: 'pending' | 'member'; household?: { id: string; name: string } }>;
+  /** Owner only. Approving creates the membership. */
+  decideRequest: (requestId: string, approve: boolean) => Promise<{ error?: string }>;
+  /** Withdraw one of your own. */
+  cancelRequest: (requestId: string) => Promise<{ error?: string }>;
   renameHousehold: (householdId: string, name: string) => Promise<{ error?: string }>;
   leaveHousehold: (householdId: string) => Promise<{ error?: string }>;
   removeMember: (householdId: string, userId: string) => Promise<{ error?: string }>;
@@ -133,6 +186,18 @@ const friendlyError = (message: string, t: TFn): string => {
   if (message.includes('not_owner')) return t('householdError.notOwner');
   if (message.includes('use_leave')) return t('householdError.useLeave');
   if (message.includes('household_limit')) return t('householdError.limitReached');
+  /*
+   * The old join RPC, which now refuses rather than admitting anybody.
+   *
+   * A build that predates approval calls join_household and would otherwise
+   * walk straight in without the owner ever seeing a request — so the function
+   * raises, and this turns that into the one thing the user can act on. It
+   * cannot be forwarded to the new path: forwarding would return the households
+   * row, invite code and all, to somebody who is now only pending, and would
+   * tell an old client it had joined a household it cannot read.
+   */
+  if (message.includes('use_request_join')) return t('householdError.updateApp');
+  if (message.includes('no_request')) return t('householdError.requestGone');
   if (message.includes('name_required')) return t('householdError.nameRequired');
   return message;
 };
@@ -194,6 +259,15 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   /** Members of every household the user belongs to, keyed by household id. */
   const [byHousehold, setByHousehold] = useState<Record<string, Member[]>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  /**
+   * Every join request this user can see, both directions in one list.
+   *
+   * One fetch, because it is one policy: RLS returns the rows where you are the
+   * asker or a member of the household being asked about, and splitting that
+   * into two queries would be two round trips to reassemble something the
+   * server already answered in one.
+   */
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(false);
   /**
    * The user id the current `households` answer belongs to, or undefined before
@@ -292,6 +366,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       sigRef.current = '';
       setHouseholds([]);
       setByHousehold({});
+      setRequests([]);
       setSettledFor(null);
       return;
     }
@@ -300,10 +375,28 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       // Both queries lean on RLS rather than filtering client-side: a user can
       // only read households they belong to, and only membership rows of those
       // households. That also means one query covers every household at once.
-      const [{ data: householdRows }, { data: memberRows }] = await Promise.all([
-        supabase.from('households').select('id, name, invite_code, created_at'),
-        supabase.from('household_members').select('household_id, user_id, role, display_name'),
-      ]);
+      const [{ data: householdRows }, { data: memberRows }, { data: requestRows }] =
+        await Promise.all([
+          supabase.from('households').select('id, name, invite_code, created_at'),
+          supabase.from('household_members').select('household_id, user_id, role, display_name'),
+          /*
+           * Pending only. A decided request is history — approved ones became
+           * memberships and declined ones are a thing nobody needs shown back
+           * to them — and fetching them would grow this query without bound as
+           * a household turns people over.
+           *
+           * Unfiltered by household or user: the SELECT policy already answers
+           * exactly "rows you are the asker on, or a member of the household
+           * for", so one query covers both directions at once. Adding a filter
+           * here would be the client restating a rule the server enforces, and
+           * the two would eventually disagree.
+           */
+          supabase
+            .from('household_join_requests')
+            .select('id, household_id, household_name, user_id, display_name, status, created_at')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false }),
+        ]);
 
       const list = ((householdRows as Household[] | null) ?? []).sort((a, b) =>
         a.name.localeCompare(b.name),
@@ -317,8 +410,14 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         });
       }
 
+      const pending = (requestRows as JoinRequest[] | null) ?? [];
+
       const sig = JSON.stringify({
         h: list.map((h) => `${h.id}:${h.name}`),
+        // In the signature, so a request arriving while nothing else changed
+        // still re-renders. Left out, the nudge would appear on whichever poll
+        // happened to coincide with a rename.
+        r: pending.map((r) => `${r.id}:${r.status}`),
         m: Object.entries(grouped)
           .map(([id, rows]) =>
             `${id}:${rows.map((r) => `${r.user_id}:${r.role}:${r.display_name}`).sort().join(',')}`,
@@ -329,6 +428,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         sigRef.current = sig;
         setHouseholds(list);
         setByHousehold(grouped);
+        setRequests(pending);
       }
     } finally {
       setLoading(false);
@@ -345,6 +445,23 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
    * the first one. Falling back matters — the stored id goes stale whenever the
    * user leaves that household, it is deleted, or they sign in as someone else.
    */
+  /*
+   * The same rows, split by who has to act on them.
+   *
+   * Derived rather than fetched twice: `requests` is what RLS returned, which
+   * is precisely "mine, plus those aimed at a household I am in". Owning the
+   * household is not checked here — every member sees the queue, and the ANSWER
+   * is what is owner-only. See migration 0042.
+   */
+  const incomingRequests = useMemo(
+    () => requests.filter((r) => r.user_id !== (user?.id ?? '')),
+    [requests, user?.id],
+  );
+  const outgoingRequests = useMemo(
+    () => requests.filter((r) => r.user_id === (user?.id ?? '')),
+    [requests, user?.id],
+  );
+
   const household = useMemo(
     () => households.find((h) => h.id === activeId) ?? households[0] ?? null,
     [households, activeId],
@@ -466,19 +583,68 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         await refresh();
         return { household: created ?? undefined };
       },
-      joinHousehold: async (code, displayName) => {
+      incomingRequests,
+      outgoingRequests,
+      isOwnerOf: (householdId) =>
+        (byHousehold[householdId] ?? []).some(
+          (m) => m.user_id === user?.id && m.role === 'owner',
+        ),
+      requestJoin: async (code, displayName) => {
         if (!user) return { error: t('householdError.signInFirst') };
-        const { data, error } = await supabase.rpc('join_household', {
+        const { data, error } = await supabase.rpc('request_join_household', {
           p_code: code,
           p_display_name: displayName,
         });
         if (error) return { error: friendlyError(error.message, t) };
-        const joined = data as Household | null;
-        // Same as create: the RPC has proved this household exists and that the
-        // user is in it, so the list learns that before the id changes.
-        if (joined?.id) adoptHousehold(joined);
+        const row = data as {
+          status: 'pending' | 'member';
+          household_id: string;
+          household_name: string;
+        } | null;
+        if (!row) return { error: t('householdError.invalidCode') };
+
+        /*
+         * Already a member is the one case that still switches. The code named
+         * a household this user is in, nothing was asked of anybody, and the
+         * only sensible reading of entering it is "take me there".
+         *
+         * A pending request switches NOTHING. There is nothing to switch to —
+         * RLS returns no lists, no members and no household row until the owner
+         * says yes — so moving there would empty the screen and look like the
+         * app losing the shopping they were just looking at.
+         */
+        if (row.status === 'member') {
+          const known = households.find((h) => h.id === row.household_id);
+          if (known) setActiveHousehold(known.id);
+        }
         await refresh();
-        return { household: joined ?? undefined };
+        return {
+          status: row.status,
+          household: { id: row.household_id, name: row.household_name },
+        };
+      },
+      decideRequest: async (requestId, approve) => {
+        const { error } = await supabase.rpc('decide_join_request', {
+          p_request: requestId,
+          p_approve: approve,
+        });
+        if (error) return { error: friendlyError(error.message, t) };
+        /*
+         * The signature is cleared because approving CHANGES A MEMBERSHIP, and
+         * the refresh must apply it rather than decide nothing moved. Without
+         * this the owner approves somebody and the member list does not grow
+         * until something unrelated happens to shift the signature.
+         */
+        sigRef.current = '';
+        await refresh();
+        return {};
+      },
+      cancelRequest: async (requestId) => {
+        const { error } = await supabase.rpc('cancel_join_request', { p_request: requestId });
+        if (error) return { error: friendlyError(error.message, t) };
+        sigRef.current = '';
+        await refresh();
+        return {};
       },
       renameHousehold: async (householdId, name) => {
         const target = households.find((h) => h.id === householdId);
@@ -550,6 +716,8 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       restored,
       setActiveHousehold,
       adoptHousehold,
+      incomingRequests,
+      outgoingRequests,
       members,
       byHousehold,
       myName,

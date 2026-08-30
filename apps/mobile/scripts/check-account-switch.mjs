@@ -225,13 +225,38 @@ check(
  */
 check('...and invalidates the refresh signature', /sigRef\.current = ''/.test(adopt), true);
 
-// Both doors into a new household go through it. Join had the identical bug.
 const createBody = householdSrc.match(/createHousehold: async[\s\S]*?\n      \},/)?.[0] ?? '';
-const joinBody = householdSrc.match(/joinHousehold: async[\s\S]*?\n      \},/)?.[0] ?? '';
 check('creating adopts rather than setting the id directly',
   /adoptHousehold\(created\)/.test(createBody) && !/setActiveHousehold\(/.test(createBody), true);
-check('joining does the same',
-  /adoptHousehold\(joined\)/.test(joinBody) && !/setActiveHousehold\(/.test(joinBody), true);
+
+/*
+ * JOINING NO LONGER SWITCHES ANYBODY, so it has nothing to adopt.
+ *
+ * A code is a request now (migration 0042), and until an owner approves it the
+ * requester is not a member — RLS gives them no household row, no lists and no
+ * members. Switching there would empty the app and read as the shopping having
+ * been lost, which is the same class of silent wrongness the adopt fix above
+ * exists for, arriving from the opposite direction.
+ *
+ * The one case that still switches is a code for a household you are ALREADY
+ * in: nothing was asked of anybody, the household is already in the roster, and
+ * "take me there" is the only sensible reading. Already in the roster is why it
+ * uses setActiveHousehold and not adoptHousehold — there is nothing new to
+ * learn about.
+ */
+const requestBody = householdSrc.match(/requestJoin: async[\s\S]*?\n      \},/)?.[0] ?? '';
+check('the request path is findable', requestBody.length > 0, true);
+check(
+  'asking to join switches nothing on its own',
+  /if \(row\.status === 'member'\) \{/.test(requestBody),
+  true,
+);
+check(
+  '...and the only switch is guarded by already being a member',
+  requestBody.indexOf("row.status === 'member'") < requestBody.indexOf('setActiveHousehold('),
+  true,
+);
+check('the old join path is gone from the store', /joinHousehold: async/.test(householdSrc), false);
 
 /*
  * AND THE MESSAGE REPORTS THE WRITE RATHER THAN THE FORM.

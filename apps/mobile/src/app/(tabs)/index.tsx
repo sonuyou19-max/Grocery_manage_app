@@ -17,6 +17,8 @@ import { MemberAvatars, type AvatarMember } from "@/components/member-avatars";
 import { usePlusGate } from "@/lib/plus-gate";
 import { PlusBadge } from "@/components/plus-badge";
 import { HouseholdNudge } from "@/components/household-nudge";
+import { JoinRequests } from "@/components/join-requests";
+import { PendingJoins } from "@/components/pending-joins";
 import { TrialNudge } from "@/components/trial-nudge";
 import { WeeklyListSheet } from "@/components/weekly-list-sheet";
 import { dedupeByName } from "@/lib/item-dup";
@@ -269,6 +271,12 @@ export default function ListsScreen() {
             backed up" outranks "your free month is ending", and both render
             nothing at all in the ordinary case. See the components. */}
         <HouseholdNudge />
+        {/* Somebody is waiting on an answer, or you are waiting on one. Both go
+            at the top of the first screen for the same reason the nudge does:
+            they are about a person, and a queue nobody visits is worse than no
+            approval step at all. */}
+        <JoinRequests />
+        <PendingJoins />
 
         {/* Renders nothing at all unless a free month is genuinely days from
             ending on an account that could act on it. See the component. */}
