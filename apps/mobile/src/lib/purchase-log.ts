@@ -1,5 +1,7 @@
 import type { ItemCategory } from '@korb/shared';
 
+import type { DecimalMark } from '@/i18n/regions';
+import { normaliseNumber, parsePriceToCents } from '@/lib/money';
 import { normalizeKey } from '@/lib/pantry-intel';
 
 /**
@@ -508,6 +510,46 @@ export function totalCents(perPackCents: number, packs: number): number {
   if (!Number.isFinite(perPackCents) || perPackCents < 0) return 0;
   const n = Number.isFinite(packs) && packs > 0 ? Math.floor(packs) : 1;
   return Math.round(perPackCents * n);
+}
+
+/**
+ * The total, from what is typed in the unit-price field and the pack count.
+ *
+ * The single direction the entry arithmetic runs in. Everything that can change
+ * a total — editing the price, stepping the count — goes through here, so there
+ * is one expression to be right rather than several that must agree.
+ *
+ * Here rather than private to a screen because there are now two screens: the
+ * list's item sheet and the pantry's purchase form ask the shopper for the same
+ * three numbers, and a second copy of this is a second thing to fix the next
+ * time the reading of a comma changes. It changed once already.
+ */
+export function totalFor(
+  priceText: string,
+  packs: number,
+  decimal: DecimalMark,
+): number | null {
+  const each = parsePriceToCents(priceText, decimal);
+  return each == null ? null : totalCents(each, packs);
+}
+
+/**
+ * A typed quantity, read in the shopper's own convention.
+ *
+ * This did `text.replace(',', '.')` and nothing else, which reads "1,5" as one
+ * and a half — right in Belgium — and "1,500" as one and a half too, when a
+ * British shopper typing it means fifteen hundred. Same class of bug as the
+ * price field had, one function below it, and found only because the compiler
+ * dragged that file into the change.
+ *
+ * Zero is refused along with the unparseable. A pack of nothing is not a
+ * measurement, and it is the denominator of every per-unit price in this file.
+ */
+export function parseQuantity(text: string, decimal: DecimalMark): number | null {
+  const cleaned = normaliseNumber(text, decimal);
+  if (cleaned == null) return null;
+  const value = Number.parseFloat(cleaned);
+  return Number.isNaN(value) || value <= 0 ? null : value;
 }
 
 /**

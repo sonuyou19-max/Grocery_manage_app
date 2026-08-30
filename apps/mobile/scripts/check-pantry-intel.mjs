@@ -178,6 +178,46 @@ const after = mod.recordPurchase(
 check('recordPurchase keeps keepStocked', after.milk.keepStocked, true);
 check('recordPurchase keeps cadenceDays', after.milk.cadenceDays, 5);
 
+/* ------------------------------------------------------- backdated purchases
+ *
+ * The pantry's purchase form can record a shop that happened days ago, which
+ * makes `now` no longer a synonym for "the latest purchase". Two things must
+ * hold, and neither is visible on any screen if it breaks.
+ */
+
+// 1. LAST BOUGHT MUST NOT GO BACKWARDS. Remembering on Tuesday that you also
+//    bought bread on Sunday is ordinary; if it rewrote last-bought to Sunday
+//    the item would come due, and the app would tell you to buy more bread
+//    BECAUSE you had just told it about more bread.
+const backdated = mod.recordPurchase(
+  { milk: stat({ lastPurchasedAt: now - DAY, intervalDays: 7, sampleCount: 4 }) },
+  'Milk',
+  'dairy_eggs',
+  now - 5 * DAY,
+);
+check('a backdated purchase does not move last-bought backwards',
+  backdated.milk.lastPurchasedAt, now - DAY);
+
+// 2. AND IT TEACHES NOTHING. This function only ever sees one end of the gap a
+//    backdated entry sits in; inventing the other is how a burn rate acquires a
+//    number nobody can trace back to a shop.
+check('...and does not blend an interval out of a negative gap',
+  [backdated.milk.intervalDays, backdated.milk.sampleCount], [7, 4]);
+
+// A purchase logged NOW still moves it, or the guard above would be satisfied
+// by a function that never updates the date at all.
+const current = mod.recordPurchase(
+  { milk: stat({ lastPurchasedAt: now - 5 * DAY }) },
+  'Milk',
+  'dairy_eggs',
+  now,
+);
+check('a purchase made now still moves last-bought', current.milk.lastPurchasedAt, now);
+
+// And a FIRST purchase, where there is no previous date to be newer than.
+check('a first purchase sets the date it was given',
+  mod.recordPurchase({}, 'Bread', 'bakery', now - 9 * DAY).bread.lastPurchasedAt, now - 9 * DAY);
+
 /* ------------------------------------------------------------- resting */
 
 // Resting is the "stop asking me about this" state. It must beat every reason
@@ -744,23 +784,58 @@ check(
   check('the sheet does not repeat the row it was opened from',
     has(/statusLabel\(/) || has(/<StockBar/), false);
 
-  // THE THREE VERBS. All three existed; none was reachable from here.
-  check('the sheet offers all three actions',
-    has(/t\("staple\.actionBuy"\)/) && has(/t\("staple\.actionList"\)/) && has(/t\("staple\.actionUsed"\)/),
-    true);
   /*
-   * Wired to what the Pantry already does, and every one CLOSES the sheet —
-   * each changes the reading on screen, so staying open would leave stale
-   * numbers with nothing saying they had moved.
+   * THE THREE VERBS — two that add, and one that is the way OUT of the item.
+   *
+   * The third was "Mark as used", which set the item low: a fourth way to say
+   * something the pantry row behind this sheet already shows, sitting beside
+   * two buttons that add. What the row was missing was the opposite — "I do not
+   * buy this any more" — which existed only as an unlabelled bag icon in the
+   * corner, next to the bin. An icon competing with a labelled button that does
+   * the same thing is worse than either, and a bag with a minus in it is not a
+   * sentence anyone reads as a decision to stop.
+   *
+   * Marking something low did not go anywhere: it is still the left swipe on
+   * the row, where it has always been.
    */
-  check('buying is logged through the store',
-    /onAddPurchase=\{\(\) => \{[\s\S]{0,320}?logPurchase\(item\.display, item\.category\)/.test(pantry), true);
+  check('the sheet offers all three actions',
+    has(/t\("staple\.actionBuy"\)/) && has(/t\("staple\.actionList"\)/) && has(/t\("staple\.actionStopped"\)/),
+    true);
+  check('...and the third one stops buying',
+    has(/label=\{t\("staple\.actionStopped"\)\}[\s\S]{0,160}?onPress=\{onStopBuying\}/), true);
+  check('...so nothing here still marks it used',
+    has(/onMarkUsed/), false);
+  /*
+   * ONE control per decision. The bag icon in the header went with the button
+   * arriving, or the sheet would offer the same irreversible-sounding thing
+   * twice — once labelled and once not.
+   */
+  check('stopping is not also an icon in the header',
+    has(/name="bag-remove-outline" size=\{22\}/), false);
+  check('...but deleting still is', has(/name="trash-outline"/), true);
+
+  /*
+   * Wired to what the Pantry already does. Buying now opens a FORM rather than
+   * writing a row on the spot — see purchase-sheet — so what this handler does
+   * is name the item, and the write happens on save.
+   */
+  check('buying opens the form for that item',
+    /onAddPurchase=\{\(\) => \{[\s\S]{0,320}?setRecording\(\{ key: item\.key/.test(pantry), true);
+  check('...and the form is what calls the store',
+    /onSave=\{\(draft\) => \{[\s\S]{0,320}?logPurchase\(it\.display, it\.category, draft\)/.test(pantry), true);
   check('...listing takes the same path as the swipe',
     /onAddToList=\{\(\) => \{[\s\S]{0,320}?onAddToList\(item\)/.test(pantry), true);
-  check('...and using it up teaches the interval',
-    /onMarkUsed=\{\(\) => \{[\s\S]{0,320}?markAlmostOut\(item\.key\)/.test(pantry), true);
-  check('all three close the sheet first',
-    (pantry.match(/setStapleKey\(null\);\s*(logPurchase|onAddToList\(item\)|markAlmostOut)/g) ?? []).length, 3);
+  /*
+   * EVERY verb waits for the Modal, not for the prop that drives it.
+   *
+   * Two of the three open a Modal of their own now — the purchase form and the
+   * list picker — and `setStapleKey(null)` only starts the exit animation. This
+   * is the hazard lib/modal-nav.ts exists about, and it has shipped four times
+   * in this codebase; the deferral is inside ActionButton so no call site can
+   * forget it.
+   */
+  check('the verbs go through the sheet, not straight out of it',
+    has(/const dismiss = useSheetDismiss\(\);/) && has(/onPress=\{\(\) => dismiss\(onPress\)\}/), true);
 
   /*
    * The cadence footnote is behind a tap. It was permanent prose under controls

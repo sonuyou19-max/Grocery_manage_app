@@ -716,7 +716,25 @@ export function recordPurchase(
       key,
       display: name.trim(),
       category,
-      lastPurchasedAt: now,
+      /*
+       * The LATEST purchase, which is not always the one being recorded.
+       *
+       * `now` is the moment of the purchase, and since the pantry grew a form
+       * that can backdate one, it is no longer guaranteed to be the most
+       * recent. Remembering on Tuesday that you also bought bread last Sunday
+       * is an ordinary thing to do, and writing that straight in would move
+       * "last bought" from yesterday to five days ago — so the item would come
+       * due, and the shopper would be told to buy bread BECAUSE they had just
+       * told the app about more of it.
+       *
+       * The gap-learning above is safe without a guard of its own: a backdated
+       * entry produces a negative gapDays, which fails the `>= 1` test and
+       * teaches nothing. That is the honest outcome rather than a missed one —
+       * the interval between an older purchase and the one before it is a real
+       * sample, but this function only ever sees one end of it, and inventing
+       * the other is how a burn rate learns a number nobody can trace.
+       */
+      lastPurchasedAt: Math.max(now, prev?.lastPurchasedAt ?? 0),
       intervalDays,
       sampleCount,
       snoozeUntil: null,

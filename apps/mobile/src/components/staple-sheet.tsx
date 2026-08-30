@@ -81,7 +81,6 @@ interface StapleSheetProps {
    */
   onAddPurchase: () => void;
   onAddToList: () => void;
-  onMarkUsed: () => void;
   /**
    * The lists this item is currently on, tagged under its name.
    *
@@ -103,7 +102,6 @@ export function StapleSheet({
   onOpenHistory,
   onAddPurchase,
   onAddToList,
-  onMarkUsed,
   lists: openLists,
 }: StapleSheetProps) {
   const { colors, scheme } = useTheme();
@@ -284,31 +282,22 @@ export function StapleSheet({
             </Text>
             </View>
 
-            {/* The two ways an item leaves the pantry, side by side and in
-                that order: stop buying it, or delete it.
+            {/* Delete, and only delete.
 
-                They used to be at opposite ends of the sheet, on the reasoning
-                that one is reversible and the other ends the item, so a
-                destructive control should not sit at the foot of a list of
-                settings where somebody working downwards will hit it. That
-                second half still holds and is why neither is down there any
-                more — but keeping them apart also hid the reversible one at the
-                bottom of a scroll, which made delete the obvious answer to "I
-                do not buy this any more" when it is the wrong one.
+                "Stopped buying" used to sit here beside it, on the reasoning
+                that the two ways an item leaves the pantry read as a choice
+                when they are adjacent. They do — but it was ALSO the third
+                verb's job to be findable, and the same control in two places is
+                worse than either: an icon with no label up here, competing with
+                a labelled button eight rows down that does exactly the same
+                thing. The labelled one won, because a bag with a minus in it is
+                not a sentence anybody reads as "I have stopped buying this".
 
-                Adjacent, they read as a choice. Both muted rather than red: the
-                weight belongs in delete's confirmation, and a red button up
-                here would shout on a screen opened to change a cadence. */}
-            <Pressable
-              onPress={onStopBuying}
-              accessibilityRole="button"
-              accessibilityLabel={t("stopped.action")}
-              accessibilityHint={t("stopped.hint")}
-              hitSlop={12}
-              style={styles.trash}
-            >
-              <Ionicons name="bag-remove-outline" size={22} color={colors.muted} />
-            </Pressable>
+                Which leaves delete alone up here, where a destructive control
+                belongs — out of the run of settings somebody works down
+                through, and never at the foot of a scroll. Muted rather than
+                red: the weight belongs in its confirmation, and a red button on
+                a screen opened to change a cadence is shouting. */}
             <Pressable
               onPress={onDelete}
               accessibilityRole="button"
@@ -345,10 +334,26 @@ export function StapleSheet({
               label={t("staple.actionList")}
               onPress={onAddToList}
             />
+            {/*
+              The third verb is an EXIT, not another way to change the numbers.
+
+              It was "Mark as used", which set the item low — a fourth way to
+              say something the pantry can already see, sitting next to two
+              buttons that add. What was missing from this row was the opposite:
+              the answer to "I do not buy this any more", which existed only as
+              an unlabelled icon in the corner. Marking something low is still a
+              left-swipe on the row behind this sheet, where it has always been.
+
+              Muted, not accent. The two beside it add something and this one
+              removes it, and a row of three identical green cards would say
+              they are three of a kind.
+            */}
             <ActionButton
-              icon="checkmark-circle-outline"
-              label={t("staple.actionUsed")}
-              onPress={onMarkUsed}
+              icon="bag-remove-outline"
+              label={t("staple.actionStopped")}
+              hint={t("stopped.hint")}
+              onPress={onStopBuying}
+              tone="quiet"
             />
           </View>
 
@@ -609,25 +614,62 @@ function HistoryRow({
   );
 }
 
-/** One of the three verbs. Equal thirds, so no action reads as the main one. */
+/**
+ * One of the three verbs. Equal thirds, so no action reads as the main one.
+ *
+ * `tone` is the one thing that is not equal: two of these put something into
+ * the world and the third takes the item out of it, and giving all three the
+ * same green wash would say they are three of a kind. The quiet one keeps the
+ * same size and position — it is still a first-class verb, not a footnote.
+ */
 function ActionButton({
   icon,
   label,
   onPress,
+  hint,
+  tone = "accent",
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  /** What the button does, for screen readers, when two words cannot say it. */
+  hint?: string;
+  tone?: "accent" | "quiet";
 }) {
   const { colors } = useTheme();
+  /*
+   * Every verb here leaves this sheet, so every one goes through the sheet's
+   * own dismiss rather than firing while the Modal is still up.
+   *
+   * Two of the three now open a Modal of their own — the purchase form and the
+   * list picker — which is exactly the hazard lib/modal-nav.ts exists about: on
+   * iOS UIKit refuses to present a second view controller while one is already
+   * presenting, so the form never appears and the tab is left under a
+   * transparent sheet eating every touch. `dismiss` runs the action once the
+   * native window is really gone, which is a thing the `visible` prop cannot
+   * tell anybody — it goes false a whole exit animation early.
+   *
+   * Applied to all three rather than only to the two that need it today. The
+   * third is a toast now and could grow a dialog next month, and "remember to
+   * add the deferral" is the convention this codebase has already watched fail
+   * four times.
+   */
+  const dismiss = useSheetDismiss();
+  const quiet = tone === "quiet";
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => dismiss(onPress)}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[styles.action, { backgroundColor: colors.accentSoft }]}
+      accessibilityHint={hint}
+      style={[
+        styles.action,
+        quiet
+          ? { backgroundColor: "transparent", borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line }
+          : { backgroundColor: colors.accentSoft },
+      ]}
     >
-      <Ionicons name={icon} size={19} color={colors.accent} />
+      <Ionicons name={icon} size={19} color={quiet ? colors.muted : colors.accent} />
       {/*
         Sentence case at body weight, not the uppercase label style.
 

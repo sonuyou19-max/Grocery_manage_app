@@ -539,6 +539,7 @@ if (bare.length) {
 const LISTING_SHEETS = [
   'components/purchase-ledger.tsx',
   'components/staple-sheet.tsx',
+  'components/purchase-sheet.tsx',
   'app/receipt/review.tsx',
 ];
 

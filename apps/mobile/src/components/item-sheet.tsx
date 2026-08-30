@@ -35,9 +35,15 @@ import { categoryLabel, CATEGORY_ORDER } from '@/lib/categorize';
 import { haptics } from '@/lib/haptics';
 import { rubberBand, SPRING, springTo } from '@/lib/motion';
 import { rememberItemDetails } from '@/lib/item-memory';
-import { decimalMarkFor, type DecimalMark } from '@/i18n/regions';
-import { parsePriceToCents } from '@/lib/money';
-import { amountLabel, historyFor, totalCents, unitPrice, unitPriceParts } from '@/lib/purchase-log';
+import { decimalMarkFor } from '@/i18n/regions';
+import {
+  amountLabel,
+  historyFor,
+  parseQuantity,
+  totalFor,
+  unitPrice,
+  unitPriceParts,
+} from '@/lib/purchase-log';
 import { orderedStoreOptions, recordStoreUse, useStorePrefs } from '@/lib/store-prefs';
 import { useGroceries, useItem } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -58,35 +64,6 @@ interface ItemSheetProps {
   itemId: string | null;
   onClose: () => void;
 }
-
-/**
- * The total, from what is typed in the unit-price field and the pack count.
- *
- * The single direction the sheet's arithmetic runs in. Everything that can
- * change the total — editing the price, stepping the count — goes through here,
- * so there is one expression to be right rather than three that must agree.
- */
-const totalFor = (priceText: string, packs: number, decimal: DecimalMark): number | null => {
-  const each = parsePriceToCents(priceText, decimal);
-  return each == null ? null : totalCents(each, packs);
-};
-
-/**
- * A typed quantity, read in the shopper's own convention.
- *
- * This did `text.replace(',', '.')` and nothing else, which reads "1,5" as one
- * and a half — right in Belgium — and "1,500" as one and a half too, when a
- * British shopper typing it means fifteen hundred. Same class of bug as the
- * price field had, one function below it, and found only because the compiler
- * dragged this file into the change.
- */
-const parseQuantity = (text: string, decimal: DecimalMark): number | null => {
-  const group = decimal === ',' ? '.' : ',';
-  const cleaned = text.replace(/[\s\u00A0\u202F]/g, '').split(group).join('').replace(decimal, '.');
-  if ((cleaned.match(/\./g) ?? []).length > 1) return null;
-  const value = Number.parseFloat(cleaned);
-  return Number.isNaN(value) || value <= 0 ? null : value;
-};
 
 /**
  * Bottom sheet shown right after an item is added ("Added to <category>") and
@@ -415,9 +392,11 @@ export function ItemSheet({ listId, itemId, onClose }: ItemSheetProps) {
                     value={priceText}
                     onChangeText={(t) => {
                       setPriceText(t);
-                      const each = parsePriceToCents(t, decimalMarkFor(region));
+                      // The same expression the two steppers use. It was
+                      // spelled out longhand here and abbreviated there, which
+                      // is how one of three copies comes to disagree.
                       patch({
-                        priceCents: each == null ? null : totalCents(each, itemObj.packs),
+                        priceCents: totalFor(t, itemObj.packs, decimalMarkFor(region)),
                       });
                     }}
                     placeholder="0.00"

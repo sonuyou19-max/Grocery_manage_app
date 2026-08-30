@@ -26,6 +26,7 @@ import { PantryTeaser } from '@/components/pantry-teaser';
 import { CoachMark } from '@/components/coach-mark';
 import { PurchaseLedger } from '@/components/purchase-ledger';
 import { Screen } from '@/components/screen';
+import { PurchaseSheet } from '@/components/purchase-sheet';
 import { StapleSheet } from '@/components/staple-sheet';
 import { StockBar } from '@/components/stock-bar';
 import { TextPromptModal } from '@/components/text-prompt-modal';
@@ -44,6 +45,7 @@ import {
   lastBoughtLabel,
   listsHolding,
   queuedKeys,
+  sinceBoughtLabel,
   statusLabel,
   stockGeometry,
   type ItemStat,
@@ -116,6 +118,12 @@ function SignedInPantry() {
   const [stapleKey, setStapleKey] = useState<string | null>(null);
   const [restOpen, setRestOpen] = useState(false);
   const [ledgerFor, setLedgerFor] = useState<{ name: string; category: ItemCategory } | null>(null);
+  // The item whose purchase form is open. By value rather than by key: the form
+  // is about a shop that already happened, so nothing it shows should change
+  // underneath it while somebody is filling it in.
+  const [recording, setRecording] = useState<
+    { key: string; display: string; category: ItemCategory } | null
+  >(null);
   /*
    * Which items have a ledger worth opening, built once for the whole screen.
    *
@@ -599,13 +607,22 @@ function SignedInPantry() {
          * date forward — so staying open would leave a stale set of numbers on
          * screen with no sign they had moved.
          */
+        /*
+         * Add purchase opens a FORM, and the form is a second Modal.
+         *
+         * So this only records which item to record against; the sheet itself
+         * closes through `useSheetDismiss` (see PurchaseButton in
+         * staple-sheet), and the form opens once this one's native window is
+         * actually gone. Opening it here on the next line is the exact
+         * modal-over-modal bug check-modal-nav exists about — on iOS UIKit
+         * simply refuses the second presentation and the tab locks up under an
+         * invisible sheet.
+         */
         onAddPurchase={() => {
           const item = stapleKey ? stats[stapleKey] : null;
           if (!item) return;
           setStapleKey(null);
-          logPurchase(item.display, item.category);
-          haptics.success();
-          showToast(t('pantry.loggedOne', { item: item.display }));
+          setRecording({ key: item.key, display: item.display, category: item.category });
         }}
         onAddToList={() => {
           const item = stapleKey ? stats[stapleKey] : null;
@@ -613,13 +630,6 @@ function SignedInPantry() {
           setStapleKey(null);
           // The same path the swipe takes, list picker and all.
           onAddToList(item);
-        }}
-        onMarkUsed={() => {
-          const item = stapleKey ? stats[stapleKey] : null;
-          if (!item) return;
-          setStapleKey(null);
-          markAlmostOut(item.key);
-          haptics.tick();
         }}
         purchases={purchases}
         /* Plus gates this by PROMPTING, not hiding.
@@ -644,6 +654,37 @@ function SignedInPantry() {
           if (!item) return;
           if (locked) requirePlus();
           else setLedgerFor({ name: item.display, category: item.category });
+        }}
+      />
+
+      {/*
+        The form behind "Add purchase".
+
+        Rendered here rather than inside StapleSheet because it REPLACES it:
+        two bottom sheets cannot be on screen at once, and the pantry is the
+        only thing that knows both are its own. What it hands back is a draft,
+        not a write — `logPurchase` is this screen's to call, the same call the
+        one-tap version made, with the four fields somebody actually filled in.
+      */}
+      <PurchaseSheet
+        item={recording}
+        onClose={() => setRecording(null)}
+        onSave={(draft) => {
+          const it = recording;
+          setRecording(null);
+          if (!it) return;
+          logPurchase(it.display, it.category, draft);
+          showToast(
+            /* The date read back, because it is the field somebody may have
+               just changed and the only one they cannot check afterwards
+               without opening the ledger. Not lowercased to fit a sentence:
+               `toLowerCase` on a translated string is a small bet against
+               seven languages, and the em dash makes the case moot. */
+            t('purchaseSheet.savedOn', {
+              item: it.display,
+              when: sinceBoughtLabel(draft.at, Date.now(), t),
+            }),
+          );
         }}
       />
 
