@@ -355,6 +355,21 @@ RULES.
   second reduction. Count each reduction ONCE, on the row where it was taken,
   and never from the summary. Two discount rows are two discounts only if the
   paper takes the money off twice.
+- A REDUCTION THE RECEIPT SAYS IS ALREADY IN THE PRICE IS NOT A LINE AT ALL.
+  Colruyt prints "Hoeveelheidsvoordeel toegekend: € 0,12 (in prijs verrekend)"
+  under the item it applied to, and again at the bottom as "Uw totale
+  hoeveelheidsvoordeel: € 0,12 (al in totaalbedrag verrekend)". The parenthesis
+  is the whole message: the prices above have ALREADY been reduced, and the
+  figure is being shown so the shopper knows what they saved. Subtracting it
+  takes the money off a second time.
+
+  Look for that marker in whatever language the receipt is printed in —
+  "verrekend", "inbegrepen", "reeds afgetrokken", "bereits berücksichtigt",
+  "im Preis enthalten", "déjà déduit", "inclus dans le prix", "already
+  included". A line carrying one is kind "other" and never "discount".
+
+  A real reduction is one the till TAKES OFF: it has its own negative amount in
+  the money column and the total below it is smaller because of it.
 - Never invent a line, a price or a total. A field you cannot read is null.`;
 
 /**

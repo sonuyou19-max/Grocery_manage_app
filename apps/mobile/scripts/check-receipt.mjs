@@ -493,6 +493,62 @@ const noSubtotal = reconcile(
 );
 check_('with no goods subtotal the line sum is used', noSubtotal.doubledDiscounts.length === 1);
 
+/* ---------------------- a subtotal that was never the subtotal ------------ */
+
+/*
+ * COLRUYT PRINTS TOTAAL GOEDEREN 116,95 — and also FOOD INC 86,93, which is
+ * the food-only subtotal, and EMCHE EDENRED 86,93, which is what the meal
+ * vouchers covered. The same number twice, which is exactly what makes a reader
+ * take it for the answer. Every correctly-read line was then reported as wrong.
+ *
+ * goods + adjustments = paid, and adjustments are deposits (a few euro) or
+ * discounts (which make goods LARGER than paid). So a subtotal sitting well
+ * BELOW what was paid cannot be the subtotal of the goods.
+ *
+ * Ignoring it costs one check on a receipt whose subtotal could not be read.
+ * Believing it costs every line on the screen.
+ */
+const usableGoods = (goods, paid, lines) =>
+  !reconcile(lines, { goodsCents: goods, paidCents: paid, articleCount: null }).notes.some((n) =>
+    n.includes('implausible goods subtotal'),
+  );
+
+const colruytLines = [...asItems(COLRUYT_ITEMS), coupon()];
+
+check_(
+  'a food-only subtotal is refused',
+  !usableGoods(8693, 10496, colruytLines),
+);
+check_('the real subtotal is used', usableGoods(11695, 10496, colruytLines));
+check_(
+  '...and refusing it silences the goods check rather than blaming the lines',
+  !reconcile(colruytLines, { goodsCents: 8693, paidCents: 10496, articleCount: null })
+    .details.some((d) => d.code === 'goods'),
+);
+/*
+ * A DEPOSIT-HEAVY RECEIPT IS NOT THIS. Statiegeld makes goods legitimately
+ * smaller than paid, and refusing those would trade a false accusation for a
+ * blind spot on every crate of beer in Belgium.
+ */
+check_('a five-euro deposit is fine', usableGoods(5000, 5500, [flat('x', 5000)]));
+check_('...and twelve euros of them', usableGoods(10000, 11200, [flat('x', 10000)]));
+
+/*
+ * And the doubled-discount detector must not trust it either. It measures
+ * between the printed totals now, so a subtotal twenty euros out would move the
+ * gap by twenty euros and match nothing — falling back to the line sum is the
+ * behaviour that survives.
+ */
+const doubledWithBadGoods = reconcile(
+  [...asItems(COLRUYT_ITEMS), coupon(), xtraSummary()],
+  { goodsCents: 8693, paidCents: 10496, articleCount: null },
+);
+check_(
+  'a refused subtotal does not disable the discount fix',
+  doubledWithBadGoods.doubledDiscounts.length === 1 &&
+    doubledWithBadGoods.discountCents === -1199,
+);
+
 /* ------------------------------ a number that was never a count ---------- */
 
 /*

@@ -303,6 +303,7 @@ function doubledDiscountsIn(
   computedPaid: number,
   reportedAdjustments: number,
   totals: ReceiptTotals,
+  subtotalUnusable: boolean,
 ): number[] {
   const { goodsCents: printedGoods, paidCents: printedPaid } = totals;
   if (printedPaid == null) return [];
@@ -316,8 +317,13 @@ function doubledDiscountsIn(
    * back to the line sum only when the goods subtotal was not printed or not
    * legible.
    */
+  /*
+   * The two printed totals when the subtotal is usable, the line sum when it is
+   * not. A subtotal the GOODS check has just refused must not be trusted here
+   * either — it would move the gap by twenty euros and match nothing.
+   */
   const gap =
-    printedGoods != null
+    printedGoods != null && !subtotalUnusable
       ? round(printedPaid) - round(printedGoods) - round(reportedAdjustments)
       : round(printedPaid) - round(computedPaid);
 
@@ -411,6 +417,35 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
     rows.filter((l) => l.kind === kind).reduce((acc, l) => acc + l.totalCents, 0);
 
   /*
+   * A SUBTOTAL FAR BELOW WHAT WAS PAID IS NOT THE GOODS SUBTOTAL.
+   *
+   * goods + adjustments = paid, and adjustments are deposits (a few euro at
+   * most) and discounts (which make goods LARGER than paid, not smaller). So a
+   * printed "subtotal" that sits well under the amount paid cannot be the
+   * subtotal of the goods — it is one of the other totals a receipt prints: a
+   * VAT band, a department, or what one card covered.
+   *
+   * On the Colruyt receipt that prompted this, TOTAAL GOEDEREN was €116,95 and
+   * the reader took €86,93 — the food-only subtotal, which is also exactly what
+   * the meal vouchers paid, so the number appeared twice and looked confirmed.
+   * Every correctly-read line was then reported as wrong.
+   *
+   * Ignoring it costs one check on a receipt whose subtotal could not be read.
+   * Believing it costs every line on the screen.
+   */
+  const impossibleGap = Math.max(1500, Math.round(0.15 * (totals.paidCents ?? 0)));
+  const subtotalUnusable =
+    totals.goodsCents != null &&
+    totals.paidCents != null &&
+    round(totals.paidCents) - round(totals.goodsCents) > impossibleGap;
+
+  if (subtotalUnusable) {
+    notes.push(
+      `ignored an implausible goods subtotal: ${round(totals.goodsCents ?? 0)} against ${round(totals.paidCents ?? 0)} paid`,
+    );
+  }
+
+  /*
    * THE SAME REDUCTION, TWICE — settled before any total below is computed.
    *
    * A doubled discount does not fail one check, it fails GOODS and PAID
@@ -426,6 +461,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
     sumOf(lines, 'item') + adjustments,
     adjustments,
     totals,
+    subtotalUnusable,
   );
   const kept = lines.filter((_, i) => !doubled.includes(i));
 
@@ -436,7 +472,8 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
   const discountCents = sum('discount');
   const roundingCents = sum('rounding');
 
-  if (totals.goodsCents != null && round(goodsCents) !== round(totals.goodsCents)) {
+
+  if (!subtotalUnusable && totals.goodsCents != null && round(goodsCents) !== round(totals.goodsCents)) {
     problems.push(
       `items add up to ${goodsCents} but the receipt says ${totals.goodsCents}`,
     );
