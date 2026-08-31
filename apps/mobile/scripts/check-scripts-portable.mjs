@@ -21,6 +21,25 @@
  * So: the separator is `path.sep`, and no script may assume otherwise.
  *
  * ---------------------------------------------------------------------------
+ * And the same asymmetry in package.json, which this did not look at
+ * ---------------------------------------------------------------------------
+ *
+ * The three `:tz` scripts were shell loops — `for tz in UTC …; do … done` —
+ * written on Linux and run on Windows, where pnpm hands scripts to cmd.exe.
+ * cmd has no such construct and answers `tz was unexpected at this time.`
+ *
+ * Exactly the failure described above, in a file this guard had never opened:
+ * invisible where it was written, fatal where it was used, and reported as a
+ * broken command rather than as a broken check. It shipped three times, because
+ * one copy of a mistake teaches nobody and three copies of it look like a
+ * convention.
+ *
+ * So package.json is read too, and a script may be a plain command with plain
+ * arguments. A loop, a conditional, an inline env var or a pipe belongs in a
+ * .mjs file where both platforms run the same code — see run-tz.mjs, which is
+ * what those three became.
+ *
+ * ---------------------------------------------------------------------------
  * What counts as a violation
  * ---------------------------------------------------------------------------
  *
@@ -160,6 +179,48 @@ if (crlfBlind.length) {
   ]);
 } else {
   console.log('ok   no script matches across a newline without allowing for CRLF');
+}
+
+/* ------------------------------------------------- package.json scripts --- */
+
+/*
+ * What cmd.exe cannot do. Not an exhaustive shell grammar — a list of the
+ * constructs that actually appear in npm scripts and actually break, each of
+ * which has a portable home in a .mjs file.
+ */
+const SHELLISMS = [
+  [/\bfor\s+\w+\s+in\b/, 'a for loop'],
+  [/;\s*do\b/, 'a do block'],
+  [/\bdone\b/, 'a done'],
+  [/\bif\s+\[/, 'a test conditional'],
+  [/(^|\s)\w+=[^\s]+\s+\w/, 'an inline environment variable'],
+  [/\$\{?\w+\}?/, 'a shell variable'],
+  [/\|\s*(tail|head|grep|sed|awk)\b/, 'a unix pipe'],
+  [/&&\s*echo\s+"[^"]*\\n/, 'an echo with a backslash escape'],
+];
+
+const pkg = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8'));
+const shellish = [];
+for (const [name, command] of Object.entries(pkg.scripts ?? {})) {
+  for (const [re, what] of SHELLISMS) {
+    if (re.test(command)) {
+      shellish.push(`${name}: ${what} — ${command.slice(0, 70)}`);
+      break;
+    }
+  }
+}
+
+if (shellish.length) {
+  fail(`${shellish.length} package.json script(s) assume a unix shell`, [
+    ...shellish,
+    '',
+    'pnpm runs these through cmd.exe on Windows, which answers',
+    '"… was unexpected at this time." — a broken command, reported as though',
+    'the check itself had failed. Put the logic in a .mjs file instead;',
+    'run-tz.mjs is what the three timezone loops became.',
+  ]);
+} else {
+  console.log(`ok   all ${Object.keys(pkg.scripts ?? {}).length} package scripts run on either shell`);
 }
 
 /*
