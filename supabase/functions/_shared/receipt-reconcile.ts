@@ -125,6 +125,21 @@ export interface ReconcileResult {
   /** One entry per failed check, in the order they were run. */
   problems: string[];
   /**
+   * Things worth recording that are NOT failures.
+   *
+   * Kept apart from `problems` because `ok` is derived from that array, and the
+   * first version of the implausible-count rule pushed its note there — which
+   * would have made a receipt that adds up perfectly report as not reconciled,
+   * and shown the shopper a warning banner about arithmetic that was correct.
+   * Strictly worse than the false warning it was written to remove, and caught
+   * by the invariant that every problem must carry a code.
+   *
+   * Nothing here reaches the screen. A note is the app saying it declined to
+   * use something, which is worth being able to count and is not something
+   * anybody can act on.
+   */
+  notes: string[];
+  /**
    * The same failures, with their numbers, for the client to phrase.
    *
    * One list, not two. `codes` used to sit beside `problems` and the pair could
@@ -352,6 +367,8 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
    * exactly as the reconciler saw them.
    */
   const details: Problem[] = [];
+  /* Declined checks and corrections, for the log only. See ReconcileResult. */
+  const notes: string[] = [];
 
   /* ---------------------------------------------------- LINE ------------- */
 
@@ -476,7 +493,35 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
     );
     const asLines = positive.length;
 
-    if (asUnits !== totals.articleCount && asLines !== totals.articleCount) {
+    /*
+     * A NUMBER THAT IS NOWHERE NEAR EITHER READING WAS NEVER AN ARTICLE COUNT.
+     *
+     * Most receipts do not print one, and a bare number in the header — a till
+     * number, a ticket number, an operator code — is the thing a reader
+     * mistakes for one. On the Colruyt receipt that prompted this, 64 was read
+     * against 45 articles and 35 lines, and the result was a warning about
+     * arithmetic that was perfectly correct.
+     *
+     * That is worse than no check at all. This one exists to catch a line
+     * DUPLICATED across two overlapping photographs, which moves the count by
+     * one or two; a figure nineteen away from the nearest reading is not that
+     * fault, it is a different number entirely. So the check runs only inside a
+     * band wide enough for what it is looking for and narrow enough to exclude
+     * what it keeps finding instead.
+     */
+    const nearest = Math.min(
+      Math.abs(asUnits - totals.articleCount),
+      Math.abs(asLines - totals.articleCount),
+    );
+    const band = Math.max(3, Math.round(0.25 * Math.max(asUnits, asLines)));
+
+    if (nearest > band) {
+      // A NOTE, not a problem. `ok` is derived from `problems`, so recording
+      // this there would fail a receipt that adds up perfectly.
+      notes.push(
+        `ignored an implausible article count: ${totals.articleCount} against ${asUnits} articles / ${asLines} lines`,
+      );
+    } else if (asUnits !== totals.articleCount && asLines !== totals.articleCount) {
       problems.push(
         `counted ${asUnits} articles (or ${asLines} lines), the receipt says ${totals.articleCount}`,
       );
@@ -487,6 +532,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
   return {
     ok: problems.length === 0,
     problems,
+    notes,
     details,
     badLines,
     doubledDiscounts: doubled,

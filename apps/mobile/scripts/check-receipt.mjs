@@ -493,6 +493,48 @@ const noSubtotal = reconcile(
 );
 check_('with no goods subtotal the line sum is used', noSubtotal.doubledDiscounts.length === 1);
 
+/* ------------------------------ a number that was never a count ---------- */
+
+/*
+ * THE TILL NUMBER READ AS AN ARTICLE COUNT.
+ *
+ * Most receipts do not print a count at all, and the header of one that does
+ * not is full of bare numbers — a till, a ticket, an operator code. On the
+ * Colruyt receipt above, 64 was read against 35 lines, and the shopper was
+ * warned that arithmetic which was perfectly correct did not add up.
+ *
+ * A warning nobody can act on about a fault that is not there is worse than no
+ * check. This one exists to catch a line DUPLICATED across two overlapping
+ * photographs, which moves the count by one or two — so it now runs only inside
+ * a band wide enough for that and narrow enough to exclude a number that was
+ * never a count.
+ */
+const counted = (n) =>
+  reconcile([...asItems(COLRUYT_ITEMS), coupon()], { ...COLRUYT_TOTALS, articleCount: n });
+const warnsAboutCount = (r) => r.details.some((d) => d.code === 'count');
+
+check_('a till number is not treated as a count', !warnsAboutCount(counted(64)));
+check_(
+  '...and the app records that it ignored one',
+  counted(64).notes.some((p) => p.includes('implausible article count')),
+);
+/*
+ * As a NOTE. Recorded in `problems` it would fail a receipt that adds up
+ * perfectly, because `ok` is derived from that array — strictly worse than the
+ * false warning it removes.
+ */
+check_('...as a note, so the receipt still reconciles', counted(64).ok);
+check_('the real count passes quietly', !warnsAboutCount(counted(35)));
+/*
+ * And the fault it is FOR still fires. Losing that would be trading a false
+ * warning for a blind spot, which is the wrong trade — a line duplicated across
+ * two photos is cheap enough to miss in the money and is exactly what a count
+ * catches.
+ */
+check_('one duplicated line is still caught', warnsAboutCount(counted(36)));
+check_('...and three', warnsAboutCount(counted(38)));
+check_('no printed count says nothing', !warnsAboutCount(counted(null)));
+
 /*
  * A POSITIVE line labelled as a discount is not this fault, and must not be
  * deleted to make the books balance.
@@ -968,12 +1010,21 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
   const codesOf = (r) => r.details.map((d) => d.code).join(',');
 
   // A count-only failure, built by claiming an article count nothing supports.
+  /*
+   * Eight lines claiming nine articles — one duplicated line's worth, which is
+   * the fault this check is for.
+   *
+   * It was one line claiming nine, and that stopped being a count mismatch when
+   * the plausibility band arrived: a receipt reading one line against nine
+   * articles has not duplicated anything, it has misread a number. The fixture
+   * was testing the plumbing with an input the rule now correctly refuses.
+   */
   const countOnly = reconcile(
-    [
-      { raw: 'A', kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
-        unitPriceCents: 100, unitPriceDp: 2, totalCents: 100 },
-    ],
-    { goodsCents: 100, paidCents: 100, articleCount: 9 },
+    Array.from({ length: 8 }, (_, i) => ({
+      raw: `A${i}`, kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
+      unitPriceCents: 100, unitPriceDp: 2, totalCents: 100,
+    })),
+    { goodsCents: 800, paidCents: 800, articleCount: 9 },
   );
   check_('a count-only mismatch is coded as such', codesOf(countOnly) === 'count');
   check_('...and nothing about money is claimed', !countOnly.details.some((d) => MONEY_CODES.includes(d.code)));
@@ -1094,7 +1145,13 @@ check_('the date rule names the middle number', /The middle number is the month/
       { raw: 'A', kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
         unitPriceCents: 100, unitPriceDp: 2, totalCents: 100 },
     ],
-    { goodsCents: 4827, paidCents: 4718, articleCount: 9 },
+    /*
+     * The count is 4 rather than 9. One line against nine articles is outside
+     * the plausibility band now and is correctly ignored, so it produced no
+     * count detail at all — and this block is about the SHAPE of a detail, not
+     * about whether the rule fires.
+     */
+    { goodsCents: 4827, paidCents: 4718, articleCount: 4 },
   );
 
   const goods = r.details.find((d) => d.code === 'goods');
@@ -1106,7 +1163,7 @@ check_('the date rule names the middle number', /The middle number is the month/
   const count = r.details.find((d) => d.code === 'count');
   check_(
     'a count failure carries BOTH readings it accepts',
-    count.units === 1 && count.asLines === 1 && count.printed === 9,
+    count.units === 1 && count.asLines === 1 && count.printed === 4,
   );
 
   check_(

@@ -89,8 +89,8 @@ const en = {
     useShot: 'Use photo',
     offBy: '%{amount} off what the receipt says was paid — check the amounts.',
     problemLine: { one: '%{count} line does not multiply out', other: '%{count} lines do not multiply out' },
-    problemGoods: 'The items add up to %{got}, but the receipt says %{printed}.',
-    problemPaid: 'The lines come to %{got}, but %{printed} was paid.',
+    problemGoods: 'The lines add up to %{got}, and we read the subtotal as %{printed}.',
+    problemPaid: 'The lines come to %{got}, and we read the total paid as %{printed}.',
     problemCount: 'We counted %{units} articles (or %{lines} lines); the receipt says %{printed}.',
   },
   coach: {

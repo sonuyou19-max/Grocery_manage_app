@@ -80,8 +80,8 @@ const fr = {
     useShot: 'Utiliser',
     offBy: '%{amount} d’écart avec le total du ticket — vérifie les montants.',
     problemLine: { one: '%{count} ligne ne tombe pas juste', other: '%{count} lignes ne tombent pas juste' },
-    problemGoods: 'Les articles font %{got}, le ticket indique %{printed}.',
-    problemPaid: 'Les lignes font %{got}, mais %{printed} ont été payés.',
+    problemGoods: 'Les lignes totalisent %{got}, et nous avons lu le sous-total comme %{printed}.',
+    problemPaid: 'Les lignes totalisent %{got}, et nous avons lu le total payé comme %{printed}.',
     problemCount: 'Nous comptons %{units} articles (ou %{lines} lignes) ; le ticket dit %{printed}.',
   },
   coach: {

@@ -80,8 +80,8 @@ const de = {
     useShot: 'Foto nehmen',
     offBy: '%{amount} Unterschied zum Bonbetrag — prüf die Beträge.',
     problemLine: { one: '%{count} Zeile geht nicht auf', other: '%{count} Zeilen gehen nicht auf' },
-    problemGoods: 'Die Artikel ergeben %{got}, auf dem Bon steht %{printed}.',
-    problemPaid: 'Die Zeilen ergeben %{got}, bezahlt wurden %{printed}.',
+    problemGoods: 'Die Zeilen ergeben %{got}, und wir haben die Zwischensumme als %{printed} gelesen.',
+    problemPaid: 'Die Zeilen ergeben %{got}, und wir haben den Gesamtbetrag als %{printed} gelesen.',
     problemCount: 'Wir zählen %{units} Artikel (oder %{lines} Zeilen); der Bon sagt %{printed}.',
   },
   coach: {

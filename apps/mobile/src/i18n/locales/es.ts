@@ -80,8 +80,8 @@ const es = {
     useShot: 'Usar foto',
     offBy: '%{amount} de diferencia con el total del tique — revisa los importes.',
     problemLine: { one: '%{count} línea no cuadra', other: '%{count} líneas no cuadran' },
-    problemGoods: 'Los artículos suman %{got}, pero el tique pone %{printed}.',
-    problemPaid: 'Las líneas suman %{got}, pero se pagaron %{printed}.',
+    problemGoods: 'Las líneas suman %{got}, y leímos el subtotal como %{printed}.',
+    problemPaid: 'Las líneas suman %{got}, y leímos el total pagado como %{printed}.',
     problemCount: 'Contamos %{units} artículos (o %{lines} líneas); el tique dice %{printed}.',
   },
   coach: {

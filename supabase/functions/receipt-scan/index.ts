@@ -264,16 +264,44 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
 - language: the language the receipt is PRINTED in, as a two-letter code. Not
   the target language, and not the country's main language — a Leuven receipt
   can be in French. This is what tells the reader which expansions to trust.
-- goodsCents: the printed subtotal for goods, before discounts and deposits.
+- goodsCents: the printed subtotal for ALL goods, before discounts and deposits.
   READ IT OFF THE PAPER. Never add up your own lines to produce it. It is the
   one number here that can contradict you, and that is its entire job — a
   subtotal derived from your own answer agrees with your own answer no matter
   how wrong the answer is.
+
+  THE HARD PART IS THAT A RECEIPT PRINTS SEVERAL SUBTOTALS, and only one of
+  them is this. Take the one labelled as the total OF GOODS — "TOTAAL GOEDEREN",
+  "TOTAL MARCHANDISES", "Zwischensumme", "Subtotaal". These are NOT it, however
+  total they look:
+
+    * A CATEGORY subtotal. "FOOD INC", "NON FOOD", "A 6%", "B 21%" — how much of
+      the shopping fell in one VAT band or one department. Always smaller than
+      the goods total, and on a mixed basket it looks exactly like a plausible
+      answer.
+    * A PAYMENT line. "BANCONTACT", "EDENRED", "VISA", "CASH", "Totaal betaald".
+      What each card or voucher covered. On a split payment these sum to what
+      was paid, and any one of them alone is not a total of anything.
+    * A LOYALTY or savings figure. What was saved, not what was bought.
+
+  A Belgian receipt frequently prints the food subtotal and the meal-voucher
+  payment as the SAME number, which makes that number look confirmed. It is
+  still not the goods total.
+
+  Answer null rather than guessing. A missing subtotal weakens one check; a
+  wrong one makes every correct line look wrong.
 - paidCents: the amount actually paid, also READ OFF THE PAPER and never
-  computed. Where payment is split across two tenders, this is their sum, or
-  the printed "total paid".
-- articleCount: the printed count of articles, if there is one. Do not compute
-  it yourself — report only what is printed, or null.
+  computed. The final figure — "TE BETALEN", "TOTAAL", "TOTAL", "Summe". Where
+  payment is split across two tenders, this is their sum, or the printed
+  "total paid".
+- articleCount: the printed count of articles, if there is one.
+
+  ONLY A NUMBER PRINTED BESIDE A WORD MEANING ARTICLES — "23 Artikelen",
+  "8 Artikel", "12 articles". A bare number in the header or footer is a till
+  number, a ticket number, a store number or an operator code, and reading one
+  as a count produces a warning about arithmetic that is perfectly correct.
+  Most receipts do not print this at all: null is the common and correct
+  answer. Never compute it yourself.
 - emoji: one emoji for the product, from the app's own set. Null if unsure.
 - category: the aisle, one of: ${CATEGORIES.join(', ')}. Use the printed section
   heading when the receipt has one — "Tiernahrung" is household, whatever the
@@ -851,6 +879,12 @@ Deno.serve(async (req) => {
        * a thousand and a rule that fires on half of them are different
        * situations, and only one of them says the prompt is still wrong.
        */
+      /*
+       * Checks that declined to run, and why. Not failures — see notes on
+       * ReconcileResult — but the only record that a printed number was read
+       * and then judged not to be what it claimed.
+       */
+      notes: result.notes,
       doubledDiscounts: result.doubledDiscounts.map((i) => ({
         i,
         total: parsed.lines[i]?.totalCents ?? null,

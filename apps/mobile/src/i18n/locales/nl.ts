@@ -80,8 +80,8 @@ const nl = {
     useShot: 'Foto gebruiken',
     offBy: '%{amount} verschil met het bonbedrag — controleer de bedragen.',
     problemLine: { one: '%{count} regel klopt niet', other: '%{count} regels kloppen niet' },
-    problemGoods: 'De artikelen komen op %{got}, op het bonnetje staat %{printed}.',
-    problemPaid: 'De regels komen op %{got}, maar er is %{printed} betaald.',
+    problemGoods: 'De regels komen op %{got}, en we lazen het subtotaal als %{printed}.',
+    problemPaid: 'De regels komen op %{got}, en we lazen het betaalde totaal als %{printed}.',
     problemCount: 'Wij tellen %{units} artikelen (of %{lines} regels); het bonnetje zegt %{printed}.',
   },
   coach: {
