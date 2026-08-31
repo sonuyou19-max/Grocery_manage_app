@@ -214,6 +214,44 @@ assert(
   !/registerForPush/.test(layout) && !/registerForPush/.test(boot),
   'a prompt with no context is refused once and permanently',
 );
+/*
+ * THE NATIVE MODULE IS NEVER IMPORTED AT MODULE SCOPE.
+ *
+ * expo-notifications is native, and this app ships JavaScript over the air —
+ * so there is always a window where a new bundle runs on an older binary that
+ * does not contain it. A top-level import there does not degrade, it throws
+ * while the module graph is still evaluating, and this file is reached from the
+ * household store, which is in the provider tree. The app fails to open.
+ *
+ * A feature that cannot work on an old binary is fine. One that stops the old
+ * binary from starting is not — and it would take every other fix in the same
+ * update down with it.
+ */
+assert(
+  'the native module is required lazily, never imported',
+  !/^import .*from 'expo-notifications'/m.test(push) &&
+    /require\('expo-notifications'\)/.test(push),
+  'a top-level import throws on any binary built before push existed',
+);
+assert(
+  '...inside a try, so an absent module is null rather than a crash',
+  /try \{[\s\S]{0,400}?require\('expo-notifications'\)[\s\S]{0,600}?\} catch \{\s*loaded = null;/.test(push),
+);
+assert(
+  '...and every entry point checks before using it',
+  /const Notifications = notifications\(\);\s*[\s\S]{0,200}?if \(!Notifications\) return;/.test(push),
+);
+/*
+ * Including the handler. Setting it at module scope is the specific line that
+ * would run on an old binary, and it is the one thing here with no caller to
+ * guard it.
+ */
+assert(
+  'the notification handler is set after the module loads, not at import',
+  !/^Notifications\.setNotificationHandler/m.test(push) &&
+    /mod\.setNotificationHandler/.test(push),
+);
+
 assert(
   'a previous refusal is not asked again',
   /existing\.canAskAgain/.test(push),

@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
@@ -41,20 +40,60 @@ import { reportWriteFailure } from '@/lib/monitoring';
  */
 
 /**
- * How a notification behaves while the app is open.
+ * expo-notifications, loaded ONLY if this binary actually contains it.
  *
- * Banner and sound, deliberately, rather than the silent default. Every one of
- * these is about a person waiting on another person, and an owner with Korb
- * open when a request lands is the best possible case for answering it now.
+ * ---------------------------------------------------------------------------
+ * The failure this avoids, which is worse than no notifications
+ * ---------------------------------------------------------------------------
+ *
+ * This is a NATIVE module, and the app ships JavaScript over the air. So there
+ * is a window — every time push is added, and every time somebody skips a
+ * build — where a new bundle runs on an older binary that has no such native
+ * module in it. A top-level `import * as Notifications` in that situation does
+ * not degrade: it throws while the module graph is still being evaluated, and
+ * this file is reached from the household store, which is in the provider tree.
+ * The app fails to start.
+ *
+ * A feature that cannot work on an old binary is fine. A feature that stops the
+ * old binary from opening is not, and it would take out every OTHER fix in the
+ * same update with it.
+ *
+ * So the import is a require inside a try, resolved on first use. On a binary
+ * with the module this is one lazy load; on one without, `push()` is null,
+ * every function here returns quietly, and the in-app queue — which is what
+ * actually makes the feature work — is untouched.
  */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+type PushModule = typeof import('expo-notifications');
+
+let loaded: PushModule | null | undefined;
+function notifications(): PushModule | null {
+  if (loaded !== undefined) return loaded;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('expo-notifications') as PushModule;
+    /*
+     * How a notification behaves while the app is open: banner and sound,
+     * rather than the silent default. Every one of these is about a person
+     * waiting on another person, and an owner with Korb open when a request
+     * lands is the best possible case for answering it now.
+     *
+     * Set here rather than at module scope, because module scope is exactly
+     * where an absent native module takes the whole app down.
+     */
+    mod.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+    loaded = mod;
+  } catch {
+    loaded = null;
+  }
+  return loaded;
+}
 
 /**
  * Ask, register, and remember the token.
@@ -67,6 +106,11 @@ Notifications.setNotificationHandler({
  * server long after this app has closed. See device_tokens.language.
  */
 export async function registerForPush(language: string): Promise<void> {
+  const Notifications = notifications();
+  // An older binary, running a newer bundle. Everything else in this update
+  // works; this one thing waits for a build.
+  if (!Notifications) return;
+
   try {
     /*
      * Android needs a channel to exist before anything can arrive in it, and it
