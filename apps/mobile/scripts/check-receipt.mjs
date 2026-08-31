@@ -402,6 +402,98 @@ const overshoot = reconcile(
 check_('a total that is too high is not this fault', overshoot.doubledDiscounts.length === 0);
 
 /*
+ * THE REAL RECEIPT THAT BROKE THE FIRST VERSION.
+ *
+ * Colruyt Heverlee, 29 August. A 50% coupon printed against the DASH — "Korting
+ * bon B102440 −11,99" — and the SAME reduction printed again in the summary
+ * block as "Totale korting met Xtra: € 11,99". Two lines, one saving.
+ *
+ * The first version of the detector handled that, and shipped a doubled
+ * discount anyway, because this receipt had a SECOND fault: one item line (the
+ * kiwi, €3,15) was never read. The gap was measured against the sum of the
+ * lines, so the missing item moved it to €15,14, which matches no discount
+ * line, and nothing was dropped.
+ *
+ * Two independent faults, and the second disabled the fix for the first. That
+ * is why the gap now comes from the two PRINTED totals — a difference the model
+ * cannot change by failing to read a line.
+ */
+const COLRUYT_ITEMS = [
+  399, 89, 148, 899, 315, 176, 158, 395, 115, 994, 250, 233, 221, 91, 177, 492,
+  91, 2398, 205, 249, 159, 189, 956, 99, 319, 576, 343, 199, 77, 214, 117, 79,
+  60, 57, 156,
+];
+const COLRUYT_TOTALS = { goodsCents: 11695, paidCents: 10496, articleCount: null };
+const coupon = () => ({ ...flat('Korting bon B102440', -1199), kind: 'discount' });
+const xtraSummary = () => ({ ...flat('Totale korting met Xtra', -1199), kind: 'discount' });
+const asItems = (cents) => cents.map((c, i) => flat(`item ${i}`, c));
+
+// The fixture's own arithmetic, so a typo in the transcription is caught rather
+// than quietly changing what every assertion below is about.
+check_(
+  'the transcribed receipt adds up to its printed subtotal',
+  COLRUYT_ITEMS.reduce((a, b) => a + b, 0) === COLRUYT_TOTALS.goodsCents,
+);
+check_(
+  '...and the coupon takes it to what was paid',
+  COLRUYT_TOTALS.goodsCents - 1199 === COLRUYT_TOTALS.paidCents,
+);
+
+const colruytWhole = reconcile(
+  [...asItems(COLRUYT_ITEMS), coupon(), xtraSummary()],
+  COLRUYT_TOTALS,
+);
+check_('the duplicated coupon is dropped', colruytWhole.doubledDiscounts.length === 1);
+check_('...crediting 11,99 once', colruytWhole.discountCents === -1199);
+check_('...and the receipt reconciles', colruytWhole.ok);
+
+/*
+ * THE CASE THAT ACTUALLY SHIPPED: the same receipt with the kiwi missing.
+ *
+ * The discount must still be corrected — it is provable from the printed totals
+ * either way — and the missing item must still be REPORTED. Fixing one fault
+ * silently while hiding the other would be worse than fixing neither.
+ */
+const colruytNoKiwi = reconcile(
+  [...asItems(COLRUYT_ITEMS.filter((_, i) => i !== 4)), coupon(), xtraSummary()],
+  COLRUYT_TOTALS,
+);
+check_(
+  'a missing item no longer disables the discount fix',
+  colruytNoKiwi.doubledDiscounts.length === 1 && colruytNoKiwi.discountCents === -1199,
+);
+check_('...and the missing item is still reported', !colruytNoKiwi.ok);
+check_(
+  '...as a goods mismatch, naming both numbers',
+  colruytNoKiwi.problems.some((p) => p.includes('11380') && p.includes('11695')),
+);
+
+/*
+ * And the same missing item with only ONE coupon, which is a receipt that has
+ * a misread line and no duplicate at all. Nothing may be dropped: the printed
+ * totals agree with a single 11,99, and taking it away would invent money.
+ */
+const oneCouponNoKiwi = reconcile(
+  [...asItems(COLRUYT_ITEMS.filter((_, i) => i !== 4)), coupon()],
+  COLRUYT_TOTALS,
+);
+check_(
+  'a misread item alone drops nothing',
+  oneCouponNoKiwi.doubledDiscounts.length === 0 && oneCouponNoKiwi.discountCents === -1199,
+);
+
+/*
+ * The fallback, for a receipt that prints only what was paid. The line sum is
+ * then the only thing to measure against — worse, and better than refusing to
+ * act at all.
+ */
+const noSubtotal = reconcile(
+  [...asItems(COLRUYT_ITEMS), coupon(), xtraSummary()],
+  { ...COLRUYT_TOTALS, goodsCents: null },
+);
+check_('with no goods subtotal the line sum is used', noSubtotal.doubledDiscounts.length === 1);
+
+/*
  * A POSITIVE line labelled as a discount is not this fault, and must not be
  * deleted to make the books balance.
  *

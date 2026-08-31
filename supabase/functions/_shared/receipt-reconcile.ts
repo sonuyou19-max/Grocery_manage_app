@@ -218,14 +218,36 @@ const round = (n: number): number => Math.sign(n) * Math.round(Math.abs(n));
  * exactly.
  *
  * ---------------------------------------------------------------------------
- * The printed total is the judge, and nothing happens without it
+ * MEASURED BETWEEN THE TWO PRINTED TOTALS, not against the lines
  * ---------------------------------------------------------------------------
  *
- * A doubled reduction always makes the computed total too SMALL, by exactly the
- * amount of the duplicate. So if dropping a discount line closes that gap to
- * the cent, that line was the duplicate; if nothing closes it, the receipt has
- * some other problem and this leaves it alone for the existing checks to
- * report.
+ * This is the second version, and the first one failed on a real receipt for a
+ * reason worth writing down.
+ *
+ * It measured the gap as `printedPaid - sum(everything read)`. That is correct
+ * only while every line was read correctly — and on the receipt that broke it,
+ * one item had also been missed. The missing €3,15 moved the gap to €15,14,
+ * which is not the value of any discount line, so nothing was dropped and the
+ * shopper was credited twice. Two independent faults, and the second one
+ * disabled the fix for the first.
+ *
+ * A receipt prints TWO totals that bracket its adjustments: the goods subtotal
+ * before them and the amount paid after. Their difference is what every
+ * deposit, discount and rounding line must add up to, and it is a fact about
+ * the PAPER — a model that drops an item line cannot change it. So that is the
+ * comparison:
+ *
+ *     (paid - goods)  is what the adjustments should come to
+ *     deposit + discount + rounding  is what was read
+ *     the excess between them is what was counted twice
+ *
+ * On the receipt above: 104,96 - 116,95 = -11,99 expected, -23,98 read, so
+ * 11,99 too much was taken off — which is exactly one of the two identical
+ * coupon lines, whether or not the kiwi was ever read.
+ *
+ * The old comparison survives as the fallback for a receipt that prints only
+ * one of the two totals, where it is the best available and better than
+ * nothing.
  *
  * That is what keeps it safe. It never removes money on a hunch — only when
  * doing so makes the parse agree with a number the shopper can read off the
@@ -264,13 +286,28 @@ const round = (n: number): number => Math.sign(n) * Math.round(Math.abs(n));
 function doubledDiscountsIn(
   lines: readonly ReceiptLine[],
   computedPaid: number,
-  printedPaid: number | null,
+  reportedAdjustments: number,
+  totals: ReceiptTotals,
 ): number[] {
+  const { goodsCents: printedGoods, paidCents: printedPaid } = totals;
   if (printedPaid == null) return [];
 
-  // Too small, and by how much. A doubled reduction can only ever subtract too
-  // much, so a gap the other way is a different fault entirely.
-  const gap = round(printedPaid) - round(computedPaid);
+  /*
+   * How much too much was taken off.
+   *
+   * Preferring the two printed totals, because their difference is a property
+   * of the paper and survives a line the model failed to read — see the note
+   * above, where exactly that combination shipped a doubled discount. Falling
+   * back to the line sum only when the goods subtotal was not printed or not
+   * legible.
+   */
+  const gap =
+    printedGoods != null
+      ? round(printedPaid) - round(printedGoods) - round(reportedAdjustments)
+      : round(printedPaid) - round(computedPaid);
+
+  // A doubled reduction can only ever subtract too much, so a gap the other way
+  // is a different fault entirely.
   if (gap <= 0) return [];
 
   const discounts: number[] = [];
@@ -365,13 +402,13 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
    * right saving on the review sheet AND stops being warned about arithmetic
    * that is now correct.
    */
+  const adjustments =
+    sumOf(lines, 'deposit') + sumOf(lines, 'discount') + sumOf(lines, 'rounding');
   const doubled = doubledDiscountsIn(
     lines,
-    sumOf(lines, 'item') +
-      sumOf(lines, 'deposit') +
-      sumOf(lines, 'discount') +
-      sumOf(lines, 'rounding'),
-    totals.paidCents,
+    sumOf(lines, 'item') + adjustments,
+    adjustments,
+    totals,
   );
   const kept = lines.filter((_, i) => !doubled.includes(i));
 

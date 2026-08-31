@@ -46,10 +46,38 @@ export const TARGET_LONG_EDGE = 1600;
 /**
  * JPEG quality.
  *
- * High-contrast black on white, so 0.6 is generous — the artefacts JPEG
- * produces at this quality are in gradients, and a receipt has none.
+ * ---------------------------------------------------------------------------
+ * This was 0.6, and the reasoning for it was backwards
+ * ---------------------------------------------------------------------------
+ *
+ * The old note said high-contrast black on white made 0.6 generous, because
+ * "the artefacts JPEG produces at this quality are in gradients, and a receipt
+ * has none". That has it exactly the wrong way round. Smooth gradients are what
+ * the DCT encodes WELL; what it handles badly is a hard edge, which it
+ * reconstructs with ringing either side and blocking around it. Till printing
+ * is nothing but hard edges — thin strokes, one or two pixels wide at the
+ * resolution this sends — so a receipt is close to the worst case for JPEG
+ * rather than the best.
+ *
+ * The visible cost is small and specific: a comma smeared into a full stop, a 3
+ * that reads as an 8, a decimal point that ringing has filled in. Every one of
+ * those is a wrong number that looks like a right one.
+ *
+ * ---------------------------------------------------------------------------
+ * The headroom was there the whole time
+ * ---------------------------------------------------------------------------
+ *
+ * MAX_IMAGE_CHARS allows about 1.4MB per shot. At the resolution this captures,
+ * 0.6 produces roughly a fifth of that — so the ceiling was never the binding
+ * constraint and the compression was buying nothing anybody needed. 0.85 is
+ * still comfortably inside it, and if a device does overshoot, the retry below
+ * catches it.
+ *
+ * Raising it does not fix a photograph that is out of focus, badly lit, or
+ * mostly table. Those cost far more than the codec does, and no setting here
+ * reaches them.
  */
-export const CAPTURE_QUALITY = 0.6;
+export const CAPTURE_QUALITY = 0.85;
 
 /**
  * Quality for the second attempt, when the first came back over the ceiling.
@@ -59,7 +87,7 @@ export const CAPTURE_QUALITY = 0.6;
  * all. Low enough to make a real difference to the file, and still far above
  * where JPEG starts eating the thin strokes of till printing.
  */
-export const FALLBACK_QUALITY = 0.35;
+export const FALLBACK_QUALITY = 0.6;
 
 /** Sections of one receipt. Beyond four, the photographs are the problem. */
 export const MAX_SHOTS = 4;
