@@ -808,6 +808,46 @@ Deno.serve(async (req) => {
    */
   const worthRetrying = result.details.some((d) => MONEY_CODES.includes(d.code));
 
+  /*
+   * ---------------------------------------------------------------------------
+   * HOW WRONG, not just whether — because it decides WHICH retry
+   * ---------------------------------------------------------------------------
+   *
+   * A patch and a re-read fix different faults, and sending the wrong one is
+   * how a receipt came back twenty-four euros short with the retry having run
+   * and reported success.
+   *
+   * A PATCH corrects lines it is told are disputed. `badLines` are lines whose
+   * own multiplier x unit price does not equal their total — a misread digit,
+   * which is real and common and cheap to fix.
+   *
+   * It is useless against the fault that actually costs money. `DASH platinum
+   * 2 x 11,99 = 23,98` was read as `2 x 0,99 = 1,98`, and that line MULTIPLIES
+   * OUT PERFECTLY. It is internally consistent, it is not in badLines, and the
+   * repair brief has nothing to point at. Same for a line dropped entirely, and
+   * for two adjacent lines whose money got swapped: every one of them is
+   * arithmetically flawless and completely wrong.
+   *
+   * Those need the pixels read again, not the numbers adjusted. So the size of
+   * the discrepancy chooses: cents mean a digit, and tens of euros mean a LINE.
+   */
+  const gapCents =
+    result.details.reduce(
+      (worst, d) =>
+        d.code === 'paid' || d.code === 'goods'
+          ? Math.max(worst, Math.abs(d.got - d.printed))
+          : worst,
+      0,
+    );
+  /*
+   * A euro, or one percent of the shop, whichever is larger. Below that a
+   * weighed line rounding against its printed unit price accounts for it, and
+   * a second vision call is a long wait to move a shopper's total by four
+   * cents. Above it, something was READ wrong.
+   */
+  const reReadThreshold = Math.max(100, Math.round(0.01 * (parsed.paidCents ?? 0)));
+  const misreadLine = gapCents > reReadThreshold;
+
   if (!result.ok && worthRetrying) {
     /*
      * One retry, never a loop. A receipt that will not reconcile twice is
@@ -818,17 +858,43 @@ Deno.serve(async (req) => {
      */
     const retryAt = Date.now();
     try {
-      const fixed = applyFixes(parsed, await repair(parsed, result.badLines, result.details));
-      const better = check(fixed);
+      let candidate: z.infer<typeof receiptSchema>;
+
+      if (misreadLine) {
+        /*
+         * READ IT AGAIN, properly. The whole receipt, on the careful model,
+         * with nothing carried over from the first attempt — a re-read that
+         * was shown the first answer would anchor on it, and the first answer
+         * is the thing being doubted.
+         */
+        candidate = await ask(MODEL_CAREFUL);
+      } else {
+        candidate = applyFixes(parsed, await repair(parsed, result.badLines, result.details));
+      }
+
+      const better = check(candidate);
       /*
        * Kept only if it is actually better. A repair that fixes one row and
-       * breaks another has not helped, and `problems.length` is the same
-       * measure the old full re-read was judged by — the point of the change is
-       * that it costs a tenth as much to ask, not that the answer is trusted
-       * any more readily.
+       * breaks another has not helped.
+       *
+       * `problems.length` was the whole test, and it is too coarse for a
+       * re-read: two answers can each fail the same two checks while one is
+       * twenty euros closer to the paper. So a smaller MONEY GAP counts as
+       * better too — that is the number the shopper is looking at.
        */
-      if (better.ok || better.problems.length < result.problems.length) {
-        parsed = fixed;
+      const betterGap = better.details.reduce(
+        (worst, d) =>
+          d.code === 'paid' || d.code === 'goods'
+            ? Math.max(worst, Math.abs(d.got - d.printed))
+            : worst,
+        0,
+      );
+      if (
+        better.ok ||
+        better.problems.length < result.problems.length ||
+        betterGap < gapCents
+      ) {
+        parsed = candidate;
         result = better;
         model = MODEL_CAREFUL;
       }
@@ -852,6 +918,14 @@ Deno.serve(async (req) => {
       model,
       readMs,
       retryMs,
+      /*
+       * Which retry was chosen and how far off the first read was. The two
+       * paths fix different faults, and without this there is no way to tell a
+       * receipt that was patched from one that was read twice — nor whether the
+       * threshold between them is set anywhere near right.
+       */
+      gapCents,
+      retry: result.ok || retryMs > 0 ? (misreadLine ? 're-read' : 'patch') : 'none',
       ok: result.ok,
       codes: result.details.map((d) => d.code),
       /*

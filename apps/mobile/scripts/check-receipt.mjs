@@ -759,20 +759,59 @@ check_(
   /MODEL_CAREFUL/.test(fn) && /better\.problems\.length < result\.problems\.length/.test(fn),
 );
 /*
- * ONE full transcription, ever.
+ * TWO TRANSCRIPTIONS AT MOST, AND THE SECOND ONE HAS TO EARN IT.
  *
- * The escalation used to be a second `ask` — every line on the paper read again
- * on a slower model, which is roughly two thousand output tokens generated
- * twice, and output is what the shopper actually waits for. It is a REPAIR now:
- * the same images, the numbers already read, and the rows in dispute.
+ * This asserted exactly one `ask`, and it was right for the fault it was
+ * written about: re-reading every line on a slower model is roughly two
+ * thousand output tokens generated twice, and output is what the shopper waits
+ * for. A repair — same images, numbers already read, rows in dispute — costs a
+ * tenth of that.
  *
- * Counted rather than described, because the way this regresses is somebody
- * reaching for `ask` again — it is right there, it works, and it is the reason
- * a seventeen-line receipt took minutes.
+ * It is useless against the fault that actually costs money. `DASH platinum
+ * 2 x 11,99 = 23,98` came back as `2 x 0,99 = 1,98`, which MULTIPLIES OUT
+ * PERFECTLY: it is not in badLines, the repair brief has nothing to point at,
+ * and the retry ran and reported success while the receipt was twenty-four
+ * euros short. A line dropped entirely, and two adjacent lines whose money got
+ * swapped, are the same shape — arithmetically flawless and completely wrong.
+ *
+ * Those need the pixels read again. So the SIZE of the discrepancy chooses:
+ * cents mean a misread digit and get the cheap patch; tens of euros mean a
+ * misread LINE and get the re-read. The speed argument is preserved exactly
+ * where it applies and abandoned where it was costing correctness.
  */
 check_(
-  'the receipt is transcribed exactly once',
-  (fn.match(/await ask\(/g) ?? []).length === 1,
+  'the receipt is transcribed at most twice',
+  (fn.match(/await ask\(/g) ?? []).length === 2,
+);
+check_(
+  '...and the second time only when a whole line looks wrong',
+  /if \(misreadLine\) \{[\s\S]{0,400}?candidate = await ask\(MODEL_CAREFUL\);/.test(fn),
+);
+check_(
+  '...with a small gap still taking the cheap patch',
+  /\} else \{\s*candidate = applyFixes\(parsed, await repair\(/.test(fn),
+);
+/*
+ * The threshold is money, not a count of failed checks. A weighed line rounding
+ * against its printed unit price is worth cents; a line read wrong is worth
+ * euros, and only the second is worth a second vision call.
+ */
+check_(
+  'the choice is made on how far off the money is',
+  /const misreadLine = gapCents > reReadThreshold;/.test(fn),
+);
+check_(
+  '...against a euro or one percent, whichever is larger',
+  /Math\.max\(100, Math\.round\(0\.01 \* \(parsed\.paidCents \?\? 0\)\)\)/.test(fn),
+);
+/*
+ * AND A RE-READ IS JUDGED ON THE GAP IT CLOSES, not only on how many checks it
+ * passes. Two answers can fail the same two checks with one of them twenty
+ * euros closer to the paper — `problems.length` alone would throw that away.
+ */
+check_(
+  'a closer answer is kept even when it fails the same checks',
+  /betterGap < gapCents/.test(fn),
 );
 check_(
   '...and the repair asks only for corrections',
@@ -858,7 +897,17 @@ const logCall = fn.slice(
   fn.indexOf("at: 'receipt-scan',"),
   fn.indexOf('Teach the shared dictionary'),
 );
-check_('the log block was found', logCall.length > 100 && logCall.length < 3000);
+/*
+ * The bound is a runaway check on the slice, not a budget for the log. It grew
+ * past 3000 when the retry started recording which path it took and how far off
+ * the first read was — which is the one thing that says whether the threshold
+ * between a patch and a re-read is set anywhere near right.
+ */
+check_('the log block was found', logCall.length > 100 && logCall.length < 4000);
+check_(
+  '...and records which retry ran, and how wrong the first read was',
+  /gapCents,/.test(logCall) && /retry: result\.ok \|\| retryMs > 0/.test(logCall),
+);
 check_('the log names which rows failed', /badLines: result\.badLines,/.test(logCall));
 check_(
   '...with the three numbers that did not multiply out',
