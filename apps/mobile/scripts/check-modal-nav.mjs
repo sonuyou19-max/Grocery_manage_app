@@ -391,6 +391,94 @@ if (/maxHeight:\s*["']\d+%["']/.test(ledger)) {
   console.log('ok   the ledger caps itself with a measured number, not a percentage');
 }
 
+/* ---------------- a list's ceiling is the room, not a constant ------------ */
+
+/*
+ * The overflow sheet had the card capped from the window and the LIST capped at
+ * a flat 380dp, inherited from the `staples-sheet` it replaced. 380 is the
+ * lower of the two on every phone made since, so the card's cap never once
+ * decided anything: the sheet came out at roughly 512dp on an 874dp screen,
+ * with a third of the screen empty above it and the rest of the list past the
+ * fold. "I can't scroll up this list, it feels stuck" — a sheet that is plainly
+ * not full, over a list that plainly is.
+ *
+ * A constant is exactly the wrong shape for this number. It cannot know the
+ * screen, and it cannot know the chrome it has to sit under either: the title
+ * wraps at large font scales and in longer languages, and the card's floor
+ * moves with the gesture bar. So the assertion is not "there is a cap" — the
+ * broken version had one — but that the cap is DERIVED: the window, less what
+ * onLayout measured.
+ *
+ * Kept separate from the ledger's block above because the two files fail
+ * differently. The ledger's regression is a percentage that will not resolve;
+ * this one's is a number that resolves perfectly and is simply not the room
+ * available.
+ */
+const overflow = code(read('components/overflow-sheet.tsx') ?? '');
+
+/*
+ * Literal caps, anywhere in the file. Written as an enumeration of what the
+ * file may say rather than a ban on "380", because the bug is a hard-coded
+ * ceiling and 320 or 420 would be the same bug — this repo has already shipped
+ * a guard that blacklisted one spelling and passed against the next.
+ */
+const literalCaps = [...overflow.matchAll(/maxHeight:\s*([^,\n}]+)/g)].map((m) =>
+  m[1].trim(),
+);
+
+if (!overflow) {
+  fail('components/overflow-sheet.tsx is missing', [
+    'It owns the "see all" sheet for four Insights cards.',
+  ]);
+} else if (literalCaps.some((v) => /^["']?\d/.test(v))) {
+  fail('the overflow sheet caps its list with a constant again', [
+    `  maxHeight: ${literalCaps.filter((v) => /^["']?\d/.test(v)).join(', ')}`,
+    '',
+    'A number written here cannot be the room the sheet has — it is smaller',
+    'than the card cap on every modern phone, so it, and not the cap, decides',
+    'how much list you get. That is the 380 that made the staples sheet stop',
+    'at eleven rows with a third of the screen unused above it.',
+  ]);
+} else if (!/=\s*useWindowDimensions\(\)/.test(overflow)) {
+  fail('the overflow sheet no longer measures the window', [
+    'cardCap derives from it, and scrollCap from cardCap. Without the call',
+    'there is nothing for either ceiling to be a fraction OF.',
+  ]);
+} else if (!/cardCap\s*-\s*chrome/.test(overflow)) {
+  fail('the list ceiling no longer subtracts the chrome around it', [
+    'scrollCap is the room LEFT for rows: the card cap, less the handle, the',
+    'title, the Done row, the padding and the gesture bar. Capping the list at',
+    'the card cap instead overflows the card by the height of all of that, and',
+    'the GlassView clips it — silently, and from the bottom, which takes the',
+    'Done button with it.',
+  ]);
+} else if ((overflow.match(/onLayout=/g) ?? []).length < 2) {
+  fail('the overflow sheet no longer measures its chrome', [
+    'Both blocks — the handle-and-title above the list and the Done row below',
+    'it — are measured, because a title wraps at large font scales and in',
+    'longer languages. A constant subtracted for them is wrong on exactly the',
+    'devices where the room is tightest.',
+  ]);
+} else if (!/maxHeight:\s*cardCap/.test(overflow) || !/maxHeight:\s*scrollCap/.test(overflow)) {
+  fail('the computed caps are no longer wired to the card and the list', [
+    'cardCap must reach the GlassView and scrollCap must reach the ScrollView.',
+    'A cap that is computed but not applied is silent.',
+  ]);
+} else if (!/scroll:\s*\{[^}]*flexGrow:\s*0/.test(overflow)) {
+  fail('the overflow sheet list can grow past its own rows', [
+    'scrollCap is a CEILING, never a floor. With flexGrow the ScrollView takes',
+    'the whole cap whatever it holds, and a three-row list becomes a',
+    'full-height sheet with three rows stranded at the top of it.',
+  ]);
+} else if (!/scroll:\s*\{[^}]*flexShrink:\s*1/.test(overflow)) {
+  fail('the overflow sheet list can no longer shrink', [
+    'Without it the ceiling is ignored when the rows exceed it and the list',
+    'overflows the card, which clips — the same failure the cap exists for.',
+  ]);
+} else {
+  console.log('ok   the overflow sheet gives its list the room the screen has');
+}
+
 /* ------------- the deferral must key on the WINDOW, not on the prop ------- */
 
 /*
@@ -537,6 +625,7 @@ if (bare.length) {
  * somewhere to shrink TO.
  */
 const LISTING_SHEETS = [
+  'components/overflow-sheet.tsx',
   'components/purchase-ledger.tsx',
   'components/staple-sheet.tsx',
   'components/purchase-sheet.tsx',

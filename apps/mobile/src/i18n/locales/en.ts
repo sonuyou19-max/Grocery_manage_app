@@ -19,6 +19,7 @@ const en = {
     undo: 'Undo',
     save: 'Save',
     done: 'Done',
+    inTotal: '%{count} in total',
     add: 'Add',
     close: 'Close',
     back: 'Back',

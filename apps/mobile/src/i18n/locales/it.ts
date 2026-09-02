@@ -10,6 +10,7 @@ const it = {
     undo: 'Annulla',
     save: 'Salva',
     done: 'Fatto',
+    inTotal: '%{count} in totale',
     add: 'Aggiungi',
     close: 'Chiudi',
     back: 'Indietro',

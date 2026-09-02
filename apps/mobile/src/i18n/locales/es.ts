@@ -10,6 +10,7 @@ const es = {
     undo: 'Deshacer',
     save: 'Guardar',
     done: 'Hecho',
+    inTotal: '%{count} en total',
     add: 'Añadir',
     close: 'Cerrar',
     back: 'Atrás',

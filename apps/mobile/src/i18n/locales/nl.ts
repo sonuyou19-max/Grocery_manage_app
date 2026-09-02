@@ -10,6 +10,7 @@ const nl = {
     undo: 'Ongedaan maken',
     save: 'Opslaan',
     done: 'Klaar',
+    inTotal: '%{count} in totaal',
     add: 'Toevoegen',
     close: 'Sluiten',
     back: 'Terug',

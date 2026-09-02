@@ -15,6 +15,7 @@ const pl = {
     undo: 'Cofnij',
     save: 'Zapisz',
     done: 'Gotowe',
+    inTotal: '%{count} łącznie',
     add: 'Dodaj',
     close: 'Zamknij',
     back: 'Wstecz',

@@ -597,13 +597,39 @@ if (anonymous.length) {
  * A number that differs from every shared value is a deliberate deviation and
  * passes; one that MATCHES is the vocabulary written out by hand, and the fix
  * is to say so.
+ *
+ * ---------------------------------------------------------------------------
+ * ...but only for constants that are actually DURATIONS
+ * ---------------------------------------------------------------------------
+ *
+ * The first version matched every screaming-snake number in the app, and a
+ * duration in milliseconds is not distinguishable from a length in dp by its
+ * digits alone. It caught `MIN_SCROLL = 160` — the smallest list an overflow
+ * sheet will draw — and told it to use DURATION.exit, which is 160ms and has
+ * nothing to do with it.
+ *
+ * That is not a harmless false positive. A guard that fires on things it cannot
+ * really know about is one that gets suppressed, and this one has already
+ * earned its keep once. So a constant is in scope when EITHER it names itself
+ * temporal, OR the file passes it to something that takes a duration. The
+ * second half is the one with teeth: a hand-typed 220 called `FOLD` and handed
+ * to withTiming is caught on how it is USED, whatever it is called.
  */
 const shared = new Map(Object.entries(DURATION).map(([k, v]) => [v, k]));
+const TEMPORAL_NAME = /(^|_)(MS|DURATION|DELAY|TIME|SPEED|FADE|ANIM)($|_)/;
+// Passed where a duration goes: `{ duration: X }`, withTiming/withDelay's
+// second argument, or a bare timer.
+const usedAsDuration = (text, name) =>
+  new RegExp(
+    `duration:\\s*${name}\\b|with(?:Timing|Delay|Repeat)\\([^)]*\\b${name}\\b|set(?:Timeout|Interval)\\([^)]*\\b${name}\\b`,
+  ).test(text);
+
 const restated = files
   .filter((f) => f.rel !== 'lib/motion.ts')
   .flatMap((f) =>
-    [...f.text.matchAll(/const ([A-Z][A-Z0-9_]*(?:_MS)?)\s*=\s*(\d+)\s*;/g)]
-      .filter(([, , n]) => shared.has(Number(n)))
+    [...f.text.matchAll(/const ([A-Z][A-Z0-9_]*)\s*=\s*(\d+)\s*;/g)]
+      .filter(([, name, n]) => shared.has(Number(n)))
+      .filter(([, name]) => TEMPORAL_NAME.test(name) || usedAsDuration(f.text, name))
       .map(([, name, n]) => `${f.rel}: ${name} = ${n} is DURATION.${shared.get(Number(n))}`),
   );
 if (restated.length) {

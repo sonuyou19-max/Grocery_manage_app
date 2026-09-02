@@ -10,6 +10,7 @@ const fr = {
     undo: 'Annuler',
     save: 'Enregistrer',
     done: 'Terminé',
+    inTotal: '%{count} au total',
     add: 'Ajouter',
     close: 'Fermer',
     back: 'Retour',

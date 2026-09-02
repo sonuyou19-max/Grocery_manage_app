@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -6,6 +6,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -52,11 +53,58 @@ import { radii, spacing, type, useScrollIndicator, useTheme } from "@/theme";
  *
  * So: a real pixel cap on the card from the window, `flexShrink: 1` so the cap
  * can actually squeeze, and `flexGrow: 0` so a list SHORTER than the cap still
- * sizes down to its rows rather than stranding them above blank space. The 380
- * goes back to meaning what it reads as — how much list to show when there is
- * room for it. See purchase-ledger.tsx for why the cap is a measured number
- * and not a percentage.
+ * sizes down to its rows rather than stranding them above blank space. See
+ * purchase-ledger.tsx for why the cap is a measured number and not a
+ * percentage.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the list's own ceiling is measured too, and is not 380
+ * ---------------------------------------------------------------------------
+ *
+ * That sizing work capped the CARD correctly and left the ScrollView's own
+ * `maxHeight: 380` alone, which was inherited from `staples-sheet` and is not a
+ * design intent — it is a number from a phone nobody wrote down. It is the
+ * lower of the two ceilings on every device made since, so it, not the card,
+ * is what decides how much list you get.
+ *
+ * On a 874dp screen that puts the sheet at roughly 512dp: eleven rows, a third
+ * of the screen left empty ABOVE a sheet that has been told it may use 699dp,
+ * and the rest of the list beyond the fold. Reported as "I can't scroll up this
+ * list, it feels stuck", which is the right description — a sheet that is
+ * plainly not full, with a list that plainly is.
+ *
+ * So the ceiling on the list is the room the card actually has: the cap, less
+ * the chrome around it. The chrome is MEASURED, for purchase-ledger's reason —
+ * the title wraps at large font scales and in longer languages, and a constant
+ * subtracted for it is wrong on exactly the devices where the room is
+ * tightest. The estimates below are only what paints on the first frame, before
+ * onLayout has fired; the sheet is still travelling in for another 220ms, so a
+ * correction lands inside the entrance rather than after it.
  */
+
+/**
+ * First-frame guesses, replaced by real measurements a frame later.
+ *
+ * The handle's 28dp plus a line of h2, a line of sub, and the gaps between
+ * them; and the Done row, a line of body text under its own padding.
+ *
+ * Deliberately a little LARGE: over-guessing the chrome makes the first frame's
+ * list slightly short, which corrects invisibly, while under-guessing overshoots
+ * the card and gets clipped by the GlassView for that frame.
+ */
+const HEAD_ESTIMATE = 92;
+const FOOT_ESTIMATE = 36;
+
+/**
+ * The least list worth showing, whatever the arithmetic says.
+ *
+ * A short screen at the largest font scale can drive `cardCap - chrome` down to
+ * a couple of rows or, with a title wrapped to three lines, past zero. Better
+ * to overflow the 80% by a little and stay scrollable than to render a sheet
+ * with a sliver of list in it.
+ */
+const MIN_SCROLL = 160;
+
 export function OverflowSheet({
   visible,
   title,
@@ -75,7 +123,20 @@ export function OverflowSheet({
   const { height: windowHeight } = useWindowDimensions();
   const t = useT();
 
+  const [headHeight, setHeadHeight] = useState(HEAD_ESTIMATE);
+  const [footHeight, setFootHeight] = useState(FOOT_ESTIMATE);
+
   const cardCap = Math.round(windowHeight * 0.8);
+  /*
+   * Everything in the card that is not the list: the two measured blocks, the
+   * card's own padding — the bottom of which carries the gesture bar — and the
+   * two gaps that sit either side of the ScrollView. Subtracted rather than
+   * approximated, because this figure IS the list's ceiling and anything left
+   * out of it is list that gets clipped.
+   */
+  const chrome =
+    headHeight + footHeight + spacing.lg * 2 + insets.bottom + spacing.sm * 2;
+  const scrollCap = Math.max(MIN_SCROLL, cardCap - chrome);
 
   return (
     <Sheet visible={visible} onClose={onClose} scrim gutter={0} motion="slide">
@@ -92,16 +153,55 @@ export function OverflowSheet({
           },
         ]}
       >
-        <SheetHandle />
-        <Text style={[type.h2, { color: colors.ink }]}>{title}</Text>
+        {/* Handle and title measured together, as one block — they are what
+            sits above the list, and two onLayouts to add up would be two
+            numbers that can disagree about the gap between them. */}
+        <View
+          style={styles.head}
+          onLayout={(e: LayoutChangeEvent) =>
+            setHeadHeight(e.nativeEvent.layout.height)
+          }
+        >
+          <SheetHandle />
+          <Text style={[type.h2, { color: colors.ink }]}>{title}</Text>
+          {/*
+            How many rows there are, which is the other half of "it feels
+            stuck".
+
+            A clipped list and a complete one look identical here: both end at
+            the bottom of the card, and the scroll indicator only appears once
+            you are already dragging. So a reader who expected more has no way
+            to tell whether the sheet is holding rows back or simply has none —
+            and the honest answer to that question is a number.
+
+            Counted off the children rather than passed in, because the caller
+            has already said it once by rendering them and two counts that can
+            disagree is worse than none. toArray, not Children.count: the call
+            sites render four conditional branches, and count would score the
+            three false ones as children.
+          */}
+          <Text style={[type.sub, { color: colors.muted }]}>
+            {t("common.inTotal", { count: Children.toArray(children).length })}
+          </Text>
+        </View>
         <ScrollView
-          style={styles.scroll}
+          // The measured ceiling, not a constant: see the note above. flexGrow
+          // 0 keeps a SHORT list at its own height, so this is a ceiling and
+          // never a floor — three staples still get a three-row sheet.
+          style={[styles.scroll, { maxHeight: scrollCap }]}
           contentContainerStyle={styles.list}
           {...scrollIndicator}
         >
           {children}
         </ScrollView>
-        <Pressable onPress={onClose} style={styles.done} hitSlop={8}>
+        <Pressable
+          onPress={onClose}
+          style={styles.done}
+          hitSlop={8}
+          onLayout={(e: LayoutChangeEvent) =>
+            setFootHeight(e.nativeEvent.layout.height)
+          }
+        >
           <Text style={[type.body, { color: colors.accent }]}>
             {t("common.done")}
           </Text>
@@ -145,7 +245,11 @@ const styles = StyleSheet.create({
     // cap is applied inline, since it is computed from the window at render.
     flexShrink: 1,
   },
-  scroll: { maxHeight: 380, flexGrow: 0, flexShrink: 1 },
+  // The numeric maxHeight is applied inline (scrollCap, from the window and the
+  // measured chrome). These two are the static half: shrink so the cap can
+  // squeeze the list, grow 0 so a short one keeps its own height.
+  head: { gap: spacing.sm },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   // A row's worth of room under the last entry, so the end of the list reads
   // as the end of the list rather than as something cut off by the Done row.
   list: { paddingBottom: spacing.sm },

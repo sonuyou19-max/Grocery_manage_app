@@ -10,6 +10,7 @@ const de = {
     undo: 'Rückgängig',
     save: 'Speichern',
     done: 'Fertig',
+    inTotal: '%{count} insgesamt',
     add: 'Hinzufügen',
     close: 'Schließen',
     back: 'Zurück',
