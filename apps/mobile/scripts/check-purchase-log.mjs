@@ -164,7 +164,75 @@ const wow = mod.spendTrend(
   4,
 );
 check('week-over-week ignores the partial current week', wow.weekOverWeek, 1);
+check('...and the same change in money', wow.weekOverWeekCents, 500);
 check('no week-over-week without two active weeks', mod.spendTrend([buy('A', 100, '2026-07-15T10:00:00')], now, 4).weekOverWeek, null);
+
+/*
+ * THE 5797% CARD.
+ *
+ * Real numbers off a real screen: a week where one €1,98 item had been logged,
+ * followed by a €116,76 shop. The fraction is arithmetically perfect and
+ * completely unreadable — nobody parses 5797% as a proportion, and a grocery
+ * week is very often not a base worth dividing by. People shop fortnightly, do
+ * one big shop and three top-ups, go on holiday.
+ *
+ * The old guard was `prior.cents > 0`, which 198 cents passes — while the
+ * comment directly above it said "a jump from nothing to something is not a
+ * percentage". The intent was right and the threshold was at zero.
+ *
+ * Both figures are computed here and the CARD picks; that split is deliberate,
+ * because "which of these reads better" is a question about a sentence and this
+ * file is about arithmetic.
+ */
+const explosive = mod.spendTrend(
+  [
+    buy('BigShop', 11676, '2026-07-22T10:00:00'),
+    buy('OneThing', 198, '2026-07-15T10:00:00'),
+  ],
+  mondayMorning,
+  4,
+);
+check('a tiny base still yields its fraction', Math.round(explosive.weekOverWeek * 100), 5797);
+check(
+  '...and the money, which is what the card will show',
+  explosive.weekOverWeekCents,
+  11478,
+);
+/*
+ * The money is available whenever the two weeks are comparable, INCLUDING when
+ * the fraction is not — a week of exactly nothing followed by a shop has no
+ * percentage at all, and "€40 more" is still true and still useful.
+ */
+const fromNothing = mod.spendTrend(
+  [buy('Shop', 4000, '2026-07-22T10:00:00'), buy('Nothing', 0, '2026-07-15T10:00:00')],
+  mondayMorning,
+  4,
+);
+check('a zero base has no percentage', fromNothing.weekOverWeek, null);
+check('...but still has a difference', fromNothing.weekOverWeekCents, 4000);
+
+/*
+ * And the CARD makes the choice, which is the half a reader sees. Asserted
+ * against the source because the rule is one line of JSX and the way it
+ * regresses is somebody simplifying it back to a single branch.
+ */
+{
+  const insights = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'insights.tsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const rule = /trend\.weekOverWeek != null && Math\.abs\(trend\.weekOverWeek\) < 3/.test(insights);
+  check('the card shows a percentage only up to a quadrupling', rule, true);
+  check(
+    '...and the money beyond it',
+    /insights\.trendUpMoney[\s\S]{0,200}?trendDownMoney/.test(insights),
+    true,
+  );
+  check(
+    '...with the row shown whenever there is a difference at all',
+    /trend\.weekOverWeekCents != null && \(/.test(insights),
+    true,
+  );
+}
 check('empty log has no peak', mod.spendTrend([], now, 4).peak, null);
 check('empty log averages zero', mod.spendTrend([], now, 4).averageCents, 0);
 

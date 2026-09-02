@@ -855,6 +855,8 @@ const pl = {
     trendPerWeek: 'średnio na tydzień',
     trendUp: '%{percent}% więcej niż tydzień wcześniej',
     trendDown: '%{percent}% mniej niż tydzień wcześniej',
+    trendUpMoney: '%{amount} więcej niż tydzień wcześniej',
+    trendDownMoney: '%{amount} mniej niż tydzień wcześniej',
     trendThisWeek: 'Ten tydzień',
     trendPartial: 'Ten tydzień jeszcze trwa, więc jego słupek będzie rósł.',
     trendCaveat:

@@ -752,6 +752,8 @@ const fr = {
     trendPerWeek: 'par semaine en moyenne',
     trendUp: '%{percent}% de plus que la semaine précédente',
     trendDown: '%{percent}% de moins que la semaine précédente',
+    trendUpMoney: '%{amount} de plus que la semaine dernière',
+    trendDownMoney: '%{amount} de moins que la semaine dernière',
     trendThisWeek: 'Cette semaine',
     trendPartial: 'Cette semaine n’est pas finie, sa barre va donc encore monter.',
     trendCaveat:

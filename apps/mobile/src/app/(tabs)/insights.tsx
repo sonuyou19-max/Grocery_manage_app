@@ -615,24 +615,44 @@ function SignedInInsights() {
               {t("insights.trendPerWeek")}
             </Text>
           </View>
-          {trend.weekOverWeek != null && (
+          {trend.weekOverWeekCents != null && (
             <View style={styles.deltaRow}>
               <Ionicons
-                name={trend.weekOverWeek >= 0 ? "arrow-up" : "arrow-down"}
+                name={trend.weekOverWeekCents >= 0 ? "arrow-up" : "arrow-down"}
                 size={14}
                 // Neither direction is good or bad — spending more isn't a
                 // failure — so this stays ink, not a status colour.
                 color={colors.muted}
               />
+              {/*
+                A PERCENTAGE ONLY WHILE IT IS STILL READ AS A PROPORTION.
+                
+                This said "5797% more than the week before", which was
+                arithmetically correct: €117 against a week where a single
+                €1,98 item had been logged. Nobody reads 5797% as a
+                proportion — it is a number that has stopped meaning anything,
+                on a card whose whole job is to mean something.
+                
+                A grocery week is often not a base worth dividing by. People
+                shop fortnightly, do one big shop and three top-ups, go away.
+                So past a quadrupling the card shows the MONEY, which cannot
+                explode because subtraction has no denominator, and which
+                answers the question a percentage was standing in for.
+              */}
               <Text style={[type.sub, { color: colors.muted }]}>
-                {t(
-                  trend.weekOverWeek >= 0
-                    ? "insights.trendUp"
-                    : "insights.trendDown",
-                  {
-                    percent: Math.abs(Math.round(trend.weekOverWeek * 100)),
-                  },
-                )}
+                {trend.weekOverWeek != null && Math.abs(trend.weekOverWeek) < 3
+                  ? t(
+                      trend.weekOverWeek >= 0
+                        ? "insights.trendUp"
+                        : "insights.trendDown",
+                      { percent: Math.abs(Math.round(trend.weekOverWeek * 100)) },
+                    )
+                  : t(
+                      trend.weekOverWeekCents >= 0
+                        ? "insights.trendUpMoney"
+                        : "insights.trendDownMoney",
+                      { amount: money(Math.abs(trend.weekOverWeekCents)) },
+                    )}
               </Text>
             </View>
           )}

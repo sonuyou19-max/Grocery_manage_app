@@ -306,6 +306,16 @@ export interface SpendTrend {
    * from nothing to something is not a percentage.
    */
   weekOverWeek: number | null;
+  /**
+   * The same change in MONEY, which is the half that is always readable.
+   *
+   * A percentage needs a base worth dividing by, and a grocery week often is
+   * not one: a week where somebody logged a single €1,98 item against a €117
+   * shop the week after is a true and useless "5797% more". The card picks
+   * whichever of the two says something — see insights.tsx — and the money form
+   * cannot explode, because subtraction has no denominator.
+   */
+  weekOverWeekCents: number | null;
 }
 
 /**
@@ -325,12 +335,17 @@ export function spendTrend(purchases: Purchase[], now: number, weeks = 8): Spend
   const complete = series.slice(0, -1);
   const last = complete[complete.length - 1];
   const prior = complete[complete.length - 2];
+  const comparable = last != null && prior != null && last.count > 0 && prior.count > 0;
   const weekOverWeek =
-    last && prior && last.count > 0 && prior.count > 0 && prior.cents > 0
-      ? (last.cents - prior.cents) / prior.cents
-      : null;
+    comparable && prior!.cents > 0 ? (last!.cents - prior!.cents) / prior!.cents : null;
+  /*
+   * Computed whenever the two weeks are comparable at all, including when the
+   * fraction above is unusable. That is the point: the money is what the card
+   * falls back to.
+   */
+  const weekOverWeekCents = comparable ? last!.cents - prior!.cents : null;
 
-  return { weeks: series, averageCents, peak, weekOverWeek };
+  return { weeks: series, averageCents, peak, weekOverWeek, weekOverWeekCents };
 }
 
 /* ------------------------------------------------------------ price movement */

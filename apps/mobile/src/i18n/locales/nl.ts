@@ -751,6 +751,8 @@ const nl = {
     trendPerWeek: 'per week gemiddeld',
     trendUp: '%{percent}% meer dan de week ervoor',
     trendDown: '%{percent}% minder dan de week ervoor',
+    trendUpMoney: '%{amount} meer dan de week ervoor',
+    trendDownMoney: '%{amount} minder dan de week ervoor',
     trendThisWeek: 'Deze week',
     trendPartial: 'Deze week loopt nog, dus die balk wordt nog hoger.',
     trendCaveat:

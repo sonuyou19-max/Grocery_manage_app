@@ -764,6 +764,8 @@ const en = {
     trendPerWeek: 'a week, on average',
     trendUp: '%{percent}% more than the week before',
     trendDown: '%{percent}% less than the week before',
+    trendUpMoney: '%{amount} more than the week before',
+    trendDownMoney: '%{amount} less than the week before',
     trendThisWeek: 'This week',
     trendPartial: 'This week is still going, so its bar will grow.',
     trendCaveat: 'Based only on the prices you logged, so it’s a floor — not your full shop.',

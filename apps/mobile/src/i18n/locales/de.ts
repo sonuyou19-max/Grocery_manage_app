@@ -753,6 +753,8 @@ const de = {
     trendPerWeek: 'pro Woche im Durchschnitt',
     trendUp: '%{percent}% mehr als in der Woche davor',
     trendDown: '%{percent}% weniger als in der Woche davor',
+    trendUpMoney: '%{amount} mehr als in der Vorwoche',
+    trendDownMoney: '%{amount} weniger als in der Vorwoche',
     trendThisWeek: 'Diese Woche',
     trendPartial: 'Diese Woche läuft noch, ihr Balken wächst also weiter.',
     trendCaveat:
