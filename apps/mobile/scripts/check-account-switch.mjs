@@ -134,7 +134,7 @@ check(
  * The tolerant match stays anyway: a working tree that predates that file is
  * still out there, and this is one regex.
  */
-const anchor = /^ {2}useEffect\(\(\) => \{\r?\n {4}if \(!restoredRef\.current\) return;/m;
+const anchor = /^ {2}useEffect\(\(\) => \{\r?\n {4}if \(!restored\) return;/m;
 const at = householdSrc.search(anchor);
 const end = at < 0 ? -1 : householdSrc.indexOf('  }, [', at);
 if (at < 0 || end < 0) {
@@ -157,6 +157,87 @@ check(
 check(
   'a cleared selection removes the key rather than leaving it',
   /removeItem\(ACTIVE_KEY\)/.test(body),
+  true,
+);
+// The gate has to be something an effect can depend on. As a ref it was read
+// but never depended on, so the one launch that changes no other dep — no
+// stored id at all — reached the correction only because the fetch happened to
+// land afterwards.
+// Read off THIS effect's own closer — `end` is where it was found — rather than
+// the first one anywhere below it, which would let a different effect's
+// dependencies satisfy an assertion about this one.
+check(
+  'the correction re-runs when the on-device read lands',
+  body ? /^ {2}\}, \[restored,/.test(householdSrc.slice(end, end + 60)) : 'no body to check',
+  true,
+);
+
+/* ---------------- "not yet" must never be mistaken for "none" ------------- */
+
+/*
+ * THE COLD-START BUG, which is the same class as the one above and cost the
+ * remembered household on every hard close.
+ *
+ * `settled` is `settledFor === (user?.id ?? null)`, and the two sides are both
+ * null in two situations that mean opposite things: signed out, which is
+ * conclusive, and auth still reading the session off the device at launch,
+ * which is nothing at all. `refresh` wrote `settledFor = null` on the second one
+ * too — so for the first moments of every cold start the correction believed an
+ * empty roster was final, resolved the remembered id to null, and REMOVED THE
+ * KEY. Auth then arrived, the roster loaded, nothing was remembered, and the
+ * fallback took households[0] — alphabetically first — and wrote that back. The
+ * wrong household, and permanently, because storage had been overwritten.
+ *
+ * The same hole had a second mouth: `settledFor = user.id` was set from a
+ * `finally`, so a query that failed was also "settled with no households". A
+ * launch on a bad connection erased the choice exactly as thoroughly.
+ *
+ * Both halves are asserted, because either one alone restores the whole bug.
+ */
+/*
+ * Comments stripped, and this file's most repeated guard bug is the reason: the
+ * block above this function explains at length why the settle is NOT written
+ * from a finally, and an assertion that the words "finally" and "setSettledFor"
+ * do not appear near each other would fail against exactly the code that gets
+ * it right.
+ */
+const stripComments = (t) =>
+  t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const refreshFn = stripComments(
+  householdSrc.slice(
+    householdSrc.indexOf('const refresh = useCallback'),
+    householdSrc.indexOf('  }, [user, initializing]);'),
+  ),
+);
+
+check(
+  'refresh claims nothing while auth is still initializing',
+  /if \(initializing\) return;/.test(refreshFn),
+  true,
+);
+check(
+  '...and re-runs once it stops',
+  /\}, \[user, initializing\]\);/.test(householdSrc),
+  true,
+);
+check(
+  'a failed roster query is not an empty roster',
+  /error: householdsError/.test(refreshFn) && /if \(householdsError\) return;/.test(refreshFn),
+  true,
+);
+/*
+ * Asserted as an absence AND a presence, because deleting the settle entirely
+ * would satisfy "it is not in a finally" while leaving nothing settled ever —
+ * `needsHousehold` would never fire and a stale id would never be corrected.
+ */
+check(
+  'the settle is not written from a finally',
+  /finally \{[\s\S]*?setSettledFor/.test(refreshFn),
+  false,
+);
+check(
+  '...and is written on the path that saw the answer',
+  /setSettledFor\(user\.id\);/.test(refreshFn),
   true,
 );
 

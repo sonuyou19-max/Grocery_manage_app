@@ -286,7 +286,14 @@ export function resolveActiveId(
 }
 
 export function HouseholdProvider({ children }: PropsWithChildren) {
-  const { user } = useAuth();
+  /*
+   * `initializing` matters as much as `user` here, and leaving it out is what
+   * lost the remembered household on every cold start. See the note on refresh:
+   * during the launch window `user` is null because the session is still being
+   * read off the device, which is indistinguishable from being signed out
+   * unless you also ask whether auth has answered yet.
+   */
+  const { user, initializing } = useAuth();
   const t = useT();
   /*
    * The language this device reads, carried to the server with the push token.
@@ -325,13 +332,14 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   // when something actually changed.
   const sigRef = useRef<string>('');
 
-  // Restore the previously selected household before the first fetch, so the
-  // app reopens where it left off instead of flashing another household.
-  //
-  // Mirrored into state as well as the ref: the ref is read inside effects,
-  // while `restored` has to re-render consumers — the boot gate is waiting on
-  // it, and a ref would leave it waiting forever.
-  const restoredRef = useRef(false);
+  /*
+   * Restore the previously selected household before the first fetch, so the
+   * app reopens where it left off instead of flashing another household.
+   *
+   * State, not a ref. It has to re-render consumers — the boot gate waits on it
+   * — and it also gates the correction below, which is an effect and so needs
+   * this in its dependencies to run when the read lands.
+   */
   const [restored, setRestored] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem(ACTIVE_KEY)
@@ -339,10 +347,7 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         if (id) setActiveId(id);
       })
       .catch(() => {})
-      .finally(() => {
-        restoredRef.current = true;
-        setRestored(true);
-      });
+      .finally(() => setRestored(true));
   }, []);
 
   const setActiveHousehold = useCallback((householdId: string) => {
@@ -403,12 +408,52 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
     [setActiveHousehold],
   );
 
+  /**
+   * The roster for the signed-in user, and the ONE place that declares an
+   * answer trustworthy.
+   *
+   * ---------------------------------------------------------------------------
+   * Why `settledFor` is not written on every path any more
+   * ---------------------------------------------------------------------------
+   *
+   * `settledFor === (user?.id ?? null)` is what tells the correction below that
+   * an empty roster is the truth rather than a moment in a launch. It used to be
+   * written unconditionally — `null` whenever there was no user, and `user.id`
+   * from a `finally` whatever the queries came back with — and both of those are
+   * a claim to know something this function had not established.
+   *
+   *   AUTH HAS NOT ANSWERED YET. `getSession()` reads the session off the
+   *   device, so for the first moments of every cold start `user` is null and
+   *   there is no session yet — identical, from here, to being signed out. That
+   *   wrote `settledFor = null`, which matched `user?.id ?? null`, which made
+   *   the correction believe an empty roster was final, which cleared the
+   *   remembered household from storage. Auth would then arrive, the roster
+   *   would load, and with nothing remembered the app fell back to
+   *   `households[0]` — alphabetically first, and written back to storage, so
+   *   it stuck. Hard-close the app and it opens somebody else's household; do
+   *   it again and it stays there. Exactly the report.
+   *
+   *   THE QUERY FAILED. A dead connection returns an error and no rows, and the
+   *   old `finally` marked that settled too — so a launch on a bad train
+   *   connection erased the choice just as thoroughly as the race did, with the
+   *   same fallback and the same permanence.
+   *
+   * So: nothing is claimed while auth is still initializing, and `user.id` is
+   * only recorded once the households query has actually answered. "We do not
+   * know yet" and "we asked, and the answer is none" are different states and
+   * this is the only function in a position to tell them apart.
+   */
   const refresh = useCallback(async () => {
+    // Nothing to say yet, and saying it is the bug. Not an early state to be
+    // tidied away: `initializing` goes false exactly once, so this only ever
+    // affects the launch window it exists for.
+    if (initializing) return;
     if (!user) {
       sigRef.current = '';
       setHouseholds([]);
       setByHousehold({});
       setRequests([]);
+      // Conclusive, and the reason sign-out still clears a stale id.
       setSettledFor(null);
       return;
     }
@@ -417,30 +462,44 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
       // Both queries lean on RLS rather than filtering client-side: a user can
       // only read households they belong to, and only membership rows of those
       // households. That also means one query covers every household at once.
-      const [{ data: householdRows }, { data: memberRows }, { data: requestRows }] =
-        await Promise.all([
-          supabase.from('households').select('id, name, invite_code, created_at'),
-          supabase.from('household_members').select('household_id, user_id, role, display_name'),
-          /*
-           * Pending only. A decided request is history — approved ones became
-           * memberships and declined ones are a thing nobody needs shown back
-           * to them — and fetching them would grow this query without bound as
-           * a household turns people over.
-           *
-           * Unfiltered by household or user: the SELECT policy already answers
-           * exactly "rows you are the asker on, or a member of the household
-           * for", so one query covers both directions at once. Adding a filter
-           * here would be the client restating a rule the server enforces, and
-           * the two would eventually disagree.
-           */
-          supabase
-            .from('household_join_requests')
-            .select(
-              'id, household_id, household_name, user_id, display_name, status, created_at, seen_at',
-            )
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false }),
-        ]);
+      const [
+        { data: householdRows, error: householdsError },
+        { data: memberRows },
+        { data: requestRows },
+      ] = await Promise.all([
+        supabase.from('households').select('id, name, invite_code, created_at'),
+        supabase.from('household_members').select('household_id, user_id, role, display_name'),
+        /*
+         * Pending only. A decided request is history — approved ones became
+         * memberships and declined ones are a thing nobody needs shown back
+         * to them — and fetching them would grow this query without bound as
+         * a household turns people over.
+         *
+         * Unfiltered by household or user: the SELECT policy already answers
+         * exactly "rows you are the asker on, or a member of the household
+         * for", so one query covers both directions at once. Adding a filter
+         * here would be the client restating a rule the server enforces, and
+         * the two would eventually disagree.
+         */
+        supabase
+          .from('household_join_requests')
+          .select(
+            'id, household_id, household_name, user_id, display_name, status, created_at, seen_at',
+          )
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
+      ]);
+
+      /*
+       * A failed query is not an empty roster, and the difference is somebody's
+       * remembered household. supabase-js reports this in `error` rather than
+       * throwing, so ignoring it and taking `data ?? []` reads offline as "you
+       * belong to nothing" — which the correction below then acts on.
+       *
+       * Only the households query is checked. The other two decorate what is on
+       * screen; this one is what the selection is resolved against.
+       */
+      if (householdsError) return;
 
       const list = ((householdRows as Household[] | null) ?? []).sort((a, b) =>
         a.name.localeCompare(b.name),
@@ -486,11 +545,15 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
         setByHousehold(grouped);
         setRequests(pending);
       }
+      // Here, not in the finally: this is the only line that has seen the
+      // query answer. A throw or an error above leaves the previous verdict
+      // standing, which for a launch means "not settled" — and an unsettled
+      // launch keeps what it remembered.
+      setSettledFor(user.id);
     } finally {
       setLoading(false);
-      setSettledFor(user.id);
     }
-  }, [user]);
+  }, [user, initializing]);
 
   useEffect(() => {
     void refresh();
@@ -538,16 +601,23 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
    *
    * Now the null case is handled too, and the storage key is removed rather
    * than left pointing somewhere the user cannot go.
+   *
+   * Gated on the `restored` STATE rather than the ref beside it. A ref does not
+   * re-run an effect, and the one case where nothing else re-runs it either is
+   * the launch with no stored id at all — the read finishes, sets no id, and
+   * changes none of these deps. It happened to be covered because the fetch
+   * lands afterwards and moves `settledFor`; that is a coincidence of timing
+   * standing in for a dependency, which is the same shape as the bug below.
    */
   useEffect(() => {
-    if (!restoredRef.current) return;
+    if (!restored) return;
     const settled = settledFor === (user?.id ?? null);
     const next = resolveActiveId(activeId, households, settled);
     if (next === activeId) return;
     setActiveId(next);
     if (next) AsyncStorage.setItem(ACTIVE_KEY, next).catch(() => {});
     else AsyncStorage.removeItem(ACTIVE_KEY).catch(() => {});
-  }, [activeId, households, settledFor, user?.id]);
+  }, [restored, activeId, households, settledFor, user?.id]);
 
   // Point the per-item home-list cache at the active household, so routing an
   // item back to "its" list never reaches across into another household.
