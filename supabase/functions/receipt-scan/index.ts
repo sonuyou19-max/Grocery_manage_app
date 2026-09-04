@@ -12,8 +12,11 @@ import { clientIp, reserveBudget } from '../_shared/rate-limit.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
 import {
   fingerprint,
+  isBetter,
   MONEY_CODES,
+  outcomeOf,
   reconcile,
+  type Outcome,
   type Problem,
   type ReceiptLine,
 } from '../_shared/receipt-reconcile.ts';
@@ -757,6 +760,18 @@ Deno.serve(async (req) => {
   const started = Date.now();
   let readMs = 0;
   let retryMs = 0;
+  /*
+   * What the retry actually did, which the log could not say.
+   *
+   * It recorded which BRANCH was chosen and the FIRST read's gap, and nothing
+   * about the second answer — so "the escalation ran and was thrown away",
+   * "the escalation ran and helped" and "the escalation threw" all printed the
+   * same line. The one question the escalation exists to answer was the one
+   * question its own instrumentation could not.
+   */
+  let retryKept = false;
+  let retryOutcome: Outcome | null = null;
+  let retryError: string | null = null;
 
   try {
     parsed = await ask(MODEL_FAST);
@@ -831,14 +846,8 @@ Deno.serve(async (req) => {
    * Those need the pixels read again, not the numbers adjusted. So the size of
    * the discrepancy chooses: cents mean a digit, and tens of euros mean a LINE.
    */
-  const gapCents =
-    result.details.reduce(
-      (worst, d) =>
-        d.code === 'paid' || d.code === 'goods'
-          ? Math.max(worst, Math.abs(d.got - d.printed))
-          : worst,
-      0,
-    );
+  const firstOutcome = outcomeOf(result);
+  const gapCents = firstOutcome.gapCents;
   /*
    * A euro, or one percent of the shop, whichever is larger. Below that a
    * weighed line rounding against its printed unit price accounts for it, and
@@ -874,32 +883,31 @@ Deno.serve(async (req) => {
 
       const better = check(candidate);
       /*
-       * Kept only if it is actually better. A repair that fixes one row and
-       * breaks another has not helped.
+       * Kept only if it is actually better — see isBetter, which is where the
+       * comparison lives now and why.
        *
-       * `problems.length` was the whole test, and it is too coarse for a
-       * re-read: two answers can each fail the same two checks while one is
-       * twenty euros closer to the paper. So a smaller MONEY GAP counts as
-       * better too — that is the number the shopper is looking at.
+       * The test used to be `problems.length` OR a smaller money gap, and both
+       * halves are blind to a PARTIAL repair: `problems` holds one entry for
+       * three bad rows exactly as it does for one, and a bad row moves neither
+       * printed total, so the gap is 0 on both sides. A repair that fixed two
+       * rows of three satisfied neither and was discarded. That is not a corner
+       * case — it is the ordinary outcome of the branch, and it is why two
+       * scans in the log spent 92 seconds between them on retries that were
+       * thrown away.
        */
-      const betterGap = better.details.reduce(
-        (worst, d) =>
-          d.code === 'paid' || d.code === 'goods'
-            ? Math.max(worst, Math.abs(d.got - d.printed))
-            : worst,
-        0,
-      );
-      if (
-        better.ok ||
-        better.problems.length < result.problems.length ||
-        betterGap < gapCents
-      ) {
+      retryOutcome = outcomeOf(better);
+      if (better.ok || isBetter(retryOutcome, firstOutcome)) {
         parsed = candidate;
         result = better;
         model = MODEL_CAREFUL;
+        retryKept = true;
       }
-    } catch (_err) {
-      // Keep the first answer. A failed repair is not worse than no repair.
+    } catch (err) {
+      // Keep the first answer. A failed repair is not worse than no repair —
+      // but it is not the same as a repair that ran and lost, and the log said
+      // the same thing for both. A model id the API rejects and an answer that
+      // simply did not help are one line apart here and a different fix.
+      retryError = err instanceof Error ? err.name : 'unknown';
     }
     retryMs = Date.now() - retryAt;
   }
@@ -925,7 +933,23 @@ Deno.serve(async (req) => {
        * threshold between them is set anywhere near right.
        */
       gapCents,
-      retry: result.ok || retryMs > 0 ? (misreadLine ? 're-read' : 'patch') : 'none',
+      /*
+       * Whether a retry HAPPENED, not whether one would have been chosen.
+       *
+       * `result.ok || retryMs > 0 ? ... : 'none'` reads as one condition and is
+       * two: a first pass that reconciles cleanly never enters the retry block,
+       * yet `result.ok` made it log 'patch'. Every clean scan in the log claims
+       * to have been repaired, which is precisely backwards and makes the field
+       * useless for the question it was added for.
+       */
+      retry: retryMs > 0 ? (misreadLine ? 're-read' : 'patch') : 'none',
+      // ...and whether it was worth it. Kept, with the outcome it was judged
+      // on, so a retry that runs for eighty seconds and loses is one grep away
+      // instead of being invisible.
+      retryKept,
+      retryGapCents: retryOutcome?.gapCents ?? null,
+      retryBadLines: retryOutcome?.badLines ?? null,
+      retryError,
       ok: result.ok,
       codes: result.details.map((d) => d.code),
       /*

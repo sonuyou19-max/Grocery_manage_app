@@ -601,3 +601,78 @@ export function fingerprint(
   const t = purchasedAt ? purchasedAt.slice(0, 16) : '?';
   return `${s}|${paidCents ?? '?'}|${t}`;
 }
+
+/**
+ * How wrong an answer is, as three numbers that can be compared.
+ *
+ * ---------------------------------------------------------------------------
+ * Why `problems.length` could not do this job
+ * ---------------------------------------------------------------------------
+ *
+ * The retry in receipt-scan keeps its second answer only if it is better than
+ * the first, and "better" was `problems.length` plus the money gap. Both are
+ * blind to the improvement the retry is MOST likely to produce.
+ *
+ * `problems` carries one entry for every failed CHECK, not for every failed
+ * row: three lines that do not multiply out push exactly one string, the same
+ * as one line does. So a repair that fixes two of three bad lines leaves the
+ * count at one, and the money gap is 0 on both sides because a `line` problem
+ * moves neither total. Neither test can see it, so the better answer is thrown
+ * away and the shopper waits for nothing. Observed: a six-item receipt with
+ * badLines [3,4,8] spent twelve seconds on a repair and shipped the first
+ * reading.
+ *
+ * `lines` was in the Problem type the whole time and nothing read it.
+ *
+ * ---------------------------------------------------------------------------
+ * The order is the priority, and it is deliberate
+ * ---------------------------------------------------------------------------
+ *
+ * MONEY FIRST, because it is the number the shopper is looking at and the one
+ * the banner is about. Then BAD LINES, the rows that do not multiply out. Then
+ * the count of failed checks, which only separates answers the first two call
+ * equal.
+ *
+ * Compared lexicographically rather than summed into a score: a weighted sum
+ * would let a big improvement in rows pay for a worse total, and a worse total
+ * is not something a repair may buy.
+ */
+export interface Outcome {
+  /** The worst gap between a printed total and the lines, in cents. */
+  gapCents: number;
+  /** Rows whose own arithmetic does not hold. */
+  badLines: number;
+  /** Failed checks, as a tie-break only. */
+  problems: number;
+}
+
+export function outcomeOf(result: ReconcileResult): Outcome {
+  return {
+    gapCents: result.details.reduce(
+      (worst, d) =>
+        d.code === 'paid' || d.code === 'goods'
+          ? Math.max(worst, Math.abs(d.got - d.printed))
+          : worst,
+      0,
+    ),
+    badLines: result.badLines.length,
+    problems: result.problems.length,
+  };
+}
+
+/**
+ * Whether `candidate` is worth keeping over `incumbent`.
+ *
+ * Strictly better on the first thing they disagree about, so an answer that is
+ * merely DIFFERENT loses. The incumbent has already been paid for; a tie means
+ * the retry bought nothing and there is no reason to prefer a second guess.
+ */
+export function isBetter(candidate: Outcome, incumbent: Outcome): boolean {
+  if (candidate.gapCents !== incumbent.gapCents) {
+    return candidate.gapCents < incumbent.gapCents;
+  }
+  if (candidate.badLines !== incumbent.badLines) {
+    return candidate.badLines < incumbent.badLines;
+  }
+  return candidate.problems < incumbent.problems;
+}

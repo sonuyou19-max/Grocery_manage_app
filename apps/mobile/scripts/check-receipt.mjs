@@ -53,6 +53,12 @@ const SHARED = join(here, '..', '..', '..', 'supabase', 'functions', '_shared');
 let failures = 0;
 const ok = (what) => console.log(`ok   ${what}`);
 const check_ = (what, cond) => (cond ? ok(what) : fail(what));
+// Value form. Prints both sides, because "false" is not a useful thing to read
+// back when the assertion is about a number of cents.
+const is = (what, actual, expected) =>
+  Object.is(actual, expected)
+    ? ok(what)
+    : fail(what, [`expected ${JSON.stringify(expected)}`, `actual   ${JSON.stringify(actual)}`]);
 const fail = (what, detail = []) => {
   failures += 1;
   console.log(`FAIL ${what}`);
@@ -63,7 +69,7 @@ const src = readFileSync(join(SHARED, 'receipt-reconcile.ts'), 'utf8');
 const { outputText } = ts.transpileModule(src, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
-const { reconcile, classify, fingerprint, MONEY_CODES } = await import(
+const { reconcile, classify, fingerprint, MONEY_CODES, outcomeOf, isBetter } = await import(
   'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 );
 
@@ -756,7 +762,7 @@ check_(
 );
 check_(
   'a failed reconciliation is repaired on a stronger model',
-  /MODEL_CAREFUL/.test(fn) && /better\.problems\.length < result\.problems\.length/.test(fn),
+  /MODEL_CAREFUL/.test(fn) && /if \(better\.ok \|\| isBetter\(/.test(fn),
 );
 /*
  * TWO TRANSCRIPTIONS AT MOST, AND THE SECOND ONE HAS TO EARN IT.
@@ -810,8 +816,16 @@ check_(
  * euros closer to the paper — `problems.length` alone would throw that away.
  */
 check_(
-  'a closer answer is kept even when it fails the same checks',
-  /betterGap < gapCents/.test(fn),
+  /*
+   * The comparison lives in ONE place, and this asserts the caller no longer
+   * keeps a copy. It used to hand-roll `betterGap < gapCents` here — a test
+   * blind to a repair that fixes two rows of three, because a bad row moves no
+   * printed total and both sides of that comparison are zero. The properties
+   * are exercised against isBetter at the end of this file; what matters here
+   * is that nothing reconstructs the old one alongside it.
+   */
+  'the keep test is not re-derived at the call site',
+  !/betterGap/.test(fn) && !/better\.problems\.length/.test(fn),
 );
 check_(
   '...and the repair asks only for corrections',
@@ -903,10 +917,10 @@ const logCall = fn.slice(
  * the first read was — which is the one thing that says whether the threshold
  * between a patch and a re-read is set anywhere near right.
  */
-check_('the log block was found', logCall.length > 100 && logCall.length < 4000);
+check_('the log block was found', logCall.length > 100 && logCall.length < 5000);
 check_(
   '...and records which retry ran, and how wrong the first read was',
-  /gapCents,/.test(logCall) && /retry: result\.ok \|\| retryMs > 0/.test(logCall),
+  /gapCents,/.test(logCall) && /retry: retryMs > 0 \?/.test(logCall),
 );
 check_('the log names which rows failed', /badLines: result\.badLines,/.test(logCall));
 check_(
@@ -1284,6 +1298,119 @@ check_(
 check_(
   '...and the prose survives only in the log',
   /problems: result\.problems,/.test(fn) && /at: 'receipt-scan'/.test(fn),
+);
+
+/* ============================================================================
+ * KEEPING THE BETTER OF TWO ANSWERS
+ * ==========================================================================*/
+
+/*
+ * The retry's verdict, which for two whole scans in the production log was
+ * "throw it away".
+ *
+ * A six-item receipt came back with badLines [3,4,8], spent twelve seconds on
+ * a repair, and shipped the FIRST reading. A Colruyt receipt spent eighty
+ * seconds — seventy-one percent of the entire wait — on a full re-read and
+ * shipped the first reading too. Both were discarded by a test that could not
+ * see the improvement it was written to look for:
+ *
+ *   `problems.length` counts failed CHECKS, not failed rows. Three bad lines
+ *   push one string, exactly as one bad line does. Fix two of the three and
+ *   the count is unchanged.
+ *
+ *   the money gap is 0 whenever the only complaint is `line`, because a row
+ *   that does not multiply out moves neither printed total. So the other half
+ *   of the test compared 0 against 0.
+ *
+ * `lines` was in the Problem type the whole time and nothing read it.
+ */
+const outcome = (gapCents, badLines, problems) => ({ gapCents, badLines, problems });
+
+is(
+  'a repair that fixes two rows of three is kept',
+  isBetter(outcome(0, 1, 1), outcome(0, 3, 1)),
+  true,
+);
+is(
+  '...which the old test could not see',
+  // Both halves of it, spelled out: neither fires on that case.
+  outcome(0, 1, 1).problems < outcome(0, 3, 1).problems ||
+    outcome(0, 1, 1).gapCents < outcome(0, 3, 1).gapCents,
+  false,
+);
+is(
+  'a re-read twenty euros closer is kept',
+  isBetter(outcome(230, 2, 1), outcome(2230, 2, 1)),
+  true,
+);
+/*
+ * MONEY FIRST, and this is the case that says why the three are compared in
+ * order rather than added up. A repair that tidies every row while moving the
+ * total further from the paper has not helped: the banner is about the total.
+ */
+is(
+  'rows fixed do not buy a worse total',
+  isBetter(outcome(500, 0, 1), outcome(100, 4, 1)),
+  false,
+);
+is(
+  '...nor does a smaller problem count',
+  isBetter(outcome(500, 3, 0), outcome(100, 3, 2)),
+  false,
+);
+// An answer that is merely DIFFERENT loses. The first read is already paid
+// for, and a tie means the retry bought nothing.
+is('an identical outcome is not better', isBetter(outcome(770, 0, 1), outcome(770, 0, 1)), false);
+is('a worse one is not better', isBetter(outcome(900, 0, 1), outcome(770, 0, 1)), false);
+is(
+  'problems only break a tie the first two cannot',
+  isBetter(outcome(0, 0, 1), outcome(0, 0, 2)),
+  true,
+);
+
+/*
+ * And the score is read off a real ReconcileResult, not just compared as a
+ * struct — `outcomeOf` reaching into the wrong field would leave every
+ * assertion above passing while the retry went on discarding good answers.
+ */
+const threeBad = reconcile(
+  [count('A', 1, 100, 100), count('B', 2, 100, 500), count('C', 2, 100, 500)],
+  { goodsCents: null, paidCents: null, articleCount: null },
+);
+is('outcomeOf counts the bad rows', outcomeOf(threeBad).badLines, 2);
+is('...and reports no gap when no total is printed', outcomeOf(threeBad).gapCents, 0);
+const paidOff = reconcile([count('A', 1, 1000, 1000)], {
+  goodsCents: null,
+  paidCents: 1770,
+  articleCount: null,
+});
+is('outcomeOf measures the gap in cents', outcomeOf(paidOff).gapCents, 770);
+
+/* ------------------- the caller has to actually use the verdict ----------- */
+
+check_(
+  'the retry keeps its answer through isBetter',
+  /if \(better\.ok \|\| isBetter\(retryOutcome, firstOutcome\)\)/.test(fn),
+);
+/*
+ * The log has to say what the retry DID. It recorded which branch was chosen
+ * and the first read's gap, and nothing about the second answer — so "ran and
+ * was discarded", "ran and helped" and "threw" printed the same line, and the
+ * one question the escalation exists to answer was the one its own
+ * instrumentation could not.
+ */
+check_('the log says whether the retry was kept', /retryKept,/.test(fn));
+check_('...with the outcome it was judged on', /retryGapCents: retryOutcome\?\.gapCents/.test(fn));
+check_('...and names a retry that threw', /retryError/.test(fn) && /err instanceof Error/.test(fn));
+/*
+ * `result.ok || retryMs > 0 ? ... : 'none'` reads as one condition and is two.
+ * A first pass that reconciles cleanly never enters the retry block, and
+ * `result.ok` made it log 'patch' — every clean scan claiming a repair that
+ * never happened.
+ */
+check_(
+  'the retry label follows the clock, not the verdict',
+  /retry: retryMs > 0 \?/.test(fn) && !/retry: result\.ok \|\|/.test(fn),
 );
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
