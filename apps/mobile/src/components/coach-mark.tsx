@@ -272,8 +272,8 @@ const SCRIM_ALPHA = 0.72;
 const styles = StyleSheet.create({
   // elevation as well as zIndex: on Android the two orderings are separate, and
   // without elevation the overlay can paint under an elevated sibling.
-  root: { ...StyleSheet.absoluteFillObject, zIndex: 50, elevation: 50 },
-  scrimGroup: { ...StyleSheet.absoluteFillObject, opacity: SCRIM_ALPHA },
+  root: { ...StyleSheet.absoluteFill, zIndex: 50, elevation: 50 },
+  scrimGroup: { ...StyleSheet.absoluteFill, opacity: SCRIM_ALPHA },
   op: { position: 'absolute', backgroundColor: SCRIM_SOLID },
   ring: { position: 'absolute', borderWidth: 1, borderRadius: HOLE_R },
   captionWrap: { position: 'absolute', left: spacing.lg, right: spacing.lg },

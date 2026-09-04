@@ -383,15 +383,22 @@ assert(
   assert(guard > 0, 'the camera chrome is guarded');
   assert(guard > 0 && guard < chrome, '...and the guard comes before it');
 
-  // Both screens it defers to are full-screen, which is the reason the guard
-  // has to exist at all. If either stopped covering the screen, the guard would
-  // be hiding controls for no reason.
+  /*
+   * Both screens it defers to are full-screen, which is the reason the guard
+   * has to exist at all. If either stopped covering the screen, the guard would
+   * be hiding controls for no reason.
+   *
+   * `absoluteFill`, not `absoluteFillObject`: React Native 0.86 removed the
+   * latter and made the former the plain object it used to be a registered id
+   * for. Both spellings mean the same thing here — a spread — and only one of
+   * them still exists.
+   */
   assert(
-    /confirmRoot: \{ \.\.\.StyleSheet\.absoluteFillObject/.test(screen),
+    /confirmRoot: \{ \.\.\.StyleSheet\.absoluteFill\b/.test(screen),
     'the confirm screen fills the screen',
   );
   assert(
-    /root: \{\s*\.\.\.StyleSheet\.absoluteFillObject/.test(overlay),
+    /root: \{\s*\.\.\.StyleSheet\.absoluteFill\b/.test(overlay),
     'the scan screen fills the screen',
   );
 

@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   remaining: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '600' },
 
   celebrate: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  bloomWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  bloomWrap: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   ring: { alignItems: 'center', justifyContent: 'center' },
   allSet: { fontSize: 44, fontWeight: '800', letterSpacing: -1.6 },
   allSetSub: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '500' },

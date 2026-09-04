@@ -50,5 +50,50 @@ mkdirSync(outDir, { recursive: true });
 // to be set before the module is loaded — hence the dynamic import below.
 process.env.EXPO_ROUTER_APP_ROOT = appRoot;
 
-const { regenerateDeclarations } = await import('expo-router/build/typed-routes/index.js');
+/*
+ * Where the generator lives, most recent first.
+ *
+ * It moved in SDK 57: expo-router vendored react-navigation and split its
+ * server-side pieces into `@expo/router-server`, so
+ * `expo-router/build/typed-routes/index.js` — the only path this script knew —
+ * stopped existing. The failure was a hard ERR_MODULE_NOT_FOUND at the very
+ * top of `typecheck`, which is the first thing in `check:all`, so the whole
+ * suite died before running a single assertion.
+ *
+ * A LIST rather than one path, because this is an internal build path with no
+ * package export pointing at it: it has moved once and will move again. Trying
+ * each in turn costs nothing and turns the next move into a one-line change
+ * instead of a suite that will not start.
+ *
+ * `@expo/cli` resolves the same module the same way — see
+ * build/src/start/server/type-generation/routes.js — so this tracks whatever
+ * the dev server does rather than guessing separately.
+ */
+const GENERATORS = [
+  '@expo/router-server/build/typed-routes/index.js', // SDK 57+
+  'expo-router/build/typed-routes/index.js', // SDK 54 and earlier
+];
+
+let regenerateDeclarations = null;
+const tried = [];
+for (const path of GENERATORS) {
+  try {
+    ({ regenerateDeclarations } = await import(path));
+    if (regenerateDeclarations) break;
+  } catch {
+    tried.push(path);
+  }
+}
+
+if (!regenerateDeclarations) {
+  console.error(
+    'gen-routes: expo-router\'s typed-route generator is not where this script expects.\n' +
+      `  tried: ${tried.join('\n         ')}\n` +
+      '  It moves between SDKs. Find the current path with:\n' +
+      "    grep -rn 'typed-routes' node_modules/@expo/cli/build/src/start/server/type-generation/routes.js\n" +
+      '  and add it to GENERATORS in this file.',
+  );
+  process.exit(1);
+}
+
 regenerateDeclarations(outDir);

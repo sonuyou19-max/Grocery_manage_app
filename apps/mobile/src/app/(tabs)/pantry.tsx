@@ -1046,7 +1046,7 @@ const styles = StyleSheet.create({
   },
   swipeWrap: { borderRadius: radii.md, overflow: 'hidden' },
   actionPanel: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

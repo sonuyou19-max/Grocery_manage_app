@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1, justifyContent: 'flex-end' },
   fillPlain: { flex: 1 },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(12,18,10,0.45)',
   },
   sheet: {

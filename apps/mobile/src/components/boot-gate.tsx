@@ -151,5 +151,5 @@ export function BootGate({ children }: PropsWithChildren) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  centre: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.xl },
+  centre: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: spacing.xl },
 });

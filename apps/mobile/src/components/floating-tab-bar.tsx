@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
+import type { Tabs } from 'expo-router';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing,
@@ -21,6 +21,21 @@ import { haptics } from '@/lib/haptics';
 import { SPRING } from '@/lib/motion';
 import { useT } from '@/store/locale';
 import { spacing, useTheme } from '@/theme';
+
+/**
+ * What `<Tabs tabBar={…}>` hands this component, taken from `<Tabs>` itself.
+ *
+ * It used to be `BottomTabBarProps` from `@react-navigation/bottom-tabs`, which
+ * SDK 57 stopped shipping — react-navigation is vendored inside expo-router
+ * now, and its bottom-tabs types live under `expo-router/build/…`, a path no
+ * package export points at.
+ *
+ * Reading the type off the prop that receives it is better than reaching for
+ * that path anyway: this is by construction whatever the installed expo-router
+ * passes, so an SDK that changes the shape becomes a type error here rather
+ * than a tab bar that renders against a signature nothing has checked.
+ */
+type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 /** Pill dimensions, exported so screens can reserve bottom clearance for it. */
 export const TAB_BAR_HEIGHT = 68;
@@ -76,7 +91,7 @@ const ICONS: Record<string, [IoniconName, IoniconName]> = {
  * the bottom edge, with a soft highlight that springs smoothly to the active
  * tab. Mirrors the current tabs (icons + labels), just re-laid-out.
  */
-export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();

@@ -1,10 +1,15 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-  type Theme as NavTheme,
-} from '@react-navigation/native';
-import { Stack, useSegments } from 'expo-router';
+/*
+ * The navigation theme comes from expo-router itself, not from
+ * `@react-navigation/native`.
+ *
+ * SDK 57 vendored react-navigation into expo-router and stopped shipping the
+ * `@react-navigation/*` packages alongside it. A separately installed copy
+ * would still resolve and still type-check — and would be a SECOND React
+ * context, so the provider set here and the one the navigator reads would be
+ * different objects and the theme would silently do nothing. Importing from
+ * expo-router is the only spelling that cannot come apart that way.
+ */
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useSegments, type Theme as NavTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';

@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   chart: { width: SIZE, height: SIZE },
   centre: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },

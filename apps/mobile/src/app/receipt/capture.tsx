@@ -444,7 +444,7 @@ function ConfirmShot({
 }
 
 const styles = StyleSheet.create({
-  confirmRoot: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000' },
+  confirmRoot: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
   confirmChrome: { flex: 1, justifyContent: 'space-between', padding: spacing.lg },
   confirmActions: { flexDirection: 'row', gap: spacing.md },
   confirmBtn: {

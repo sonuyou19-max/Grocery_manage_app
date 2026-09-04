@@ -187,7 +187,7 @@ export function ScanOverlay({ uris, phase }: { uris: readonly string[]; phase: S
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
@@ -201,8 +201,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: spacing.lg,
   },
-  shot: { ...StyleSheet.absoluteFillObject },
-  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
+  shot: { ...StyleSheet.absoluteFill },
+  dim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.35)' },
   line: { position: 'absolute', left: 0, right: 0, height: 80 },
   count: {
     position: 'absolute',

@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   // Centred over the sample rather than pinned, so it sits in the optical
   // middle whatever the sample cards happen to measure at.
   ctaWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
