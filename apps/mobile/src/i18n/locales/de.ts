@@ -83,6 +83,7 @@ const de = {
     problemLine: { one: '%{count} Zeile geht nicht auf', other: '%{count} Zeilen gehen nicht auf' },
     problemGoods: 'Die Zeilen ergeben %{got}, und wir haben die Zwischensumme als %{printed} gelesen.',
     problemPaid: 'Die Zeilen ergeben %{got}, und wir haben den Gesamtbetrag als %{printed} gelesen.',
+    numberUnreadable: 'Diese Zahl war nicht lesbar — die Zeile bleibt unverändert',
     problemCount: 'Wir zählen %{units} Artikel (oder %{lines} Zeilen); der Bon sagt %{printed}.',
   },
   coach: {

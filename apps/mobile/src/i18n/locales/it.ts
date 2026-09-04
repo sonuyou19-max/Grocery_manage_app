@@ -83,6 +83,7 @@ const it = {
     problemLine: { one: '%{count} riga non torna', other: '%{count} righe non tornano' },
     problemGoods: 'Le righe fanno %{got}, e abbiamo letto il subtotale come %{printed}.',
     problemPaid: 'Le righe fanno %{got}, e abbiamo letto il totale pagato come %{printed}.',
+    numberUnreadable: 'Numero illeggibile: la riga resta invariata',
     problemCount: 'Contiamo %{units} articoli (o %{lines} righe); lo scontrino dice %{printed}.',
   },
   coach: {

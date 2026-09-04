@@ -83,6 +83,7 @@ const nl = {
     problemLine: { one: '%{count} regel klopt niet', other: '%{count} regels kloppen niet' },
     problemGoods: 'De regels komen op %{got}, en we lazen het subtotaal als %{printed}.',
     problemPaid: 'De regels komen op %{got}, en we lazen het betaalde totaal als %{printed}.',
+    numberUnreadable: 'Dat getal was niet leesbaar — de regel blijft ongewijzigd',
     problemCount: 'Wij tellen %{units} artikelen (of %{lines} regels); het bonnetje zegt %{printed}.',
   },
   coach: {

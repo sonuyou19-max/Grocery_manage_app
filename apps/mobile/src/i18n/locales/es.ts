@@ -83,6 +83,7 @@ const es = {
     problemLine: { one: '%{count} línea no cuadra', other: '%{count} líneas no cuadran' },
     problemGoods: 'Las líneas suman %{got}, y leímos el subtotal como %{printed}.',
     problemPaid: 'Las líneas suman %{got}, y leímos el total pagado como %{printed}.',
+    numberUnreadable: 'No hemos podido leer ese número; la línea no ha cambiado',
     problemCount: 'Contamos %{units} artículos (o %{lines} líneas); el tique dice %{printed}.',
   },
   coach: {

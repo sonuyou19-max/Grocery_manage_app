@@ -93,6 +93,7 @@ const pl = {
     problemLine: { one: '%{count} pozycja się nie zgadza', few: '%{count} pozycje się nie zgadzają', many: '%{count} pozycji się nie zgadza', other: '%{count} pozycji się nie zgadza' },
     problemGoods: 'Pozycje dają %{got}, a subtotal odczytaliśmy jako %{printed}.',
     problemPaid: 'Pozycje dają %{got}, a zapłaconą kwotę odczytaliśmy jako %{printed}.',
+    numberUnreadable: 'Nie udało się odczytać tej liczby — wiersz bez zmian',
     problemCount: 'Liczymy %{units} artykułów (lub %{lines} pozycji); paragon podaje %{printed}.',
   },
   coach: {

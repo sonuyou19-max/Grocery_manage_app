@@ -92,6 +92,7 @@ const en = {
     problemLine: { one: '%{count} line does not multiply out', other: '%{count} lines do not multiply out' },
     problemGoods: 'The lines add up to %{got}, and we read the subtotal as %{printed}.',
     problemPaid: 'The lines come to %{got}, and we read the total paid as %{printed}.',
+    numberUnreadable: 'We could not read that number, so the line is unchanged',
     problemCount: 'We counted %{units} articles (or %{lines} lines); the receipt says %{printed}.',
   },
   coach: {

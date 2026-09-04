@@ -490,9 +490,24 @@ export default function ReceiptReviewScreen() {
       // The PER-PACK price. setUnitPrice multiplies it back up, so the total —
       // which is what gets imported and summed — follows the shopper's edit.
       if (cents != null) setDecisions((d) => setUnitPrice(d, key, cents));
+      /*
+       * SAID, not swallowed.
+       *
+       * Leaving the value alone is right — a number nobody could read must not
+       * become a price — but doing it in silence is not. The chip snaps back to
+       * what it held before, which is indistinguishable from the app having
+       * done some arithmetic of its own to the number just typed. That is
+       * exactly how a refused edit gets reported as a maths bug.
+       *
+       * Only for a field somebody actually put something in: closing an
+       * untouched chip, or one cleared in order to retype, is not a mistake to
+       * be told about.
+       */
+      else if (text.trim()) showToast(t('receipt.numberUnreadable'));
     } else if (field === 'packs') {
       const n = Number(text.replace(',', '.'));
       if (Number.isFinite(n) && n >= 1) setDecisions((d) => setPacks(d, key, n));
+      else if (text.trim()) showToast(t('receipt.numberUnreadable'));
     } else {
       /*
        * "750g", "1 L", "33cl" — the shapes printed on packaging, which is what
@@ -658,6 +673,37 @@ export default function ReceiptReviewScreen() {
      */
     const unitCents = unitPriceOf(d);
 
+    /*
+     * ---------------------------------------------------------------------------
+     * THE TOTAL FOLLOWS THE CHIP, WHILE IT IS BEING TYPED
+     * ---------------------------------------------------------------------------
+     *
+     * The arithmetic here runs one way and always has: the chip is the price of
+     * ONE pack, and setUnitPrice multiplies it up. What was missing is that you
+     * could not see that until you had already committed.
+     *
+     * Mid-edit the row said: price `2.88`, `× 2`, TOTAL €2,88 — the stored
+     * total, unchanged, because nothing recomputed it until the field closed.
+     * Those three numbers, read together, say the exact opposite of what the
+     * app is about to do: they say the amount typed became the total and the
+     * per-pack price was derived back down from it. Reported as "it makes the
+     * unit price 1.44 if I enter 2.88 because the quantity is 2", which is a
+     * fair reading of that frame and not what happens on commit.
+     *
+     * So the total is computed from what is in the field. Type 2.88 against two
+     * packs and TOTAL reads €5,76 immediately — the multiplication is on screen
+     * before the decision is made, rather than being something to find out
+     * about afterwards.
+     *
+     * Display only. Nothing is written until commitEdit; a half-typed "2." is a
+     * price mid-thought, and it simply does not parse, so the row keeps showing
+     * what it last understood rather than flickering to zero.
+     */
+    const typedUnit =
+      isEditing && editing.field === 'price' ? parsePriceToCents(editing.text, decimal) : null;
+    const shownUnit = typedUnit ?? unitCents;
+    const shownTotal = typedUnit == null ? d.priceCents : typedUnit * Math.max(1, d.packs);
+
     return (
       <Animated.View
         entering={cascade(order)}
@@ -788,7 +834,7 @@ export default function ReceiptReviewScreen() {
               keyboardType="decimal-pad"
               colors={colors}
             >
-              {money(unitCents)}
+              {money(shownUnit)}
             </EditChip>
 
             {/*
@@ -844,7 +890,10 @@ export default function ReceiptReviewScreen() {
           {d.packs > 1 && (
             <View style={styles.totalRow}>
               <Text style={[type.label, { color: colors.muted }]}>{t('receipt.lineTotal')}</Text>
-              <Text style={[type.price, { color: colors.ink }]}>{money(d.priceCents)}</Text>
+              {/* shownTotal, not d.priceCents: the multiplication has to be
+                  visible while the price is being typed, or the row spends the
+                  whole edit saying the opposite of what it will do. */}
+              <Text style={[type.price, { color: colors.ink }]}>{money(shownTotal)}</Text>
             </View>
           )}
         </View>

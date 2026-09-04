@@ -83,6 +83,7 @@ const fr = {
     problemLine: { one: '%{count} ligne ne tombe pas juste', other: '%{count} lignes ne tombent pas juste' },
     problemGoods: 'Les lignes totalisent %{got}, et nous avons lu le sous-total comme %{printed}.',
     problemPaid: 'Les lignes totalisent %{got}, et nous avons lu le total payé comme %{printed}.',
+    numberUnreadable: 'Nombre illisible : la ligne reste inchangée',
     problemCount: 'Nous comptons %{units} articles (ou %{lines} lignes) ; le ticket dit %{printed}.',
   },
   coach: {

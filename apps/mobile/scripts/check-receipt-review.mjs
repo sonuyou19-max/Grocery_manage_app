@@ -68,6 +68,7 @@ const {
   pickerOptions,
   collapseRaw,
   parseAmount,
+  parsePriceToCents,
   setAmount,
   setInclude,
   setPacks,
@@ -1151,6 +1152,130 @@ assert(
   /count === 0 && !amending/.test(sheet),
   '...but emptying a saved receipt is allowed',
   'removing every line is how an import that was wrong end to end gets undone',
+);
+
+/* ============================================================================
+ * THE PRICE CHIP, END TO END
+ * ==========================================================================*/
+
+/*
+ * The arithmetic runs ONE WAY: the chip is the price of one pack, and the line
+ * total is that price times the packs. Never the reverse.
+ *
+ * Each half of this was already tested and the composition was not, which is
+ * the gap a report walked through: `parsePriceToCents` was checked against
+ * every separator, `setUnitPrice` against a Decision, and nothing against what
+ * a person actually does — open a chip, type into it in their own convention,
+ * and read the total that comes back. A guard on two halves is not a guard on
+ * the path.
+ *
+ * The fixture is the reported row: Barilla spaghetti, 2 packs, €1,44 each,
+ * €2,88 the line.
+ */
+const pastaRow = new Map([
+  ['pasta', { ...buy('pasta', 'pasta', 288), packs: 2, include: true, itemId: null }],
+]);
+
+/** Open the chip, type `typed`, close it — in a locale using `mark`. */
+const typePrice = (decisions, typed, mark) => {
+  const cents = parsePriceToCents(typed, mark);
+  // The screen's own refusal: an unreadable number leaves the line alone.
+  return cents == null ? decisions : setUnitPrice(decisions, 'pasta', cents);
+};
+
+for (const [mark, typed] of [
+  [',', '2,88'],
+  [',', '2.88'],
+  ['.', '2.88'],
+  ['.', '2,88'],
+]) {
+  const after = typePrice(pastaRow, typed, mark).get('pasta');
+  eq(
+    `typing "${typed}" where "${mark}" is the decimal mark sets the pack price`,
+    unitPriceOf(after),
+    288,
+  );
+  eq(`...and the line total is that times two`, after.priceCents, 576);
+}
+
+/*
+ * The direction, stated as the property rather than as a number: the total is
+ * ALWAYS the chip times the packs. A regression that divided instead would put
+ * 144 in the chip and leave the total at 288, which is precisely the shape
+ * that was reported.
+ */
+for (const packs of [1, 2, 3, 7]) {
+  const row = new Map([['pasta', { ...pastaRow.get('pasta'), packs }]]);
+  const after = typePrice(row, '2.88', ',').get('pasta');
+  eq(`${packs} pack(s): the total is the typed price times the packs`, after.priceCents, 288 * packs);
+  eq(`${packs} pack(s): and the chip still reads what was typed`, unitPriceOf(after), 288);
+}
+
+// An unreadable entry changes nothing at all — neither half of the row.
+const refused = typePrice(pastaRow, '2.8.8', ',').get('pasta');
+eq('an unreadable price leaves the pack price alone', unitPriceOf(refused), 144);
+eq('...and the line total alone', refused.priceCents, 288);
+
+/* ------------- and the screen has to SHOW the multiplication -------------- */
+
+/*
+ * Mid-edit the row used to read: price `2.88`, `× 2`, TOTAL €2,88 — the stored
+ * total, because nothing recomputed it until the field closed. Those three
+ * numbers say the opposite of what commit is about to do, and that frame is
+ * what got reported as the app dividing the entry by the pack count.
+ */
+assert(
+  /const typedUnit =\s*\n?\s*isEditing && editing\.field === 'price'/.test(sheet),
+  'the row reads the price chip while it is being typed into',
+  "Without it the total only catches up after the field closes, and the frame in between says the typed number BECAME the total.",
+);
+assert(
+  /const shownTotal = typedUnit == null \? d\.priceCents : typedUnit \* Math\.max\(1, d\.packs\)/.test(sheet),
+  '...and multiplies it by the packs rather than dividing',
+  'The preview must do the same arithmetic as the commit, or it is a lie that is easier to read than the truth.',
+);
+assert(
+  /money\(shownTotal\)/.test(sheet) && !/money\(d\.priceCents\)/.test(sheet),
+  '...and that is what the TOTAL line renders',
+  'A preview computed and not displayed is the bug with extra code.',
+);
+assert(
+  /money\(shownUnit\)/.test(sheet),
+  '...with the chip showing the same figure it is about to commit',
+);
+/*
+ * AND THE COMMIT GOES THROUGH setUnitPrice.
+ *
+ * The single most important line in this section, and it was the one missing:
+ * every assertion above passed against a screen whose price chip called
+ * `setPrice` — which stores the entry as the LINE TOTAL and lets the chip
+ * derive back down from it. Type 2.88 against two packs and the chip settles at
+ * 1.44 with the total unmoved, which is the reported bug exactly.
+ *
+ * Found by mutation. The setter was covered, the parse was covered, the preview
+ * was covered, and which setter the screen reaches for was nobody's assertion —
+ * so the two correct halves could be wired to the wrong one and nothing here
+ * would have noticed.
+ */
+assert(
+  /field === 'price'[\s\S]{0,400}?setUnitPrice\(d, key, cents\)/.test(sheet),
+  'the price chip commits through setUnitPrice',
+  'setUnitPrice multiplies the entry up by the packs; setPrice stores it as the total and the chip divides back down.',
+);
+assert(
+  !/setPrice\(/.test(sheet),
+  '...and never through setPrice, which runs the other way',
+  'setPrice exists for the total, and no chip on this screen edits the total.',
+);
+/*
+ * And a refusal is SAID. Leaving the value alone is right; doing it in silence
+ * is what makes a rejected edit look like arithmetic nobody asked for — the
+ * chip snaps back to its old number and nothing says why.
+ */
+assert(
+  (sheet.match(/showToast\(t\('receipt\.numberUnreadable'\)\)/g) ?? []).length >= 2,
+  'an unreadable price or pack count says so rather than snapping back',
+  'Both numeric chips refuse the same way, so both have to explain it.',
 );
 
 /* ------------------------------------------------------------------------ */
