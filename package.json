@@ -5,7 +5,8 @@
   "description": "Korb — shared grocery list and pantry tracker for European households",
   "scripts": {
     "mobile": "pnpm --filter mobile start",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "reinstall": "node scripts/reinstall.mjs"
   },
   "engines": {
     "node": ">=20"

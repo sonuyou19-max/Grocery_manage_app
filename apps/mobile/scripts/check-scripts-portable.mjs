@@ -64,9 +64,33 @@ const fail = (title, lines = []) => {
 };
 
 const SELF = basename(fileURLToPath(import.meta.url));
-const scripts = readdirSync(HERE)
-  .filter((f) => f.endsWith('.mjs') && f !== SELF)
-  .map((f) => ({ name: f, src: readFileSync(join(HERE, f), 'utf8') }));
+
+/*
+ * Both script directories. The workspace root has its own — `reinstall.mjs`
+ * removes every node_modules in the workspace, which is exactly the kind of
+ * job that reaches for a shell loop and exactly the kind that has to run on
+ * Windows, because Windows is where the tree it repairs gets broken.
+ *
+ * Same reasoning as the two manifests below: a guard that reads one of the two
+ * places a fault can live is the bug it was written to catch.
+ */
+const DIRS = [
+  ['', HERE],
+  ['root:', join(HERE, '..', '..', '..', 'scripts')],
+];
+
+const scripts = DIRS.flatMap(([prefix, dir]) => {
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    // The root scripts directory is allowed not to exist.
+    return [];
+  }
+  return entries
+    .filter((f) => f.endsWith('.mjs') && !(prefix === '' && f === SELF))
+    .map((f) => ({ name: prefix + f, src: readFileSync(join(dir, f), 'utf8') }));
+});
 
 /*
  * A variable holding a real filesystem path — one built by join/resolve or
@@ -199,13 +223,36 @@ const SHELLISMS = [
   [/&&\s*echo\s+"[^"]*\\n/, 'an echo with a backslash escape'],
 ];
 
-const pkg = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8'));
+/*
+ * BOTH package.json files, and the second one is the gap this guard had.
+ *
+ * It read apps/mobile's and stopped there — but the workspace ROOT has scripts
+ * too, they are run the same way, through the same cmd.exe, and a shell-ism in
+ * one of them breaks in exactly the same manner. The root is also where
+ * anything spanning the whole workspace naturally goes (`reinstall` removes
+ * four node_modules trees), which is to say: it is where the loops would be.
+ *
+ * A guard covering one of the two places a fault can live is the shape of the
+ * original bug, not the fix for it — the shell loops were IN package.json for
+ * as long as this only read .mjs files.
+ */
+const MANIFESTS = [
+  ['apps/mobile/package.json', join(HERE, '..', 'package.json')],
+  ['package.json', join(HERE, '..', '..', '..', 'package.json')],
+];
+
 const shellish = [];
-for (const [name, command] of Object.entries(pkg.scripts ?? {})) {
-  for (const [re, what] of SHELLISMS) {
-    if (re.test(command)) {
-      shellish.push(`${name}: ${what} — ${command.slice(0, 70)}`);
-      break;
+let scriptCount = 0;
+for (const [label, path] of MANIFESTS) {
+  const pkg = JSON.parse(readFileSync(path, 'utf8'));
+  const scripts = Object.entries(pkg.scripts ?? {});
+  scriptCount += scripts.length;
+  for (const [name, command] of scripts) {
+    for (const [re, what] of SHELLISMS) {
+      if (re.test(command)) {
+        shellish.push(`${label} → ${name}: ${what} — ${command.slice(0, 70)}`);
+        break;
+      }
     }
   }
 }
@@ -220,7 +267,9 @@ if (shellish.length) {
     'run-tz.mjs is what the three timezone loops became.',
   ]);
 } else {
-  console.log(`ok   all ${Object.keys(pkg.scripts ?? {}).length} package scripts run on either shell`);
+  console.log(
+    `ok   all ${scriptCount} package scripts, in both manifests, run on either shell`,
+  );
 }
 
 /*
