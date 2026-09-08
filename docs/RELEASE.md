@@ -373,6 +373,61 @@ on conflict (user_id) do update set current_period_end = excluded.current_period
   **it can't be changed after first submission.** Change it in `app.json`
   (both `ios.bundleIdentifier` and `android.package`) before building if not.
 
+## 4b. Testing off the dev server
+
+`npx expo start` is a **dev server on your laptop**: the phone loads the bundle
+over the local network, so it only works on the same wifi and stops the moment
+the terminal does. That is the right tool while editing a screen and the wrong
+one for carrying the app around a supermarket.
+
+Two ways off it, and they are not alternatives — use both.
+
+**iPhone, no build and no Apple account.** Publish the bundle to Expo's CDN and
+open it in Expo Go:
+
+```
+cd apps/mobile && npx eas update --branch preview -m "what changed"
+```
+
+That prints a QR. Scan it and the app runs from the CDN, on any network, with
+the laptop shut. Republish after every change; the phone picks it up on the next
+cold start.
+
+**Android, a real installable app.** Build once, then feed it updates:
+
+```
+cd apps/mobile && npx eas build --profile preview --platform android
+```
+
+EAS returns an `.apk` link — install it and the app is on the phone for good.
+Every later `npx eas update --branch preview` reaches it on the next cold start,
+with no rebuild.
+
+**A standalone iOS app** (an `.ipa` rather than Expo Go) needs the Apple
+Developer Program: internal distribution to a physical iPhone means ad-hoc
+provisioning, which means a paid account and the device's UDID registered.
+Until then Expo Go is the iPhone story, and it is not a downgrade — it runs the
+same published bundle the APK does.
+
+### When an update is NOT enough
+
+An over-the-air update carries JavaScript only. The native side lives in the
+binary, and `expo-updates` will only hand a bundle to a binary whose
+**runtimeVersion** matches — which here is `app.json`'s `version`, via the
+`appVersion` policy.
+
+So **bump `version` and rebuild** whenever the native side changes:
+
+- an Expo SDK upgrade (54 → 57 was one),
+- adding a package with native code (`expo-document-picker`,
+  `expo-file-system`, `expo-notifications` were each one),
+- anything that edits `app.json`'s plugins or permissions.
+
+Skip the bump and the update is handed to a binary that cannot run it, and the
+app dies on launch with no way back except a reinstall. Skip the *rebuild* and
+the old binary simply stops receiving updates — which is the safe half of the
+same rule, and why the bump comes first.
+
 ## 5. Builds (profiles are in `eas.json`)
 
 Internal test build (share via link / TestFlight internal / APK):
@@ -388,7 +443,8 @@ eas build --profile production --platform all
 ```
 
 `production` uses `autoIncrement` with remote versioning, so build numbers are
-managed for you. `app.json` is at marketing version **1.0.0**.
+managed for you. `app.json` is at marketing version **1.1.0** — see 4b for
+why that number is load-bearing rather than cosmetic.
 
 ## 6. Submit
 
