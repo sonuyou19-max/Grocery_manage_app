@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import {
   CAPTURE_QUALITY,
@@ -100,16 +99,19 @@ export type PickedImages =
  * the ceiling at 0.6, that is a photograph of something other than a receipt.
  */
 async function fit(uri: string): Promise<string | null> {
+  const mod = imageManipulator();
+  if (!mod) return null;
+
   for (const compress of [CAPTURE_QUALITY, FALLBACK_QUALITY]) {
     try {
-      const out = await manipulateAsync(
+      const out = await mod.manipulateAsync(
         uri,
         // Height omitted on purpose: expo-image-manipulator keeps the aspect
         // ratio from whichever edge is given, and a receipt is far taller than
         // it is wide — constraining the WIDTH is what bounds a portrait
         // photograph's pixels without cropping any of the print away.
         [{ resize: { width: TARGET_LONG_EDGE } }],
-        { compress, format: SaveFormat.JPEG, base64: true },
+        { compress, format: mod.SaveFormat.JPEG, base64: true },
       );
       if (out.base64 && !tooLarge(out.base64)) return out.base64;
     } catch {
@@ -169,6 +171,32 @@ function documentPicker(): { picker: PickerModule; fs: FsModule } | null {
     native = null;
   }
   return native;
+}
+
+/**
+ * The resizer, loaded the same way and for the same reason.
+ *
+ * `expo-image-manipulator` calls `requireNativeModule('ExpoImageManipulator')`
+ * at MODULE SCOPE — identical to expo-document-picker — so a static import of
+ * it throws while the module graph is being evaluated on any binary built
+ * before it existed, and the app fails to start.
+ *
+ * It was written as a static import two commits after that hazard was removed
+ * from the other two, and the guard did not notice because it enumerated the
+ * two package NAMES rather than stating the rule. It states the rule now.
+ */
+type ManipulatorModule = typeof import('expo-image-manipulator');
+
+let manipulator: ManipulatorModule | null | undefined;
+function imageManipulator(): ManipulatorModule | null {
+  if (manipulator !== undefined) return manipulator;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    manipulator = require('expo-image-manipulator') as ManipulatorModule;
+  } catch {
+    manipulator = null;
+  }
+  return manipulator;
 }
 
 /**

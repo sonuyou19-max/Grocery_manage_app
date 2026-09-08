@@ -242,13 +242,47 @@ for (const [name, cancels] of [
  * import is still a static edge to Metro, so it buys nothing at runtime and
  * cannot be caught.
  */
+/*
+ * Stated as a RULE about which packages may be imported at module scope, not as
+ * a list of the two that must not be.
+ *
+ * The list version passed while `expo-image-manipulator` was added as a static
+ * import two commits later — the same hazard, the same module-scope
+ * `requireNativeModule`, and an assertion that could not see it because it was
+ * enumerating names instead of the property.
+ *
+ * The allowlist is what the OLDEST binary in the field already contains.
+ * expo-image-picker shipped in the SDK 54 build, so importing it costs nothing;
+ * everything added since has to be reached through a lazy require, or a bundle
+ * delivered to that binary throws before the app can start.
+ */
+const SHIPPED_IN_OLDEST_BINARY = ['expo-image-picker'];
+const staticNative = [...source.matchAll(/^import .*from '(expo-[^']+)'/gm)]
+  .map((m) => m[1])
+  .filter((pkg) => !SHIPPED_IN_OLDEST_BINARY.includes(pkg));
+
 assert(
-  'the native pickers are required lazily, not imported at module scope',
-  !/^import .*from 'expo-document-picker'/m.test(source) &&
-    !/^import .*from 'expo-file-system'/m.test(source) &&
-    /require\('expo-document-picker'\)/.test(source) &&
-    /require\('expo-file-system'\)/.test(source),
-  ['A top-level import throws on any binary built before this feature existed.'],
+  'nothing added since the last build is imported at module scope',
+  staticNative.length === 0,
+  [
+    ...staticNative.map((pkg) => `  ${pkg}`),
+    '',
+    'These call requireNativeModule() as they are evaluated. On a binary that',
+    'does not have them, a static import throws before the app can start —',
+    'taking every other fix in the same update with it. Reach them through a',
+    'lazy require in a try, the way documentPicker() and imageManipulator() do.',
+  ],
+);
+assert(
+  '...and each is reached through a lazy require instead',
+  /require\('expo-document-picker'\)/.test(source) &&
+    /require\('expo-file-system'\)/.test(source) &&
+    /require\('expo-image-manipulator'\)/.test(source),
+  ['The absence of a static import is not the same as the feature being there.'],
+);
+assert(
+  '...answering null rather than throwing when it is missing',
+  /manipulator = null;/.test(source) && /if \(!mod\) return null;/.test(source),
 );
 assert(
   '...inside a try that answers null',
