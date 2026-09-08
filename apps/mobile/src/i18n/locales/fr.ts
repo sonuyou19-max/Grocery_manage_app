@@ -741,6 +741,7 @@ const fr = {
     spendingOptional: 'Optionnel',
     spendingEmpty:
       'Ajoute un prix à tes articles en faisant les courses et Korb t’affiche tes dépenses hebdomadaires et où va ton argent. Toujours optionnel — d’ici là, ça reste discret.',
+    noneBoughtInRange: 'Rien enregistré sur cette période. Essaie une plus longue.',
     noneInRange: 'Aucun prix enregistré sur cette période.',
     whereTitle: 'Où tu fais tes courses',
     whereHint: 'Par magasin',

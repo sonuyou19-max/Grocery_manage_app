@@ -14,7 +14,6 @@ import type { ItemCategory } from "@korb/shared";
 import { AnimatedMoney } from "@/components/animated-money";
 import { BalanceBar } from "@/components/balance-bar";
 import { BalanceDonut } from "@/components/balance-donut";
-import { Recalc } from "@/components/recalc";
 import { Card } from "@/components/card";
 import { EcoBar } from "@/components/eco-bar";
 import {
@@ -23,6 +22,7 @@ import {
   type Range,
 } from "@/components/range-picker";
 import { OverflowSheet, RankedRow } from "@/components/overflow-sheet";
+import { RangeCard } from "@/components/range-card";
 import { InsightsTeaser } from "@/components/insights-teaser";
 import { PlusBadge } from "@/components/plus-badge";
 import { Screen } from "@/components/screen";
@@ -419,6 +419,32 @@ function SignedInInsights() {
     [ecoPurchases, ecoRange, now],
   );
 
+  /*
+   * Whether this household has EVER logged something the climate card can
+   * score — as opposed to whether the chosen window has any, which is
+   * `ecoScoped` and is a different question entirely.
+   *
+   * The card used to mount on `eco.score != null`, and `eco` is computed from
+   * `ecoScoped`. So picking "Last 7 days" in a quiet week removed the whole
+   * card, and with it the range picker that had just been used — leaving no
+   * way back to a window with data in it. See components/range-card.
+   *
+   * Unfiltered on purpose. `ecoScoreFor` answers null for an empty list, so
+   * asking it about everything is the same question the card is for: is there
+   * anything here to score, ever.
+   */
+  const hasEcoEver = useMemo(
+    () =>
+      ecoScoreFor(
+        ecoPurchases.map((p) => ({
+          name: p.name,
+          category: p.category ?? ("other" as ItemCategory),
+          bio: p.bio,
+        })),
+      ).score != null,
+    [ecoPurchases],
+  );
+
   const eco = useMemo(
     () =>
       ecoScoreFor(
@@ -506,16 +532,17 @@ function SignedInInsights() {
           also the hook: somebody has to see the feature work before there is
           any reason to pay for its history. See lib/eco.ts for why the number
           is what it is. */}
-      {eco.score != null && (
-        <EcoCard
-          order={1}
-          eco={eco}
-          heaviest={heaviest}
-          now={now}
-          range={ecoRange}
-          onRange={setEcoRange}
-        />
-      )}
+      <EcoCard
+        order={1}
+        eco={eco}
+        heaviest={heaviest}
+        now={now}
+        range={ecoRange}
+        onRange={setEcoRange}
+        /* Not `eco.score != null` — that is derived from the chosen window, so
+           it hid the card and its own range picker together. See range-card. */
+        ever={hasEcoEver}
+      />
 
       {/* FREE, and ungated on data — it is a fact about the month rather than
           about the reader, so it is the one card a day-one install can show.
@@ -562,32 +589,35 @@ function SignedInInsights() {
 
       {/* Plus: HIDE, same reasoning. Staples is a list of names; without the
           names there is nothing to show. */}
-      {!locked && staples.length > 0 && (
-        <Card order={4}>
-          <CardHead
-            icon="repeat-outline"
-            title={t("insights.staplesTitle")}
-            action={
-              <RangePicker value={stapleRange} onChange={setStapleRange} />
-            }
-          />
-          <Recalc trigger={stapleRange} style={styles.recalc}>
-            {/* Five, then a door. A household with sixty tracked items turned this
-              card into most of the tab, and the sixtieth staple is not what
-              anybody came for — but it should still be reachable. */}
-            {staples.slice(0, STAPLES_SHOWN).map((s) => (
-              <View key={s.key} style={styles.row}>
-                <StapleRow staple={s} />
-              </View>
-            ))}
-            {staples.length > STAPLES_SHOWN && (
-              <ViewAllRow
-                label={t("insights.viewAllStaples", { count: staples.length })}
-                onPress={() => setExpanded("staples")}
-              />
-            )}
-          </Recalc>
-        </Card>
+      {/* `ever` is the unfiltered log, `empty` the chosen window. Mounted on
+          `staples.length > 0` this card vanished — with its own range picker —
+          the moment you asked it about a week you did not shop. */}
+      {!locked && (
+        <RangeCard
+          order={4}
+          icon="repeat-outline"
+          title={t("insights.staplesTitle")}
+          range={stapleRange}
+          onRange={setStapleRange}
+          ever={purchases.length > 0}
+          empty={staples.length === 0}
+          emptyMessage={t("insights.noneBoughtInRange")}
+        >
+          {/* Five, then a door. A household with sixty tracked items turned this
+            card into most of the tab, and the sixtieth staple is not what
+            anybody came for — but it should still be reachable. */}
+          {staples.slice(0, STAPLES_SHOWN).map((s) => (
+            <View key={s.key} style={styles.row}>
+              <StapleRow staple={s} />
+            </View>
+          ))}
+          {staples.length > STAPLES_SHOWN && (
+            <ViewAllRow
+              label={t("insights.viewAllStaples", { count: staples.length })}
+              onPress={() => setExpanded("staples")}
+            />
+          )}
+        </RangeCard>
       )}
 
       {/* No per-item purchase history here. The Pantry already gives every item
@@ -758,19 +788,15 @@ function SignedInInsights() {
           picker, because unmounting it took away the only control that could
           get back to a range with data in it. */}
       {pricedItems.length > 0 ? (
-        <Card order={8}>
-          <CardHead
-            icon="cash-outline"
-            title={t("insights.spendingTitle")}
-            action={<RangePicker value={spendRange} onChange={setSpendRange} />}
-          />
-          <Recalc trigger={spendRange} style={styles.recalc}>
-            {spendScoped.length === 0 ? (
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {t("insights.noneInRange")}
-              </Text>
-            ) : (
-            <>
+        <RangeCard
+          order={8}
+          icon="cash-outline"
+          title={t("insights.spendingTitle")}
+          range={spendRange}
+          onRange={setSpendRange}
+          ever={pricedItems.length > 0}
+          empty={spendScoped.length === 0}
+        >
             <View style={styles.spendTotal}>
               <Text style={[type.sub, { color: colors.muted }]}>
                 {t("insights.totalLogged")}
@@ -803,10 +829,7 @@ function SignedInInsights() {
                 </Text>
               </View>
             ))}
-            </>
-            )}
-          </Recalc>
-        </Card>
+        </RangeCard>
       ) : (
         <Card order={9}>
           <CardHead
@@ -822,31 +845,25 @@ function SignedInInsights() {
 
       {/* Spend per store — whenever a store has ever been priced. Scoped to the
           chosen range inside, so an empty range says so rather than vanishing. */}
-      {hasStoreSpendEver && (
-        <Card order={10}>
-          <CardHead
-            icon="storefront-outline"
-            title={t("insights.whereTitle")}
-            action={<RangePicker value={storeRange} onChange={setStoreRange} />}
+      <RangeCard
+        order={10}
+        icon="storefront-outline"
+        title={t("insights.whereTitle")}
+        range={storeRange}
+        onRange={setStoreRange}
+        ever={hasStoreSpendEver}
+        empty={storeSpend.length === 0}
+      >
+        {storeSpend.slice(0, STORES_SHOWN).map((s) => (
+          <StoreRow key={s.store ?? "none"} spend={s} />
+        ))}
+        {storeSpend.length > STORES_SHOWN && (
+          <ViewAllRow
+            label={t("insights.viewAllShops", { count: storeSpend.length })}
+            onPress={() => setExpanded("stores")}
           />
-          <Recalc trigger={storeRange} style={styles.recalc}>
-            {storeSpend.length === 0 && (
-              <Text style={[type.sub, { color: colors.muted }]}>
-                {t("insights.noneInRange")}
-              </Text>
-            )}
-            {storeSpend.slice(0, STORES_SHOWN).map((s) => (
-              <StoreRow key={s.store ?? "none"} spend={s} />
-            ))}
-            {storeSpend.length > STORES_SHOWN && (
-              <ViewAllRow
-                label={t("insights.viewAllShops", { count: storeSpend.length })}
-                onPress={() => setExpanded("stores")}
-              />
-            )}
-          </Recalc>
-        </Card>
-      )}
+        )}
+      </RangeCard>
 
       {/* Cheaper elsewhere — same item priced at 2+ stores. Plus: same reason.
           Comparing shops needs enough trips to have visited more than one.
@@ -1269,6 +1286,7 @@ function EcoCard({
   now,
   range,
   onRange,
+  ever,
   order,
 }: {
   order?: number;
@@ -1277,10 +1295,26 @@ function EcoCard({
   now: number;
   range: Range;
   onRange: (r: Range) => void;
+  /**
+   * Whether this household has ever logged anything scoreable — NOT whether the
+   * chosen window has. See hasEcoEver, and components/range-card for the bug
+   * that distinction exists to close.
+   */
+  ever: boolean;
 }) {
   const { colors } = useTheme();
   const { t } = useLocale();
   const [explained, setExplained] = useState(false);
+
+  /*
+   * Its own card rather than a <RangeCard>, because this header is not the
+   * shared one: it carries an (i) that opens the methodology, and the title
+   * sits at `type.label` rather than `type.body`. What it does share is the
+   * RULE — `ever` decides whether the card exists, the window only decides
+   * what it says — and that is the part that was wrong.
+   */
+  if (!ever) return null;
+  const emptyWindow = eco.score == null;
 
   return (
     <Card order={order}>
@@ -1316,23 +1350,34 @@ function EcoCard({
           It was up there next to the title, which put two unrelated numbers a
           few pixels apart — a score of 69 beside "69 food items" read as one
           fact stated twice. */}
-      <View style={styles.heroRow}>
-        <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
-        <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
-          {t("eco.outOf")}
-        </Text>
+      {/* The window, not the household. A quiet week is a fact about the week
+          — the card stays, the picker stays, and the way back to a range with
+          shopping in it is exactly where it was. */}
+      {emptyWindow ? (
         <Text style={[type.sub, { color: colors.muted }]}>
-          {t("eco.cardHint", { count: eco.total })}
+          {t("insights.noneBoughtInRange")}
         </Text>
-      </View>
-      <EcoBar shares={eco.shares} counts={eco.counts} />
+      ) : (
+        <>
+          <View style={styles.heroRow}>
+            <Text style={[type.h1, { color: colors.ink }]}>{eco.score}</Text>
+            <Text style={[type.sub, styles.grow, { color: colors.muted }]}>
+              {t("eco.outOf")}
+            </Text>
+            <Text style={[type.sub, { color: colors.muted }]}>
+              {t("eco.cardHint", { count: eco.total })}
+            </Text>
+          </View>
+          <EcoBar shares={eco.shares} counts={eco.counts} />
+        </>
+      )}
       {explained && (
         <Text style={[type.sub, { color: colors.muted }]}>
           {t("eco.cardNote")}
         </Text>
       )}
 
-      {eco.bioCount > 0 && (
+      {!emptyWindow && eco.bioCount > 0 && (
         /* Its own line, never folded into the bar. Organic is frequently higher
            carbon per kilo, so showing it as part of the impact mix would state
            something false; showing it beside is true and still gives credit. */
@@ -1346,7 +1391,7 @@ function EcoCard({
 
       {/* A fact, with no instruction attached. See heaviestStaple in eco.ts for
           why there is no "try swapping" on the end of it. */}
-      {heaviest && (
+      {!emptyWindow && heaviest && (
         <View style={styles.row}>
           <Ionicons
             name="arrow-up-circle-outline"
@@ -1502,7 +1547,6 @@ const styles = StyleSheet.create({
    * <Recalc> turns N spaced children into one — and the rows inside collapse
    * against each other. The wrapper has to carry the gap it displaced.
    */
-  recalc: { gap: spacing.sm },
   row: {
     flexDirection: "row",
     alignItems: "center",

@@ -839,6 +839,7 @@ const pl = {
     spendingOptional: 'Opcjonalne',
     spendingEmpty:
       'Dodawaj ceny produktów podczas zakupów, a Korb pokaże tygodniowe wydatki i to, na co idą Twoje pieniądze. Zawsze opcjonalne — do tego czasu nie zawraca głowy.',
+    noneBoughtInRange: 'Nic nie zapisano w tym okresie. Spróbuj dłuższego.',
     noneInRange: 'W tym okresie nie zapisano żadnych cen.',
     whereTitle: 'Gdzie robisz zakupy',
     whereHint: 'Według sklepu',

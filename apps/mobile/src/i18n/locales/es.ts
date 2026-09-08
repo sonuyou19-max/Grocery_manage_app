@@ -741,6 +741,7 @@ const es = {
     spendingOptional: 'Opcional',
     spendingEmpty:
       'Añade un precio a los artículos mientras compras y Korb te muestra el gasto semanal y adónde va tu dinero. Siempre opcional — hasta entonces esto no molesta.',
+    noneBoughtInRange: 'No hay nada registrado en este periodo. Prueba con uno más largo.',
     noneInRange: 'No hay precios registrados en este periodo.',
     whereTitle: 'Dónde compras',
     whereHint: 'Por tienda',

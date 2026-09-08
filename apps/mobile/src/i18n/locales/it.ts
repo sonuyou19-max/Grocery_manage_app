@@ -741,6 +741,7 @@ const it = {
     spendingOptional: 'Facoltativo',
     spendingEmpty:
       'Aggiungi un prezzo agli articoli mentre fai la spesa e Korb ti mostra la spesa settimanale e dove finiscono i tuoi soldi. Sempre facoltativo — fino ad allora resta in disparte.',
+    noneBoughtInRange: 'Niente registrato in questo periodo. Prova un periodo più lungo.',
     noneInRange: 'Nessun prezzo registrato in questo periodo.',
     whereTitle: 'Dove fai la spesa',
     whereHint: 'Per negozio',

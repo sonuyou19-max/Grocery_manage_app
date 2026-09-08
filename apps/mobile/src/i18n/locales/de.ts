@@ -742,6 +742,7 @@ const de = {
     spendingOptional: 'Optional',
     spendingEmpty:
       'Trag beim Einkaufen Preise ein und Korb zeigt dir die Wochenausgaben und wohin dein Geld fließt. Immer optional — bis dahin bleibt das im Hintergrund.',
+    noneBoughtInRange: 'In diesem Zeitraum nichts erfasst. Versuch einen längeren.',
     noneInRange: 'In diesem Zeitraum wurden keine Preise erfasst.',
     whereTitle: 'Wo du einkaufst',
     whereHint: 'Nach Geschäft',

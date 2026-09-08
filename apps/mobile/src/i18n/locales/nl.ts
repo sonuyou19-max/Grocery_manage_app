@@ -740,6 +740,7 @@ const nl = {
     spendingOptional: 'Optioneel',
     spendingEmpty:
       'Voeg een prijs toe aan items tijdens het winkelen en Korb toont je weekuitgaven en waar je geld naartoe gaat. Altijd optioneel — tot dan blijft dit uit beeld.',
+    noneBoughtInRange: 'Niets vastgelegd in deze periode. Probeer een langere.',
     noneInRange: 'Geen prijzen vastgelegd in deze periode.',
     whereTitle: 'Waar je winkelt',
     whereHint: 'Per winkel',
