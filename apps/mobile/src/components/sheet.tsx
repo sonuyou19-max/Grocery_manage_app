@@ -189,10 +189,10 @@ export interface SheetProps {
    * Extra room under the card, in px. The create sheet passes the tab bar's
    * height so it clears the button it grew out of.
    *
-   * PADDING on the backdrop, never margin on the card: margin counts toward the
-   * card's own tap-blocking wrapper, whose touch area would then cover the
-   * cleared strip and swallow every tap meant for the button under it. That was
-   * a dead close button for a whole release.
+   * PADDING on the layout layer, never margin or padding on the card: the card
+   * is the one thing here that is opaque to touches, so anything that grows it
+   * covers the cleared strip and swallows every tap meant for the button under
+   * it. That was a dead close button for a whole release.
    */
   bottomClearance?: number;
   /** Lift above the keyboard. For sheets containing a text field. */
@@ -385,21 +385,45 @@ export function Sheet({
     [dismiss, drag, motion, scrim],
   );
 
+  /*
+   * ---------------------------------------------------------------------------
+   * The tap-catcher is BEHIND the card, never around it
+   * ---------------------------------------------------------------------------
+   *
+   * This used to be two nested Pressables — one filling the window to catch a
+   * tap outside, one hugging the card to stop a tap on it from closing the
+   * sheet — with the card, and therefore every ScrollView in every sheet in the
+   * app, rendered inside both. That reads correctly and is correct on Android.
+   * On iOS it means no sheet can be scrolled.
+   *
+   * Pressable claims the JS responder on touch DOWN (`onStartShouldSetResponder`
+   * is unconditionally true). On Android the native ScrollView then intercepts
+   * the move and the responder is terminated, so the drag becomes a scroll. On
+   * iOS the responder is already held by an ancestor when UIScrollView's pan
+   * would otherwise begin, and the pan never starts: the finger moves, the list
+   * does not, and there is no error anywhere. Reported as "it is stuck at the
+   * same view, I can scroll in Android though" — on the staples sheet, which is
+   * simply the first list long enough to make it obvious.
+   *
+   * The two sheets that were never converted to this component — item-sheet and
+   * quick-add-sheet — both scroll on iOS, and both put their tap-catcher where
+   * it is put here: an absolutely-filled Pressable UNDER the card, as a sibling.
+   * Nothing then wraps the card, so nothing competes for the touch, and a tap on
+   * the card lands on a plain View that claims no responder and does nothing —
+   * which is the whole of what the inner Pressable was for.
+   *
+   * The layers between are `box-none`: they lay the card out and are not touch
+   * targets themselves, so a tap in the gutter or the cleared strip falls
+   * through to the catcher below and closes the sheet, as it always did.
+   */
   const body = (
-    <Pressable
-      style={[
-        styles.backdrop,
-        { padding: gutter },
-        align === "center" ? styles.center : styles.end,
-        bottomClearance != null ? { paddingBottom: bottomClearance } : null,
-      ]}
-      onPress={onClose}
-    >
-      {/* Its own layer rather than a colour on the backdrop, because it has to
-          fade and the backdrop must not: this Pressable is what catches a tap
-          outside the card, and animating the view that owns the touch target is
-          how that stops being reliable. pointerEvents none for the same reason
-          — it sits over the backdrop and would otherwise be the thing tapped. */}
+    <View style={styles.fill}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+
+      {/* Its own layer rather than a colour on the catcher, because it has to
+          fade and the catcher must not: animating the view that owns the touch
+          target is how that stops being reliable. pointerEvents none because it
+          sits OVER the catcher and would otherwise be the thing tapped. */}
       {scrim && (
         <Animated.View
           pointerEvents="none"
@@ -407,30 +431,35 @@ export function Sheet({
         />
       )}
 
-      {/* Stops a tap on the card itself from closing it. Wraps the card and
-          nothing else — anything that ADDS layout in here (padding, margin,
-          a minimum size) eats the backdrop's taps, which is what once left a
-          close button dead for a whole release.
-
-          What it does carry is the opposite of that: constraints that can only
-          ever make it smaller. Without them this Pressable is the break in the
-          chain — a flex item at RN's default `flexShrink: 0`, with no definite
-          height for a child's `maxHeight: '80%'` to resolve against. So a sheet
-          whose content outgrows the screen cannot shrink and its ScrollView
-          never becomes scrollable; it just runs off the edge. */}
-      <Pressable onPress={() => {}} style={styles.cardWrap}>
-        <Animated.View
-          style={[
-            styles.card,
-            align === "center" ? styles.originCenter : styles.originEnd,
-            cardStyle,
-            cardAnim,
-          ]}
-        >
-          {children}
-        </Animated.View>
-      </Pressable>
-    </Pressable>
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.backdrop,
+          { padding: gutter },
+          align === "center" ? styles.center : styles.end,
+          bottomClearance != null ? { paddingBottom: bottomClearance } : null,
+        ]}
+      >
+        {/* Carries the constraints that can only ever make the card smaller.
+            Without them this view is the break in the chain — a flex item at
+            RN's default `flexShrink: 0`, with no definite height for a child's
+            `maxHeight: '80%'` to resolve against. So a sheet whose content
+            outgrows the screen cannot shrink and its ScrollView never becomes
+            scrollable; it just runs off the edge. */}
+        <View pointerEvents="box-none" style={styles.cardWrap}>
+          <Animated.View
+            style={[
+              styles.card,
+              align === "center" ? styles.originCenter : styles.originEnd,
+              cardStyle,
+              cardAnim,
+            ]}
+          >
+            {children}
+          </Animated.View>
+        </View>
+      </View>
+    </View>
   );
 
   return (
@@ -490,7 +519,7 @@ const styles = StyleSheet.create({
    * alignItems defaults to stretch), stated so the rest is obviously additive.
    * `maxHeight: 100%` gives the chain a definite bound to resolve percentages
    * against, and `flexShrink: 1` lets that bound actually squeeze the card
-   * rather than being ignored. Neither can enlarge the touch area.
+   * rather than being ignored.
    */
   cardWrap: { alignSelf: "stretch", maxHeight: "100%", flexShrink: 1 },
   // Same reason, one level down: the constraint has to reach the card's own

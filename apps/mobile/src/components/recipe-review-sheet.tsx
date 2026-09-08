@@ -207,10 +207,19 @@ export function RecipeReviewSheet({
       animationType="none"
       onRequestClose={onClose}
     >
-      <Animated.View style={[StyleSheet.absoluteFill, styles.dim, backdropStyle]} />
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable onPress={() => {}}>
-          <Animated.View style={sheetStyle}>
+      {/* Tap outside to close, as a layer UNDER the card rather than a pair of
+          Pressables wrapped around it. An ancestor Pressable claims the JS
+          responder on touch down, and on iOS that stops UIScrollView's pan from
+          ever starting — the ingredient list below could not be scrolled, while
+          Android (which terminates the responder on intercept) was fine. See
+          components/sheet.tsx, which had the same shape for the same reason. */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, styles.dim, backdropStyle]}
+      />
+      <View pointerEvents="box-none" style={styles.backdrop}>
+        <Animated.View style={sheetStyle}>
           <GlassView over="content" radius={radii.lg} style={styles.card}>
             <View style={styles.grabber} />
 
@@ -310,9 +319,8 @@ export function RecipeReviewSheet({
               </Text>
             </Pressable>
           </GlassView>
-          </Animated.View>
-        </Pressable>
-      </Pressable>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

@@ -282,24 +282,30 @@ if (!reviewSheet || !/onDismissed(Ref\.current)?\?\.\(\)/.test(code(reviewSheet)
 /* ================== a sheet can always shrink to fit the screen ============ */
 
 /*
- * The card's tap-blocking wrapper carries three constraints — alignSelf,
- * maxHeight and flexShrink — and they are the only reason a tall sheet caps and
- * scrolls instead of running off the bottom of the screen.
+ * The card's wrapper carries three constraints — alignSelf, maxHeight and
+ * flexShrink — and they are the only reason a tall sheet caps and scrolls
+ * instead of running off the bottom of the screen.
  *
  * They are unusually easy to delete, because the comment right above them warns
- * the next reader NOT to put layout in that Pressable. That warning is about
- * things which ENLARGE it (padding, margin, a minimum size) and would swallow
- * backdrop taps; these three can only make it smaller. Nothing in the code says
- * which is which, so this does.
+ * the next reader NOT to put layout in that view. That warning is about things
+ * which ENLARGE it (padding, margin, a minimum size) and would cover the strip
+ * a tap outside the card has to land on; these three can only make it smaller.
+ * Nothing in the code says which is which, so this does.
  *
  * The symptom if they go is not a crash. It is the purchase history opening
  * with its last row sliced in half by the screen edge, which reads as a
  * rendering glitch rather than a missing style.
+ *
+ * The wrapper used to be a Pressable — it was what stopped a tap on the card
+ * from closing the sheet — and is a `box-none` View now, because an ancestor
+ * Pressable takes the responder on touch down and no sheet in the app could be
+ * scrolled on iOS. See check-sheet-scroll.mjs; matched by its style rather than
+ * its tag so that the two files are not each other's tripwire.
  */
 const sheetSrc = readFileSync(join(SRC, 'components', 'sheet.tsx'), 'utf8');
 const sheetCode = sheetSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-const wrapperStyled = /<Pressable onPress=\{\(\) => \{\}\} style=\{styles\.(\w+)\}/.exec(sheetCode);
+const wrapperStyled = /style=\{styles\.(cardWrap\w*)\}/.exec(sheetCode);
 if (!wrapperStyled) {
   fail("the sheet's card wrapper has no style", [
     'Without one it is a flex item at flexShrink: 0 with an indefinite height,',
