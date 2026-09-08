@@ -131,7 +131,7 @@ assert(
  */
 for (const [name, statuses] of [
   ['pickReceiptPhotos', ['picked', 'cancelled', 'tooLarge']],
-  ['pickReceiptDocument', ['picked', 'cancelled', 'tooLarge', 'wrongType']],
+  ['pickReceiptDocument', ['picked', 'cancelled', 'tooLarge', 'wrongType', 'unavailable']],
 ]) {
   const body = source.slice(source.indexOf(`export async function ${name}`));
   const end = body.indexOf('\nexport ', 1);
@@ -174,6 +174,47 @@ for (const [name, cancels] of [
     ],
   );
 }
+
+/* ------------------ the PDF path degrades, it does not take the app down -- */
+
+/*
+ * expo-document-picker and expo-file-system are NATIVE, and they arrived with
+ * this feature. The app ships JavaScript over the air, so there is a window —
+ * every skipped build — where a new bundle runs on a binary that has neither.
+ * The existing Android APK is exactly that binary.
+ *
+ * A static import there does not degrade: it throws while the module graph is
+ * being evaluated, and this module is on the receipt screen's import chain. The
+ * app fails to start, taking every other fix in the same update with it. Same
+ * hazard, same shape and same reasoning as lib/push's notifications().
+ *
+ * `await import()` is NOT the fix and was what this shipped as: a dynamic
+ * import is still a static edge to Metro, so it buys nothing at runtime and
+ * cannot be caught.
+ */
+assert(
+  'the native pickers are required lazily, not imported at module scope',
+  !/^import .*from 'expo-document-picker'/m.test(source) &&
+    !/^import .*from 'expo-file-system'/m.test(source) &&
+    /require\('expo-document-picker'\)/.test(source) &&
+    /require\('expo-file-system'\)/.test(source),
+  ['A top-level import throws on any binary built before this feature existed.'],
+);
+assert(
+  '...inside a try that answers null',
+  /try \{[\s\S]{0,400}?require\('expo-document-picker'\)[\s\S]{0,400}?\} catch \{\s*native = null;/.test(source),
+);
+assert(
+  '...and a missing module is a REFUSAL, not a crash or a silence',
+  /if \(!mod\) return \{ status: 'unavailable' \};/.test(source) &&
+    /receipt\.pdfNeedsUpdate/.test(capture),
+  ['Told their file was too large, they would go off to shrink the wrong thing.'],
+);
+assert(
+  'no dynamic import stands in for the lazy require',
+  !/await import\('expo-/.test(source),
+  ['Metro resolves it statically all the same — it is a bundling edge, not a guard.'],
+);
 
 assert(
   'a too-large pick is said out loud rather than swallowed',

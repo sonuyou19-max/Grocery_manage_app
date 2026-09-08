@@ -30,6 +30,7 @@ const de = {
     photoTooLarge: 'Dieses Foto ist zu groß zum Senden. Versuch ein anderes.',
     pdfTooLarge: 'Dieses PDF ist zu groß zum Senden.',
     notAPdf: 'Diese Datei ist kein PDF.',
+    pdfNeedsUpdate: 'Für PDF-Bons brauchst du die neueste Korb-Version.',
     scanFailed: 'Wir konnten den Bon nicht lesen. Versuch ein schärferes Foto oder trag die Artikel von Hand ein.',
     cameraNeededTitle: 'Korb braucht die Kamera',
     cameraNeededBody: 'Um einen Kassenbon zu lesen, muss Korb ihn fotografieren. Die Fotos werden nur für diesen Scan verwendet.',

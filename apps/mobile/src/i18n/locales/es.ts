@@ -30,6 +30,7 @@ const es = {
     photoTooLarge: 'Esa foto es demasiado grande para enviarla. Prueba con otra.',
     pdfTooLarge: 'Ese PDF es demasiado grande para enviarlo.',
     notAPdf: 'Ese archivo no es un PDF.',
+    pdfNeedsUpdate: 'Los tickets en PDF necesitan la última versión de Korb.',
     scanFailed: 'No hemos podido leer el tique. Prueba con una foto más nítida, o añade los artículos a mano.',
     cameraNeededTitle: 'Korb necesita la cámara',
     cameraNeededBody: 'Para leer un tique, Korb tiene que fotografiarlo. Las fotos se usan para este escaneo y para nada más.',

@@ -30,6 +30,7 @@ const fr = {
     photoTooLarge: 'Cette photo est trop lourde à envoyer. Essaie une autre.',
     pdfTooLarge: 'Ce PDF est trop lourd à envoyer.',
     notAPdf: 'Ce fichier n’est pas un PDF.',
+    pdfNeedsUpdate: 'Les tickets PDF nécessitent la dernière version de Korb.',
     scanFailed: 'Nous n’avons pas pu lire ce ticket. Essaie une photo plus nette, ou saisis les articles à la main.',
     cameraNeededTitle: 'Korb a besoin de l’appareil photo',
     cameraNeededBody: 'Pour lire un ticket, Korb doit le photographier. Les photos servent à ce scan et à rien d’autre.',

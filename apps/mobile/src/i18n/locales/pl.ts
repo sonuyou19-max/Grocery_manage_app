@@ -40,6 +40,7 @@ const pl = {
     photoTooLarge: 'To zdjęcie jest za duże do wysłania. Spróbuj innego.',
     pdfTooLarge: 'Ten PDF jest za duży do wysłania.',
     notAPdf: 'Ten plik to nie PDF.',
+    pdfNeedsUpdate: 'Paragony PDF wymagają najnowszej wersji Korb.',
     scanFailed: 'Nie udało się odczytać tego paragonu. Spróbuj wyraźniejszego zdjęcia albo dodaj produkty ręcznie.',
     cameraNeededTitle: 'Korb potrzebuje aparatu',
     cameraNeededBody: 'Żeby odczytać paragon, Korb musi go sfotografować. Zdjęcia służą tylko do tego skanu.',

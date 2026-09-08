@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import { File } from 'expo-file-system';
 
 import { CAPTURE_QUALITY, MAX_SHOTS, tooLarge } from '@/lib/receipt-capture';
 
@@ -66,7 +65,50 @@ export type PickedDocument =
   | { status: 'picked'; name: string; data: string }
   | { status: 'cancelled' }
   | { status: 'tooLarge' }
-  | { status: 'wrongType' };
+  | { status: 'wrongType' }
+  /** This binary has no document picker in it. See `documentPicker` below. */
+  | { status: 'unavailable' };
+
+/**
+ * The two NATIVE modules the PDF path needs, loaded only if this binary has
+ * them — the same shape, and for the same reason, as lib/push's notifications().
+ *
+ * ---------------------------------------------------------------------------
+ * Why not a top-level import
+ * ---------------------------------------------------------------------------
+ *
+ * The app ships JavaScript over the air and these arrived with a feature, so
+ * there is a window — every time somebody skips a build — where a new bundle
+ * runs on an older binary that has neither. A static import in that situation
+ * does not degrade: it throws while the module graph is still being evaluated,
+ * and this module is reached from the receipt screen's import chain. The app
+ * fails to start, taking every other fix in the same update with it.
+ *
+ * The existing Android APK is exactly that binary: SDK 54, built before either
+ * package existed. A feature that cannot work there is fine; one that stops it
+ * opening is not.
+ *
+ * Resolved once, on first use. `require` rather than `await import()`, which is
+ * what this was: a dynamic import is still a static edge to Metro, so it buys
+ * nothing at runtime and cannot be caught this way.
+ */
+type PickerModule = typeof import('expo-document-picker');
+type FsModule = typeof import('expo-file-system');
+
+let native: { picker: PickerModule; fs: FsModule } | null | undefined;
+function documentPicker(): { picker: PickerModule; fs: FsModule } | null {
+  if (native !== undefined) return native;
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const picker = require('expo-document-picker') as PickerModule;
+    const fs = require('expo-file-system') as FsModule;
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    native = { picker, fs };
+  } catch {
+    native = null;
+  }
+  return native;
+}
 
 /**
  * Receipt photographs already on the phone.
@@ -111,8 +153,12 @@ export async function pickReceiptPhotos(): Promise<PickedImages> {
  * scanner would spend a vision call finding out.
  */
 export async function pickReceiptDocument(): Promise<PickedDocument> {
-  const DocumentPicker = await import('expo-document-picker');
-  const picked = await DocumentPicker.getDocumentAsync({
+  const mod = documentPicker();
+  // An older binary running a newer bundle. Everything else in this update
+  // works; this one source waits for a build, and says so.
+  if (!mod) return { status: 'unavailable' };
+
+  const picked = await mod.picker.getDocumentAsync({
     type: PDF_MEDIA,
     copyToCacheDirectory: true,
     multiple: false,
@@ -127,7 +173,7 @@ export async function pickReceiptDocument(): Promise<PickedDocument> {
     asset.mimeType === PDF_MEDIA || named.toLowerCase().endsWith('.pdf');
   if (!looksPdf) return { status: 'wrongType' };
 
-  const data = await new File(asset.uri).base64();
+  const data = await new mod.fs.File(asset.uri).base64();
   if (!data || data.length > MAX_PDF_CHARS) return { status: 'tooLarge' };
 
   return { status: 'picked', name: named, data };

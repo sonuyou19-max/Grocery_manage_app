@@ -30,6 +30,7 @@ const it = {
     photoTooLarge: 'Questa foto è troppo grande da inviare. Provane un’altra.',
     pdfTooLarge: 'Questo PDF è troppo grande da inviare.',
     notAPdf: 'Questo file non è un PDF.',
+    pdfNeedsUpdate: 'Gli scontrini PDF richiedono l’ultima versione di Korb.',
     scanFailed: 'Non siamo riusciti a leggere lo scontrino. Prova una foto più nitida, o inserisci gli articoli a mano.',
     cameraNeededTitle: 'Korb ha bisogno della fotocamera',
     cameraNeededBody: 'Per leggere uno scontrino Korb deve fotografarlo. Le foto servono solo per questa scansione.',

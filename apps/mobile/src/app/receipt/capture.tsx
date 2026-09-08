@@ -296,8 +296,20 @@ export default function ReceiptCaptureScreen() {
         return;
       }
       if (picked.status !== 'picked') {
+        /*
+         * Three refusals, three sentences. `unavailable` is the one that is not
+         * the shopper's doing at all — this binary predates the PDF path — and
+         * telling them their file was too large would send them off to shrink
+         * something that was never the problem.
+         */
         showToast(
-          t(picked.status === 'wrongType' ? 'receipt.notAPdf' : 'receipt.pdfTooLarge'),
+          t(
+            picked.status === 'wrongType'
+              ? 'receipt.notAPdf'
+              : picked.status === 'unavailable'
+                ? 'receipt.pdfNeedsUpdate'
+                : 'receipt.pdfTooLarge',
+          ),
         );
         goBack();
         return;

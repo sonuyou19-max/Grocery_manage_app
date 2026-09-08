@@ -39,6 +39,7 @@ const en = {
     photoTooLarge: 'That photo is too large to send. Try another.',
     pdfTooLarge: 'That PDF is too large to send.',
     notAPdf: 'That file is not a PDF.',
+    pdfNeedsUpdate: 'PDF receipts need the latest version of Korb.',
     scanFailed: 'We could not read that receipt. Try a clearer photo, or add the items by hand.',
     cameraNeededTitle: 'Korb needs the camera',
     cameraNeededBody: 'To read a receipt, Korb has to photograph it. The photos are used for this scan and nothing else.',
