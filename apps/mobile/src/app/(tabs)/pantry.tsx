@@ -45,6 +45,7 @@ import {
   hasStopped,
   lastBoughtLabel,
   listsHolding,
+  normalizeKey,
   queuedKeys,
   sinceBoughtLabel,
   statusLabel,
@@ -554,10 +555,42 @@ function SignedInPantry() {
         placeholder={t('pantry.trackPlaceholder')}
         confirmLabel={t('pantry.trackConfirm')}
         onCancel={() => setAdding(false)}
+        /*
+         * ---------------------------------------------------------------------
+         * THE NAME IS HALF THE ANSWER, SO IT IS HALF THE FLOW
+         * ---------------------------------------------------------------------
+         *
+         * This used to call `logPurchase(clean, category)` right here — one
+         * purchase, dated now, with nothing else asked. That is a guess wearing
+         * a record: the whole pantry model is built from WHEN things were
+         * bought, and a made-up date teaches it a cadence nobody shopped.
+         *
+         * So the name prompt hands straight to the purchase form, the same one
+         * the item sheet opens, and the write happens ONCE at the end of it.
+         * Nothing is recorded here — not the item, not a placeholder, not a
+         * purchase — which is what makes it impossible to record twice.
+         *
+         * Backing out of the form therefore adds nothing at all. That is the
+         * right reading of a cancelled flow: somebody who abandons "when did
+         * you buy it" has not told us they own it either, and an item with an
+         * invented date is worse than no item.
+         *
+         * `TextPromptModal` submits through useSheetDismiss, so this runs once
+         * its window is really gone — which is what lets it open a second one.
+         * See lib/modal-nav for the four times that was got wrong.
+         */
         onSubmit={(name) => {
           const clean = name.trim();
-          if (clean) logPurchase(clean, categorizeSync(clean));
           setAdding(false);
+          if (!clean) return;
+          setRecording({
+            // The key the purchase will be filed under, computed the same way
+            // logPurchase computes it. The sheet only reads it to know when it
+            // has been handed a different item and should reset its fields.
+            key: normalizeKey(clean),
+            display: clean,
+            category: categorizeSync(clean),
+          });
         }}
       />
       <CoachMark

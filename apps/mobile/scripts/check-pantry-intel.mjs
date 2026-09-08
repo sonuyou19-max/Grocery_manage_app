@@ -949,5 +949,59 @@ check(
   check('...and nothing renders when there is none', has(/\{tip != null && \(/), true);
 }
 
+/* ============ tracking a new item is ONE flow and ONE purchase ============ */
+
+{
+  /*
+   * Comments stripped, for the reason two assertions in the block above learned
+   * the hard way: the code being asserted on is explained at length right beside
+   * it, and the explanation quotes the call this counts.
+   */
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const pantry = strip(
+    readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8'),
+  );
+
+  /*
+   * The + button used to write a purchase the moment a name was typed — dated
+   * now, with nothing else asked. That is a guess wearing a record: the whole
+   * pantry model is built from WHEN things were bought, and a made-up date
+   * teaches it a cadence nobody shopped.
+   *
+   * Now the name prompt hands straight to the purchase form and the write
+   * happens once, at the end. The risk in that shape is the obvious one — a
+   * write at BOTH ends, so the item is logged twice from one flow — which is
+   * why this counts the call sites rather than checking that the second one
+   * exists.
+   */
+  const writes = (pantry.match(/[^.\w]logPurchase\(/g) ?? []).length;
+  check(
+    'the pantry writes a purchase from exactly one place',
+    writes,
+    1,
+  );
+  check(
+    '...and the name prompt is not it',
+    /onSubmit=\{\(name\) => \{[\s\S]{0,600}?logPurchase\(/.test(pantry),
+    false,
+  );
+  check(
+    '...it opens the purchase form instead',
+    /onSubmit=\{\(name\) => \{[\s\S]{0,600}?setRecording\(\{/.test(pantry),
+    true,
+  );
+  /*
+   * Filed under the key logPurchase will compute, not a placeholder. The sheet
+   * reads it only to notice it has been handed a different item and reset its
+   * fields — but a key that disagreed with the one the write lands on would
+   * make the form fail to reset between two items typed one after another.
+   */
+  check(
+    'the new item carries the key its purchase will land on',
+    /key: normalizeKey\(clean\)/.test(pantry),
+    true,
+  );
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
