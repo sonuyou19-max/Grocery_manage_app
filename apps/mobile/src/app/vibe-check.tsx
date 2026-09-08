@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -139,7 +140,7 @@ function SignedInVibeCheck() {
       celebratedRef.current = true;
       setDone(true);
       if (cards.length > 0) haptics.success();
-      const timer = setTimeout(() => router.back(), cards.length > 0 ? 1900 : 1500);
+      const timer = setTimeout(() => goBack(), cards.length > 0 ? 1900 : 1500);
       return () => clearTimeout(timer);
     }
   }, [remaining.length, cards.length, pendingPick]);
@@ -271,7 +272,7 @@ function SignedInVibeCheck() {
       <View style={styles.safe}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + spacing.xs }]}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => goBack()} hitSlop={12}>
             <Ionicons name="close" size={26} color="rgba(255,255,255,0.7)" />
           </Pressable>
           <View style={styles.headerMid}>

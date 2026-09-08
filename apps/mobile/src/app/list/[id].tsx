@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBack } from '@/lib/navigate';
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -510,7 +511,7 @@ export default function ListDetailScreen() {
               extra row of chrome. */}
           <View style={styles.topBar}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => goBack()}
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={t("common.back")}

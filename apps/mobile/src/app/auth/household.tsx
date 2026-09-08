@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -100,7 +101,7 @@ export default function HouseholdSetupScreen() {
      * silence was, and it reads as the app losing your data rather than
      * showing you somewhere else.
      *
-     * Fired BEFORE router.back(): the toast host lives at the root of the
+     * Fired BEFORE goBack(): the toast host lives at the root of the
      * tree, above every screen, so the message survives this modal closing
      * and lands over the dashboard it is describing.
      *
@@ -123,7 +124,7 @@ export default function HouseholdSetupScreen() {
     showToast(
       name ? t('household.nowShoppingIn', { name }) : t('household.nowShoppingJoined'),
     );
-    router.back();
+    goBack();
   };
 
   /*
@@ -146,7 +147,7 @@ export default function HouseholdSetupScreen() {
         <MeshBackground />
         <Safe style={styles.rootTransparent} edges={['top', 'bottom']}>
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Pressable onPress={() => goBack()} hitSlop={12}>
               <Ionicons name="chevron-back" size={26} color={colors.ink} />
             </Pressable>
           </View>
@@ -158,7 +159,7 @@ export default function HouseholdSetupScreen() {
             <Text style={[type.bodyRegular, { color: colors.muted }]}>
               {sent ? t('join.sentBody', { name: sent }) : t('join.sentBodyGeneric')}
             </Text>
-            <PrimaryButton label={t('common.done')} onPress={() => router.back()} />
+            <PrimaryButton label={t('common.done')} onPress={() => goBack()} />
           </View>
         </Safe>
       </View>
@@ -171,7 +172,7 @@ export default function HouseholdSetupScreen() {
       <Safe style={styles.rootTransparent} edges={['top', 'bottom']}>
       <KeyboardAvoidingView behavior="padding" style={styles.fill}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => goBack()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
           </Pressable>
         </View>

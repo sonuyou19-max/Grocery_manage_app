@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -88,7 +89,7 @@ export default function SignInScreen() {
     }
     setBusy(false);
     if (known) {
-      router.back(); // back to Settings, now signed in
+      goBack(); // back to Settings, now signed in
       return;
     }
     setError(null);
@@ -133,7 +134,7 @@ export default function SignInScreen() {
     }
 
     setBusy(false);
-    router.back();
+    goBack();
   };
 
   const backToEmail = () => {
@@ -156,7 +157,7 @@ export default function SignInScreen() {
                 "back" would land on a half-finished sign-up. It's one field. */}
             {phase !== 'name' && (
               <Pressable
-                onPress={() => (phase === 'code' ? backToEmail() : router.back())}
+                onPress={() => (phase === 'code' ? backToEmail() : goBack())}
                 hitSlop={12}
               >
                 <Ionicons name="chevron-back" size={26} color={colors.ink} />

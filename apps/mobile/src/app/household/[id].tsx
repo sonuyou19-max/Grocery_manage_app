@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
@@ -48,7 +49,7 @@ export default function HouseholdScreen() {
         <MeshBackground />
         <Safe style={styles.safe} edges={['top']}>
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Pressable onPress={() => goBack()} hitSlop={12}>
               <Ionicons name="chevron-back" size={26} color={colors.ink} />
             </Pressable>
           </View>
@@ -116,7 +117,7 @@ export default function HouseholdScreen() {
           }
           // This household is gone; the provider promotes another (or falls back
           // to local lists), so there's nothing left to show here.
-          router.back();
+          goBack();
         },
       },
     ]);
@@ -127,7 +128,7 @@ export default function HouseholdScreen() {
       <MeshBackground />
       <Safe style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => goBack()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
           </Pressable>
         </View>

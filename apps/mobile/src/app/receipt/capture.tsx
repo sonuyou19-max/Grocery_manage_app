@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -244,7 +245,7 @@ export default function ReceiptCaptureScreen() {
               onPress={() => void requestPermission()}
             />
           )}
-          <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={8}>
+          <Pressable onPress={() => goBack()} style={styles.backRow} hitSlop={8}>
             <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
           </Pressable>
         </ScrollView>
@@ -298,7 +299,7 @@ export default function ReceiptCaptureScreen() {
           <Text style={styles.hint}>
             {full ? t('receipt.hintFull') : t('receipt.hint', { max: MAX_SHOTS })}
           </Text>
-          <Pressable onPress={() => router.back()} style={styles.close} hitSlop={12}>
+          <Pressable onPress={() => goBack()} style={styles.close} hitSlop={12}>
             <Ionicons name="close" size={22} color="#FFFFFF" />
           </Pressable>
         </View>

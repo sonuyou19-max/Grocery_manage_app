@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { goBack } from '@/lib/navigate';
 import { useMemo } from "react";
 import { Pressable, SectionList, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -128,7 +129,7 @@ export default function BasketScreen() {
       <Safe style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={t("common.back")}

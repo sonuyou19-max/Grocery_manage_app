@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useCallback } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -48,7 +49,7 @@ export default function ReceiptsScreen() {
       <Safe style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}

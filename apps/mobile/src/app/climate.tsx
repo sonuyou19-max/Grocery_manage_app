@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { ItemCategory } from "@korb/shared";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBack } from '@/lib/navigate';
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -335,7 +336,7 @@ export default function ClimateScreen() {
       <Safe style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={t("common.back")}

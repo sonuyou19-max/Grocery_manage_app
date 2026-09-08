@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { type ComponentProps, useRef, useState } from 'react';
 import {
   Pressable,
@@ -57,8 +58,7 @@ export default function OnboardingScreen() {
       router.replace('/get-started');
       return;
     }
-    if (router.canGoBack()) router.back();
-    else router.replace('/');
+    goBack();
   };
 
   const goTo = (i: number) => {

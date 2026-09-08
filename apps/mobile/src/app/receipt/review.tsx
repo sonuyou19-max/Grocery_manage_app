@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -597,7 +598,7 @@ export default function ReceiptReviewScreen() {
       await saveReconciled(receiptId, gap == null || gap === 0);
       haptics.success();
       showToast(t('receipt.amended', { count: plan.purchases.length }));
-      router.back();
+      goBack();
       return;
     }
 
@@ -658,7 +659,7 @@ export default function ReceiptReviewScreen() {
     showToast(t('receipt.imported', { count: plan.purchases.length }));
     // back(), not replace: the list is the screen under this one, and it
     // re-renders from the same store with the rows now ticked.
-    router.back();
+    goBack();
   };
 
   const renderRow = (p: ReceiptPurchase, order: number) => {
@@ -1526,7 +1527,7 @@ function Header({ title, subtitle }: { title: string; subtitle: string | null })
   return (
     <View style={styles.header}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel={t('common.back')}

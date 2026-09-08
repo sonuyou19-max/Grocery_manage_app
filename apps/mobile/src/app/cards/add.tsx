@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -309,7 +310,7 @@ export default function AddCardScreen() {
     // this one, so replacing would stack a second copy of it and make the next
     // back press look like it did nothing. The wallet re-renders with the new
     // card because both screens read the same store.
-    router.back();
+    goBack();
   };
 
   /* ------------------------------------------------------------- sign-in gate */

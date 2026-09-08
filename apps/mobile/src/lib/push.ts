@@ -154,26 +154,29 @@ export async function registerForPush(language: string): Promise<void> {
     )).data;
     if (!token) return;
 
-    const { data: session } = await supabase.auth.getUser();
-    const userId = session.user?.id;
-    if (!userId) return;
-
     /*
-     * Upserted on (user_id, token), so reopening the app re-registers the same
-     * row rather than growing the table, and a language changed in Settings
-     * reaches the server the next time this runs.
+     * Through an RPC, and the client never names a user.
+     *
+     * This was a direct `.upsert({ user_id, … }, { onConflict: … })`, and it
+     * failed for every account with 42501 — "new row violates row-level
+     * security policy". PostgREST turns an upsert into
+     * `INSERT … ON CONFLICT DO UPDATE`, Postgres applies the SELECT policies to
+     * the row such a statement would touch, and this table deliberately has no
+     * select policy: nobody reads the push addresses, which is the point of it.
+     * So the app's only write path depended on a permission the table exists to
+     * withhold.
+     *
+     * `register_device_token` is security definer and takes the user from
+     * auth.uid(), so the id cannot be sent, cannot be wrong, and does not need
+     * a policy to check it. Same idempotence — one row per (user, token), and a
+     * language changed in Settings reaches the server the next time this runs.
      */
-    const { error } = await supabase.from('device_tokens').upsert(
-      {
-        user_id: userId,
-        token,
-        platform: Platform.OS,
-        language,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,token' },
-    );
-    reportWriteFailure('device_tokens.upsert', error);
+    const { error } = await supabase.rpc('register_device_token', {
+      p_token: token,
+      p_platform: Platform.OS,
+      p_language: language,
+    });
+    reportWriteFailure('device_tokens.register', error);
   } catch {
     /*
      * Swallowed on purpose, and this is the one catch in the app that reports

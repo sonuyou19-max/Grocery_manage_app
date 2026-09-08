@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import { goBack } from '@/lib/navigate';
 import { useState } from "react";
 import {
   Alert,
@@ -142,7 +143,7 @@ export default function CardsScreen() {
       <MeshBackground />
       <Safe style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => goBack()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
           </Pressable>
           <View style={styles.grow}>

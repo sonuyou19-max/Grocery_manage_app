@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MeshBackground } from '@/components/mesh-background';
@@ -40,7 +41,7 @@ export default function LegalScreen() {
       <MeshBackground />
       <Safe style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => goBack()} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.ink} />
           </Pressable>
         </View>

@@ -37,7 +37,7 @@
  *
  * Run with `pnpm --filter mobile check:join-signals`.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,8 +60,32 @@ const assert = (what, cond, detail) => (cond ? ok(what) : fail(what, detail));
 const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const sqlOnly = (t) => t.replace(/^\s*--.*$/gm, '');
 
-const sql = sqlOnly(
-  readFileSync(join(REPO, 'supabase', 'migrations', '0043_join_signals.sql'), 'utf8'),
+/*
+ * EVERY migration that touches device_tokens, concatenated — not just the one
+ * that created it.
+ *
+ * This read 0043 alone, and asserted "none of these policies is a read" against
+ * the three it found there. 0044 then added policies of its own (the write path
+ * moved to a security-definer RPC, and the policies were recreated so a
+ * partially-applied 0043 could not leave a table with RLS on and nothing to
+ * satisfy). A select policy added in that file, or the next one, would have
+ * been invisible to an assertion whose whole subject is that no such policy
+ * exists.
+ *
+ * Globbed rather than listed, so the next migration is covered by existing.
+ */
+const MIGRATIONS = join(REPO, 'supabase', 'migrations');
+const tokenMigrations = readdirSync(MIGRATIONS)
+  .filter((f) => f.endsWith('.sql'))
+  .map((f) => sqlOnly(readFileSync(join(MIGRATIONS, f), 'utf8')))
+  .filter((text) => /device_tokens/.test(text));
+
+const sql = tokenMigrations.join('\n');
+
+assert(
+  'every migration touching device_tokens is read',
+  tokenMigrations.length >= 2,
+  `found ${tokenMigrations.length} — the table is created in 0043 and its policies recreated in 0044`,
 );
 const fn = code(
   readFileSync(join(REPO, 'supabase', 'functions', 'notify-join', 'index.ts'), 'utf8'),
@@ -131,7 +155,9 @@ assert(
  * addresses one policy mistake from being public.
  */
 const tokenPolicies = sql.match(/create policy "own device tokens[^"]*"[\s\S]*?;/g) ?? [];
-assert('device tokens carry their own policies', tokenPolicies.length === 3);
+// Three in 0043, three recreated in 0044. The count is a floor rather than an
+// equality now that more than one file may define them.
+assert('device tokens carry their own policies', tokenPolicies.length >= 3);
 assert(
   '...and none of them is a read',
   !tokenPolicies.some((p) => /for select/.test(p)),
@@ -141,6 +167,39 @@ assert('...with row-level security on', /alter table device_tokens enable row le
 assert(
   '...and a client may only write its own',
   (sql.match(/user_id = auth\.uid\(\)/g) ?? []).length >= 4,
+);
+
+/*
+ * AND THE CLIENT NO LONGER WRITES THE TABLE.
+ *
+ * `.upsert({ user_id, … }, { onConflict })` failed for every account with
+ * 42501. PostgREST turns an upsert into `INSERT … ON CONFLICT DO UPDATE`;
+ * Postgres applies the SELECT policies to the row such a statement would touch;
+ * and this table has no select policy by design. The one write path the app had
+ * was resting on the permission the table exists to withhold.
+ *
+ * Both halves asserted. The absence alone would pass against a file that
+ * registers nothing at all, which is the same silence with none of the feature.
+ */
+assert(
+  'the token is registered through the RPC',
+  /supabase\.rpc\('register_device_token'/.test(push),
+  'the user id has to come from auth.uid(), not from the client',
+);
+assert(
+  '...and nothing writes device_tokens from the app',
+  !/from\('device_tokens'\)/.test(push),
+  'a direct upsert needs a select policy this table must not have',
+);
+assert(
+  'the function takes the user from the session, not the caller',
+  /values \(auth\.uid\(\), p_token/.test(sql),
+  'a user_id parameter is a value that has to be policed; auth.uid() cannot be wrong',
+);
+assert(
+  '...and is definer with a pinned search_path',
+  /security definer[\s\S]{0,200}?set search_path = public/.test(sql),
+  'an inherited search_path lets a shadowing schema decide which table this writes',
 );
 
 /* ============================================== 2. it sends exactly once = */

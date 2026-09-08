@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MeshBackground } from '@/components/mesh-background';
@@ -46,8 +47,7 @@ export default function GetStartedScreen() {
    */
   const dismiss = () => {
     void markGetStartedSeen();
-    if (router.canGoBack()) router.back();
-    else router.replace('/');
+    goBack();
   };
 
   const goToSignIn = () => {

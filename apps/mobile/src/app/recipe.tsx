@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
+import { goBack } from '@/lib/navigate';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -204,7 +205,7 @@ export default function RecipeImportScreen() {
     if (append) {
       // Back to the list that opened this. It re-reads the store on render,
       // so the imported rows are simply there.
-      router.back();
+      goBack();
     } else {
       // replace, not push: backing out of a list built from an import should
       // reach the app, not the import screen it came from.
@@ -224,7 +225,7 @@ export default function RecipeImportScreen() {
         <KeyboardAvoidingView behavior="padding" style={styles.fill}>
           <View style={styles.header}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => goBack()}
               hitSlop={12}
               disabled={busy}
             >

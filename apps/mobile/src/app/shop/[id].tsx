@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -62,7 +63,7 @@ export default function ShoppingModeScreen() {
           <Text style={[type.body, { color: colors.ink, padding: spacing.xl }]}>
             {t('listDetail.gone')}
           </Text>
-          <Pressable onPress={() => router.back()} style={styles.exitBtn}>
+          <Pressable onPress={() => goBack()} style={styles.exitBtn}>
             <Text style={[type.body, { color: colors.accent }]}>{t('common.close')}</Text>
           </Pressable>
         </Safe>
@@ -118,7 +119,7 @@ export default function ShoppingModeScreen() {
             {/* Renders nothing when you're shopping alone. */}
             <ShoppersBadge names={shopperNames} />
           </View>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.close}>
+          <Pressable onPress={() => goBack()} hitSlop={12} style={styles.close}>
             <Ionicons name="close" size={26} color={colors.ink} />
           </Pressable>
         </View>
@@ -227,7 +228,7 @@ export default function ShoppingModeScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          <Pressable onPress={() => router.back()} style={[styles.exitBtn, { backgroundColor: colors.accent }]}>
+          <Pressable onPress={() => goBack()} style={[styles.exitBtn, { backgroundColor: colors.accent }]}>
             <Text style={[type.body, { color: colors.accentInk }]}>
               {allDone ? t('common.done') : t('shop.finish')}
             </Text>

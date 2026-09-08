@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { goBack } from '@/lib/navigate';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -104,7 +105,7 @@ export default function PaywallScreen() {
     if (entitled && phase === 'working') {
       haptics.success();
       showToast(t('paywall.thanks'));
-      router.back();
+      goBack();
     }
   }, [entitled, phase, showToast, t]);
 
@@ -126,7 +127,7 @@ export default function PaywallScreen() {
     // Still here means the webhook has not landed yet. Thank them anyway and
     // get out of the way — see the header comment.
     showToast(t('paywall.thanks'));
-    router.back();
+    goBack();
   };
 
   const restore = async () => {
@@ -136,7 +137,7 @@ export default function PaywallScreen() {
     if (had) {
       await waitForEntitlement();
       showToast(t('paywall.restored'));
-      router.back();
+      goBack();
       return;
     }
     setPhase('ready');
@@ -154,7 +155,7 @@ export default function PaywallScreen() {
       <MeshBackground />
       <Safe style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12} disabled={busy}>
+          <Pressable onPress={() => goBack()} hitSlop={12} disabled={busy}>
             <Ionicons name="close" size={26} color={colors.ink} />
           </Pressable>
         </View>
