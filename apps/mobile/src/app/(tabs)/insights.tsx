@@ -160,7 +160,19 @@ function SignedInInsights() {
    * the one they just scanned, and a household's full history belongs on a
    * screen of its own rather than unrolled down a tab about spending.
    */
-  const { receipts: recentReceipts, reload: reloadReceipts } = useReceipts(5);
+  /*
+   * PLUS ONLY, and not fetched otherwise.
+   *
+   * The archive is the paid feature — the card's rows ARE past receipts, so
+   * there is no teaser to show that does not show the thing being sold. HIDE
+   * rather than PROMPT, by the test in lib/plus-gate: if the visible-while-
+   * locked part requires having computed the paid data, it is not a teaser.
+   *
+   * `locked` reaches the hook rather than only the JSX, so a free account does
+   * not send the query at all. Hiding a card whose data was fetched anyway is
+   * the Vibe Check bug — a paywall stapled under output already computed.
+   */
+  const { receipts: recentReceipts, reload: reloadReceipts } = useReceipts(5, !locked);
   /*
    * Re-read when this tab comes back, because the change worth catching is the
    * one made two screens away: correct a receipt, come back, and a list held
@@ -752,7 +764,7 @@ function SignedInInsights() {
           the place that offers scanning is the list screen where the receipt is
           actually in somebody's hand.
         */}
-        {recentReceipts.length > 0 && (
+        {!locked && recentReceipts.length > 0 && (
           <Card order={7}>
             <CardHead
               icon="receipt-outline"

@@ -6,10 +6,19 @@ import { usePlusGate } from '@/lib/plus-gate';
 import { useAuth } from '@/store/auth';
 
 /**
- * Whether `/recipe` is reachable right now, and where to send someone who
- * cannot reach it — computed once so the three places that open this screen
- * (the create sheet, a list's ✨ button, and the route itself for a deep link)
- * cannot give three different answers to "why can't I get in".
+ * Whether a Plus-only ROUTE is reachable right now, and where to send someone
+ * who cannot reach it — computed once so every place that opens such a screen
+ * gives the same answer to "why can't I get in".
+ *
+ * Two routes use it. `/recipe`, the importer, reached from the create sheet, a
+ * list's ✨ button, and its own deep link. And `/receipts`, the scanned-receipt
+ * archive, reached from the Insights card and its own deep link.
+ *
+ * It was `useRecipeGate`, named for the first of those, and the second one
+ * needed exactly this and nothing else — so the name moved to the concept
+ * rather than a second copy of it being written. A tab does not need this: the
+ * tabs are already behind their own "signed out → teaser" screens, which is the
+ * whole reason `gateActive` does not account for auth.
  *
  * ---------------------------------------------------------------------------
  * The bug this exists to close
@@ -29,11 +38,11 @@ import { useAuth } from '@/store/auth';
  * signed out is a different problem from unentitled, and it needs a different
  * screen — see the two-step check below.
  */
-export type RecipeGateReason = 'signin' | 'paywall' | false;
+export type PlusRouteReason = 'signin' | 'paywall' | false;
 
-export interface RecipeGate {
+export interface PlusRoute {
   /** Reason nobody may open the importer right now, or `false` if they may. */
-  blocked: RecipeGateReason;
+  blocked: PlusRouteReason;
   /**
    * Tap-time entry: open `open()` if allowed, otherwise push toward whichever
    * step is missing. Callers already inside a Modal must wrap the WHOLE call
@@ -49,11 +58,11 @@ export interface RecipeGate {
   redirectIfBlocked: () => void;
 }
 
-export function useRecipeGate(): RecipeGate {
+export function usePlusRoute(): PlusRoute {
   const { user } = useAuth();
   const { locked, requirePlus } = usePlusGate();
 
-  const blocked: RecipeGateReason = !user ? 'signin' : locked ? 'paywall' : false;
+  const blocked: PlusRouteReason = !user ? 'signin' : locked ? 'paywall' : false;
 
   const openOrRedirect = useCallback(
     (open: () => void) => {

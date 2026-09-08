@@ -40,7 +40,7 @@ import { FlyToCart, type FlyToCartHandle } from "@/components/fly-to-cart";
 import { GlassView } from "@/components/glass";
 import { EcoBar } from "@/components/eco-bar";
 import { amountLabel } from "@/lib/purchase-log";
-import { useRecipeGate } from "@/lib/recipe-gate";
+import { usePlusRoute } from "@/lib/plus-route";
 import { ecoScoreFor } from "@/lib/item-carbon";
 import { ItemEmoji } from "@/components/item-emoji";
 import { ItemSheet } from "@/components/item-sheet";
@@ -99,7 +99,7 @@ export default function ListDetailScreen() {
   const { colors, scheme } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const { t, money } = useLocale();
-  const { openOrRedirect } = useRecipeGate();
+  const { openOrRedirect } = usePlusRoute();
   const list = useList(id);
   const { addItem, toggleItem, deleteItem, setClaim, shoppersOnline } =
     useGroceries();

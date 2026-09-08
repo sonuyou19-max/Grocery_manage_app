@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { goBack } from '@/lib/navigate';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '@/components/empty-state';
 import { MeshBackground } from '@/components/mesh-background';
 import { ReceiptRow } from '@/components/receipt-row';
 import { Safe } from '@/components/safe';
+import { usePlusRoute } from '@/lib/plus-route';
 import { useReceipts } from '@/lib/use-receipts';
 import { useLocale } from '@/store/locale';
 import { spacing, type, useScrollIndicator, useTheme } from '@/theme';
@@ -35,12 +36,31 @@ export default function ReceiptsScreen() {
   const { colors } = useTheme();
   const { t } = useLocale();
   const scrollIndicator = useScrollIndicator();
-  const { receipts, loading, reload } = useReceipts();
+  const { blocked, redirectIfBlocked } = usePlusRoute();
+  /*
+   * PLUS ONLY, checked TWICE and fetched not at all when blocked.
+   *
+   * The Insights card that opens this screen is hidden without Plus, so in
+   * ordinary use nobody arrives here who should not. That is the only check the
+   * recipe importer had, and it was not enough for the same reason it is not
+   * enough here: this is a ROUTE. `korb://receipts`, a notification, a restored
+   * navigation state after a trial expired mid-session, or a visitor who was
+   * never signed in — none of those go through the card.
+   *
+   * `blocked` gates the fetch and `redirectIfBlocked` moves them off the
+   * screen, because a gate that only redirects has already sent the query by
+   * the time it fires.
+   */
+  const { receipts, loading, reload } = useReceipts(50, blocked === false);
+
+  useEffect(() => {
+    redirectIfBlocked();
+  }, [redirectIfBlocked]);
 
   useFocusEffect(
     useCallback(() => {
-      reload();
-    }, [reload]),
+      if (blocked === false) reload();
+    }, [reload, blocked]),
   );
 
   return (

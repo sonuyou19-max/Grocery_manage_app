@@ -22,7 +22,7 @@ import { categorizeSync } from "@/lib/categorize";
 import { haptics } from "@/lib/haptics";
 import { dedupeByName } from "@/lib/item-dup";
 import { importRecipe, type ImportOutcome } from "@/lib/recipe-import";
-import { useRecipeGate } from "@/lib/recipe-gate";
+import { usePlusRoute } from "@/lib/plus-route";
 import { looksLikeUrl, type ParsedRecipe, type ReviewRow } from "@/lib/recipe";
 import { useGroceries } from "@/store/groceries";
 import { useT } from "@/store/locale";
@@ -59,7 +59,7 @@ export default function RecipeImportScreen() {
   const { to } = useLocalSearchParams<{ to?: string }>();
   const target = to ? lists.find((l) => l.id === to) : undefined;
   const { showToast } = useToast();
-  const { redirectIfBlocked } = useRecipeGate();
+  const { redirectIfBlocked } = usePlusRoute();
 
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -75,13 +75,13 @@ export default function RecipeImportScreen() {
   /**
    * The gate, checked here as well as at the two buttons that open this screen.
    *
-   * Those buttons already redirect via `useRecipeGate` when blocked, so this
+   * Those buttons already redirect via `usePlusRoute` when blocked, so this
    * only fires for a route reached another way — a deep link, a notification,
    * a restored navigation state after the trial expired mid-session, or a
    * visitor who was never signed in at all. Every other Plus feature is a card
    * inside a gated tab; this is the only one with its own URL, so it is the
    * only one that needs the check twice. `redirectIfBlocked` picks sign-in vs
-   * paywall itself — see lib/recipe-gate.ts for why those are two different
+   * paywall itself — see lib/plus-route.ts for why those are two different
    * questions with two different destinations.
    */
   useEffect(() => {

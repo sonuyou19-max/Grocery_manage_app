@@ -8,7 +8,7 @@ import { GlassView } from "@/components/glass";
 import { Sheet, useSheetDismiss } from "@/components/sheet";
 import { TextPromptModal } from "@/components/text-prompt-modal";
 import { haptics } from "@/lib/haptics";
-import { useRecipeGate } from "@/lib/recipe-gate";
+import { usePlusRoute } from "@/lib/plus-route";
 import { useGroceries } from "@/store/groceries";
 import { useT } from "@/store/locale";
 import { radii, spacing, type, useTheme } from "@/theme";
@@ -69,7 +69,7 @@ export function CreateSheet({
   const { colors } = useTheme();
   const t = useT();
   const { addList } = useGroceries();
-  const { openOrRedirect } = useRecipeGate();
+  const { openOrRedirect } = usePlusRoute();
   const [naming, setNaming] = useState(false);
 
   /*
@@ -119,7 +119,7 @@ export function CreateSheet({
 function CreateMenu({ onNameList }: { onNameList: () => void }) {
   const { colors } = useTheme();
   const t = useT();
-  const { openOrRedirect } = useRecipeGate();
+  const { openOrRedirect } = usePlusRoute();
   const dismiss = useSheetDismiss();
 
   return (
@@ -154,7 +154,7 @@ function CreateMenu({ onNameList }: { onNameList: () => void }) {
           // The gate decides, not this component. `blocked` is false
           // for a trial user and for everyone while the tier is off, so
           // this row simply works until billing goes live — see
-          // lib/recipe-gate.ts.
+          // lib/plus-route.ts.
           dismiss(() => openOrRedirect(() => router.push("/recipe")));
         }}
       >
