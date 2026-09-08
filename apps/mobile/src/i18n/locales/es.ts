@@ -31,6 +31,8 @@ const es = {
     pdfTooLarge: 'Ese PDF es demasiado grande para enviarlo.',
     notAPdf: 'Ese archivo no es un PDF.',
     pdfNeedsUpdate: 'Los tickets en PDF necesitan la última versión de Korb.',
+    photosDenied: 'Korb necesita acceso a tus fotos para leer un ticket.',
+    pickerFailed: 'No se ha abierto. Inténtalo de nuevo.',
     scanFailed: 'No hemos podido leer el tique. Prueba con una foto más nítida, o añade los artículos a mano.',
     cameraNeededTitle: 'Korb necesita la cámara',
     cameraNeededBody: 'Para leer un tique, Korb tiene que fotografiarlo. Las fotos se usan para este escaneo y para nada más.',
@@ -99,6 +101,8 @@ const es = {
     photosHint: 'De tu galería, hasta %{max}',
     fileTitle: 'Subir un PDF',
     fileHint: 'El ticket que te llegó por correo',
+    choose: 'Elegir',
+    opening: 'Abriendo…',
   },
   coach: {
     gotIt: 'Entendido',

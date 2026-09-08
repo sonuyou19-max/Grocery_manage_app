@@ -40,6 +40,8 @@ const en = {
     pdfTooLarge: 'That PDF is too large to send.',
     notAPdf: 'That file is not a PDF.',
     pdfNeedsUpdate: 'PDF receipts need the latest version of Korb.',
+    photosDenied: 'Korb needs access to your photos to read a receipt from one.',
+    pickerFailed: 'That did not open. Try again.',
     scanFailed: 'We could not read that receipt. Try a clearer photo, or add the items by hand.',
     cameraNeededTitle: 'Korb needs the camera',
     cameraNeededBody: 'To read a receipt, Korb has to photograph it. The photos are used for this scan and nothing else.',
@@ -108,6 +110,8 @@ const en = {
     photosHint: 'From your library, up to %{max}',
     fileTitle: 'Upload a PDF',
     fileHint: 'The receipt your shop emailed you',
+    choose: 'Choose',
+    opening: 'Opening…',
   },
   coach: {
     gotIt: 'Got it',

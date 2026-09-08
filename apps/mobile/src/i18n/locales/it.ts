@@ -31,6 +31,8 @@ const it = {
     pdfTooLarge: 'Questo PDF è troppo grande da inviare.',
     notAPdf: 'Questo file non è un PDF.',
     pdfNeedsUpdate: 'Gli scontrini PDF richiedono l’ultima versione di Korb.',
+    photosDenied: 'Korb ha bisogno delle tue foto per leggerci uno scontrino.',
+    pickerFailed: 'Non si è aperto. Riprova.',
     scanFailed: 'Non siamo riusciti a leggere lo scontrino. Prova una foto più nitida, o inserisci gli articoli a mano.',
     cameraNeededTitle: 'Korb ha bisogno della fotocamera',
     cameraNeededBody: 'Per leggere uno scontrino Korb deve fotografarlo. Le foto servono solo per questa scansione.',
@@ -99,6 +101,8 @@ const it = {
     photosHint: 'Dalla galleria, fino a %{max}',
     fileTitle: 'Carica un PDF',
     fileHint: 'Lo scontrino che ti è arrivato via email',
+    choose: 'Scegli',
+    opening: 'Apertura…',
   },
   coach: {
     gotIt: 'Capito',

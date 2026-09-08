@@ -59,7 +59,10 @@ export const PDF_MEDIA = 'application/pdf';
 export type PickedImages =
   | { status: 'picked'; images: { uri: string; base64: string }[] }
   | { status: 'cancelled' }
-  | { status: 'tooLarge' };
+  | { status: 'tooLarge' }
+  /** The library was refused, or the picker threw. Both need saying. */
+  | { status: 'denied' }
+  | { status: 'failed' };
 
 export type PickedDocument =
   | { status: 'picked'; name: string; data: string }
@@ -67,7 +70,9 @@ export type PickedDocument =
   | { status: 'tooLarge' }
   | { status: 'wrongType' }
   /** This binary has no document picker in it. See `documentPicker` below. */
-  | { status: 'unavailable' };
+  | { status: 'unavailable' }
+  /** The picker threw. Silence here was a dead screen. */
+  | { status: 'failed' };
 
 /**
  * The two NATIVE modules the PDF path needs, loaded only if this binary has
@@ -122,13 +127,39 @@ function documentPicker(): { picker: PickerModule; fs: FsModule } | null {
  * CAPTURE_QUALITY, which is the same number for the same reason.
  */
 export async function pickReceiptPhotos(): Promise<PickedImages> {
-  const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    allowsMultipleSelection: true,
-    selectionLimit: MAX_SHOTS,
-    quality: CAPTURE_QUALITY,
-    base64: true,
-  });
+  /*
+   * Asked for explicitly, rather than left to the picker to raise.
+   *
+   * On Android the library needs permission and `launchImageLibraryAsync`
+   * THROWS without it — which, from the screen, is indistinguishable from the
+   * picker never opening. Asking first turns that into an answer the caller can
+   * put on screen.
+   */
+  try {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return { status: 'denied' };
+  } catch {
+    // Some platforms have nothing to ask. Not a refusal — carry on and let the
+    // picker itself be the thing that fails, if anything does.
+  }
+
+  let picked: ImagePicker.ImagePickerResult;
+  try {
+    picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_SHOTS,
+      quality: CAPTURE_QUALITY,
+      base64: true,
+    });
+  } catch {
+    /*
+     * A throw here was a SILENT DEAD SCREEN. The call sat in an unawaited async
+     * IIFE, so a rejection went nowhere and the person was left looking at a
+     * screen that had not opened anything and could not say why.
+     */
+    return { status: 'failed' };
+  }
   if (picked.canceled) return { status: 'cancelled' };
 
   const images: { uri: string; base64: string }[] = [];
@@ -158,11 +189,22 @@ export async function pickReceiptDocument(): Promise<PickedDocument> {
   // works; this one source waits for a build, and says so.
   if (!mod) return { status: 'unavailable' };
 
-  const picked = await mod.picker.getDocumentAsync({
-    type: PDF_MEDIA,
-    copyToCacheDirectory: true,
-    multiple: false,
-  });
+  /*
+   * Wrapped, because `require` succeeding is not the same as the NATIVE module
+   * being there. Metro bundles the JS wrapper either way, so a binary without
+   * the native side gets past documentPicker() and throws HERE instead — which
+   * was a screen that opened nothing and said nothing.
+   */
+  let picked: Awaited<ReturnType<PickerModule['getDocumentAsync']>>;
+  try {
+    picked = await mod.picker.getDocumentAsync({
+      type: PDF_MEDIA,
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+  } catch {
+    return { status: 'failed' };
+  }
   if (picked.canceled) return { status: 'cancelled' };
 
   const asset = picked.assets?.[0];
@@ -173,7 +215,12 @@ export async function pickReceiptDocument(): Promise<PickedDocument> {
     asset.mimeType === PDF_MEDIA || named.toLowerCase().endsWith('.pdf');
   if (!looksPdf) return { status: 'wrongType' };
 
-  const data = await new mod.fs.File(asset.uri).base64();
+  let data: string;
+  try {
+    data = await new mod.fs.File(asset.uri).base64();
+  } catch {
+    return { status: 'failed' };
+  }
   if (!data || data.length > MAX_PDF_CHARS) return { status: 'tooLarge' };
 
   return { status: 'picked', name: named, data };

@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MeshBackground } from '@/components/mesh-background';
+import { InteractionManager } from 'react-native';
 import { goBack } from '@/lib/navigate';
 import {
   isReceiptSource,
@@ -121,6 +122,8 @@ export default function ReceiptCaptureScreen() {
   const [mountFailed, setMountFailed] = useState(false);
   /** The chosen PDF's filename, so the progress screen names what it is reading. */
   const [pdfName, setPdfName] = useState<string | null>(null);
+  /** Whether a picker is open, so the button cannot stack a second one. */
+  const [picking, setPicking] = useState(false);
 
   const list = lists.find((l) => l.id === id);
 
@@ -267,26 +270,33 @@ export default function ReceiptCaptureScreen() {
    * Cancelling goes back rather than leaving an empty screen. The person
    * changed their mind at the picker; there is nothing here for them.
    */
-  const opened = useRef(false);
-  useEffect(() => {
-    if (fromCamera || opened.current) return;
-    opened.current = true;
-
-    void (async () => {
+  const openPicker = useCallback(async () => {
+    if (picking) return;
+    setPicking(true);
+    try {
       if (source === 'photos') {
         const picked = await pickReceiptPhotos();
+        if (picked.status === 'picked') {
+          // Into the same strip the camera fills, so they are confirmed and
+          // removable exactly as photographs taken here are.
+          setShots(picked.images);
+          return;
+        }
+        // Cancelled is the one that leaves; every other answer is something
+        // gone wrong, and the person stays on a screen that can try again.
         if (picked.status === 'cancelled') {
           goBack();
           return;
         }
-        if (picked.status === 'tooLarge') {
-          showToast(t('receipt.photoTooLarge'));
-          goBack();
-          return;
-        }
-        // Into the same strip the camera fills, so they are confirmed and
-        // removable exactly as photographs taken here are.
-        setShots(picked.images);
+        showToast(
+          t(
+            picked.status === 'denied'
+              ? 'receipt.photosDenied'
+              : picked.status === 'tooLarge'
+                ? 'receipt.photoTooLarge'
+                : 'receipt.pickerFailed',
+          ),
+        );
         return;
       }
 
@@ -297,7 +307,7 @@ export default function ReceiptCaptureScreen() {
       }
       if (picked.status !== 'picked') {
         /*
-         * Three refusals, three sentences. `unavailable` is the one that is not
+         * Four refusals, four sentences. `unavailable` is the one that is not
          * the shopper's doing at all — this binary predates the PDF path — and
          * telling them their file was too large would send them off to shrink
          * something that was never the problem.
@@ -308,10 +318,11 @@ export default function ReceiptCaptureScreen() {
               ? 'receipt.notAPdf'
               : picked.status === 'unavailable'
                 ? 'receipt.pdfNeedsUpdate'
-                : 'receipt.pdfTooLarge',
+                : picked.status === 'tooLarge'
+                  ? 'receipt.pdfTooLarge'
+                  : 'receipt.pickerFailed',
           ),
         );
-        goBack();
         return;
       }
       /*
@@ -321,8 +332,37 @@ export default function ReceiptCaptureScreen() {
        */
       setPdfName(picked.name);
       await send({ kind: 'document', media: PDF_MEDIA, data: picked.data });
-    })();
-  }, [fromCamera, source, send, showToast, t]);
+    } finally {
+      setPicking(false);
+    }
+  }, [picking, source, send, showToast, t]);
+
+  /*
+   * ---------------------------------------------------------------------------
+   * OPENING THE PICKER, AFTER THE SCREEN IS ACTUALLY THERE
+   * ---------------------------------------------------------------------------
+   *
+   * This ran straight out of a mount effect and did nothing at all: on iOS an
+   * OS picker asked for while the screen is still being presented is a
+   * presentation onto a view controller that is not on screen yet, and UIKit
+   * declines it silently. Both sources failed identically, which is what said
+   * it was the timing rather than either picker — a black screen with the
+   * CAMERA's hint on it, because that chrome was drawing too.
+   *
+   * `runAfterInteractions` waits for the navigation animation to finish. That
+   * is a promise about scheduling and not a guarantee, which is why the manual
+   * button below exists rather than being a nicety: if this ever silently does
+   * nothing again, the screen still has a way forward and a way out.
+   */
+  const opened = useRef(false);
+  useEffect(() => {
+    if (fromCamera || opened.current) return;
+    opened.current = true;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void openPicker();
+    });
+    return () => task.cancel();
+  }, [fromCamera, openPicker]);
 
   /* ----------------------------------------------------------- permission */
 
@@ -418,7 +458,47 @@ export default function ReceiptCaptureScreen() {
         replaced should stop existing, not have its parts individually talked
         out of drawing.
       */}
-      {!pending && !scanning && (
+      {/*
+        The two sources that are not the camera get their own body.
+        
+        They were falling through to the camera's chrome — the capture hint, the
+        shutter, the Scan button — over a black screen with no camera behind it.
+        That is what "a black screen with the same quotes" was: instructions for
+        photographing a receipt, on a screen that was supposed to be opening a
+        file picker.
+        
+        A button rather than a spinner, because the auto-open above is a promise
+        about scheduling and not a guarantee. If it ever fails to fire there is
+        still a way forward and a way out, which is the whole difference between
+        this and what was there before.
+      */}
+      {!fromCamera && !pending && !scanning && (
+        <Safe style={styles.pickWrap}>
+          <View style={styles.pickBody}>
+            <Ionicons
+              name={source === 'photos' ? 'images-outline' : 'document-text-outline'}
+              size={40}
+              color={colors.muted}
+            />
+            <Text style={[type.h2, styles.pickText, { color: colors.ink }]}>
+              {t(`receiptSource.${source}Title`)}
+            </Text>
+            <Text style={[type.sub, styles.pickText, { color: colors.muted }]}>
+              {t(`receiptSource.${source}Hint`, { max: MAX_SHOTS })}
+            </Text>
+            <PrimaryButton
+              label={t(picking ? 'receiptSource.opening' : 'receiptSource.choose')}
+              onPress={() => void openPicker()}
+              disabled={picking}
+            />
+            <Pressable onPress={() => goBack()} style={styles.backRow} hitSlop={8}>
+              <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
+        </Safe>
+      )}
+
+      {fromCamera && !pending && !scanning && (
       <Safe style={styles.overlay}>
         <View style={styles.top}>
           <Text style={styles.hint}>
@@ -570,6 +650,11 @@ function ConfirmShot({
 }
 
 const styles = StyleSheet.create({
+  // The gallery / file body. Centred, because there is nothing behind it to
+  // align to — unlike the camera, whose chrome hugs the frame.
+  pickWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  pickBody: { alignItems: 'center', gap: spacing.md, maxWidth: 320 },
+  pickText: { textAlign: 'center' },
   confirmRoot: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
   confirmChrome: { flex: 1, justifyContent: 'space-between', padding: spacing.lg },
   confirmActions: { flexDirection: 'row', gap: spacing.md },

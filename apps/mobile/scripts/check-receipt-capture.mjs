@@ -379,7 +379,13 @@ assert(
  */
 {
   const chrome = screen.indexOf('<Safe style={styles.overlay}>');
-  const guard = screen.indexOf('{!pending && !scanning && (');
+  /*
+   * `fromCamera &&` is part of the guard now, and that is not cosmetic: without
+   * it the gallery and PDF sources fell through to this same overlay, drawing
+   * the capture hint and the shutter over a black screen with no camera behind
+   * it. The anchor moved with the fix rather than being loosened around it.
+   */
+  const guard = screen.indexOf('{fromCamera && !pending && !scanning && (');
   assert(guard > 0, 'the camera chrome is guarded');
   assert(guard > 0 && guard < chrome, '...and the guard comes before it');
 

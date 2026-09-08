@@ -31,6 +31,8 @@ const nl = {
     pdfTooLarge: 'Die pdf is te groot om te versturen.',
     notAPdf: 'Dat bestand is geen pdf.',
     pdfNeedsUpdate: 'Pdf-tickets vereisen de nieuwste versie van Korb.',
+    photosDenied: 'Korb heeft toegang tot je foto’s nodig om er een ticket uit te lezen.',
+    pickerFailed: 'Dat ging niet open. Probeer opnieuw.',
     scanFailed: 'We konden dit kassabon niet lezen. Probeer een scherpere foto, of voeg de artikelen met de hand toe.',
     cameraNeededTitle: 'Korb heeft de camera nodig',
     cameraNeededBody: 'Om een kassabon te lezen moet Korb hem fotograferen. De foto’s worden alleen voor deze scan gebruikt.',
@@ -99,6 +101,8 @@ const nl = {
     photosHint: 'Uit je galerij, tot %{max}',
     fileTitle: 'Pdf uploaden',
     fileHint: 'Het ticket dat je per mail kreeg',
+    choose: 'Kiezen',
+    opening: 'Openen…',
   },
   coach: {
     gotIt: 'Duidelijk',

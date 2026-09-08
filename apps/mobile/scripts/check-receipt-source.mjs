@@ -105,7 +105,7 @@ assert(
   ['Spinning the hardware up behind a picker is a visible delay for nothing.'],
 );
 
-/* ==================================== 3. the picker opens exactly once ==== */
+/* ============= 3. the picker opens once, after the screen is really there = */
 
 assert(
   'the picker is launched from an effect guarded by a ref',
@@ -116,10 +116,60 @@ assert(
     'every dependency change. Two pickers stack on iOS.',
   ],
 );
+/*
+ * AND IT WAITS FOR THE TRANSITION.
+ *
+ * Straight out of a mount effect this did nothing at all: on iOS an OS picker
+ * asked for while the screen is still being presented is a presentation onto a
+ * view controller that is not on screen yet, and UIKit declines it silently.
+ * BOTH sources failed identically, which is what said it was the timing rather
+ * than either picker.
+ */
+assert(
+  'the picker waits for the navigation animation to finish',
+  /InteractionManager\.runAfterInteractions\(\(\) => \{\s*void openPicker\(\);/.test(capture),
+  ['Presented mid-transition, UIKit declines it and says nothing.'],
+);
+assert(
+  '...and the effect cancels the task it scheduled',
+  /return \(\) => task\.cancel\(\);/.test(capture),
+  ['A picker opening onto a screen that has been left is worse than none.'],
+);
+/*
+ * The manual button is not a nicety. runAfterInteractions is a promise about
+ * scheduling, not a guarantee — so the screen has to have a way forward that
+ * does not depend on it, and a way out. Its absence is what turned a picker
+ * that did not open into a screen nobody could leave except by the camera's
+ * own close button, which was drawing there by accident.
+ */
+assert(
+  'the screen can open the picker by hand as well',
+  /onPress=\{\(\) => void openPicker\(\)\}/.test(capture) &&
+    /receiptSource\.choose/.test(capture),
+  ['If the auto-open ever silently fails again, this is the way through.'],
+);
 assert(
   'cancelling the picker leaves the screen',
   (capture.match(/status === 'cancelled'\)\s*\{\s*goBack\(\);/g) ?? []).length === 2,
   ['Both sources. There is nothing behind an OS picker to come back to.'],
+);
+
+/* ================== 3b. and the camera's chrome stays on the camera ======= */
+
+/*
+ * The reported screen. Both non-camera sources fell through to the camera's own
+ * overlay — the capture hint, the shutter, the Scan button — over a black
+ * screen with no camera behind it. Instructions for photographing a receipt, on
+ * a screen whose job was to open a file picker.
+ */
+assert(
+  "the camera's chrome is drawn only for the camera",
+  /\{fromCamera && !pending && !scanning && \(/.test(capture),
+  ['Otherwise a gallery pick is presented as "photograph the receipt".'],
+);
+assert(
+  '...and the other sources have a body of their own',
+  /\{!fromCamera && !pending && !scanning && \(/.test(capture),
 );
 
 /* ============================ 4. the three outcomes stay distinguishable = */
@@ -130,8 +180,8 @@ assert(
  * one of the ways to write that.
  */
 for (const [name, statuses] of [
-  ['pickReceiptPhotos', ['picked', 'cancelled', 'tooLarge']],
-  ['pickReceiptDocument', ['picked', 'cancelled', 'tooLarge', 'wrongType', 'unavailable']],
+  ['pickReceiptPhotos', ['picked', 'cancelled', 'tooLarge', 'denied', 'failed']],
+  ['pickReceiptDocument', ['picked', 'cancelled', 'tooLarge', 'wrongType', 'unavailable', 'failed']],
 ]) {
   const body = source.slice(source.indexOf(`export async function ${name}`));
   const end = body.indexOf('\nexport ', 1);
@@ -218,9 +268,36 @@ assert(
 
 assert(
   'a too-large pick is said out loud rather than swallowed',
-  /showToast\(t\('receipt\.photoTooLarge'\)\)/.test(capture) &&
+  /receipt\.photoTooLarge/.test(capture) &&
     /receipt\.pdfTooLarge/.test(capture) &&
     /receipt\.notAPdf/.test(capture),
+);
+/*
+ * A THROW IS AN ANSWER TOO, and it was the missing one.
+ *
+ * Both picker calls sat in an unawaited async IIFE with no catch, so a
+ * rejection went nowhere: the screen had not opened anything and could not say
+ * why. Every await that reaches a native module is wrapped now, and `failed`
+ * is its own outcome rather than a silence.
+ */
+assert(
+  'a picker that throws is caught rather than left to reject into nothing',
+  (source.match(/return \{ status: 'failed' \};/g) ?? []).length >= 3,
+  ['launchImageLibraryAsync, getDocumentAsync and the file read all throw.'],
+);
+assert(
+  '...and the refusal reaches the screen',
+  /receipt\.pickerFailed/.test(capture) && /receipt\.photosDenied/.test(capture),
+);
+/*
+ * The library permission is asked for BEFORE the picker rather than left to it.
+ * On Android launchImageLibraryAsync throws without it, which from the screen
+ * is indistinguishable from a picker that never opened.
+ */
+assert(
+  'the photo library is asked for, not assumed',
+  /requestMediaLibraryPermissionsAsync\(\)/.test(source) &&
+    /if \(!perm\.granted\) return \{ status: 'denied' \};/.test(source),
 );
 /*
  * And the PDF's type is checked after the picker, not only by it. `type:` is a

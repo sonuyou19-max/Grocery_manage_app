@@ -31,6 +31,8 @@ const fr = {
     pdfTooLarge: 'Ce PDF est trop lourd à envoyer.',
     notAPdf: 'Ce fichier n’est pas un PDF.',
     pdfNeedsUpdate: 'Les tickets PDF nécessitent la dernière version de Korb.',
+    photosDenied: 'Korb a besoin d’accéder à tes photos pour y lire un ticket.',
+    pickerFailed: 'Ça ne s’est pas ouvert. Réessaie.',
     scanFailed: 'Nous n’avons pas pu lire ce ticket. Essaie une photo plus nette, ou saisis les articles à la main.',
     cameraNeededTitle: 'Korb a besoin de l’appareil photo',
     cameraNeededBody: 'Pour lire un ticket, Korb doit le photographier. Les photos servent à ce scan et à rien d’autre.',
@@ -99,6 +101,8 @@ const fr = {
     photosHint: 'Depuis ta galerie, jusqu’à %{max}',
     fileTitle: 'Envoyer un PDF',
     fileHint: 'Le ticket reçu par e-mail',
+    choose: 'Choisir',
+    opening: 'Ouverture…',
   },
   coach: {
     gotIt: 'Compris',

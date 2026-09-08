@@ -41,6 +41,8 @@ const pl = {
     pdfTooLarge: 'Ten PDF jest za duży do wysłania.',
     notAPdf: 'Ten plik to nie PDF.',
     pdfNeedsUpdate: 'Paragony PDF wymagają najnowszej wersji Korb.',
+    photosDenied: 'Korb potrzebuje dostępu do zdjęć, by odczytać z nich paragon.',
+    pickerFailed: 'Nie udało się otworzyć. Spróbuj ponownie.',
     scanFailed: 'Nie udało się odczytać tego paragonu. Spróbuj wyraźniejszego zdjęcia albo dodaj produkty ręcznie.',
     cameraNeededTitle: 'Korb potrzebuje aparatu',
     cameraNeededBody: 'Żeby odczytać paragon, Korb musi go sfotografować. Zdjęcia służą tylko do tego skanu.',
@@ -109,6 +111,8 @@ const pl = {
     photosHint: 'Z galerii, maksymalnie %{max}',
     fileTitle: 'Wyślij PDF',
     fileHint: 'Paragon, który dostałeś mailem',
+    choose: 'Wybierz',
+    opening: 'Otwieranie…',
   },
   coach: {
     gotIt: 'Jasne',
