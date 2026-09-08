@@ -474,27 +474,79 @@ export default function ReceiptCaptureScreen() {
       */}
       {!fromCamera && !pending && !scanning && (
         <Safe style={styles.pickWrap}>
-          <View style={styles.pickBody}>
-            <Ionicons
-              name={source === 'photos' ? 'images-outline' : 'document-text-outline'}
-              size={40}
-              color={colors.muted}
-            />
-            <Text style={[type.h2, styles.pickText, { color: colors.ink }]}>
-              {t(`receiptSource.${source}Title`)}
-            </Text>
-            <Text style={[type.sub, styles.pickText, { color: colors.muted }]}>
-              {t(`receiptSource.${source}Hint`, { max: MAX_SHOTS })}
-            </Text>
-            <PrimaryButton
-              label={t(picking ? 'receiptSource.opening' : 'receiptSource.choose')}
-              onPress={() => void openPicker()}
-              disabled={picking}
-            />
-            <Pressable onPress={() => goBack()} style={styles.backRow} hitSlop={8}>
-              <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
-            </Pressable>
-          </View>
+          {shots.length === 0 ? (
+            /* Nothing chosen yet — ask, and give a way out. */
+            <View style={styles.pickBody}>
+              <Ionicons
+                name={source === 'photos' ? 'images-outline' : 'document-text-outline'}
+                size={40}
+                color={colors.muted}
+              />
+              <Text style={[type.h2, styles.pickText, { color: colors.ink }]}>
+                {t(`receiptSource.${source}Title`)}
+              </Text>
+              <Text style={[type.sub, styles.pickText, { color: colors.muted }]}>
+                {t(`receiptSource.${source}Hint`, { max: MAX_SHOTS })}
+              </Text>
+              <PrimaryButton
+                label={t(picking ? 'receiptSource.opening' : 'receiptSource.choose')}
+                onPress={() => void openPicker()}
+                disabled={picking}
+              />
+              <Pressable onPress={() => goBack()} style={styles.backRow} hitSlop={8}>
+                <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            /*
+             * CHOSEN, AND NOW WHAT.
+             *
+             * This branch did not exist, and its absence is the whole of "I
+             * selected a photo but it didn't come through": the pick succeeded,
+             * `shots` filled, and the screen went on rendering "Choose a photo"
+             * with a Choose button — no thumbnails, no way to scan, no sign
+             * anything had happened. The photographs were in memory the entire
+             * time with nothing on screen able to reach them.
+             *
+             * The same three affordances the camera's own review strip has:
+             * see what you picked, drop a bad one, send them.
+             */
+            <View style={styles.pickBody}>
+              <Text style={[type.h2, styles.pickText, { color: colors.ink }]}>
+                {t('receiptSource.chosen', { count: shots.length })}
+              </Text>
+              <ScrollView
+                horizontal
+                {...scrollIndicator}
+                contentContainerStyle={styles.thumbs}
+              >
+                {shots.map((shot, i) => (
+                  <Pressable
+                    key={shot.uri}
+                    onPress={() => removeShot(i)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('receipt.removeShot', { n: i + 1 })}
+                  >
+                    <Image source={{ uri: shot.uri }} style={styles.thumb} contentFit="cover" />
+                    <View style={styles.thumbX}>
+                      <Ionicons name="close" size={12} color="#FFFFFF" />
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <PrimaryButton label={t('receipt.scan')} onPress={() => scan()} />
+              <Pressable
+                onPress={() => void openPicker()}
+                style={styles.backRow}
+                hitSlop={8}
+                disabled={picking}
+              >
+                <Text style={[type.sub, { color: colors.accent }]}>
+                  {t('receiptSource.chooseAgain')}
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </Safe>
       )}
 

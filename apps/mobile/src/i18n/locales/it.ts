@@ -103,6 +103,8 @@ const it = {
     fileHint: 'Lo scontrino che ti è arrivato via email',
     choose: 'Scegli',
     opening: 'Apertura…',
+    chosen: '%{count} selezionate',
+    chooseAgain: 'Scegli altre foto',
   },
   coach: {
     gotIt: 'Capito',

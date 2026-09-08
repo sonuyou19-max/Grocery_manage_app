@@ -112,6 +112,8 @@ const en = {
     fileHint: 'The receipt your shop emailed you',
     choose: 'Choose',
     opening: 'Opening…',
+    chosen: '%{count} chosen',
+    chooseAgain: 'Choose different photos',
   },
   coach: {
     gotIt: 'Got it',

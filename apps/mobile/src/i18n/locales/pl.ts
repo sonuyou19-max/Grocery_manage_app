@@ -113,6 +113,8 @@ const pl = {
     fileHint: 'Paragon, który dostałeś mailem',
     choose: 'Wybierz',
     opening: 'Otwieranie…',
+    chosen: 'Wybrano %{count}',
+    chooseAgain: 'Wybierz inne zdjęcia',
   },
   coach: {
     gotIt: 'Jasne',

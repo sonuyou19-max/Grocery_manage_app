@@ -1,6 +1,13 @@
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
-import { CAPTURE_QUALITY, MAX_SHOTS, tooLarge } from '@/lib/receipt-capture';
+import {
+  CAPTURE_QUALITY,
+  FALLBACK_QUALITY,
+  MAX_SHOTS,
+  TARGET_LONG_EDGE,
+  tooLarge,
+} from '@/lib/receipt-capture';
 
 /**
  * Where a receipt comes from, now that it is not always a piece of paper.
@@ -59,10 +66,59 @@ export const PDF_MEDIA = 'application/pdf';
 export type PickedImages =
   | { status: 'picked'; images: { uri: string; base64: string }[] }
   | { status: 'cancelled' }
+  /** Refused after downscaling, which should be unreachable. See `fit`. */
   | { status: 'tooLarge' }
   /** The library was refused, or the picker threw. Both need saying. */
   | { status: 'denied' }
   | { status: 'failed' };
+
+/**
+ * Bring a library photo down to what the scanner takes.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not a size check
+ * ---------------------------------------------------------------------------
+ *
+ * It was one, and it was the wrong answer to the wrong question. A photograph
+ * already in somebody's library is a 12-megapixel HEIC they did not choose the
+ * settings for and cannot change — telling them it is "too large to send" asks
+ * them to go and solve a problem that is not theirs, with a tool they do not
+ * have. The camera path never had this problem because `pickPictureSize` bounds
+ * the capture before it happens; the gallery has no equivalent, so the bound
+ * has to be applied afterwards.
+ *
+ * ---------------------------------------------------------------------------
+ * And downscaling costs the model nothing
+ * ---------------------------------------------------------------------------
+ *
+ * Anthropic resizes anything over 1568px on its long edge before reading it, so
+ * every pixel above TARGET_LONG_EDGE is bytes uploaded to be thrown away at the
+ * far end. Shrinking here is not a compromise for the sake of the wire: it is
+ * sending what will actually be read, and the same 1600px the camera aims for.
+ *
+ * Two passes at most, matching the camera's. If a receipt is somehow still over
+ * the ceiling at 0.6, that is a photograph of something other than a receipt.
+ */
+async function fit(uri: string): Promise<string | null> {
+  for (const compress of [CAPTURE_QUALITY, FALLBACK_QUALITY]) {
+    try {
+      const out = await manipulateAsync(
+        uri,
+        // Height omitted on purpose: expo-image-manipulator keeps the aspect
+        // ratio from whichever edge is given, and a receipt is far taller than
+        // it is wide — constraining the WIDTH is what bounds a portrait
+        // photograph's pixels without cropping any of the print away.
+        [{ resize: { width: TARGET_LONG_EDGE } }],
+        { compress, format: SaveFormat.JPEG, base64: true },
+      );
+      if (out.base64 && !tooLarge(out.base64)) return out.base64;
+    } catch {
+      // A codec that refuses one photograph should not lose the others.
+      return null;
+    }
+  }
+  return null;
+}
 
 export type PickedDocument =
   | { status: 'picked'; name: string; data: string }
@@ -149,8 +205,14 @@ export async function pickReceiptPhotos(): Promise<PickedImages> {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: MAX_SHOTS,
-      quality: CAPTURE_QUALITY,
-      base64: true,
+      /*
+       * No `base64` here, deliberately. Asking the picker for it loads the full
+       * 12-megapixel original into JavaScript as a string — tens of megabytes,
+       * four times over — only for `fit` to throw all of it away a moment
+       * later. The manipulator reads from the uri and hands back base64 of the
+       * SHRUNK image, which is the only copy anybody needs.
+       */
+      quality: 1,
     });
   } catch {
     /*
@@ -164,14 +226,14 @@ export async function pickReceiptPhotos(): Promise<PickedImages> {
 
   const images: { uri: string; base64: string }[] = [];
   for (const asset of picked.assets) {
-    if (!asset.base64) continue;
-    // The same ceiling the camera path enforces. A 12-megapixel library photo
-    // is comfortably over it, and the scanner refuses what it cannot upload.
-    if (tooLarge(asset.base64)) return { status: 'tooLarge' };
-    images.push({ uri: asset.uri, base64: asset.base64 });
+    const base64 = await fit(asset.uri);
+    if (!base64) continue;
+    // The shrunk image is what gets sent, so it is what the thumbnail shows —
+    // one image, not an original kept alongside a copy of it.
+    images.push({ uri: asset.uri, base64 });
   }
-  // Every asset lacking base64 is not "cancelled" — something was chosen and
-  // none of it survived, which the caller must be able to say out loud.
+  // Something was chosen and none of it survived. Not "cancelled": the shopper
+  // made a choice and it did not take, which they have to be told.
   return images.length > 0 ? { status: 'picked', images } : { status: 'tooLarge' };
 }
 

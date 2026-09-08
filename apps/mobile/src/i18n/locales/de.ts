@@ -103,6 +103,8 @@ const de = {
     fileHint: 'Der Bon, den dir der Laden gemailt hat',
     choose: 'Auswählen',
     opening: 'Wird geöffnet…',
+    chosen: '%{count} ausgewählt',
+    chooseAgain: 'Andere Fotos wählen',
   },
   coach: {
     gotIt: 'Alles klar',

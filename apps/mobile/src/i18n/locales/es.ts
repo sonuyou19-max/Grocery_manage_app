@@ -103,6 +103,8 @@ const es = {
     fileHint: 'El ticket que te llegó por correo',
     choose: 'Elegir',
     opening: 'Abriendo…',
+    chosen: '%{count} seleccionadas',
+    chooseAgain: 'Elegir otras fotos',
   },
   coach: {
     gotIt: 'Entendido',

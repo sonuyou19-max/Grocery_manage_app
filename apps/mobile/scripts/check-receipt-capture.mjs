@@ -433,9 +433,36 @@ assert(
   assert(guardEnd > guard, 'the guarded region was found');
   assert(inGuard("t('receipt.hint'"), 'the camera hint is inside the guard');
   assert(!inGuard("t('receipt.checkShot')"), 'the confirm hint is not');
-  // And the Scan button IS — it belongs to the camera, and it was the control
-  // that ended up sitting over "Use photo".
-  assert(inGuard("t('receipt.scan')"), 'the Scan button is inside the guard');
+
+  /*
+   * EVERY Scan button, not the first one found.
+   *
+   * This was `inGuard("t('receipt.scan')")`, and `indexOf` finds the first
+   * occurrence — which was fine while the camera owned the only one. The
+   * gallery body has its own now, earlier in the file, so the assertion
+   * silently changed subject: it started testing whether the GALLERY's button
+   * sits inside the CAMERA's guard, which it does not and must not.
+   *
+   * The property was never "the first one is in the camera's region". It is
+   * that no Scan button draws over the confirm or progress screens — so each
+   * one has to sit inside the guard of the body it belongs to, and both bodies
+   * are guarded on `!pending && !scanning`.
+   */
+  const scanButtons = [...screen.matchAll(/t\('receipt\.scan'\)/g)].map((m) => m.index);
+  const galleryGuard = screen.indexOf('{!fromCamera && !pending && !scanning && (');
+  const stray = scanButtons.filter(
+    (at) => !(at > guard && at < guardEnd) && !(at > galleryGuard && at < guard),
+  );
+  assert(
+    scanButtons.length === 2,
+    'both bodies have a Scan button',
+    'The camera has one and the gallery has one; a missing one is a screen holding photographs it cannot send.',
+  );
+  assert(
+    stray.length === 0,
+    'every Scan button sits inside its own guard',
+    'One outside would draw over the confirm step or the progress overlay, which is what this whole section is about.',
+  );
 }
 
 /* ------------------------------- the matcher is not on the critical path -- */

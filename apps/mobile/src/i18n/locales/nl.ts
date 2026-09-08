@@ -103,6 +103,8 @@ const nl = {
     fileHint: 'Het ticket dat je per mail kreeg',
     choose: 'Kiezen',
     opening: 'Openen…',
+    chosen: '%{count} gekozen',
+    chooseAgain: 'Andere foto’s kiezen',
   },
   coach: {
     gotIt: 'Duidelijk',

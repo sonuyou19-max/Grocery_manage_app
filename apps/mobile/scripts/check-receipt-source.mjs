@@ -266,6 +266,74 @@ assert(
   ['Metro resolves it statically all the same — it is a bundling edge, not a guard.'],
 );
 
+/* ================== 4b. a library photo is fitted, never refused ========== */
+
+/*
+ * THE REPORTED BUG, and it was a design mistake rather than a slip.
+ *
+ * A gallery photograph is a 12-megapixel HEIC somebody did not choose the
+ * settings for and cannot change. Refusing it as "too large to send" asks them
+ * to solve a problem that is not theirs with a tool they do not have — and the
+ * camera path never had it, because pickPictureSize bounds the capture before
+ * it happens. The gallery has no equivalent, so the bound has to be applied
+ * after the fact.
+ *
+ * Downscaling costs the model nothing: Anthropic resizes anything over 1568px
+ * on its long edge before reading it, so every pixel above TARGET_LONG_EDGE is
+ * bytes uploaded to be discarded at the far end.
+ */
+assert(
+  'a library photo is resized rather than rejected',
+  /manipulateAsync\(/.test(source) && /resize: \{ width: TARGET_LONG_EDGE \}/.test(source),
+  ['Refusing a photograph for a size the shopper cannot change is not a refusal they can act on.'],
+);
+assert(
+  '...to the same long edge the camera aims for',
+  /TARGET_LONG_EDGE/.test(source),
+  ['A second number here would be a second answer to "how big is big enough".'],
+);
+assert(
+  '...trying the fallback quality before giving up',
+  /\[CAPTURE_QUALITY, FALLBACK_QUALITY\]/.test(source),
+  ['One pass at 0.85 can still overshoot on an enormous original.'],
+);
+/*
+ * And the picker is NOT asked for base64. Doing so loads the full original into
+ * JavaScript as a string — tens of megabytes, four times over — only for the
+ * resize to discard all of it a moment later.
+ */
+assert(
+  'the original is never pulled into JS as base64',
+  !/allowsMultipleSelection: true,[\s\S]{0,200}?base64: true/.test(source),
+  ['The manipulator reads from the uri and returns base64 of the SHRUNK image.'],
+);
+
+/* ============== 4c. and a photo that IS picked has somewhere to go ======== */
+
+/*
+ * "I selected a photo but it didn't come through."
+ *
+ * The pick succeeded, `shots` filled, and the screen went on rendering "Choose
+ * a photo" with a Choose button — no thumbnails, no way to scan, no sign
+ * anything had happened. The photographs were in memory the whole time with
+ * nothing on screen able to reach them, because the non-camera body only ever
+ * knew how to ask again.
+ */
+assert(
+  'the non-camera body has a state for photos already chosen',
+  /shots\.length === 0 \? \(/.test(capture),
+  ['Without it a successful pick looks identical to no pick at all.'],
+);
+assert(
+  '...that can send them',
+  /<PrimaryButton label=\{t\('receipt\.scan'\)\} onPress=\{\(\) => scan\(\)\} \/>/.test(capture),
+  ['A screen holding four photographs and no way to scan them is the bug.'],
+);
+assert(
+  '...and can drop one and choose again',
+  /removeShot\(i\)/.test(capture) && /receiptSource\.chooseAgain/.test(capture),
+);
+
 assert(
   'a too-large pick is said out loud rather than swallowed',
   /receipt\.photoTooLarge/.test(capture) &&
