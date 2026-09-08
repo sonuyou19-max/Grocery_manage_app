@@ -1058,7 +1058,21 @@ check_(
 check_('image size and count are bounded', /MAX_IMAGE_CHARS/.test(fn) && /MAX_IMAGES/.test(fn));
 check_(
   'the budget reservation counts the images, not just the prompt',
-  /images\.length \* 6_400/.test(fn),
+  /images!\.length\) \* 6_400/.test(fn),
+);
+/*
+ * ...and a PDF is reserved as a read, not as a prompt.
+ *
+ * Its pages are rendered and read as images, so a document costs roughly what
+ * a two-photograph receipt costs. Reserved as text — which is what a
+ * prompt-only estimate produces — it would under-reserve by about an order of
+ * magnitude, on the one endpoint where that matters, and the rate cap would
+ * stop meaning anything for the source people are most likely to use twice in
+ * a row.
+ */
+check_(
+  '...and a PDF is reserved as pages, not as prose',
+  /document \? 2 : images!\.length/.test(fn),
 );
 
 /*

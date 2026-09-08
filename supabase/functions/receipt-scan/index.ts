@@ -153,12 +153,21 @@ const receiptSchema = z.object({
   lines: z.array(lineSchema).min(1).max(120),
 });
 
-const SYSTEM_PROMPT = `You transcribe supermarket till receipts from photographs.
+const SYSTEM_PROMPT = `You transcribe supermarket till receipts.
 
-The images are sections of ONE receipt, in order, and they OVERLAP. A line
+You are given EITHER photographs OR one PDF, and they are read differently.
+
+PHOTOGRAPHS are sections of ONE receipt, in order, and they OVERLAP. A line
 visible in two images is one printing and must appear once. A line genuinely
 printed twice on the paper — the same product on two separate rows — must
 appear twice. Do not tidy, merge or reorder anything else.
+
+A PDF is the shop's own emailed receipt and its pages do NOT overlap: they run
+on, so a line appearing on two pages is two printings. It is also typeset
+rather than photographed, so the transcription slips that photographs produce
+— DOUNE for DOUWE, rn for m — do not happen; take what is written literally and
+do not "correct" a spelling that is simply the shop's own. Everything else
+below is identical.
 
 Return ONLY a JSON object of this exact shape:
 
@@ -529,6 +538,23 @@ const MAX_IMAGE_CHARS = 1_900_000;
 
 const MEDIA = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
+/**
+ * The other shape a receipt arrives in.
+ *
+ * Colruyt, Carrefour and Aldi email a PDF rather than printing, and a shopper
+ * who chose paperless has a receipt no camera can help with. Claude reads PDFs
+ * directly — text layer and page images both — so this needs no rasteriser on
+ * the phone and no second pipeline here: it is one more content block in front
+ * of the same prompt, the same reconciliation, and the same retry.
+ *
+ * Four megabytes of base64 is roughly three of file. Well under what the model
+ * accepts, and chosen for the phone rather than the model: this is the most
+ * expensive endpoint in the app and an unbounded base64 string is the cheapest
+ * way to spend somebody else's budget.
+ */
+const PDF_MEDIA = 'application/pdf';
+const MAX_PDF_CHARS = 4_000_000;
+
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fenced ? fenced[1] : text;
@@ -544,26 +570,57 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const images = Array.isArray(body?.images) ? body.images : null;
+  const document = body?.document && typeof body.document === 'object' ? body.document : null;
   const language = typeof body?.language === 'string' ? body.language.slice(0, 12) : 'en';
 
-  if (!images || images.length === 0 || images.length > MAX_IMAGES) {
+  /*
+   * ONE OR THE OTHER, and the refusal is deliberate rather than a fallback.
+   *
+   * Photographs and a PDF are two readings of one receipt, and a caller sending
+   * both is a caller that does not know which it has — answering from whichever
+   * happened to be checked first would make that a silent choice made here.
+   */
+  if ((images && document) || (!images && !document)) {
     return Response.json(
-      { error: `Body must be {"images": [{media, data}], "language"} with 1-${MAX_IMAGES} images` },
+      {
+        error:
+          `Body must be {"images": [{media, data}], "language"} with 1-${MAX_IMAGES} images, ` +
+          'or {"document": {media, data}, "language"} with one PDF — not both.',
+      },
       { status: 400 },
     );
   }
 
-  const content: Anthropic.ImageBlockParam[] = [];
-  for (const img of images) {
-    const media = typeof img?.media === 'string' ? img.media : '';
-    const data = typeof img?.data === 'string' ? img.data : '';
-    // Checked here rather than trusted: this endpoint is the most expensive in
-    // the app, and an unbounded base64 string is the cheapest way to spend
-    // somebody else's budget.
-    if (!(MEDIA as readonly string[]).includes(media) || !data || data.length > MAX_IMAGE_CHARS) {
-      return Response.json({ error: 'Each image must be a JPEG, PNG or WebP under 1.4MB' }, { status: 400 });
+  const content: (Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam)[] = [];
+
+  if (document) {
+    const media = typeof document?.media === 'string' ? document.media : '';
+    const data = typeof document?.data === 'string' ? document.data : '';
+    if (media !== PDF_MEDIA || !data || data.length > MAX_PDF_CHARS) {
+      return Response.json({ error: 'The document must be a PDF under 3MB' }, { status: 400 });
     }
-    content.push({ type: 'image', source: { type: 'base64', media_type: media as typeof MEDIA[number], data } });
+    content.push({
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data },
+    });
+  } else {
+    if (images!.length === 0 || images!.length > MAX_IMAGES) {
+      return Response.json(
+        { error: `Body must carry 1-${MAX_IMAGES} images` },
+        { status: 400 },
+      );
+    }
+    for (const img of images!) {
+      const media = typeof img?.media === 'string' ? img.media : '';
+      const data = typeof img?.data === 'string' ? img.data : '';
+      // Checked here rather than trusted: this endpoint is the most expensive in
+      // the app, and an unbounded base64 string is the cheapest way to spend
+      // somebody else's budget.
+      if (!(MEDIA as readonly string[]).includes(media) || !data || data.length > MAX_IMAGE_CHARS) {
+        return Response.json({ error: 'Each image must be a JPEG, PNG or WebP under 1.4MB' }, { status: 400 });
+      }
+      content.push({ type: 'image', source: { type: 'base64', media_type: media as typeof MEDIA[number], data } });
+    }
   }
 
   /*
@@ -572,7 +629,12 @@ Deno.serve(async (req) => {
    * estimate would under-reserve by roughly an order of magnitude here — the
    * one endpoint where that matters.
    */
-  const estimate = SYSTEM_PROMPT + 'x'.repeat(images.length * 6_400);
+  const estimate =
+    SYSTEM_PROMPT +
+    // A PDF's pages are read as images too, and one emailed receipt is a page
+    // or two — so it is reserved as a two-image read rather than as text, which
+    // is the estimate a prompt-only guess would produce.
+    'x'.repeat((document ? 2 : images!.length) * 6_400);
   const guard = await reserveBudget(req, 'receipt-scan', estimate, MAX_TOKENS);
   if (guard.denied) return guard.denied;
 
@@ -795,7 +857,7 @@ Deno.serve(async (req) => {
    * the others failed. This one is written before anything else can go wrong.
    */
   console.log(
-    JSON.stringify({ at: 'receipt-scan.read', images: images.length, lines: parsed.lines.length, readMs }),
+    JSON.stringify({ at: 'receipt-scan.read', source: document ? 'pdf' : 'photos', images: images?.length ?? 0, lines: parsed.lines.length, readMs }),
   );
 
   /*
@@ -921,7 +983,8 @@ Deno.serve(async (req) => {
   console.log(
     JSON.stringify({
       at: 'receipt-scan',
-      images: images.length,
+      source: document ? 'pdf' : 'photos',
+      images: images?.length ?? 0,
       lines: parsed.lines.length,
       model,
       readMs,

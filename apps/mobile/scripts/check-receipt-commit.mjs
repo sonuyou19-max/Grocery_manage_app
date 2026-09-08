@@ -695,10 +695,28 @@ assert(
   'Scan receipt opens the capture screen',
 );
 
+/*
+ * Signed out AND unentitled, both refused before anything is asked for.
+ *
+ * This was a bare `if (!user) push('/auth/sign-in')`, which covered the first
+ * half only. Scanning is now the paid step — see the gate's own note — and
+ * `usePlusGate().locked` cannot answer for a signed-out visitor, because
+ * `gateActive` is deliberately false then. That is the exact hole the recipe
+ * importer shipped with; usePlusRoute is the two-step that closes it, and this
+ * pins that the scan button goes through it rather than back to either half.
+ *
+ * The order matters as much as the check. receipts.household_id is not null and
+ * RLS answers to membership, so asking for four photographs and a vision call
+ * before refusing would spend the shopper's time to reach the same no.
+ */
 assert(
-  /if \(!user\) \{\s*router\.push\("\/auth\/sign-in"\);/.test(listScreen),
-  'a signed-out visitor is sent to sign in first',
-  'receipts.household_id is not null; asking for four photographs and a vision call before refusing would be worse',
+  /openOrRedirect\(\(\) => setPickingSource\(true\)\)/.test(listScreen),
+  'scanning is gated before a single photograph is asked for',
+  'usePlusRoute sends a signed-out visitor to sign-in and an unentitled one to the paywall',
+);
+assert(
+  !/if \(!user\) \{\s*router\.push\("\/auth\/sign-in"\);/.test(listScreen),
+  '...and not by a hand-rolled auth check that misses the Plus half',
 );
 
 /* ------------------------------------------------------------------------ */

@@ -21,19 +21,7 @@ import { useHousehold } from '@/store/household';
  * receipt, come back, and a stale list would still show it as never edited.
  * Hence `reload`, called on focus by the screens that show this.
  */
-export function useReceipts(
-  limit = 50,
-  /**
-   * Whether to ask at all.
-   *
-   * The receipt archive is a Plus feature, and NOT FETCHING is the difference
-   * between hiding a card and not computing what is behind it. This is the
-   * Vibe Check lesson written down in lib/plus-gate: a card that hid the paid
-   * feature while still deriving its output shipped the paid data with a
-   * paywall stapled underneath. A free account should not send this query.
-   */
-  enabled = true,
-): {
+export function useReceipts(limit = 50): {
   receipts: ReceiptSummary[];
   loading: boolean;
   reload: () => void;
@@ -49,7 +37,7 @@ export function useReceipts(
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   useEffect(() => {
-    if (!activeId || !enabled) {
+    if (!activeId) {
       setReceipts([]);
       setLoading(false);
       return;
@@ -64,7 +52,7 @@ export function useReceipts(
     return () => {
       alive = false;
     };
-  }, [activeId, limit, nonce, enabled]);
+  }, [activeId, limit, nonce]);
 
   return { receipts, loading, reload };
 }

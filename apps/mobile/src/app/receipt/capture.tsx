@@ -2,8 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { MeshBackground } from '@/components/mesh-background';
 import { goBack } from '@/lib/navigate';
-import { useCallback, useRef, useState } from 'react';
+import {
+  isReceiptSource,
+  PDF_MEDIA,
+  pickReceiptDocument,
+  pickReceiptPhotos,
+  type ReceiptSource,
+} from '@/lib/receipt-source';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -27,6 +35,7 @@ import {
   tooLarge,
 } from '@/lib/receipt-capture';
 import { runScan, stashRun, type ScanPhase } from '@/lib/receipt-run';
+import type { ScanInput } from '@/lib/receipt';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
 import { radii, spacing, type, useScrollIndicator, useTheme } from '@/theme';
@@ -82,7 +91,13 @@ export default function ReceiptCaptureScreen() {
   const { colors } = useTheme();
   const { t, language } = useLocale();
   const { showToast } = useToast();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, source: sourceParam } = useLocalSearchParams<{ id: string; source?: string }>();
+  /*
+   * Which of the three ways in this is. Defaults to the camera, so a link or a
+   * restored route from before this existed still means what it used to.
+   */
+  const source: ReceiptSource = isReceiptSource(sourceParam) ? sourceParam : 'camera';
+  const fromCamera = source === 'camera';
   const { lists } = useGroceries();
   const [permission, requestPermission] = useCameraPermissions();
   const scrollIndicator = useScrollIndicator();
@@ -104,6 +119,8 @@ export default function ReceiptCaptureScreen() {
   const [scanning, setScanning] = useState(false);
   const [phase, setPhase] = useState<ScanPhase>('reading');
   const [mountFailed, setMountFailed] = useState(false);
+  /** The chosen PDF's filename, so the progress screen names what it is reading. */
+  const [pdfName, setPdfName] = useState<string | null>(null);
 
   const list = lists.find((l) => l.id === id);
 
@@ -187,12 +204,20 @@ export default function ReceiptCaptureScreen() {
    * still reads fine, it just matches nothing, which the review sheet shows as
    * a page of new items.
    */
-  const scan = useCallback(async () => {
-    if (shots.length === 0 || scanning) return;
+  /**
+   * Send whatever we have — photographs or a PDF.
+   *
+   * Takes the payload rather than reading `shots`, because there are three
+   * sources now and only one of them fills that array. Everything after the
+   * upload is identical: the same progress phases, the same one message for
+   * every failure, the same hand-off to the review sheet.
+   */
+  const send = useCallback(
+    async (input: ScanInput) => {
     setPhase('reading');
     setScanning(true);
     const run = await runScan(
-      shots.map((s) => ({ media: 'image/jpeg', data: s.base64 })),
+      input,
       language,
       (list?.items ?? []).map((it) => ({
         id: it.id,
@@ -214,11 +239,90 @@ export default function ReceiptCaptureScreen() {
     haptics.success();
     stashRun(run);
     router.replace({ pathname: '/receipt/review', params: { id: list?.id ?? '' } });
-  }, [language, list, scanning, shots, showToast, t]);
+    },
+    [language, list, showToast, t],
+  );
+
+  const scan = useCallback(() => {
+    if (shots.length === 0 || scanning) return;
+    void send({
+      kind: 'images',
+      images: shots.map((s) => ({ media: 'image/jpeg', data: s.base64 })),
+    });
+  }, [scanning, send, shots]);
+
+  /*
+   * ---------------------------------------------------------------------------
+   * THE TWO SOURCES THAT ARE NOT THE CAMERA
+   * ---------------------------------------------------------------------------
+   *
+   * Launched once, on arrival, because picking IS the screen for them — there
+   * is nothing to look at behind an OS picker, and a screen that waits for a
+   * tap before opening one is a tap that means nothing.
+   *
+   * `opened` is a ref rather than state: a second launch would stack a second
+   * picker on iOS, and this effect re-runs whenever any of its dependencies
+   * settle. It must fire exactly once per mount.
+   *
+   * Cancelling goes back rather than leaving an empty screen. The person
+   * changed their mind at the picker; there is nothing here for them.
+   */
+  const opened = useRef(false);
+  useEffect(() => {
+    if (fromCamera || opened.current) return;
+    opened.current = true;
+
+    void (async () => {
+      if (source === 'photos') {
+        const picked = await pickReceiptPhotos();
+        if (picked.status === 'cancelled') {
+          goBack();
+          return;
+        }
+        if (picked.status === 'tooLarge') {
+          showToast(t('receipt.photoTooLarge'));
+          goBack();
+          return;
+        }
+        // Into the same strip the camera fills, so they are confirmed and
+        // removable exactly as photographs taken here are.
+        setShots(picked.images);
+        return;
+      }
+
+      const picked = await pickReceiptDocument();
+      if (picked.status === 'cancelled') {
+        goBack();
+        return;
+      }
+      if (picked.status !== 'picked') {
+        showToast(
+          t(picked.status === 'wrongType' ? 'receipt.notAPdf' : 'receipt.pdfTooLarge'),
+        );
+        goBack();
+        return;
+      }
+      /*
+       * Straight to the scan. There is no confirm step for a PDF: it is not a
+       * photograph, its legibility is not in question, and a thumbnail of page
+       * one would be a decision nobody can make anything of.
+       */
+      setPdfName(picked.name);
+      await send({ kind: 'document', media: PDF_MEDIA, data: picked.data });
+    })();
+  }, [fromCamera, source, send, showToast, t]);
 
   /* ----------------------------------------------------------- permission */
 
-  if (!permission) {
+  /*
+   * The camera's permission is the camera's problem.
+   *
+   * Asking a shopper who chose "Upload a photo" to grant camera access would be
+   * asking for something the screen is not about to use — and on iOS a refusal
+   * there is permanent, so a needless prompt costs them the camera path
+   * forever. Both gates below are therefore behind `fromCamera`.
+   */
+  if (fromCamera && !permission) {
     return (
       <View style={[styles.fallback, { backgroundColor: colors.bg }]}>
         <ActivityIndicator color={colors.accent} />
@@ -226,7 +330,7 @@ export default function ReceiptCaptureScreen() {
     );
   }
 
-  if (!permission.granted || mountFailed) {
+  if (fromCamera && (!permission?.granted || mountFailed)) {
     return (
       <Safe style={[styles.fallback, { backgroundColor: colors.bg }]}>
         <ScrollView {...scrollIndicator} contentContainerStyle={styles.permWrap}>
@@ -239,7 +343,7 @@ export default function ReceiptCaptureScreen() {
           </Text>
           {/* `canAskAgain` false means the OS will not show the prompt again,
               so an Allow button would do nothing at all. */}
-          {!mountFailed && permission.canAskAgain && (
+          {!mountFailed && permission?.canAskAgain && (
             <PrimaryButton
               label={t('receipt.allowCamera')}
               onPress={() => void requestPermission()}
@@ -259,19 +363,28 @@ export default function ReceiptCaptureScreen() {
 
   return (
     <View style={styles.root}>
-      <CameraView
-        ref={camera}
-        style={StyleSheet.absoluteFill}
-        pictureSize={pictureSize}
-        onCameraReady={() => void onCameraReady()}
-        onMountError={() => setMountFailed(true)}
-      />
+      {/* Only when it is the source. Mounting a camera to sit behind a gallery
+          picker spins the hardware up for nothing and, on Android, is a visible
+          delay before a screen the user did not come here to look at. */}
+      {fromCamera ? (
+        <CameraView
+          ref={camera}
+          style={StyleSheet.absoluteFill}
+          pictureSize={pictureSize}
+          onCameraReady={() => void onCameraReady()}
+          onMountError={() => setMountFailed(true)}
+        />
+      ) : (
+        <MeshBackground />
+      )}
 
       {/* Over the camera for the whole wait. It also takes the touches, so the
           shutter cannot be pressed while a scan is in flight — the `busy` and
           `scanning` flags guard that too, but a live-looking shutter under a
           progress screen is a confusing thing to leave reachable. */}
-      {scanning && <ScanOverlay uris={shots.map((s) => s.uri)} phase={phase} />}
+      {scanning && (
+        <ScanOverlay uris={shots.map((s) => s.uri)} phase={phase} label={pdfName} />
+      )}
 
       {/* Look at it before it counts. */}
       {pending && !scanning && (

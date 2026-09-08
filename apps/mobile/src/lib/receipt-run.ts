@@ -9,6 +9,7 @@ import {
   type ListCandidate,
   type MatchOutcome,
   type ReceiptPurchase,
+  type ScanInput,
   type ScannedReceipt,
 } from '@/lib/receipt';
 
@@ -65,13 +66,13 @@ export interface ScanRun {
 }
 
 export async function runScan(
-  images: { media: string; data: string }[],
+  input: ScanInput,
   language: string,
   list: readonly ListCandidate[],
   onPhase?: (phase: ScanPhase) => void,
 ): Promise<ScanRun | null> {
   onPhase?.('reading');
-  const receipt = await scanReceipt(images, language);
+  const receipt = await scanReceipt(input, language);
   if (!receipt) return null;
 
   const purchases = groupLines(receipt.lines);

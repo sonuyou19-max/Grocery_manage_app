@@ -1,0 +1,134 @@
+import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
+
+import { CAPTURE_QUALITY, MAX_SHOTS, tooLarge } from '@/lib/receipt-capture';
+
+/**
+ * Where a receipt comes from, now that it is not always a piece of paper.
+ *
+ * ---------------------------------------------------------------------------
+ * Why there are three
+ * ---------------------------------------------------------------------------
+ *
+ * The camera was the whole feature, and it assumed a till printed something.
+ * Increasingly one does not: Colruyt, Carrefour and Aldi will all email a PDF
+ * instead, and a shopper who chose the paperless option has a receipt they
+ * cannot photograph. Pointing a camera at a phone screen is not a workaround —
+ * it is a moiré pattern with prices in it.
+ *
+ *   CAMERA   The till printed one and it is in your hand. Unchanged.
+ *   PHOTOS   Somebody already photographed it, or the shop's app exported a
+ *            screenshot. Same pipeline as the camera from the moment the
+ *            images exist — including the confirm strip, because a screenshot
+ *            of a receipt can be just as unreadable as a bad photograph.
+ *   FILE     The emailed PDF, straight through. No confirm step: there is
+ *            nothing to judge about a PDF's legibility that looking at a
+ *            thumbnail would tell you.
+ *
+ * ---------------------------------------------------------------------------
+ * The two pickers live here rather than in the screen
+ * ---------------------------------------------------------------------------
+ *
+ * Both have the same three outcomes — picked, cancelled, too big — and all
+ * three have to be distinguishable by the caller: cancelled means "go back
+ * quietly", too big means "say something", and only picked continues. Returning
+ * a discriminated result rather than a nullable keeps the screen from having to
+ * infer which of the three happened from an empty array.
+ */
+export type ReceiptSource = 'camera' | 'photos' | 'file';
+
+export const RECEIPT_SOURCES: readonly ReceiptSource[] = ['camera', 'photos', 'file'];
+
+/** Whether a route param names a source. Params are strings from anywhere. */
+export function isReceiptSource(value: unknown): value is ReceiptSource {
+  return typeof value === 'string' && (RECEIPT_SOURCES as readonly string[]).includes(value);
+}
+
+/**
+ * How much PDF the scanner will take, as base64 characters.
+ *
+ * Four megabytes of base64 is about three of file, which is a large emailed
+ * receipt and a long way short of what the model will accept. The bound is not
+ * about the model: it is about a phone on a supermarket's wifi uploading
+ * something it will wait two minutes for, and about an endpoint that anybody
+ * with an account can call.
+ */
+export const MAX_PDF_CHARS = 4_000_000;
+
+export const PDF_MEDIA = 'application/pdf';
+
+export type PickedImages =
+  | { status: 'picked'; images: { uri: string; base64: string }[] }
+  | { status: 'cancelled' }
+  | { status: 'tooLarge' };
+
+export type PickedDocument =
+  | { status: 'picked'; name: string; data: string }
+  | { status: 'cancelled' }
+  | { status: 'tooLarge' }
+  | { status: 'wrongType' };
+
+/**
+ * Receipt photographs already on the phone.
+ *
+ * Multi-select, capped at the same MAX_SHOTS the camera allows — a long receipt
+ * photographed in sections is the case this exists for, and the reason for the
+ * cap is what the model is asked to read, not where the pictures came from.
+ *
+ * `quality` matters as much here as at the camera. The picker re-encodes, and
+ * the default is low enough to lose the decimal point on a thermal print — see
+ * CAPTURE_QUALITY, which is the same number for the same reason.
+ */
+export async function pickReceiptPhotos(): Promise<PickedImages> {
+  const picked = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    selectionLimit: MAX_SHOTS,
+    quality: CAPTURE_QUALITY,
+    base64: true,
+  });
+  if (picked.canceled) return { status: 'cancelled' };
+
+  const images: { uri: string; base64: string }[] = [];
+  for (const asset of picked.assets) {
+    if (!asset.base64) continue;
+    // The same ceiling the camera path enforces. A 12-megapixel library photo
+    // is comfortably over it, and the scanner refuses what it cannot upload.
+    if (tooLarge(asset.base64)) return { status: 'tooLarge' };
+    images.push({ uri: asset.uri, base64: asset.base64 });
+  }
+  // Every asset lacking base64 is not "cancelled" — something was chosen and
+  // none of it survived, which the caller must be able to say out loud.
+  return images.length > 0 ? { status: 'picked', images } : { status: 'tooLarge' };
+}
+
+/**
+ * A PDF receipt, from Files, Drive, or wherever the email was saved.
+ *
+ * Type-checked twice over. `type: 'application/pdf'` asks the OS picker to
+ * offer only PDFs, and the extension is checked afterwards because that filter
+ * is a hint on Android — a provider is free to hand back anything, and the
+ * scanner would spend a vision call finding out.
+ */
+export async function pickReceiptDocument(): Promise<PickedDocument> {
+  const DocumentPicker = await import('expo-document-picker');
+  const picked = await DocumentPicker.getDocumentAsync({
+    type: PDF_MEDIA,
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+  if (picked.canceled) return { status: 'cancelled' };
+
+  const asset = picked.assets?.[0];
+  if (!asset) return { status: 'cancelled' };
+
+  const named = asset.name ?? 'receipt.pdf';
+  const looksPdf =
+    asset.mimeType === PDF_MEDIA || named.toLowerCase().endsWith('.pdf');
+  if (!looksPdf) return { status: 'wrongType' };
+
+  const data = await new File(asset.uri).base64();
+  if (!data || data.length > MAX_PDF_CHARS) return { status: 'tooLarge' };
+
+  return { status: 'picked', name: named, data };
+}

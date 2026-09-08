@@ -47,6 +47,7 @@ import { ItemSheet } from "@/components/item-sheet";
 import { ListPantryStrip } from "@/components/list-pantry-strip";
 import { MeshBackground } from "@/components/mesh-background";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
+import { ReceiptSourceSheet } from "@/components/receipt-source-sheet";
 import { categoryLabel, CATEGORY_ORDER } from "@/lib/categorize";
 import { useCoachMark } from "@/lib/coach-marks";
 import { findEquivalent } from "@/lib/item-dup";
@@ -111,6 +112,8 @@ export default function ListDetailScreen() {
   const [cartOpen, setCartOpen] = useState(false);
   const [sheetItemId, setSheetItemId] = useState<string | null>(null);
   const [quickAdd, setQuickAdd] = useState(false);
+  /** Whether the "where is the receipt?" chooser is up. See ReceiptSourceSheet. */
+  const [pickingSource, setPickingSource] = useState(false);
   /*
    * Whether the manual add field is showing. Closed by default, so the three
    * buttons read as three choices rather than as decoration around an input.
@@ -582,14 +585,24 @@ export default function ListDetailScreen() {
                   <PressScale
                     onPress={() => {
                       haptics.tick();
-                      if (!user) {
-                        router.push("/auth/sign-in");
-                        return;
-                      }
-                      router.push({
-                        pathname: "/receipt/capture",
-                        params: { id: list.id },
-                      });
+                      /*
+                       * PLUS, and the gate is HERE rather than on the archive.
+                       *
+                       * Scanning is the expensive half — two vision calls on a
+                       * bad receipt — and it is the half that produces
+                       * something the household keeps. Reading back what you
+                       * already imported is not what costs money, and charging
+                       * for the room after charging for the door is what makes
+                       * a paywall feel like a hostage.
+                       *
+                       * usePlusRoute rather than usePlusGate: signed out is a
+                       * different problem from unentitled and needs a different
+                       * screen, and `locked` is deliberately false when signed
+                       * out. This is the same two-step the recipe importer
+                       * needed, and the `!user` check it replaces was only half
+                       * of it.
+                       */
+                      openOrRedirect(() => setPickingSource(true));
                     }}
                     accessibilityRole="button"
                     style={[styles.ghostBtn, { borderColor: colors.accent }]}
@@ -955,6 +968,18 @@ export default function ListDetailScreen() {
         itemId={sheetItemId}
         onClose={() => setSheetItemId(null)}
       />
+      <ReceiptSourceSheet
+        visible={pickingSource}
+        onClose={() => setPickingSource(false)}
+        onPick={(source) => {
+          setPickingSource(false);
+          router.push({
+            pathname: "/receipt/capture",
+            params: { id: list.id, source },
+          });
+        }}
+      />
+
       <QuickAddSheet
         visible={quickAdd}
         listId={list.id}

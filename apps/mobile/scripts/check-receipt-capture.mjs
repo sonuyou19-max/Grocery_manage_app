@@ -296,7 +296,7 @@ console.log('\nwhile the scan runs');
  * shot of this whole feature was a photograph of a sofa.
  */
 assert(
-  /\{scanning && <ScanOverlay/.test(screen),
+  /\{scanning && \(\s*<ScanOverlay/.test(screen),
   'the scan is covered by the overlay for its whole duration',
 );
 

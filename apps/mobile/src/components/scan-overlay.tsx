@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
@@ -75,7 +76,23 @@ const SWEEP_MS = DURATION.sweep;
 /** The preview's height. Fixed, so the sweep has a distance before layout. */
 const PREVIEW_H = 260;
 
-export function ScanOverlay({ uris, phase }: { uris: readonly string[]; phase: ScanPhase }) {
+export function ScanOverlay({
+  uris,
+  phase,
+  label,
+}: {
+  uris: readonly string[];
+  phase: ScanPhase;
+  /**
+   * What is being read, when there is nothing to look at.
+   *
+   * A PDF receipt has no photograph behind the sweep — the frame would be an
+   * empty rectangle for two minutes, which reads as the app having lost the
+   * thing it was given. The filename is the one true thing available to say,
+   * and it is the same thing the person picked a moment ago.
+   */
+  label?: string | null;
+}) {
   const { colors } = useTheme();
   const { t } = useLocale();
   const reduced = useReducedMotion();
@@ -153,7 +170,17 @@ export function ScanOverlay({ uris, phase }: { uris: readonly string[]; phase: S
             transition={300}
           />
         ) : (
-          <View style={[styles.shot, { backgroundColor: colors.surface }]} />
+          <View style={[styles.shot, styles.fileShot, { backgroundColor: colors.surface }]}>
+            <Ionicons name="document-text-outline" size={40} color={colors.muted} />
+            {label ? (
+              <Text
+                style={[type.sub, styles.fileName, { color: colors.muted }]}
+                numberOfLines={2}
+              >
+                {label}
+              </Text>
+            ) : null}
+          </View>
         )}
         <View style={styles.dim} pointerEvents="none" />
 
@@ -186,6 +213,9 @@ export function ScanOverlay({ uris, phase }: { uris: readonly string[]; phase: S
 }
 
 const styles = StyleSheet.create({
+  // The stand-in for a photograph, when what is being read is a file.
+  fileShot: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.lg },
+  fileName: { textAlign: 'center' },
   root: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',

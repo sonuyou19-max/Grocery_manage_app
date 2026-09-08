@@ -666,8 +666,19 @@ export function applyAiMatches(
  */
 const SCAN_TIMEOUT_MS = 120_000;
 
+/**
+ * What the scanner is given: photographs, or one PDF.
+ *
+ * A union rather than two optional fields, because "both" and "neither" are
+ * not states the server should have to have an opinion about — and the server
+ * refuses them anyway, which is a round trip to learn something the type knew.
+ */
+export type ScanInput =
+  | { kind: 'images'; images: { media: string; data: string }[] }
+  | { kind: 'document'; media: string; data: string };
+
 export async function scanReceipt(
-  images: { media: string; data: string }[],
+  input: ScanInput,
   language: string,
 ): Promise<ScannedReceipt | null> {
   /*
@@ -681,7 +692,11 @@ export async function scanReceipt(
     const res = await fetch(`${supabaseUrl}/functions/v1/receipt-scan`, {
       method: 'POST',
       headers: await aiFunctionHeaders(),
-      body: JSON.stringify({ images, language }),
+      body: JSON.stringify(
+        input.kind === 'images'
+          ? { images: input.images, language }
+          : { document: { media: input.media, data: input.data }, language },
+      ),
       signal: abort.signal,
     });
     if (!res.ok) return null;

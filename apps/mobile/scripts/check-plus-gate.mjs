@@ -194,7 +194,6 @@ const MUST_ROUTE_GATE = [
   // without passing any button that gates them — a deep link, a notification,
   // a restored navigation state after a trial expired mid-session.
   'src/app/recipe.tsx',
-  'src/app/receipts.tsx',
 ];
 const missingRecipe = MUST_ROUTE_GATE.filter((rel) => {
   const f = files.find((x) => x.rel === rel);
@@ -233,58 +232,6 @@ if (!recipeGate || !/useAuth\(\)/.test(recipeGate) || !/usePlusGate\(\)/.test(re
 } else {
   console.log('ok   usePlusRoute checks auth before it checks Plus');
 }
-
-/* ------------------- 3c. the receipt archive is HIDE, and is not fetched -- */
-
-/*
- * The Insights receipts card, and the query behind it.
- *
- * HIDE rather than PROMPT, by the test lib/plus-gate writes down: the card's
- * rows ARE past receipts, so there is no teaser that does not show the thing
- * being sold. A "3 receipts" subtitle would be the Vibe Check mistake exactly —
- * the paid output, with a paywall stapled underneath.
- *
- * And BOTH halves are asserted, because hiding a card whose data was fetched
- * anyway is the same mistake one layer down: the rows would have been read out
- * of the household's archive, held in memory, and merely not painted. `locked`
- * has to reach the hook, not just the JSX.
- */
-const insights = files.find((f) => f.rel === 'src/app/(tabs)/insights.tsx')?.text ?? '';
-const insightsCode = code(insights);
-
-assert(
-  'the receipts card is hidden without Plus',
-  /\{!locked && recentReceipts\.length > 0 && \(/.test(insightsCode),
-);
-assert(
-  '...and a locked account does not fetch the archive at all',
-  /useReceipts\(5, !locked\)/.test(insightsCode),
-);
-
-/*
- * The hook has to honour it. `enabled` accepted and ignored would satisfy the
- * call-site assertion above while sending every query it was meant to stop.
- */
-const receiptsHook = code(files.find((f) => f.rel === 'src/lib/use-receipts.ts')?.text ?? '');
-assert(
-  'useReceipts actually skips the query when disabled',
-  /if \(!activeId \|\| !enabled\)/.test(receiptsHook) &&
-    /\[activeId, limit, nonce, enabled\]/.test(receiptsHook),
-);
-
-/*
- * ...and the full-archive screen does the same. It is a route, so the card
- * being hidden is not what keeps anybody out of it.
- */
-const receiptsScreen = code(files.find((f) => f.rel === 'src/app/receipts.tsx')?.text ?? '');
-assert(
-  'the receipts screen fetches nothing while blocked',
-  /useReceipts\(50, blocked === false\)/.test(receiptsScreen),
-);
-assert(
-  '...and bounces a deep link straight back out',
-  /useEffect\(\(\) => \{\s*redirectIfBlocked\(\);/.test(receiptsScreen),
-);
 
 /* ------------------------- 4. a locked tap always goes somewhere */
 
