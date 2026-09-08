@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   Extrapolation,
   interpolate,
   runOnJS,
@@ -117,6 +118,26 @@ function SignedInVibeCheck() {
   const ty = useSharedValue(0);
   const lastTickX = useSharedValue(0);
   const pastThreshold = useSharedValue(false);
+
+  /*
+   * Cancelled on unmount, and this deck is the most exposed case of it.
+   *
+   * EVERY card here is removed by its own swipe, and the screen itself leaves
+   * on a timer the moment the deck empties — so a spring thrown after the last
+   * card is running against a view that is on its way out twice over. A spring
+   * against a torn-down view is a use-after-free on the UI thread, which from
+   * outside is the app closing with no error at all. See the Pantry row, where
+   * it was reported.
+   */
+  useEffect(
+    () => () => {
+      cancelAnimation(tx);
+      cancelAnimation(ty);
+      cancelAnimation(lastTickX);
+      cancelAnimation(pastThreshold);
+    },
+    [tx, ty, lastTickX, pastThreshold],
+  );
 
   // Latest value reachable from gesture callbacks.
   const topRef = useRef<DeckCard | undefined>(top);

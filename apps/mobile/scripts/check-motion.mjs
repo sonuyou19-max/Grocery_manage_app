@@ -655,5 +655,52 @@ if (handRolled.length) {
   console.log('  useLastPresent is that rule with a name on it.');
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * A REPEATING OR GESTURE-DRIVEN ANIMATION IS CANCELLED WHEN ITS VIEW GOES
+ * ---------------------------------------------------------------------------
+ *
+ * The Pantry row is the one view in this app that removes ITSELF. Swiping right
+ * stretches the item's interval, it stops being low, the section drops it, and
+ * React unmounts it on the same tick `onEnd` started a spring against its
+ * shared value. A spring running on a view being torn down is a use-after-free
+ * on the UI thread, and from outside it is the whole app closing — no red
+ * screen, nothing in the log.
+ *
+ * The asymmetry named it: a LEFT swipe queues the item, and a queued item still
+ * counts as low, so that row stayed mounted and never crashed.
+ *
+ * scan-overlay and sheet both already cancel on unmount. This row never did,
+ * and it is the one whose own gesture unmounts it — so the rule stops being a
+ * habit two files happen to share.
+ *
+ * Scoped to files that drive an animation from a GESTURE or repeat one forever.
+ * A one-shot `withTiming` on a view that outlives it needs no teardown, and
+ * demanding one everywhere would be noise nobody reads.
+ */
+const needsTeardown = files.filter(
+  (f) =>
+    f.rel !== 'lib/motion.ts' &&
+    (/Gesture\.Pan\(\)/.test(f.text) || /withRepeat\(/.test(f.text)),
+);
+
+const uncancelled = needsTeardown
+  .filter((f) => !/cancelAnimation\(/.test(f.text))
+  .map((f) => f.rel);
+
+if (uncancelled.length) {
+  failures += 1;
+  console.log('FAIL an animation outlives the view it runs on');
+  for (const u of uncancelled) console.log(`  ${u}`);
+  console.log('  A gesture-driven or repeating animation has to be cancelled when');
+  console.log('  the component unmounts. The Pantry row unmounts ITSELF — swipe');
+  console.log('  right, it stops being low, the section drops it — and a spring');
+  console.log('  still running against it closed the app with no error at all.');
+} else {
+  console.log(
+    `ok   all ${needsTeardown.length} gesture/repeat animations are cancelled on unmount`,
+  );
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

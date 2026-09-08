@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   FadeInDown,
   useAnimatedStyle,
@@ -470,6 +471,10 @@ function Sparkle() {
       -1,
       false,
     );
+    // Cancelled on unmount. An infinite repeat with no teardown keeps running
+    // against a view that has gone — scan-overlay's own note says exactly this,
+    // and this one never had the return.
+    return () => cancelAnimation(pulse);
   }, [pulse]);
   const style = useAnimatedStyle(() => ({
     opacity: 0.55 + pulse.value * 0.45,

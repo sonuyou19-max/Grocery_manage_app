@@ -18,6 +18,7 @@ import {
   KeyboardController,
 } from "react-native-keyboard-controller";
 import Animated, {
+  cancelAnimation,
   FadeInDown,
   SlideInDown,
   SlideOutDown,
@@ -1030,6 +1031,24 @@ function SwipeableItemRow({
   const tx = useSharedValue(0); // 0 = closed, -DELETE_WIDTH = open
   const startX = useSharedValue(0);
   const pastThreshold = useSharedValue(false);
+
+  /*
+   * Cancelled on unmount, for the Pantry row's reason.
+   *
+   * This row can also be removed while its own spring is running — deleted from
+   * the button the swipe reveals, or ticked and moved into the cart section —
+   * and a spring running against a view being torn down is a use-after-free on
+   * the UI thread. What that looks like from outside is the app closing, with
+   * no red screen and nothing in the log.
+   */
+  useEffect(
+    () => () => {
+      cancelAnimation(tx);
+      cancelAnimation(startX);
+      cancelAnimation(pastThreshold);
+    },
+    [tx, startX, pastThreshold],
+  );
   const openRef = useRef(false);
   const swipingRef = useRef(false);
 

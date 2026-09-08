@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ItemCategory } from '@korb/shared';
-import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   Alert,
   LayoutAnimation,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   Extrapolation,
   interpolate,
   runOnJS,
@@ -834,6 +835,35 @@ function PantrySwipeRow({
   const tx = useSharedValue(0);
   const armed = useSharedValue(0); // -1/0/1: which side is past threshold (for haptic)
 
+  /*
+   * ---------------------------------------------------------------------------
+   * NOTHING MAY STILL BE ANIMATING WHEN THIS ROW IS TORN DOWN
+   * ---------------------------------------------------------------------------
+   *
+   * This row is the one view in the app that removes ITSELF. A right swipe
+   * stretches the interval, `lifeRemaining` rises past LOW_THRESHOLD, the item
+   * leaves the Low section, and React unmounts it — on the same tick that
+   * `onEnd` has just started a spring on `tx`. A spring running against a view
+   * being removed is a use-after-free on the UI thread, and what it looks like
+   * from outside is the whole app closing with no red screen and nothing in the
+   * log.
+   *
+   * The asymmetry is what named it: a LEFT swipe puts the item on a shopping
+   * list, and `isLowStat` counts a queued item as low — so that row stays
+   * mounted and never crashed. Only the right one leaves.
+   *
+   * Every other animation in this app is already cancelled on unmount —
+   * scan-overlay's sweep, sheet's travel. This row is the one that never was,
+   * and it is the one whose own gesture unmounts it.
+   */
+  useEffect(
+    () => () => {
+      cancelAnimation(tx);
+      cancelAnimation(armed);
+    },
+    [tx, armed],
+  );
+
   const pan = Gesture.Pan()
     .activeOffsetX([-12, 12])
     .failOffsetY([-10, 10])
@@ -849,12 +879,32 @@ function PantrySwipeRow({
       }
     })
     .onEnd((e) => {
-      if (tx.value > ACTION_THRESHOLD) runOnJS(onStillGood)();
-      else if (tx.value < -ACTION_THRESHOLD) runOnJS(onAddToList)();
+      const fired =
+        tx.value > ACTION_THRESHOLD ? 'right' : tx.value < -ACTION_THRESHOLD ? 'left' : null;
+      armed.value = 0;
+
+      /*
+       * The row is put back BEFORE the action is announced, and the order is
+       * the fix rather than a tidy-up.
+       *
+       * Announcing first meant the JS side could unmount this row while the
+       * spring below was still being scheduled against it — see the note on the
+       * cleanup above. Settling first means that by the time anything can
+       * remove the view, its own animation is already over.
+       *
+       * Snapped rather than sprung when an action fired: a row that is leaving
+       * the section has nothing to show a spring TO, and the one case where it
+       * stays — a left swipe, which makes the item queued and therefore still
+       * low — is behind a sheet or a toast on that frame anyway.
+       */
+      if (fired) {
+        tx.value = 0;
+        runOnJS(fired === 'right' ? onStillGood : onAddToList)();
+        return;
+      }
       // Carries the release velocity, so a flung row leaves the finger at the
       // speed the finger was moving instead of stopping and restarting.
       tx.value = springTo(0, e.velocityX);
-      armed.value = 0;
     });
 
   const contentStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }] }));
