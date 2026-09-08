@@ -205,22 +205,77 @@ check(
 const bar = codeOnly(read('src', 'components', 'stock-bar.tsx'));
 
 /*
- * The gradient must be sized as a multiple of the CLIP, not left at 100%.
- * At 100% it stretches to whatever the fill happens to be, which is the
- * decorative version — green-to-red on every row regardless of value, amber
- * landing at a different real reading each time.
+ * ---------------------------------------------------------------------------
+ * The bar paints no scale, and the fill is a wash
+ * ---------------------------------------------------------------------------
+ *
+ * The track used to carry a green-amber-red gradient sized to the whole track
+ * and cropped to the reading. On one row that is a real instrument. On a list
+ * it is not: an overdue item crops at ~95% and so paints nearly the entire
+ * scale at full saturation, and a pantry that has not been shopped is thirty
+ * rows of the identical rainbow — no comparison available, and ten times the
+ * red ink of the words beside it.
+ *
+ * So the rule is: THE ONLY SATURATED COLOUR ON THE BAR IS THE MARKER. Stated as
+ * two halves that cannot both be satisfied by accident — the fill must wear the
+ * alpha and the marker must not — and asserted by REGION, so swapping the two
+ * fails rather than passing on a count.
  */
+check('the bar paints no gradient', /LinearGradient|linear-gradient/.test(bar), false);
 check(
-  'the gradient is sized against the track, not the fill',
-  /style=\{\[styles\.scale,\s*\{\s*width:\s*`\$\{100\s*\/\s*p\}%`/.test(bar),
+  'the fill carries the reading',
+  /styles\.fill,\s*\{\s*width:\s*`\$\{p\s*\*\s*100\}%`/.test(bar),
   true,
 );
-check(
-  'and the clip carries the reading',
-  /styles\.clip,\s*\{\s*width:\s*`\$\{p\s*\*\s*100\}%`/.test(bar),
-  true,
-);
-check('the clip actually clips', /clip:\s*\{[^}]*overflow:\s*'hidden'/.test(bar), true);
+/*
+ * EVERY track, not "a track somewhere in the file".
+ *
+ * Written first as a single .test() for `styles.track, { backgroundColor:
+ * colors.line`, which passed with the visible track painted `colors.crit` —
+ * the learning branch draws a track too, and its own `colors.line` satisfied
+ * the regex on the component's behalf. Counting is what makes the assertion
+ * about all of them.
+ */
+{
+  const tracks = (bar.match(/styles\.track\b/g) ?? []).length;
+  const neutral = (bar.match(/styles\.track,\s*\{\s*backgroundColor:\s*colors\.line\b/g) ?? []).length;
+  check(
+    `every track stays neutral (${neutral}/${tracks})`,
+    tracks >= 2 && neutral === tracks,
+    true,
+  );
+}
+
+{
+  const split = bar.indexOf('styles.marker');
+  const WASHED = 'toneColor[geo.tone] + FILL_ALPHA';
+  const before = split > 0 ? bar.slice(0, split) : '';
+  const after = split > 0 ? bar.slice(split) : '';
+  // Bare = every mention of the tone with the washed ones taken out first, so
+  // "wears the tone" and "wears it at full strength" cannot be confused.
+  const bare = (text) => text.split(WASHED).join('').includes('toneColor[geo.tone]');
+
+  check('the marker is drawn after the fill', split > 0 && bar.indexOf('styles.fill') < split, true);
+  check('the fill wears the tone at FILL_ALPHA', before.includes(WASHED), true);
+  check('...and never at full strength', bare(before), false);
+  check('the marker wears the tone at full strength', bare(after), true);
+  check('...and never washed out', after.includes('FILL_ALPHA'), false);
+}
+
+/*
+ * And the wash stays a wash. Turning FILL_ALPHA up is the one edit that keeps
+ * every assertion above true and puts the wall of red straight back, so the
+ * ceiling is stated rather than left to whoever next thinks the bar looks faint.
+ */
+{
+  const decl = /const FILL_ALPHA = '([0-9a-fA-F]{2})';/.exec(bar);
+  const alpha = decl ? parseInt(decl[1], 16) : 255;
+  check(
+    `FILL_ALPHA is a wash, not a fill (${decl ? decl[1] : 'missing'})`,
+    decl != null && alpha <= 0x4d,
+    true,
+  );
+}
 
 // The notch's position and the geometry's divisor are the same number. Two
 // literals would drift and the notch would stop meaning "due".

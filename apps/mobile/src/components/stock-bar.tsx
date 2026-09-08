@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 
 import { DUE_MARK, type StockGeometry, type StockTone } from '@/lib/pantry-intel';
@@ -15,19 +14,35 @@ import { useTheme } from '@/theme';
  * and whose colour was picked from the same number — so the colour said nothing
  * the length had not already said, and both ran out together at zero.
  *
- * Here the two are separated, and that is the whole idea. The track carries a
- * fixed colour SCALE — green early, amber approaching, red past due — painted
- * at the same place on every row in the list. The marker carries the reading.
- * Because the scale does not move, the marker's position means the same thing
- * on every row, and a column of rows can be read down at a glance: everything
- * still in the green is fine, everything past the notch is late.
+ * Here the two are separated, and that is still the whole idea. The MARKER
+ * carries the reading and the notch marks due, so a marker's position means the
+ * same thing on every row and a column of rows can be read straight down.
  *
- * The obvious version is a gradient poured into the fill itself, which is what
- * the reference screenshot does. It looks the same on one row and is not the
- * same thing: a fill gradient is stretched to whatever length the fill happens
- * to be, so amber sits at a different real value on every row, and a full bar
- * and an empty one both go green→red. It is decoration wearing the costume of
- * a scale.
+ * ---------------------------------------------------------------------------
+ * Why the track no longer paints the scale
+ * ---------------------------------------------------------------------------
+ *
+ * It used to. The track held a fixed colour SCALE — green early, amber
+ * approaching, red past due — drawn as a gradient sized to the whole track and
+ * then cropped to the reading, so that amber always sat at the same real value
+ * rather than being stretched to whatever length the fill happened to be. On
+ * one row that is a genuinely better instrument than a coloured progress bar,
+ * and the argument for it was right as far as it went.
+ *
+ * It went as far as one row. Cropping the full scale to the reading means an
+ * OVERDUE item is cropped at about 95% and therefore paints nearly all of it —
+ * green through amber to red, at full saturation, every time. A pantry that has
+ * not been shopped has thirty-three of those, and thirty-three identical
+ * rainbows carry no information at all: the scale can only be compared between
+ * rows when the rows differ, and here they do not. What it does carry is the
+ * bar's area in saturated colour, roughly ten times the red ink of the words
+ * beside it. Reported, accurately, as "the red colour is bothering me".
+ *
+ * So the geometry stays and the paint goes. The track is neutral, the travelled
+ * part is the tone at FILL_ALPHA — enough to see the reading without the eye
+ * being called to it — and the marker is the one saturated object on the row.
+ * The verdict was never the bar's job anyway: the words next to it say it, and
+ * they are what a reader actually reads.
  *
  * ---------------------------------------------------------------------------
  * The notch
@@ -83,17 +98,20 @@ const ROOT_H = TICK_TOP + TICK_H;
 const MIN_POSITION = 0.02;
 
 /**
- * Where the scale changes colour, in TRACK coordinates.
+ * How much of the tone the travelled part of the track gets, as a hex alpha.
  *
- * The thresholds are stated in intervals elapsed — low at 0.65, critical at
- * 0.85, due at 1.0 — and the track spans 1.5 intervals, so each divides by 1.5:
- * 0.433, 0.567 and 0.667. The stops below are placed to blend ACROSS those
- * boundaries rather than to land on them, so each threshold falls in the middle
- * of its transition instead of at a visible seam. The exact boundary is carried
- * by the marker's own colour and by the words beside it, both of which come
- * from stockGeometry — this is the continuous reading, not the verdict.
+ * 0x38 is 22%. The number is doing one job: make the fill legible as a length
+ * without letting it register as a colour. Anything much higher and a list of
+ * overdue rows is back to being a wall of red — which is the fault this
+ * replaced, so treating the fill as somewhere to restore contrast would undo
+ * it. The reading is legible because it is a LENGTH against a neutral track,
+ * and the marker at its end is at full strength.
+ *
+ * Suffixed onto the token rather than given a token of its own: it has to work
+ * over `surface` in both palettes, and a fixed pale red is right on one of them
+ * at most. Same reasoning, and the same idiom, as the emoji tile's wash.
  */
-const SCALE_STOPS: readonly [number, number, ...number[]] = [0, 0.38, 0.5, 0.62, 1];
+const FILL_ALPHA = '38';
 
 export function StockBar({ geo }: { geo: StockGeometry }) {
   const { colors } = useTheme();
@@ -124,23 +142,19 @@ export function StockBar({ geo }: { geo: StockGeometry }) {
     <View style={styles.root} pointerEvents="none">
       <View style={[styles.track, { backgroundColor: colors.line }]}>
         {/*
-         * The clip is the reading; the gradient inside it is the scale.
+         * The reading, as a length. A percentage of the track rather than a
+         * measured width, which is why this needs no onLayout: no measurement
+         * pass per row, and no frame of zero-width bars before it arrives.
          *
-         * The gradient is drawn at 100/p percent of the CLIP, which is exactly
-         * 100% of the track — so it is always the full scale, cropped. That
-         * ratio is why this needs no onLayout: the same result from a measured
-         * pixel width, without a measurement pass per row and without the frame
-         * of zero-width bars before it arrives.
+         * The tone at FILL_ALPHA, never at full strength — see the note there.
+         * The saturated copy of this colour is the marker at its end.
          */}
-        <View style={[styles.clip, { width: `${p * 100}%` }]}>
-          <LinearGradient
-            colors={[colors.accent, colors.accent, colors.warn, colors.crit, colors.crit]}
-            locations={SCALE_STOPS}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[styles.scale, { width: `${100 / p}%` }]}
-          />
-        </View>
+        <View
+          style={[
+            styles.fill,
+            { width: `${p * 100}%`, backgroundColor: toneColor[geo.tone] + FILL_ALPHA },
+          ]}
+        />
       </View>
 
       {/* Due. */}
@@ -177,8 +191,10 @@ const styles = StyleSheet.create({
     borderRadius: TRACK_H / 2,
     overflow: 'hidden',
   },
-  clip: { position: 'absolute', left: 0, top: 0, bottom: 0, overflow: 'hidden' },
-  scale: { height: '100%' },
+  // In flow inside the track, which already clips and rounds — so the fill's
+  // leading end takes the track's radius and its trailing end stays square,
+  // which is what makes it read as a level rather than as a pill.
+  fill: { height: '100%' },
   tick: {
     position: 'absolute',
     top: TICK_TOP,
