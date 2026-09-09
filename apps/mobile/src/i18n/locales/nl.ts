@@ -104,6 +104,7 @@ const nl = {
     choose: 'Kiezen',
     opening: 'Openen…',
     chosen: '%{count} gekozen',
+    chosenHint: 'Tik op een foto om die te verwijderen.',
     chooseAgain: 'Andere foto’s kiezen',
   },
   coach: {

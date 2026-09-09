@@ -488,11 +488,13 @@ export default function ReceiptCaptureScreen() {
               <Text style={[type.sub, styles.pickText, { color: colors.muted }]}>
                 {t(`receiptSource.${source}Hint`, { max: MAX_SHOTS })}
               </Text>
-              <PrimaryButton
-                label={t(picking ? 'receiptSource.opening' : 'receiptSource.choose')}
-                onPress={() => void openPicker()}
-                disabled={picking}
-              />
+              <View style={styles.pickAction}>
+                <PrimaryButton
+                  label={t(picking ? 'receiptSource.opening' : 'receiptSource.choose')}
+                  onPress={() => void openPicker()}
+                  disabled={picking}
+                />
+              </View>
               <Pressable onPress={() => goBack()} style={styles.backRow} hitSlop={8}>
                 <Text style={[type.sub, { color: colors.muted }]}>{t('common.cancel')}</Text>
               </Pressable>
@@ -515,10 +517,17 @@ export default function ReceiptCaptureScreen() {
               <Text style={[type.h2, styles.pickText, { color: colors.ink }]}>
                 {t('receiptSource.chosen', { count: shots.length })}
               </Text>
+              {/* The × badge is 18px and sits on a dark thumbnail, which is not
+                  an affordance anybody finds — the empty state above earns its
+                  hint line and so does this one. */}
+              <Text style={[type.sub, styles.pickText, { color: colors.muted }]}>
+                {t('receiptSource.chosenHint')}
+              </Text>
               <ScrollView
                 horizontal
                 {...scrollIndicator}
-                contentContainerStyle={styles.thumbs}
+                style={styles.pickStrip}
+                contentContainerStyle={styles.pickThumbs}
               >
                 {shots.map((shot, i) => (
                   <Pressable
@@ -527,14 +536,20 @@ export default function ReceiptCaptureScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t('receipt.removeShot', { n: i + 1 })}
                   >
-                    <Image source={{ uri: shot.uri }} style={styles.thumb} contentFit="cover" />
+                    <Image
+                      source={{ uri: shot.uri }}
+                      style={[styles.pickThumb, { borderColor: colors.line }]}
+                      contentFit="cover"
+                    />
                     <View style={styles.thumbX}>
                       <Ionicons name="close" size={12} color="#FFFFFF" />
                     </View>
                   </Pressable>
                 ))}
               </ScrollView>
-              <PrimaryButton label={t('receipt.scan')} onPress={() => scan()} />
+              <View style={styles.pickAction}>
+                <PrimaryButton label={t('receipt.scan')} onPress={() => scan()} />
+              </View>
               <Pressable
                 onPress={() => void openPicker()}
                 style={styles.backRow}
@@ -705,8 +720,48 @@ const styles = StyleSheet.create({
   // The gallery / file body. Centred, because there is nothing behind it to
   // align to — unlike the camera, whose chrome hugs the frame.
   pickWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  pickBody: { alignItems: 'center', gap: spacing.md, maxWidth: 320 },
+  /*
+   * A definite width, so the button below can fill it.
+   *
+   * This was width-by-content, which on a centred column means "as wide as the
+   * widest child" — and the widest child was the words "1 chosen". The action
+   * had nothing to stretch to and shrink-wrapped to its own label.
+   */
+  pickBody: { width: '100%', maxWidth: 320, alignItems: 'center', gap: spacing.md },
   pickText: { textAlign: 'center' },
+  /** The one child that spans the column: this screen has a single action. */
+  pickAction: { alignSelf: 'stretch' },
+  /*
+   * `flexGrow: 0`, and it is the whole reason this screen had a hole in it.
+   *
+   * React Native gives a HORIZONTAL ScrollView `flexGrow: 1` in its own base
+   * style, which in a column means it takes every spare pixel of HEIGHT. So the
+   * strip of chosen photos pushed the Scan button to the bottom of the screen
+   * and left a third of a screen of nothing between them — while the branch
+   * with no strip in it, the empty state, centred correctly. That difference is
+   * what named the cause.
+   */
+  pickStrip: { flexGrow: 0, alignSelf: 'stretch' },
+  /*
+   * Centred until there are enough to scroll. `flexGrow` on the CONTENT (not on
+   * the scroller) is what lets one photograph sit in the middle of the strip
+   * rather than against its left edge, and stops mattering the moment the
+   * content is wider than the frame.
+   */
+  pickThumbs: { gap: spacing.sm, flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  /*
+   * Bigger than the camera's 54x72, deliberately. That strip is one row of
+   * chrome over a live viewfinder and has to stay out of the way; this is the
+   * whole screen, and the thumbnail is the only evidence the right photograph
+   * was picked — at 54 wide a receipt is a grey smudge.
+   */
+  pickThumb: {
+    width: 108,
+    height: 144,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    backgroundColor: '#222222',
+  },
   confirmRoot: { ...StyleSheet.absoluteFill, backgroundColor: '#000000' },
   confirmChrome: { flex: 1, justifyContent: 'space-between', padding: spacing.lg },
   confirmActions: { flexDirection: 'row', gap: spacing.md },

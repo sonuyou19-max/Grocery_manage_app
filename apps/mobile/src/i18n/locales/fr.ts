@@ -104,6 +104,7 @@ const fr = {
     choose: 'Choisir',
     opening: 'Ouverture…',
     chosen: '%{count} sélectionnée(s)',
+    chosenHint: 'Touchez une photo pour la retirer.',
     chooseAgain: 'Choisir d’autres photos',
   },
   coach: {

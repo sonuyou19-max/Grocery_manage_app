@@ -78,6 +78,20 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
+    /*
+     * Room around the label, for the times this button is NOT full width.
+     *
+     * Every other call site puts it in a stretched column, where the pill is
+     * far wider than its text and padding changes nothing. Put one in a centred
+     * column and it shrink-wraps instead — and with no padding the pill is
+     * exactly the width of the text, so "Scan" sat edge to edge in a green
+     * capsule and read as a clipped label rather than a button.
+     *
+     * On the component, not on that screen: a button whose appearance depends
+     * on which kind of parent it happens to be in is a trap for the next
+     * person, and it will not be the last one centred.
+     */
+    paddingHorizontal: spacing.xl,
   },
   ghost: { height: 44, alignItems: 'center', justifyContent: 'center' },
 });

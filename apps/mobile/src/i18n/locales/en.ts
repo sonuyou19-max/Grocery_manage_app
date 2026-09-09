@@ -113,6 +113,7 @@ const en = {
     choose: 'Choose',
     opening: 'Opening…',
     chosen: '%{count} chosen',
+    chosenHint: 'Tap a photo to remove it.',
     chooseAgain: 'Choose different photos',
   },
   coach: {

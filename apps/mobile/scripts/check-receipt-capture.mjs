@@ -560,6 +560,62 @@ assert(
 
 /* ------------------------------------------------------------------------ */
 
+/* -------------------------------------------------------------------------- */
+/* The gallery screen is a screen, not a leftover                              */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Two faults, one screenshot: the Scan button's label sat edge to edge in a
+ * capsule barely wider than the word, and a third of the screen was empty
+ * between the chosen photograph and that button.
+ *
+ * Both come from laying a stretched design out in a CENTRED column. A centred
+ * column sizes every child to its own content, so the action shrink-wrapped to
+ * its label; and React Native's base style for a HORIZONTAL ScrollView carries
+ * `flexGrow: 1`, so the strip of chosen photos took every spare pixel of height
+ * and pushed the button to the floor. The empty state, which has no strip,
+ * centred perfectly — that difference is what named the cause, and it is why
+ * these are asserted rather than described.
+ */
+const buttonStyle = codeOnly(read(join(ROOT, 'src/components/form.tsx')));
+assert(
+  /button:\s*\{[^}]*paddingHorizontal:/.test(buttonStyle),
+  'PrimaryButton keeps room around its label',
+  'Without it a button in a centred column is exactly as wide as its text, and the label reads as clipped.',
+);
+
+assert(
+  /pickStrip:\s*\{[^}]*flexGrow:\s*0/.test(screen),
+  'the chosen-photos strip does not grow',
+  "A horizontal ScrollView is flexGrow: 1 by default, so in a column it eats the screen's height.",
+);
+
+/*
+ * The action spans the column in BOTH branches. One of the two getting it is
+ * the likely half-fix: they are the same control, one screen apart, and only
+ * the second one was in the screenshot.
+ */
+{
+  const wrapped = (screen.match(/<View style=\{styles\.pickAction\}>/g) ?? []).length;
+  const buttons = (screen.match(/<PrimaryButton\b/g) ?? []).length;
+  assert(
+    wrapped === 2 && buttons >= 3,
+    `both pick actions span the column (${wrapped} wrapped of ${buttons} buttons on the screen)`,
+    'Choose and Scan are the same control on two branches; wrapping one leaves the other shrink-wrapped.',
+  );
+  assert(
+    /pickAction:\s*\{[^}]*alignSelf:\s*'stretch'/.test(screen),
+    '...and the wrapper is what stretches it',
+    'pickAction must carry alignSelf: stretch, or wrapping the button changes nothing.',
+  );
+  assert(
+    /pickBody:\s*\{[^}]*width:\s*'100%'/.test(screen),
+    '...against a column that has a width to span',
+    "A content-width column is as wide as its widest child, so 'stretch' would still be the label's width.",
+  );
+}
+
+
 if (failures > 0) {
   console.error(`\n✗ ${failures} check${failures === 1 ? '' : 's'} failed`);
   process.exit(1);

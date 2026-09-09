@@ -104,6 +104,7 @@ const de = {
     choose: 'Auswählen',
     opening: 'Wird geöffnet…',
     chosen: '%{count} ausgewählt',
+    chosenHint: 'Zum Entfernen auf ein Foto tippen.',
     chooseAgain: 'Andere Fotos wählen',
   },
   coach: {

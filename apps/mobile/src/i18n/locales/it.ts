@@ -104,6 +104,7 @@ const it = {
     choose: 'Scegli',
     opening: 'Apertura…',
     chosen: '%{count} selezionate',
+    chosenHint: 'Tocca una foto per rimuoverla.',
     chooseAgain: 'Scegli altre foto',
   },
   coach: {

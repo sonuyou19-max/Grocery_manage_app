@@ -114,6 +114,7 @@ const pl = {
     choose: 'Wybierz',
     opening: 'Otwieranie…',
     chosen: 'Wybrano %{count}',
+    chosenHint: 'Dotknij zdjęcia, aby je usunąć.',
     chooseAgain: 'Wybierz inne zdjęcia',
   },
   coach: {
