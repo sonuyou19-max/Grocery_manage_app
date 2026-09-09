@@ -307,6 +307,46 @@ mustFail(
   'do not multiply out',
 );
 
+/*
+ * ---------------------------------------------------------------------------
+ * The till's own rounding, which is not a misread
+ * ---------------------------------------------------------------------------
+ *
+ * A real Colruyt line: 2 x 0,89 printed as 1,77. Two times eighty-nine is 178,
+ * so this "fails" by exactly one cent — and it is not wrong. The till computes
+ * from a unit price it holds to more places than it prints (0,885), and prints
+ * the rounded one. Every second line of a promotion looks like this.
+ *
+ * The tolerance was written for precisely that case; it did not work, because
+ * `unitPriceCents` is scaled x100 out of euros while `unitPriceDp` still counts
+ * EURO decimals. `halfUlp` returned half a hundredth of a cent where half a
+ * cent was meant, so the unit-price term was ~0 whatever the model reported and
+ * the tolerance was always the bare 0.5. Found in a live scan: a 36-line PDF
+ * that reconciled to the cent overall (gapCents 0) spent 12.5 extra seconds on
+ * a repair it did not need, and threw the repair away.
+ *
+ * Asserted across the values the model can report, because the bug was that
+ * NONE of them made any difference.
+ */
+{
+  const rounded = (dp) => [count('PROMO 2 x 0,89', 2, 89, 177, { m: 0, p: dp })];
+  const totals = { goodsCents: 177, paidCents: 177, articleCount: null };
+  for (const dp of [2, null]) {
+    const res = reconcile(rounded(dp), totals);
+    if (res.badLines.length === 0) ok(`a till rounding a printed unit price passes (dp=${dp})`);
+    else fail(`the line tolerance still ignores display precision (dp=${dp})`, res.problems);
+  }
+  /*
+   * ...and a price printed to a TENTH of a cent has no such excuse: 0,890 x 2
+   * is 1,780 exactly, so a 1,77 against it really is a misread. The tolerance
+   * must narrow as the print gets more precise, or it is not a tolerance, it is
+   * a blanket.
+   */
+  const precise = reconcile(rounded(3), totals);
+  if (precise.badLines.length === 1) ok('...while a more precisely printed price is still checked');
+  else fail('the tolerance no longer narrows with precision', precise.problems);
+}
+
 /* ------------------------------------------- the same reduction, twice --- */
 
 /*

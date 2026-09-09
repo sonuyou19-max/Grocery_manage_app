@@ -178,6 +178,34 @@ function halfUlp(value: number | null, dp: number | null): number {
 }
 
 /**
+ * The same idea for a figure held in CENTS but printed in EUROS.
+ *
+ * `halfUlp` above is right for the multiplier, whose value and whose decimal
+ * places are in the same unit: 0,523 kg reported as dp 3 really is ±0.0005 kg.
+ * A unit price is not. It arrives as `unitPriceCents` — scaled by a hundred out
+ * of euros — while `unitPriceDp` still counts the decimals of the EURO figure
+ * the till printed. Feeding those to `halfUlp` answered half a hundredth of a
+ * cent where half a cent was meant, a hundred times too small, so the term
+ * contributed nothing whatever the model reported and the line tolerance was
+ * always the bare half cent.
+ *
+ * Which made the check reject the commonest honest line on a Belgian receipt: a
+ * till computing from a unit price it holds to more places than it prints. Two
+ * at 0,89 comes to 1,77 because the real price is 0,885 — one cent "wrong", and
+ * correct. Every such line triggered a repair that could not fix it, because
+ * there was nothing to fix.
+ *
+ * A missing dp assumes a price printed to the cent, which is what nearly every
+ * till does. The old answer for a missing dp was zero uncertainty, and being
+ * certain about a figure nobody described is how this went wrong in the first
+ * place.
+ */
+function halfUlpCents(dp: number | null): number {
+  if (dp == null) return 0.5;
+  return 0.5 * Math.pow(10, 2 - dp);
+}
+
+/**
  * Is this multiplier a count of packs, or a measure of one?
  *
  * The receipts disagree about where the multiplier is printed and agree about
@@ -401,7 +429,7 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
      */
     const measureError =
       line.multiplierKind === 'measure' ? Math.abs(p) * halfUlp(m, line.multiplierDp) : 0;
-    const tolerance = 0.5 + Math.abs(m) * halfUlp(p, line.unitPriceDp) + measureError;
+    const tolerance = 0.5 + Math.abs(m) * halfUlpCents(line.unitPriceDp) + measureError;
 
     if (Math.abs(expected - line.totalCents) > tolerance) badLines.push(i);
   });
