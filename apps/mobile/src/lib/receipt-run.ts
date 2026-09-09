@@ -6,6 +6,7 @@ import {
   matchResidue,
   residue,
   scanReceipt,
+  type ScanFailure,
   type ListCandidate,
   type MatchOutcome,
   type ReceiptPurchase,
@@ -65,15 +66,35 @@ export interface ScanRun {
   settle: Promise<Map<string, MatchOutcome>>;
 }
 
+/**
+ * A run, or the reason there isn't one.
+ *
+ * `ScanRun | null` before, which is why every failure reached the screen as the
+ * same sentence. The reason is not decoration: it decides whether the shopper is
+ * told to check their signal, to wait and retry, or that the file itself was
+ * the problem — and it is the only thing that can stop a PDF being answered with
+ * "try a clearer photo".
+ */
+export type RunOutcome =
+  | { ok: true; run: ScanRun }
+  | { ok: false; failure: ScanFailure };
+
 export async function runScan(
   input: ScanInput,
   language: string,
   list: readonly ListCandidate[],
   onPhase?: (phase: ScanPhase) => void,
-): Promise<ScanRun | null> {
+): Promise<RunOutcome> {
   onPhase?.('reading');
-  const receipt = await scanReceipt(input, language);
-  if (!receipt) return null;
+  const scan = await scanReceipt(input, language);
+  /*
+   * The failure is passed along rather than flattened to null. The screen is
+   * the only place that knows whether the shopper is looking at photographs or
+   * a PDF, and therefore the only place that can turn a reason into advice
+   * worth giving — see ScanFailure.
+   */
+  if (!scan.ok) return { ok: false, failure: scan.failure };
+  const { receipt } = scan;
 
   const purchases = groupLines(receipt.lines);
   const offline = matchPurchases(purchases, list);
@@ -115,7 +136,7 @@ export async function runScan(
     // rejection here degrades to what the free rungs already found.
     .catch(() => offline);
 
-  return { receipt, purchases, matches: offline, settle };
+  return { ok: true, run: { receipt, purchases, matches: offline, settle } };
 }
 
 /* ------------------------------------------------------------ hand-off --- */

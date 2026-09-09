@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { MeshBackground } from '@/components/mesh-background';
 import { PlusFeatures } from '@/components/plus-features';
 import { Safe } from '@/components/safe';
-import { useToast } from '@/components/toast';
+import { ScreenNoticeView, useScreenNotice } from '@/components/screen-notice';
 import {
   billingAvailable,
   getPlusOffers,
@@ -60,7 +60,9 @@ export default function PaywallScreen() {
   const { colors } = useTheme();
   const scrollIndicator = useScrollIndicator();
   const t = useT();
-  const { showToast } = useToast();
+  // A modal presentation: the root toast renders behind this screen and is
+  // never seen while it is up. See components/screen-notice.
+  const notice = useScreenNotice();
   const { entitled, trialEndsAt, refresh } = useEntitlement();
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -104,10 +106,10 @@ export default function PaywallScreen() {
   useEffect(() => {
     if (entitled && phase === 'working') {
       haptics.success();
-      showToast(t('paywall.thanks'));
+      notice.show(t('paywall.thanks'));
       goBack();
     }
-  }, [entitled, phase, showToast, t]);
+  }, [entitled, phase, notice, t]);
 
   const buy = async (offer: PlusOffer) => {
     haptics.tick();
@@ -120,13 +122,13 @@ export default function PaywallScreen() {
     }
     if (outcome.status === 'failed') {
       setPhase('ready');
-      showToast(t('paywall.failed'));
+      notice.show(t('paywall.failed'));
       return;
     }
     await waitForEntitlement();
     // Still here means the webhook has not landed yet. Thank them anyway and
     // get out of the way — see the header comment.
-    showToast(t('paywall.thanks'));
+    notice.show(t('paywall.thanks'));
     goBack();
   };
 
@@ -136,12 +138,12 @@ export default function PaywallScreen() {
     const had = await restorePlus();
     if (had) {
       await waitForEntitlement();
-      showToast(t('paywall.restored'));
+      notice.show(t('paywall.restored'));
       goBack();
       return;
     }
     setPhase('ready');
-    showToast(t('paywall.nothingToRestore'));
+    notice.show(t('paywall.nothingToRestore'));
   };
 
   const busy = phase === 'working';
@@ -281,6 +283,10 @@ export default function PaywallScreen() {
           </View>
         </ScrollView>
       </Safe>
+
+      {/* Inside the screen, because this route is a modal presentation and the
+          app's toast renders behind it. See components/screen-notice. */}
+      <ScreenNoticeView notice={notice} />
     </View>
   );
 }

@@ -8,7 +8,7 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { FormField, PrimaryButton } from '@/components/form';
 import { MeshBackground } from '@/components/mesh-background';
 import { Safe } from '@/components/safe';
-import { useToast } from '@/components/toast';
+import { ScreenNoticeView, useScreenNotice } from '@/components/screen-notice';
 import { useProfileName } from '@/lib/profile-name';
 import { useHousehold } from '@/store/household';
 import { useT } from '@/store/locale';
@@ -27,7 +27,9 @@ export default function HouseholdSetupScreen() {
   const scrollIndicator = useScrollIndicator();
   const { createHousehold, requestJoin, myName } = useHousehold();
   const { name: savedName, ready: nameReady, remember } = useProfileName();
-  const { showToast } = useToast();
+  // A modal presentation: the root toast renders behind this screen and is
+  // never seen while it is up. See components/screen-notice.
+  const notice = useScreenNotice();
   const t = useT();
 
   const [mode, setMode] = useState<'create' | 'join'>('create');
@@ -121,7 +123,7 @@ export default function HouseholdSetupScreen() {
      * screen if it does.
      */
     const name = result.household?.name?.trim();
-    showToast(
+    notice.show(
       name ? t('household.nowShoppingIn', { name }) : t('household.nowShoppingJoined'),
     );
     goBack();
@@ -251,6 +253,10 @@ export default function HouseholdSetupScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       </Safe>
+
+      {/* Inside the screen, because this route is a modal presentation and the
+          app's toast renders behind it. See components/screen-notice. */}
+      <ScreenNoticeView notice={notice} />
     </View>
   );
 }

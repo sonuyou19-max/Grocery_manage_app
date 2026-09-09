@@ -419,13 +419,30 @@ assert(
    * first version of this failed on correct code.
    */
   /*
-   * Anchored to the line, not to the characters. `'      )}'` also occurs INSIDE
-   * `'          )}'` — the thumbnail strip's own closing brace — so the region
-   * ended a third of the way through and the Scan button fell outside it. The
-   * assertion below then passed by testing the wrong span, which is the failure
-   * this whole file exists to avoid.
+   * The region ends where its own braces balance, not at a chosen string.
+   *
+   * This has now been anchored to text twice and broken twice. First on
+   * `'      )}'`, which also occurs inside `'          )}'` — the thumbnail
+   * strip's closing brace — so the region ended a third of the way through and
+   * the assertion below silently tested the wrong span. Then on
+   * `'\n      )}\n    </View>'`, which assumed the camera guard was the LAST
+   * thing in the component; adding a notice layer after it moved that anchor
+   * and this file failed on correct code.
+   *
+   * Counting braces from `{fromCamera && …` needs no such assumption. It is the
+   * same fix, for the same reason, as the paren counting in check-range-cards.
    */
-  const guardEnd = screen.indexOf('\n      )}\n    </View>', guard);
+  const guardEnd = (() => {
+    let depth = 0;
+    for (let i = guard; i < screen.length; i += 1) {
+      if (screen[i] === '{') depth += 1;
+      else if (screen[i] === '}') {
+        depth -= 1;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  })();
   const inGuard = (needle) => {
     const at = screen.indexOf(needle);
     return at > guard && at < guardEnd;

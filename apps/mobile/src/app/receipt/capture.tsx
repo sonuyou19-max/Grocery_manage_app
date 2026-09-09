@@ -26,7 +26,7 @@ import { PrimaryButton } from '@/components/form';
 import { PressScale } from '@/components/press-scale';
 import { ScanOverlay } from '@/components/scan-overlay';
 import { Safe } from '@/components/safe';
-import { useToast } from '@/components/toast';
+import { ScreenNoticeView, useScreenNotice } from '@/components/screen-notice';
 import { haptics } from '@/lib/haptics';
 import {
   CAPTURE_QUALITY,
@@ -36,6 +36,7 @@ import {
   tooLarge,
 } from '@/lib/receipt-capture';
 import { runScan, stashRun, type ScanPhase } from '@/lib/receipt-run';
+import { captureException } from '@/lib/monitoring';
 import type { ScanInput } from '@/lib/receipt';
 import { useGroceries } from '@/store/groceries';
 import { useLocale } from '@/store/locale';
@@ -91,7 +92,12 @@ interface Shot {
 export default function ReceiptCaptureScreen() {
   const { colors } = useTheme();
   const { t, language } = useLocale();
-  const { showToast } = useToast();
+  /*
+   * This screen is a fullScreenModal, so the root toast renders BEHIND it and
+   * every message it raised was invisible until the screen was dismissed — see
+   * components/screen-notice, which is where these go now.
+   */
+  const notice = useScreenNotice();
   const { id, source: sourceParam } = useLocalSearchParams<{ id: string; source?: string }>();
   /*
    * Which of the three ways in this is. Defaults to the camera, so a link or a
@@ -175,12 +181,12 @@ export default function ReceiptCaptureScreen() {
         setBusy(false);
         return;
       }
-      showToast(t('receipt.shotFailed'));
+      notice.show(t('receipt.shotFailed'));
     } catch {
-      showToast(t('receipt.shotFailed'));
+      notice.show(t('receipt.shotFailed'));
     }
     setBusy(false);
-  }, [busy, pending, ready, shots.length, showToast, t]);
+  }, [busy, pending, ready, shots.length, notice, t]);
 
   const keep = () => {
     if (!pending) return;
@@ -219,7 +225,7 @@ export default function ReceiptCaptureScreen() {
     async (input: ScanInput) => {
     setPhase('reading');
     setScanning(true);
-    const run = await runScan(
+    const outcome = await runScan(
       input,
       language,
       (list?.items ?? []).map((it) => ({
@@ -231,19 +237,50 @@ export default function ReceiptCaptureScreen() {
     );
     setScanning(false);
 
-    if (!run) {
-      // One message for every failure — an unreachable function, the rate cap,
-      // a photograph the model could not read. At a till the difference is not
-      // actionable: the answer is always another photograph or typing it in.
-      showToast(t('receipt.scanFailed'));
+    if (!outcome.ok) {
+      /*
+       * One message per REASON, which replaced one message for everything.
+       *
+       * The old note here argued that at a till the difference is not
+       * actionable, so every failure said "we could not read that receipt — try
+       * a clearer photo". That holds only while the thing being scanned is a
+       * photograph. A shop's emailed PDF is text, and being told to photograph
+       * it more clearly is advice that cannot be followed, about a file that was
+       * never at fault. It is also the sentence a shopper sees when the function
+       * is simply not deployed.
+       *
+       * `refused` keeps the generic sentence because its cause is ours and not
+       * theirs — but only the image path adds "try a clearer photo", and the
+       * status goes to the log so the cause is recoverable afterwards.
+       */
+      const { failure } = outcome;
+      if (failure.reason === 'refused') {
+        captureException(new Error(`receipt-scan refused: ${failure.status}`), {
+          status: failure.status,
+          detail: failure.detail,
+          kind: input.kind,
+        });
+      }
+      notice.show(
+        t(
+          failure.reason === 'offline'
+            ? 'receipt.scanOffline'
+            : failure.reason === 'timeout'
+              ? 'receipt.scanTimeout'
+              : input.kind === 'document'
+                ? 'receipt.scanFailedFile'
+                : 'receipt.scanFailed',
+        ),
+      );
       return;
     }
 
+    const { run } = outcome;
     haptics.success();
     stashRun(run);
     router.replace({ pathname: '/receipt/review', params: { id: list?.id ?? '' } });
     },
-    [language, list, showToast, t],
+    [language, list, notice, t],
   );
 
   const scan = useCallback(() => {
@@ -288,7 +325,7 @@ export default function ReceiptCaptureScreen() {
           goBack();
           return;
         }
-        showToast(
+        notice.show(
           t(
             picked.status === 'denied'
               ? 'receipt.photosDenied'
@@ -312,7 +349,7 @@ export default function ReceiptCaptureScreen() {
          * telling them their file was too large would send them off to shrink
          * something that was never the problem.
          */
-        showToast(
+        notice.show(
           t(
             picked.status === 'wrongType'
               ? 'receipt.notAPdf'
@@ -337,7 +374,7 @@ export default function ReceiptCaptureScreen() {
     } finally {
       setPicking(false);
     }
-  }, [picking, source, send, showToast, t]);
+  }, [picking, source, send, notice, t]);
 
   /*
    * ---------------------------------------------------------------------------
@@ -667,6 +704,15 @@ export default function ReceiptCaptureScreen() {
         </View>
       </Safe>
       )}
+
+      {/*
+        Last, so it is on top of every body above — and INSIDE this screen,
+        which is the whole point of it existing. See components/screen-notice:
+        this route is a fullScreenModal, so the app's toast renders behind it
+        and none of the messages raised here were ever seen at the moment they
+        were raised.
+      */}
+      <ScreenNoticeView notice={notice} />
     </View>
   );
 }

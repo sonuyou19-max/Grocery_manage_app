@@ -43,7 +43,7 @@
  *
  * Run with `pnpm --filter mobile check:modal-nav`.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -653,6 +653,63 @@ if (unscrollable.length) {
   ]);
 } else {
   console.log(`ok   all ${LISTING_SHEETS.length} listing sheets scroll within a measured bound`);
+}
+
+/* ============== a screen inside a modal cannot use the app's toast ========= */
+
+/*
+ * ToastProvider renders its pill in the ROOT view, above the navigator. On iOS a
+ * screen presented as `modal` or `fullScreenModal` is a separately presented
+ * view controller drawn ABOVE that root, so a toast raised from one of those
+ * screens is behind it and cannot be seen.
+ *
+ * It is not dropped, which is what made it baffling to report. It sits there
+ * unseen for its three seconds, and if the screen is dismissed while the timer
+ * is still running the pill appears over whatever is underneath — the message
+ * arrives attached to the wrong screen, moments after the thing it describes.
+ * Reported exactly that way: "I see the error message not when the upload
+ * fails, but when I click cancel and go back to the main page."
+ *
+ * Three screens were doing it. The presentations are read out of the router
+ * rather than listed here, so a screen that becomes a modal tomorrow is covered
+ * without anyone remembering this file.
+ */
+{
+  const layout = code(readFileSync(join(SRC, 'app', '_layout.tsx'), 'utf8'));
+  const presented = [];
+  for (const m of layout.matchAll(/<Stack\.Screen\s+name="([^"]+)"([\s\S]*?)\/>/g)) {
+    if (/presentation:/.test(m[2])) presented.push(m[1]);
+  }
+
+  /*
+   * The read has to have worked, or the sweep below passes by finding nothing —
+   * a rename of Stack.Screen or a change to how options are written would leave
+   * this checking an empty list and saying so cheerfully.
+   */
+  if (presented.length < 5) {
+    fail(`only ${presented.length} modal screens found in _layout.tsx`, [
+      'The router is read for this, and the shape it is read from has changed.',
+    ]);
+  } else {
+    const offenders = [];
+    for (const name of presented) {
+      for (const rel of [`${name}.tsx`, `${name}/index.tsx`]) {
+        const file = join(SRC, 'app', ...rel.split('/'));
+        if (!existsSync(file)) continue;
+        if (/\buseToast\b/.test(code(readFileSync(file, 'utf8')))) offenders.push(rel);
+        break;
+      }
+    }
+    if (offenders.length > 0) {
+      fail('a modal-presented screen still uses the app toast', [
+        ...offenders.map((o) => `  src/app/${o}`),
+        'Its messages render behind the screen and are only seen once it closes.',
+        'Use components/screen-notice, which lives inside the screen instead.',
+      ]);
+    } else {
+      console.log(`ok   none of the ${presented.length} modal screens use the app toast`);
+    }
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

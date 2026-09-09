@@ -677,32 +677,99 @@ export type ScanInput =
   | { kind: 'images'; images: { media: string; data: string }[] }
   | { kind: 'document'; media: string; data: string };
 
+/**
+ * Why a scan produced no receipt.
+ *
+ * Four outcomes because there are four different things to do about them, and
+ * for a long time there was one: every failure — an undeployed function, a
+ * flight-mode phone, a two-minute timeout, a genuinely unreadable photograph —
+ * came out as "we could not read that receipt, try a clearer photo". On a
+ * PHOTOGRAPH that advice is at least plausible. On a text PDF straight from a
+ * shop's mail it is nonsense, and it sends people to re-photograph a file that
+ * was never the problem.
+ */
+export type ScanFailure =
+  /** The request never reached the function. */
+  | { reason: 'offline' }
+  /** SCAN_TIMEOUT_MS elapsed and we aborted it ourselves. */
+  | { reason: 'timeout' }
+  /** The function answered and said no. The status is the fact worth keeping. */
+  | { reason: 'refused'; status: number; detail: string | null }
+  /** It said yes and sent something that is not a receipt. */
+  | { reason: 'malformed' };
+
+export type ScanOutcome =
+  | { ok: true; receipt: ScannedReceipt }
+  | { ok: false; failure: ScanFailure };
+
+/** Enough of a refusal body to identify it in a log; never shown to anyone. */
+const MAX_REFUSAL_DETAIL = 300;
+
 export async function scanReceipt(
   input: ScanInput,
   language: string,
-): Promise<ScannedReceipt | null> {
+): Promise<ScanOutcome> {
   /*
    * AbortController rather than Promise.race: racing leaves the request running
    * and the phone still uploading megabytes for an answer nobody will read.
    * This actually cancels it, which is also what tells the server to stop.
    */
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), SCAN_TIMEOUT_MS);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    abort.abort();
+  }, SCAN_TIMEOUT_MS);
   try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/receipt-scan`, {
-      method: 'POST',
-      headers: await aiFunctionHeaders(),
-      body: JSON.stringify(
-        input.kind === 'images'
-          ? { images: input.images, language }
-          : { document: { media: input.media, data: input.data }, language },
-      ),
-      signal: abort.signal,
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as ScannedReceipt;
-  } catch {
-    return null;
+    let res: Response;
+    try {
+      res = await fetch(`${supabaseUrl}/functions/v1/receipt-scan`, {
+        method: 'POST',
+        headers: await aiFunctionHeaders(),
+        body: JSON.stringify(
+          input.kind === 'images'
+            ? { images: input.images, language }
+            : { document: { media: input.media, data: input.data }, language },
+        ),
+        signal: abort.signal,
+      });
+    } catch {
+      // The request never got an answer. `timedOut` is the only thing that can
+      // tell our own abort apart from the network's — an AbortError looks the
+      // same either way, and the two want opposite advice.
+      return { ok: false, failure: { reason: timedOut ? 'timeout' : 'offline' } };
+    }
+
+    if (!res.ok) {
+      /*
+       * The status, kept. This used to be `if (!res.ok) return null`, and that
+       * lost the single most useful fact about every failed scan: a function
+       * that is not deployed (404), one that does not understand the request
+       * (400), and one refusing on cost (429) are three different problems with
+       * three different answers, and all three arrived as "we could not read
+       * that receipt — try a clearer photo".
+       *
+       * The body is read for the same reason and bounded because it is not ours
+       * to trust; it never reaches the screen, only the log.
+       */
+      let detail: string | null = null;
+      try {
+        detail = (await res.text()).slice(0, MAX_REFUSAL_DETAIL) || null;
+      } catch {
+        detail = null;
+      }
+      return { ok: false, failure: { reason: 'refused', status: res.status, detail } };
+    }
+
+    try {
+      return { ok: true, receipt: (await res.json()) as ScannedReceipt };
+    } catch {
+      // A 200 whose body is not the shape we asked for. Its own outcome rather
+      // than `offline`, which is where it landed when one catch covered
+      // everything — and which would have told a shopper on good wifi to check
+      // their connection.
+      return { ok: false, failure: { reason: 'malformed' } };
+    }
   } finally {
     // Always, including the success path: a two-minute timer left armed on a
     // scan that finished in twenty seconds keeps this module alive for the rest
