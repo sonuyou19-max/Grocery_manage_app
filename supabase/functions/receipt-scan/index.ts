@@ -252,8 +252,12 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   "15x10g" means fifteen pieces of ten grams, so 150 and "g". If the line is
   weighed, leave both null: the measured weight is the multiplier, and a
   nominal "±1kg" in the name is not the amount bought.
-- unitPriceCents: price per pack, or per kg, in whole cents. 1,67 -> 167. Null
-  when the receipt prints only a line total, which some tills do.
+- unitPriceCents: price per pack, or per kg, in cents, WITH EVERY DECIMAL THE
+  RECEIPT PRINTS. 1,67 -> 167. Colruyt prints 0,887 -> 88.7, NOT 89. Do not
+  round this to a whole cent: the third decimal is real money once it is
+  multiplied, and rounding it here is the difference between a line that
+  reconciles and one that does not. Null when the receipt prints only a line
+  total, which some tills do.
 - unitPriceDp: decimal places it was printed to. Colruyt prints 0,523 — that is
   3, and reporting 2 would make the line fail a check it should pass.
 - totalCents: the line's own money as printed, in whole cents. Negative for

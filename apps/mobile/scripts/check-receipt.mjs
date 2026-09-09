@@ -347,6 +347,33 @@ mustFail(
   else fail('the tolerance no longer narrows with precision', precise.problems);
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * ...and the same line, reported the way the receipt actually prints it
+ * ---------------------------------------------------------------------------
+ *
+ * The line above is a real one, and the text layer of the PDF it came from
+ * settles what the paper says: "SCHWEPPES Ginger Beer 25cl | 2 | 0,887 | 1,77".
+ * Not 0,89. The till prints a THIRD decimal, and 2 x 0,887 is 1,774, which
+ * rounds to exactly the 1,77 printed.
+ *
+ * So the cleanest reading of that line needs no tolerance at all — it needs the
+ * decimal not to be thrown away. `unitPriceCents` is z.number().finite(), not
+ * an integer, and has always been able to hold 88.7; the PROMPT was asking for
+ * whole cents while separately asking for the decimal count, which cannot both
+ * be satisfied. A model doing exactly as it was told produced a line that could
+ * not reconcile.
+ *
+ * Asserted here because a later tidy-up of that prompt line would put the
+ * rounding back with nothing to notice.
+ */
+{
+  const asPrinted = [count('SCHWEPPES Ginger Beer 25cl', 2, 88.7, 177, { m: 0, p: 3 })];
+  const res = reconcile(asPrinted, { goodsCents: 177, paidCents: 177, articleCount: null });
+  if (res.badLines.length === 0) ok('a third decimal, kept, reconciles on its own');
+  else fail('a unit price printed to a tenth of a cent still does not reconcile', res.problems);
+}
+
 /* ------------------------------------------- the same reduction, twice --- */
 
 /*
