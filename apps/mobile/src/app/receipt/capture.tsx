@@ -320,7 +320,9 @@ export default function ReceiptCaptureScreen() {
                 ? 'receipt.pdfNeedsUpdate'
                 : picked.status === 'tooLarge'
                   ? 'receipt.pdfTooLarge'
-                  : 'receipt.pickerFailed',
+                  : picked.status === 'busy'
+                    ? 'receipt.pdfPickerBusy'
+                    : 'receipt.pickerFailed',
           ),
         );
         return;
@@ -345,24 +347,44 @@ export default function ReceiptCaptureScreen() {
    * This ran straight out of a mount effect and did nothing at all: on iOS an
    * OS picker asked for while the screen is still being presented is a
    * presentation onto a view controller that is not on screen yet, and UIKit
-   * declines it silently. Both sources failed identically, which is what said
-   * it was the timing rather than either picker — a black screen with the
-   * CAMERA's hint on it, because that chrome was drawing too.
+   * declines it silently. `runAfterInteractions` waits for the navigation
+   * animation to finish, which is a promise about SCHEDULING and not a
+   * guarantee that the screen's view controller is done being presented.
    *
-   * `runAfterInteractions` waits for the navigation animation to finish. That
-   * is a promise about scheduling and not a guarantee, which is why the manual
-   * button below exists rather than being a nicety: if this ever silently does
-   * nothing again, the screen still has a way forward and a way out.
+   * ---------------------------------------------------------------------------
+   * ...and why the PDF source is no longer opened this way at all
+   * ---------------------------------------------------------------------------
+   *
+   * For photographs an early call is merely wasted. For documents it is
+   * permanent damage, and this is the whole of "I clicked Choose but it isn't
+   * opening anything, and then I got a message that it did not work".
+   *
+   * Read DocumentPickerModule.swift. `getDocumentAsync` throws immediately if
+   * the module's `pickingContext` is non-nil, and that context is cleared in
+   * exactly two places: the two delegate callbacks. So a picker that is
+   * presented but whose delegate never fires — which is what a swallowed
+   * presentation IS — leaves the context set for the life of the process, and
+   * every later call throws PickingInProgressException. One badly timed
+   * automatic call poisons the feature until the app is restarted, which is why
+   * pressing Choose afterwards does nothing either.
+   *
+   * expo-image-picker has no such guard: it overwrites its context rather than
+   * refusing. That asymmetry is why the photo path works and this one did not,
+   * and it is why only this one changes.
+   *
+   * A tap is the fix. It cannot happen before the screen is interactive, which
+   * is the one thing an effect cannot promise — and expo-document-picker's own
+   * documentation says as much about calling it on mount.
    */
   const opened = useRef(false);
   useEffect(() => {
-    if (fromCamera || opened.current) return;
+    if (source !== 'photos' || opened.current) return;
     opened.current = true;
     const task = InteractionManager.runAfterInteractions(() => {
       void openPicker();
     });
     return () => task.cancel();
-  }, [fromCamera, openPicker]);
+  }, [source, openPicker]);
 
   /* ----------------------------------------------------------- permission */
 

@@ -31,6 +31,7 @@ const nl = {
     pdfTooLarge: 'Die pdf is te groot om te versturen.',
     notAPdf: 'Dat bestand is geen pdf.',
     pdfNeedsUpdate: 'Pdf-tickets vereisen de nieuwste versie van Korb.',
+    pdfPickerBusy: 'De bestandskiezer loopt vast. Sluit Korb, open het opnieuw en probeer het dan nog eens.',
     photosDenied: 'Korb heeft toegang tot je foto’s nodig om er een ticket uit te lezen.',
     pickerFailed: 'Dat ging niet open. Probeer opnieuw.',
     scanFailed: 'We konden dit kassabon niet lezen. Probeer een scherpere foto, of voeg de artikelen met de hand toe.',

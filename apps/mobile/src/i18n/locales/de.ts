@@ -31,6 +31,7 @@ const de = {
     pdfTooLarge: 'Dieses PDF ist zu groß zum Senden.',
     notAPdf: 'Diese Datei ist kein PDF.',
     pdfNeedsUpdate: 'Für PDF-Bons brauchst du die neueste Korb-Version.',
+    pdfPickerBusy: 'Die Dateiauswahl hängt. Schließe Korb, öffne es erneut und versuche es dann noch einmal.',
     photosDenied: 'Korb braucht Zugriff auf deine Fotos, um einen Bon daraus zu lesen.',
     pickerFailed: 'Das ließ sich nicht öffnen. Versuch es nochmal.',
     scanFailed: 'Wir konnten den Bon nicht lesen. Versuch ein schärferes Foto oder trag die Artikel von Hand ein.',

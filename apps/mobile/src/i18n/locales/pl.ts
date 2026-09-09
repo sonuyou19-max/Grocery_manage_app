@@ -41,6 +41,7 @@ const pl = {
     pdfTooLarge: 'Ten PDF jest za duży do wysłania.',
     notAPdf: 'Ten plik to nie PDF.',
     pdfNeedsUpdate: 'Paragony PDF wymagają najnowszej wersji Korb.',
+    pdfPickerBusy: 'Wybór pliku się zaciął. Zamknij Korb, otwórz go ponownie i spróbuj jeszcze raz.',
     photosDenied: 'Korb potrzebuje dostępu do zdjęć, by odczytać z nich paragon.',
     pickerFailed: 'Nie udało się otworzyć. Spróbuj ponownie.',
     scanFailed: 'Nie udało się odczytać tego paragonu. Spróbuj wyraźniejszego zdjęcia albo dodaj produkty ręcznie.',

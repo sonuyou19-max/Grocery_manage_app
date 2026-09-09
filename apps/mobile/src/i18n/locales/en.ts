@@ -40,6 +40,7 @@ const en = {
     pdfTooLarge: 'That PDF is too large to send.',
     notAPdf: 'That file is not a PDF.',
     pdfNeedsUpdate: 'PDF receipts need the latest version of Korb.',
+    pdfPickerBusy: 'The file picker is stuck. Close Korb and reopen it, then try again.',
     photosDenied: 'Korb needs access to your photos to read a receipt from one.',
     pickerFailed: 'That did not open. Try again.',
     scanFailed: 'We could not read that receipt. Try a clearer photo, or add the items by hand.',

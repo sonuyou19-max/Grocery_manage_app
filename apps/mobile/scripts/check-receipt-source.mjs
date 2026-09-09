@@ -107,10 +107,15 @@ assert(
 
 /* ============= 3. the picker opens once, after the screen is really there = */
 
+/*
+ * A REF, and set before anything can await. Which sources are allowed through
+ * the guard is a separate question with its own rule further down — this one is
+ * only about the guard being a ref that latches immediately.
+ */
 assert(
   'the picker is launched from an effect guarded by a ref',
   /const opened = useRef\(false\);/.test(capture) &&
-    /if \(fromCamera \|\| opened\.current\) return;\s*opened\.current = true;/.test(capture),
+    /if \([^)]*\|\| opened\.current\) return;\s*opened\.current = true;/.test(capture),
   [
     'State would re-render before the guard took, and the effect re-runs on',
     'every dependency change. Two pickers stack on iOS.',
@@ -382,9 +387,18 @@ assert(
  * why. Every await that reaches a native module is wrapped now, and `failed`
  * is its own outcome rather than a silence.
  */
+/*
+ * Counted across both spellings. One of the three catches now decides between
+ * `busy` and `failed` — a refusal that cannot be retried told apart from one
+ * that can — so a literal count of `status: 'failed'` reads that catch as
+ * missing. What the rule is about is that all three native calls END IN A NAMED
+ * OUTCOME, not which name.
+ */
 assert(
   'a picker that throws is caught rather than left to reject into nothing',
-  (source.match(/return \{ status: 'failed' \};/g) ?? []).length >= 3,
+  (source.match(/return \{ status: 'failed' \};/g) ?? []).length +
+    (source.match(/'busy' : 'failed'/g) ?? []).length >=
+    3,
   ['launchImageLibraryAsync, getDocumentAsync and the file read all throw.'],
 );
 assert(
@@ -458,6 +472,64 @@ assert(
   /PHOTOGRAPHS are sections of ONE receipt/.test(fn) &&
     /A PDF is the shop's own emailed receipt and its pages do NOT overlap/.test(fn),
 );
+
+/* -------------------------------------------------------------------------- */
+/* The document picker is never opened from an effect                          */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * "I clicked Choose but it isn't opening anything, and then I got a message
+ * that it did not work."
+ *
+ * Read DocumentPickerModule.swift. getDocumentAsync throws immediately when the
+ * module's `pickingContext` is non-nil, and that context is cleared in exactly
+ * two places — the two delegate callbacks. A picker presented while the screen
+ * is still being presented is declined by UIKit without its delegate ever
+ * firing, so the context stays set for the LIFE OF THE PROCESS and every later
+ * call throws PickingInProgressException. One badly timed automatic call
+ * disables the feature until the app is restarted, which is why pressing the
+ * button afterwards did nothing either.
+ *
+ * expo-image-picker overwrites its context instead of refusing, which is why
+ * the photo path survives the same timing and is deliberately left alone.
+ *
+ * The rule is therefore about WHICH SOURCE may be opened automatically, and it
+ * is asserted on the effect's own guard rather than on a comment about it.
+ */
+{
+  const capture = read(SRC, 'app', 'receipt', 'capture.tsx');
+  const effect = /const opened = useRef\(false\);\s*useEffect\(\(\) => \{([\s\S]*?)\n  \}, \[/.exec(capture);
+  const body = effect?.[1] ?? '';
+
+  assert('the auto-open effect is still where this rule can see it', body.length > 0, [
+    'The `const opened = useRef(false)` effect in capture.tsx has moved or been rewritten.',
+  ]);
+  assert("only the photo source opens its picker automatically", /source !== 'photos'/.test(body), [
+    "The effect must bail unless source === 'photos'.",
+    'Opening the DOCUMENT picker from an effect can wedge it until the app is',
+    'restarted — see the note above, and DocumentPickerModule.swift.',
+  ]);
+  assert(
+    '...not merely "anything that is not the camera"',
+    !/fromCamera \|\| opened\.current/.test(body),
+    ['That older guard let the file source through, which is the bug this rule is about.'],
+  );
+}
+
+/*
+ * And the wedged state is told apart from an ordinary failure, because the
+ * advice differs: nothing in JS can clear that context and it does not time
+ * out, so "try again" is false and "restart" is the only thing that works.
+ */
+assert(
+  'a wedged picker is reported as its own state',
+  /'busy' : 'failed'/.test(source) && /\| \{ status: 'busy' \}/.test(source),
+  [
+    "pickReceiptDocument must map the in-progress exception to 'busy',",
+    'or the app tells people to retry something that cannot succeed.',
+  ],
+);
+
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

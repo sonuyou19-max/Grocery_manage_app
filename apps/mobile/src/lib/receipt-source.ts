@@ -129,6 +129,16 @@ export type PickedDocument =
   | { status: 'wrongType' }
   /** This binary has no document picker in it. See `documentPicker` below. */
   | { status: 'unavailable' }
+  /**
+   * The native module still thinks a pick is open, and only a restart clears it.
+   *
+   * Its own words for a state nothing in JS can reach: `pickingContext` is
+   * cleared in the two delegate callbacks and nowhere else, so a presentation
+   * that never reported back leaves it set for the life of the process. Told
+   * apart from `failed` because the advice differs and "try again" is a lie
+   * here — every later attempt throws the same way.
+   */
+  | { status: 'busy' }
   /** The picker threw. Silence here was a dead screen. */
   | { status: 'failed' };
 
@@ -292,8 +302,23 @@ export async function pickReceiptDocument(): Promise<PickedDocument> {
       copyToCacheDirectory: true,
       multiple: false,
     });
-  } catch {
-    return { status: 'failed' };
+  } catch (error) {
+    /*
+     * Read for the one refusal a shopper can act on.
+     *
+     * PickingInProgressException says "Different document picking in progress.
+     * Await other document picking first" — a state that cannot be cleared from
+     * JS and does not time out, so the difference between it and any other
+     * throw is the difference between "try again" and "try again after
+     * restarting", and only one of those is true.
+     *
+     * Matched on the text rather than a code because the module raises it as a
+     * plain exception with no discriminator on it. That is best-effort by
+     * nature: a reworded message falls through to `failed`, which is the
+     * message this always gave, so the worst case is what we had before.
+     */
+    const said = error instanceof Error ? error.message : String(error);
+    return { status: /in progress/i.test(said) ? 'busy' : 'failed' };
   }
   if (picked.canceled) return { status: 'cancelled' };
 

@@ -31,6 +31,7 @@ const fr = {
     pdfTooLarge: 'Ce PDF est trop lourd à envoyer.',
     notAPdf: 'Ce fichier n’est pas un PDF.',
     pdfNeedsUpdate: 'Les tickets PDF nécessitent la dernière version de Korb.',
+    pdfPickerBusy: 'Le sélecteur de fichiers est bloqué. Fermez Korb, rouvrez-le puis réessayez.',
     photosDenied: 'Korb a besoin d’accéder à tes photos pour y lire un ticket.',
     pickerFailed: 'Ça ne s’est pas ouvert. Réessaie.',
     scanFailed: 'Nous n’avons pas pu lire ce ticket. Essaie une photo plus nette, ou saisis les articles à la main.',

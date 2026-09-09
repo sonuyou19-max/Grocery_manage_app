@@ -31,6 +31,7 @@ const it = {
     pdfTooLarge: 'Questo PDF è troppo grande da inviare.',
     notAPdf: 'Questo file non è un PDF.',
     pdfNeedsUpdate: 'Gli scontrini PDF richiedono l’ultima versione di Korb.',
+    pdfPickerBusy: 'Il selettore di file è bloccato. Chiudi Korb, riaprilo e riprova.',
     photosDenied: 'Korb ha bisogno delle tue foto per leggerci uno scontrino.',
     pickerFailed: 'Non si è aperto. Riprova.',
     scanFailed: 'Non siamo riusciti a leggere lo scontrino. Prova una foto più nitida, o inserisci gli articoli a mano.',
