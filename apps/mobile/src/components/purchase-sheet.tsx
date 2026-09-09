@@ -149,8 +149,17 @@ export function PurchaseSheet({
     });
   };
 
+  /*
+   * `avoidKeyboard`, because this form is typed into.
+   *
+   * A bottom sheet sits exactly where the keyboard comes up, so the price and
+   * quantity fields — the two things anybody opens this to type — were under it
+   * and you could not see what you were entering. Both ways in reach this same
+   * sheet (the pantry's + and "Add purchase"), so this is the one place it has
+   * to be said.
+   */
   return (
-    <Sheet visible={item != null} onClose={onClose} scrim gutter={0} motion="slide">
+    <Sheet visible={item != null} onClose={onClose} scrim gutter={0} motion="slide" avoidKeyboard>
       {/* A real pixel ceiling rather than maxHeight: '85%'. Nothing above this
           card in Sheet has a definite height to resolve a percentage against,
           so the card lays out under a degenerate constraint and GlassView's
@@ -508,7 +517,17 @@ function StoreOption({
 }
 
 const styles = StyleSheet.create({
-  sheet: { overflow: 'hidden' },
+  /*
+   * `flexShrink` is what makes `avoidKeyboard` work rather than just move things.
+   *
+   * The inline cap is 85% of the WINDOW — 717dp on a 844dp phone — and once the
+   * keyboard is up there are about 508dp left. A cap larger than the room
+   * available does nothing on its own: RN defaults flexShrink to 0, so the card
+   * keeps its full height, and `overflow: hidden` above quietly cuts off
+   * whatever does not fit. Here that is the footer, so the fix for "I cannot
+   * see what I am typing" would have been "the Save button is gone".
+   */
+  sheet: { overflow: 'hidden', flexShrink: 1 },
   head: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -518,7 +537,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   grow: { flex: 1, minWidth: 0 },
-  scrollArea: { flexGrow: 0 },
+  // And the shrinking has to land HERE. The head and the footer are pinned on
+  // purpose, so the scrolling middle is the only part that may give up height —
+  // `flexGrow: 0` so a short form still sizes to its rows, `flexShrink: 1` so a
+  // tall one yields to the card's cap instead of pushing the footer out of it.
+  scrollArea: { flexGrow: 0, flexShrink: 1 },
   content: { padding: spacing.lg, gap: spacing.lg },
 
   dateCard: { borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs },
