@@ -640,6 +640,10 @@ Deno.serve(async (req) => {
 
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
+  /** Totalled across the read and any repair, so the log shows the whole scan. */
+  let tokensIn = 0;
+  let tokensOut = 0;
+
   const ask = async (model: string) => {
     const message = await anthropic.messages.create({
       model,
@@ -671,6 +675,18 @@ Deno.serve(async (req) => {
       ],
     });
     await guard.settle(message.usage);
+    /*
+     * Kept for the log as well as the budget.
+     *
+     * `guard.settle` already sends these to the daily spend row, which answers
+     * "what did today cost" and cannot answer "what did THIS scan cost" — and
+     * the second question is the one asked when a scan takes forty-seven
+     * seconds. Latency on a read like this is dominated by tokens GENERATED,
+     * so without the output count next to readMs there is no way to tell a slow
+     * model from a long receipt, and every optimisation is a guess.
+     */
+    tokensIn += message.usage?.input_tokens ?? 0;
+    tokensOut += message.usage?.output_tokens ?? 0;
     const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
     return receiptSchema.parse(JSON.parse(extractJson(raw)));
   };
@@ -748,6 +764,11 @@ Deno.serve(async (req) => {
       ],
     });
     await guard.settle(message.usage);
+    // Into the same totals as the read. A repair that costs as much as the read
+    // it corrects is the argument against keeping it, and that cannot be made
+    // from a number that only counts the first call.
+    tokensIn += message.usage?.input_tokens ?? 0;
+    tokensOut += message.usage?.output_tokens ?? 0;
     const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
     return repairSchema.parse(JSON.parse(extractJson(raw)));
   };
@@ -857,7 +878,7 @@ Deno.serve(async (req) => {
    * the others failed. This one is written before anything else can go wrong.
    */
   console.log(
-    JSON.stringify({ at: 'receipt-scan.read', source: document ? 'pdf' : 'photos', images: images?.length ?? 0, lines: parsed.lines.length, readMs }),
+    JSON.stringify({ at: 'receipt-scan.read', source: document ? 'pdf' : 'photos', images: images?.length ?? 0, lines: parsed.lines.length, readMs, tokensIn, tokensOut }),
   );
 
   /*
@@ -989,6 +1010,15 @@ Deno.serve(async (req) => {
       model,
       readMs,
       retryMs,
+      /*
+       * The whole scan's tokens, read plus any repair.
+       *
+       * Next to readMs on purpose: decode time is roughly linear in tokensOut,
+       * so the pair is what says whether a slow scan was a slow model or a long
+       * receipt — and which fields are worth not asking for.
+       */
+      tokensIn,
+      tokensOut,
       /*
        * Which retry was chosen and how far off the first read was. The two
        * paths fix different faults, and without this there is no way to tell a
