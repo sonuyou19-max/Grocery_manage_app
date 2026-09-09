@@ -390,7 +390,7 @@ export default function ReceiptCaptureScreen() {
        * one would be a decision nobody can make anything of.
        */
       setPdfName(picked.name);
-      await send({ kind: 'document', media: PDF_MEDIA, data: picked.data });
+      await send({ kind: 'document', media: PDF_MEDIA, data: picked.data, name: picked.name });
     } finally {
       setPicking(false);
     }

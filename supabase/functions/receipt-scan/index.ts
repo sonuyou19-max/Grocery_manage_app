@@ -8,7 +8,8 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.39.0';
 import { z } from 'npm:zod@3.24.1';
 
-import { clientIp, reserveBudget } from '../_shared/rate-limit.ts';
+import { callerBucket, clientIp, reserveBudget } from '../_shared/rate-limit.ts';
+import { readJob, sweepJobs, writeJob } from '../_shared/scan-jobs.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
 import {
   fingerprint,
@@ -576,6 +577,57 @@ Deno.serve(async (req) => {
   const images = Array.isArray(body?.images) ? body.images : null;
   const document = body?.document && typeof body.document === 'object' ? body.document : null;
   const language = typeof body?.language === 'string' ? body.language.slice(0, 12) : 'en';
+  /*
+   * The name this scan was given by the client BEFORE it sent anything.
+   *
+   * Optional, and everything below works without it — an app that knows nothing
+   * about this, which is every build already in people's hands, sends no key
+   * and gets exactly the behaviour it always got. See _shared/scan-jobs.
+   */
+  const scanKey = typeof body?.scanKey === 'string' ? body.scanKey.slice(0, 200) : null;
+  const caller = callerBucket(req);
+
+  /*
+   * ---------------------------------------------------------------------------
+   * COMING BACK FOR AN ANSWER
+   * ---------------------------------------------------------------------------
+   *
+   * A poll carries a key and nothing else — no images, no PDF — so it has to be
+   * answered before the validation below, which exists to refuse a caller that
+   * sent neither. It is not that kind of caller: it sent them a minute ago, and
+   * the upload died when the phone locked.
+   */
+  if (scanKey && body?.poll === true) {
+    const job = await readJob(caller, scanKey);
+    if (!job) return Response.json({ error: 'No such scan' }, { status: 404 });
+    if (job.status === 'running') return Response.json({ status: 'running' }, { status: 202 });
+    if (job.status === 'done') return Response.json(job.result);
+    return Response.json({ error: job.error ?? 'Could not read that receipt' }, { status: 422 });
+  }
+
+  /*
+   * ---------------------------------------------------------------------------
+   * ...AND NOT PAYING TWICE FOR ONE
+   * ---------------------------------------------------------------------------
+   *
+   * The same receipt, sent again. Usually because the first attempt's answer
+   * never reached the phone — the read still ran, and was still billed. This is
+   * the whole of the saving: the model is not called at all.
+   *
+   * A `running` row means the first attempt is still going. Answering 202 sends
+   * the client to wait for it rather than starting a second read of the same
+   * paper, which would double the cost of the one case this is here to fix.
+   */
+  if (scanKey) {
+    const job = await readJob(caller, scanKey);
+    if (job?.status === 'done') {
+      console.log(JSON.stringify({ at: 'receipt-scan.cached', caller, key: scanKey }));
+      return Response.json(job.result);
+    }
+    if (job?.status === 'running') {
+      return Response.json({ status: 'running' }, { status: 202 });
+    }
+  }
 
   /*
    * ONE OR THE OTHER, and the refusal is deliberate rather than a fallback.
@@ -860,10 +912,20 @@ Deno.serve(async (req) => {
   let retryOutcome: Outcome | null = null;
   let retryError: string | null = null;
 
+  /*
+   * Claimed before the first token is spent, so a second press of Scan a few
+   * seconds later is told to wait rather than starting a second read of the
+   * same paper. Not awaited: the row is a courtesy to the NEXT request, and
+   * making this one wait on a write it does not need would put the database
+   * between the shopper and their receipt.
+   */
+  if (scanKey) void writeJob(caller, scanKey, 'running', null, null);
+
   try {
     parsed = await ask(MODEL_FAST);
     result = check(parsed);
   } catch (_err) {
+    if (scanKey) void writeJob(caller, scanKey, 'failed', null, 'unreadable');
     return Response.json({ error: 'Could not read that receipt' }, { status: 422 });
   }
   readMs = Date.now() - started;
@@ -1155,7 +1217,7 @@ Deno.serve(async (req) => {
   if (runtime?.waitUntil) runtime.waitUntil(offers);
   else void offers;
 
-  return Response.json({
+  const payload = {
     ...parsed,
     /*
      * Computed here rather than on the device, so there is one implementation.
@@ -1173,5 +1235,34 @@ Deno.serve(async (req) => {
     depositCents: result.depositCents,
     discountCents: result.discountCents,
     paidCents: result.paidCents,
-  });
+  };
+
+  /*
+   * ---------------------------------------------------------------------------
+   * FILED BEFORE IT IS RETURNED
+   * ---------------------------------------------------------------------------
+   *
+   * The socket this answer is about to go down may already be gone: the phone
+   * locked thirty seconds in, the JS thread suspended, and the upload died
+   * while this function carried on reading and being billed for it. Writing the
+   * answer here is what makes that survivable — the client comes back for it by
+   * the key it chose before it sent anything, and pays nothing the second time.
+   *
+   * Inside waitUntil, which is the whole point: a request whose client has hung
+   * up can be torn down at the moment it returns, and a write started but not
+   * awaited would be exactly the write that never lands — on the one invocation
+   * that needed it. receipt-scan already uses this for the lexicon offers.
+   *
+   * The sweep rides along because it must never delay a response, and this is
+   * the one place in the request where nothing is waiting on it.
+   */
+  if (scanKey) {
+    const filed = writeJob(caller, scanKey, 'done', payload, null).then(() => sweepJobs());
+    const runtime2 = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } })
+      .EdgeRuntime;
+    if (runtime2?.waitUntil) runtime2.waitUntil(filed);
+    else void filed;
+  }
+
+  return Response.json(payload);
 });

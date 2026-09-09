@@ -652,6 +652,112 @@ assert(
 );
 
 
+/* -------------------------------------------------------------------------- */
+/* A read that finishes without us must not be lost                            */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * "The screen goes off after a few seconds and scanning stops. The user has to
+ * restart it again and it spends tokens as well."
+ *
+ * The upload dies when the JS thread is suspended. The FUNCTION does not know:
+ * it finishes the read, is billed for it, and answers into a socket nobody is
+ * listening to. Three things have to hold for that to be survivable, and each
+ * is useless without the other two.
+ */
+const jobs = codeOnly(read(join(REPO, 'supabase/functions/_shared/scan-jobs.ts')));
+const key = codeOnly(read(join(ROOT, 'src/lib/scan-key.ts')));
+
+/*
+ * ONE implementation of the key, on the device.
+ *
+ * The client must know the name before it sends, because a name that only
+ * arrives in the response is no use when the response is what went missing. A
+ * server-side copy of the recipe would be a second thing to keep in step, and
+ * the one thing this value must never do is differ between two attempts at the
+ * same receipt — the same hazard fingerprint() is commented about, one layer up.
+ */
+assert(
+  /export function scanKey\(/.test(key) && !/scanKey\s*=\s*[`'"]/.test(fn),
+  'the scan key is derived on the client and only there',
+  'The function must store the key it is given, never compute one of its own.',
+);
+assert(
+  !/expo-crypto|crypto\.subtle/.test(key),
+  '...without a native crypto module',
+  'This ships over the air; a new native dependency would need a new binary first.',
+);
+assert(
+  /\$\{what\}\|\$\{language\}/.test(key),
+  '...and the language is part of it',
+  'The read carries `translated`. Serving a Dutch reader an English one is the same receipt in the wrong language.',
+);
+
+/*
+ * The answer is filed INSIDE waitUntil. Started-but-not-awaited is exactly the
+ * write that never lands, on the one invocation that needed it: a request whose
+ * client has hung up can be torn down the moment it returns.
+ */
+assert(
+  /if \(runtime2\?\.waitUntil\) runtime2\.waitUntil\(filed\);/.test(fn) &&
+    /writeJob\(caller, scanKey, 'done'/.test(fn),
+  'a finished read is filed before it is returned',
+  'Without waitUntil the write races the teardown of a request nobody is waiting on. ' +
+    'Matched as the GUARDED CALL, not as a mention of waitUntil: the first version ' +
+    'of this passed with the call sitting inside `if (false)`.',
+);
+
+/*
+ * And a repeat of the same scan is answered from that row rather than re-read.
+ * This is the half that stops the double charge; the one above is the half that
+ * makes it possible.
+ */
+assert(
+  /if \(job\?\.status === 'done'\)/.test(fn) && /at: 'receipt-scan\.cached'/.test(fn),
+  'a repeat of the same scan is served without calling the model',
+  'The saving is that the model is not called at all — and the log says when that happened.',
+);
+
+/*
+ * A poll carries a key and NOTHING else, so it has to be answered before the
+ * validation that refuses a caller who sent neither images nor a document. It
+ * is not that caller: it sent them a minute ago.
+ */
+{
+  const poll = fn.indexOf("body?.poll === true");
+  const validation = fn.indexOf("if ((images && document) || (!images && !document))");
+  assert(
+    poll > 0 && validation > 0 && poll < validation,
+    'a poll is answered before the both-or-neither refusal',
+    'Otherwise every resume is rejected as a request with no receipt in it.',
+  );
+}
+
+/*
+ * A `running` row has to expire. There is no process to ask whether an
+ * invocation is alive, so a row left behind by one that was torn down mid-read
+ * would answer 202 for ever and no retry could ever start.
+ */
+assert(
+  /STALE_MINUTES/.test(jobs) && /age > STALE_MINUTES/.test(jobs),
+  'a running job that died is not running for ever',
+  'Without an age check a torn-down read blocks every later attempt at that receipt.',
+);
+
+/*
+ * None of this may fail a scan. A cache that is down is a lost saving; a cache
+ * that throws is a lost receipt.
+ */
+{
+  const guarded = (jobs.match(/} catch \{/g) ?? []).length;
+  assert(
+    guarded >= 3,
+    `every job write is allowed to fail quietly (${guarded} guarded)`,
+    'readJob, writeJob and sweepJobs each answer "no row" rather than throwing into the scan.',
+  );
+}
+
+
 if (failures > 0) {
   console.error(`\n✗ ${failures} check${failures === 1 ? '' : 's'} failed`);
   process.exit(1);

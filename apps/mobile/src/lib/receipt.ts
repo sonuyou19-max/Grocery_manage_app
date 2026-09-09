@@ -3,6 +3,7 @@ import type { ItemCategory } from '@korb/shared';
 import { canonicalize, emojiFor, fold, CATEGORY_EMOJI } from '@/lib/item-emoji';
 import { samePlural } from '@/lib/item-plural';
 import { normalizeKey } from '@/lib/pantry-intel';
+import { scanKey } from '@/lib/scan-key';
 import { aiFunctionHeaders, supabaseUrl } from '@/lib/supabase';
 
 /**
@@ -675,7 +676,8 @@ const SCAN_TIMEOUT_MS = 120_000;
  */
 export type ScanInput =
   | { kind: 'images'; images: { media: string; data: string }[] }
-  | { kind: 'document'; media: string; data: string };
+  /** `name` is the file's, carried for the resume key — see lib/scan-key. */
+  | { kind: 'document'; media: string; data: string; name: string };
 
 /**
  * Why a scan produced no receipt.
@@ -705,10 +707,41 @@ export type ScanOutcome =
 /** Enough of a refusal body to identify it in a log; never shown to anyone. */
 const MAX_REFUSAL_DETAIL = 300;
 
-export async function scanReceipt(
-  input: ScanInput,
-  language: string,
-): Promise<ScanOutcome> {
+/**
+ * How long the resume keeps asking, and how often.
+ *
+ * A read lands around forty-seven seconds and the phone locks at thirty, so a
+ * scan interrupted at its worst moment has roughly twenty left to run. Ninety
+ * gives that room and some, and stops well short of leaving somebody watching a
+ * spinner for a job that is never going to answer.
+ */
+const POLL_EVERY_MS = 3_000;
+const POLL_FOR_MS = 90_000;
+/**
+ * Consecutive unreachable polls before giving up on the resume.
+ *
+ * One failure is a phone whose radio has not woken up yet, which is exactly the
+ * moment this runs. Three in a row is a phone with no network, and continuing
+ * to poll one of those means ninety seconds of spinner before the shopper is
+ * told what they could have been told at nine.
+ */
+const POLL_GIVE_UP_AFTER = 3;
+
+/**
+ * One exchange with the scanner, in the four shapes it can come back.
+ *
+ * `running` and `missing` are not failures, which is why they are not
+ * ScanFailure: one means come back shortly and the other means there is nothing
+ * to come back for. Folding either into `failed` would make the resume either
+ * hang on a job that does not exist or abandon one that does.
+ */
+type Reply =
+  | { state: 'done'; receipt: ScannedReceipt }
+  | { state: 'running' }
+  | { state: 'missing' }
+  | { state: 'failed'; failure: ScanFailure };
+
+async function request(payload: unknown, timeoutMs: number): Promise<Reply> {
   /*
    * AbortController rather than Promise.race: racing leaves the request running
    * and the phone still uploading megabytes for an answer nobody will read.
@@ -719,26 +752,29 @@ export async function scanReceipt(
   const timer = setTimeout(() => {
     timedOut = true;
     abort.abort();
-  }, SCAN_TIMEOUT_MS);
+  }, timeoutMs);
   try {
     let res: Response;
     try {
       res = await fetch(`${supabaseUrl}/functions/v1/receipt-scan`, {
         method: 'POST',
         headers: await aiFunctionHeaders(),
-        body: JSON.stringify(
-          input.kind === 'images'
-            ? { images: input.images, language }
-            : { document: { media: input.media, data: input.data }, language },
-        ),
+        body: JSON.stringify(payload),
         signal: abort.signal,
       });
     } catch {
       // The request never got an answer. `timedOut` is the only thing that can
       // tell our own abort apart from the network's — an AbortError looks the
       // same either way, and the two want opposite advice.
-      return { ok: false, failure: { reason: timedOut ? 'timeout' : 'offline' } };
+      return { state: 'failed', failure: { reason: timedOut ? 'timeout' : 'offline' } };
     }
+
+    // Still reading. The body carries no receipt and asking for one would be a
+    // parse failure reported as a malformed answer.
+    if (res.status === 202) return { state: 'running' };
+    // Nothing filed under that key. Only a poll can see this, and it means the
+    // server never got far enough to record the job.
+    if (res.status === 404) return { state: 'missing' };
 
     if (!res.ok) {
       /*
@@ -758,17 +794,17 @@ export async function scanReceipt(
       } catch {
         detail = null;
       }
-      return { ok: false, failure: { reason: 'refused', status: res.status, detail } };
+      return { state: 'failed', failure: { reason: 'refused', status: res.status, detail } };
     }
 
     try {
-      return { ok: true, receipt: (await res.json()) as ScannedReceipt };
+      return { state: 'done', receipt: (await res.json()) as ScannedReceipt };
     } catch {
       // A 200 whose body is not the shape we asked for. Its own outcome rather
       // than `offline`, which is where it landed when one catch covered
       // everything — and which would have told a shopper on good wifi to check
       // their connection.
-      return { ok: false, failure: { reason: 'malformed' } };
+      return { state: 'failed', failure: { reason: 'malformed' } };
     }
   } finally {
     // Always, including the success path: a two-minute timer left armed on a
@@ -776,6 +812,98 @@ export async function scanReceipt(
     // of it, and fires an abort on a controller nobody is listening to.
     clearTimeout(timer);
   }
+}
+
+const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+/**
+ * Go back for a read that finished without us.
+ *
+ * ---------------------------------------------------------------------------
+ * What this is recovering from
+ * ---------------------------------------------------------------------------
+ *
+ * The upload dies when the JS thread is suspended — the phone locked, a call
+ * came in, the app went to the background. The SERVER does not know or care:
+ * it finishes the read, is billed for it, and files the answer under the key
+ * the client chose before it sent anything. Without this, that answer is
+ * unreachable and the shopper pays twice for one read.
+ *
+ * Polling rather than anything cleverer because the interruption is precisely a
+ * suspended JS thread: a socket held open cannot survive it, and a timer can —
+ * iOS pauses `setTimeout` on suspend and runs it on wake, so this loop resumes
+ * itself the moment the screen comes back, with no listener to re-attach.
+ */
+async function resume(key: string, language: string): Promise<ScanOutcome | null> {
+  const until = Date.now() + POLL_FOR_MS;
+  let unreachable = 0;
+  while (Date.now() < until) {
+    await wait(POLL_EVERY_MS);
+    // A short ceiling: a poll is a primary-key lookup, so one that takes longer
+    // than a few seconds is a network problem and the next tick will ask again.
+    const reply = await request({ scanKey: key, language, poll: true }, POLL_EVERY_MS * 3);
+    if (reply.state === 'done') return { ok: true, receipt: reply.receipt };
+    // The server never recorded it, so there is nothing coming. Stop rather
+    // than spend the rest of the window learning that again.
+    if (reply.state === 'missing') return null;
+    if (reply.state === 'failed') {
+      const { failure } = reply;
+      // A refusal is the server's final answer about this scan; only a network
+      // failure is worth another go.
+      if (failure.reason !== 'offline' && failure.reason !== 'timeout') {
+        return { ok: false, failure };
+      }
+      unreachable += 1;
+      if (unreachable >= POLL_GIVE_UP_AFTER) return null;
+    } else {
+      unreachable = 0;
+    }
+  }
+  return null;
+}
+
+export async function scanReceipt(
+  input: ScanInput,
+  language: string,
+): Promise<ScanOutcome> {
+  /*
+   * The key goes with the request, so the server can file the answer under a
+   * name this client already knows. See lib/scan-key — it is deliberately
+   * computed here rather than returned by the server, because a name that only
+   * arrives in the response is no use when the response is what went missing.
+   */
+  const key = scanKey(input, language);
+  const payload =
+    input.kind === 'images'
+      ? { images: input.images, language, scanKey: key }
+      : { document: { media: input.media, data: input.data }, language, scanKey: key };
+
+  const first = await request(payload, SCAN_TIMEOUT_MS);
+  if (first.state === 'done') return { ok: true, receipt: first.receipt };
+
+  /*
+   * A 202 on the FIRST attempt means this scan is already running — the same
+   * receipt was sent moments ago and has not answered yet. Waiting for it is
+   * right and starting a second read of the same paper is not.
+   */
+  if (first.state === 'running') {
+    return (await resume(key, language)) ?? { ok: false, failure: { reason: 'timeout' } };
+  }
+
+  if (first.state === 'missing') return { ok: false, failure: { reason: 'malformed' } };
+
+  /*
+   * The request did not come back — but the server may have finished anyway,
+   * which is the whole case this exists for. Only worth asking when the failure
+   * was the connection: a refusal or a malformed body is an answer, and asking
+   * again would just be waiting to be told it twice.
+   */
+  const { failure } = first;
+  if (failure.reason === 'offline' || failure.reason === 'timeout') {
+    const resumed = await resume(key, language);
+    if (resumed) return resumed;
+  }
+  return { ok: false, failure };
 }
 
 /**
