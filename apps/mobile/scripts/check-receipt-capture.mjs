@@ -633,6 +633,25 @@ assert(
 }
 
 
+/*
+ * The phone must not fall asleep in the middle of a scan.
+ *
+ * A read takes the better part of a minute; the common auto-lock is thirty
+ * seconds. Locking suspends the JS thread and the upload in flight dies with
+ * it — while the model call it abandoned runs to completion and is paid for. A
+ * missing line here is not a slower feature, it is one that charges for
+ * nothing and asks the shopper to start again.
+ *
+ * shop/[id].tsx has held this for the same reason since it was written, which
+ * is why the import resolves without a direct dependency: expo ships it.
+ */
+assert(
+  /import \{ useKeepAwake \} from 'expo-keep-awake'/.test(screen) && /^\s*useKeepAwake\(\);/m.test(screen),
+  'the capture screen keeps the phone awake',
+  'Without it a 47-second scan loses to a 30-second auto-lock, after paying for the read.',
+);
+
+
 if (failures > 0) {
   console.error(`\n✗ ${failures} check${failures === 1 ? '' : 's'} failed`);
   process.exit(1);

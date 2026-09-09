@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
+import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MeshBackground } from '@/components/mesh-background';
 import { InteractionManager } from 'react-native';
@@ -98,6 +99,25 @@ export default function ReceiptCaptureScreen() {
    * components/screen-notice, which is where these go now.
    */
   const notice = useScreenNotice();
+  /*
+   * The screen stays on for as long as this one is open.
+   *
+   * A scan takes the better part of a minute and the phone's auto-lock is
+   * commonly thirty seconds. Locking suspends the JS thread, the upload in
+   * flight dies with it, and the scan has to be started again — while the model
+   * call it abandoned has already run to completion and been paid for. So the
+   * default lock turns a slow feature into one that silently costs money and
+   * delivers nothing.
+   *
+   * Unconditional rather than gated on `scanning`, the same as shop mode: the
+   * whole of this screen is a phone held over a receipt or waiting on one, and
+   * the moment before the shutter is exactly as bad a time to sleep as the
+   * moment after. It releases on unmount.
+   *
+   * This does not cover a lock the shopper asks for, or leaving the app. Those
+   * need the scan to survive being abandoned, which is a different fix.
+   */
+  useKeepAwake();
   const { id, source: sourceParam } = useLocalSearchParams<{ id: string; source?: string }>();
   /*
    * Which of the three ways in this is. Defaults to the camera, so a link or a
