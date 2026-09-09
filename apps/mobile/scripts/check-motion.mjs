@@ -370,12 +370,25 @@ if (faded.length) {
   check('a negative order cannot pull the delay backwards', /Math\.max\(0,/.test(cascade), true);
 
   /*
-   * Stated rather than inherited. Reanimated's default for layout animations
-   * follows the system setting, which is what we want — but a default that
-   * changes in a minor release would take a whole accessibility behaviour with
-   * it, silently, and nothing here would fail.
+   * Stated rather than inherited, on EVERY animation this file hands out.
+   * Reanimated's default for layout animations follows the system setting,
+   * which is what we want — but a default that changes in a minor release would
+   * take a whole accessibility behaviour with it, silently, and nothing here
+   * would fail.
+   *
+   * Counted, not tested. This was one `.test()` back when `cascade` was the
+   * only export; `depart` and `reflow` arrived beside it and a single stated
+   * ReduceMotion anywhere in the file would have covered for both of them.
    */
-  check('Reduce Motion is stated', /\.reduceMotion\(ReduceMotion\.System\)/.test(cascade), true);
+  {
+    const factories = (cascade.match(/^export function \w+\(/gm) ?? []).length;
+    const stated = (cascade.match(/\.reduceMotion\(ReduceMotion\.System\)/g) ?? []).length;
+    check(
+      `Reduce Motion is stated on every animation (${stated}/${factories})`,
+      factories >= 1 && stated === factories,
+      true,
+    );
+  }
 
   /*
    * Every screen that staggers something goes through it. Three had grown their

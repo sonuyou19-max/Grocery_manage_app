@@ -668,6 +668,10 @@ const fr = {
     trackConfirm: 'Suivre',
     loggedOne: 'Achat de %{item} enregistré',
     addTo: 'Ajouter %{item} à',
+    stillGoodToast: {
+      one: '%{item} — devrait durer %{count} jour de plus',
+      other: '%{item} — devrait durer %{count} jours de plus',
+    },
   },
   category: {
     fruit_veg: 'Fruits & Légumes',

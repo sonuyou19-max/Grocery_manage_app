@@ -750,10 +750,36 @@ export function recordPurchase(
  * Swipe right — "Still Good". The user consumes this slower than we thought:
  * stretch the burn rate and snooze it out of the deck for a few days.
  */
+/**
+ * The interval an item is given when somebody says it is still good.
+ *
+ * A named function rather than an expression inside applyStillGood, because the
+ * confirmation the user sees has to quote this number and there must be exactly
+ * one of it. A toast that says "3 days longer" while the model stretched by 4 is
+ * worse than no toast: it is the app misreporting what it just did, and nothing
+ * on screen would ever contradict it.
+ */
+export function stillGoodInterval(stat: ItemStat): number {
+  return Math.round(effectiveInterval(stat) * 1.15) + 2;
+}
+
+/**
+ * How many whole days that adds — the number the confirmation says.
+ *
+ * Rounded on BOTH sides before subtracting, so the figure is the difference
+ * between the two whole-day intervals a reader could actually observe, rather
+ * than a fractional difference rounded once. The floor of 1 never binds today
+ * (the formula's smallest gain is 2) and is there so no future tuning can make
+ * the app announce that it changed something by nothing.
+ */
+export function stillGoodGainDays(stat: ItemStat): number {
+  return Math.max(1, stillGoodInterval(stat) - Math.round(effectiveInterval(stat)));
+}
+
 export function applyStillGood(stats: StatMap, key: string, now: number = Date.now()): StatMap {
   const s = stats[key];
   if (!s) return stats;
-  const stretched = Math.round(effectiveInterval(s) * 1.15) + 2;
+  const stretched = stillGoodInterval(s);
   return {
     ...stats,
     [key]: {

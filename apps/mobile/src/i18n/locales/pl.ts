@@ -736,6 +736,12 @@ const pl = {
     trackConfirm: 'Śledź',
     loggedOne: 'Zapisano zakup: %{item}',
     addTo: 'Dodaj %{item} do',
+    stillGoodToast: {
+      one: '%{item} — powinno wystarczyć o %{count} dzień dłużej',
+      few: '%{item} — powinno wystarczyć o %{count} dni dłużej',
+      many: '%{item} — powinno wystarczyć o %{count} dni dłużej',
+      other: '%{item} — powinno wystarczyć o %{count} dni dłużej',
+    },
   },
   category: {
     fruit_veg: 'Owoce i warzywa',

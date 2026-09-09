@@ -667,6 +667,10 @@ const nl = {
     trackConfirm: 'Volgen',
     loggedOne: 'Aankoop van %{item} vastgelegd',
     addTo: '%{item} toevoegen aan',
+    stillGoodToast: {
+      one: '%{item} — gaat naar verwachting %{count} dag langer mee',
+      other: '%{item} — gaat naar verwachting %{count} dagen langer mee',
+    },
   },
   category: {
     fruit_veg: 'Groente & Fruit',

@@ -667,6 +667,10 @@ const it = {
     trackConfirm: 'Monitora',
     loggedOne: 'Acquisto di %{item} registrato',
     addTo: 'Aggiungi %{item} a',
+    stillGoodToast: {
+      one: '%{item}: dovrebbe durare %{count} giorno in più',
+      other: '%{item}: dovrebbe durare %{count} giorni in più',
+    },
   },
   category: {
     fruit_veg: 'Frutta e verdura',

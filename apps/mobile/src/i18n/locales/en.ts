@@ -679,6 +679,10 @@ const en = {
     trackConfirm: 'Track',
     loggedOne: 'Logged a purchase of %{item}',
     addTo: 'Add %{item} to',
+    stillGoodToast: {
+      one: '%{item} — expecting it to last %{count} day longer',
+      other: '%{item} — expecting it to last %{count} days longer',
+    },
   },
   category: {
     fruit_veg: 'Fruit & Veg',

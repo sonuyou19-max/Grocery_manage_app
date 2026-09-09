@@ -1003,5 +1003,98 @@ check(
   );
 }
 
+/* ------------------------------------------------------------------------- */
+/* The confirmation says the number that was applied.                         */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Swiping a pantry row right stretches the interval and, usually, takes the row
+ * out of Running low — so for a long time the entire visible result was a row
+ * disappearing, which reads as a delete and is the opposite of what the gesture
+ * means. The toast that fixes that quotes a number of days, and the one way it
+ * can be worse than saying nothing is by quoting the WRONG number: nothing else
+ * on screen would ever contradict it.
+ *
+ * So this is checked against the real functions rather than against the source.
+ * `stillGoodGainDays` is what the toast says; `applyStillGood` is what the model
+ * does; the assertion is that they cannot disagree, at any interval, however
+ * either is next tuned.
+ */
+for (const [what, s] of [
+  ['a category default', stat()],
+  ['a learned rate', stat({ intervalDays: 11, sampleCount: 4 })],
+  ['a pinned cadence', stat({ cadenceDays: 30, intervalDays: 4, sampleCount: 6 })],
+  ['a one-day interval', stat({ intervalDays: 1, sampleCount: 3 })],
+]) {
+  const before = Math.round(mod.effectiveInterval(s));
+  const after = mod.applyStillGood({ [s.key]: s }, s.key, now)[s.key].intervalDays;
+  check(`still-good announces the gain it applies (${what})`, mod.stillGoodGainDays(s), after - before);
+}
+
+// And it is never a claim that nothing happened.
+check(
+  'the announced gain is always at least a day',
+  [stat(), stat({ intervalDays: 1, sampleCount: 3 }), stat({ cadenceDays: 1 })]
+    .map((s) => mod.stillGoodGainDays(s))
+    .every((d) => d >= 1),
+  true,
+);
+
+/* ------------------------------------------------------------------------- */
+/* ...and the screen reads it BEFORE the write, and shows it.                 */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * The gain must come from the interval as it was BEFORE the stretch.
+ *
+ * `item` is a captured snapshot, so today the order genuinely does not change
+ * the answer, and this assertion is honest about being about the shape rather
+ * than about a live bug: the moment this handler reads from the store instead
+ * of from a captured stat — which is the ordinary way such a handler drifts —
+ * reading after markStillGood would measure the new interval against itself and
+ * announce a stretch that had already happened.
+ */
+{
+  /*
+   * Comments stripped. The handler right above this rule is commented at length
+   * and the prose names both `stillGoodGainDays` and `markStillGood` in the
+   * order the assertion looks for — so an uncommented read would pass on the
+   * explanation of the rule instead of on the rule.
+   */
+  const screen = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const handler = /const onStillGood = \(item: ItemStat\) => \{([\s\S]*?)\n  \};/.exec(screen);
+  const body = handler?.[1] ?? '';
+  check('the screen reads the gain before applying it',
+    body.indexOf('stillGoodGainDays(item)') > 0 &&
+      body.indexOf('stillGoodGainDays(item)') < body.indexOf('markStillGood('),
+    true);
+  check('...and puts it in the toast as the count',
+    /showToast\(\s*t\('pantry\.stillGoodToast', \{ item: item\.display, count: days \}\)/.test(body),
+    true);
+}
+
+/* ------------------------------------------------------------------------- */
+/* The row leaves softly, and the gap closes.                                 */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Both, on the same wrapper, or it is still a flicker: a row that fades while
+ * its neighbours snap up is a snap, because the eye follows the movement and
+ * the movement is the gap closing. See lib/cascade, which is why these are
+ * named rather than written out here.
+ */
+{
+  const screen = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const wrapper = /<Animated\.View key=\{item\.key\}([^>]*)>/.exec(screen)?.[1] ?? '';
+  check('the row wrapper animates in', /entering=\{cascade\(i\)\}/.test(wrapper), true);
+  check('...out', /exiting=\{depart\(\)\}/.test(wrapper), true);
+  check('...and the list closes over it', /layout=\{reflow\(\)\}/.test(wrapper), true);
+}
+
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

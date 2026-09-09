@@ -1,4 +1,6 @@
-import { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import { FadeInDown, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
+
+import { DURATION } from '@/lib/motion';
 
 /**
  * Things arriving one after another, rather than all at once.
@@ -54,4 +56,41 @@ export function cascade(order: number) {
   return FadeInDown.delay(step * CASCADE_STEP)
     .duration(CASCADE_MS)
     .reduceMotion(ReduceMotion.System);
+}
+
+/**
+ * A row leaving, and the rows below closing over the gap.
+ *
+ * ---------------------------------------------------------------------------
+ * Why both, and never one without the other
+ * ---------------------------------------------------------------------------
+ *
+ * Swiping a pantry row right takes it out of Running low, so the row unmounted
+ * on the same frame the state changed and the next row jumped up into its
+ * place. Two discontinuities at once, in the same 16ms: reported as "it is so
+ * fast disappearing and the next item takes its place — it is creating a
+ * flickering effect".
+ *
+ * `depart` is only half a fix. A row that fades while its neighbours snap is
+ * still a snap — the eye follows the MOVEMENT, and the movement is the gap
+ * closing, not the pixels dimming. `reflow` on the same wrapper is what makes
+ * the list settle rather than cut, and the two belong together: exiting without
+ * layout animates the wrong thing.
+ *
+ * The exiting view keeps its space while it fades and the rows below travel
+ * into it, so nothing is ever double-booked and no row moves before there is
+ * somewhere for it to move to.
+ *
+ * Durations from lib/motion, whose `exit` is described in as many words as
+ * "something leaving on its own: a toast, a chip, a row". `settle` is the
+ * longer of the two on purpose — the gap closing is the part meant to be
+ * followed, and matching them reads as a cut with a crossfade over it.
+ */
+export function depart() {
+  return FadeOut.duration(DURATION.exit).reduceMotion(ReduceMotion.System);
+}
+
+/** The gap closing. Goes on the SAME wrapper as `depart` — see above. */
+export function reflow() {
+  return LinearTransition.duration(DURATION.settle).reduceMotion(ReduceMotion.System);
 }
