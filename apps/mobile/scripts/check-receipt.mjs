@@ -1542,6 +1542,105 @@ check_(
 }
 
 /*
+ * ---------------------------------------------------------------------------
+ * The receipt this was written for, as the paper actually prints it
+ * ---------------------------------------------------------------------------
+ *
+ * Carrefour Market Heverlee, 08-09-2026. Every weighed line is two rows:
+ *
+ *     BULK LOOK            1   8,99    1,35
+ *     0,150 Kg
+ *
+ * The leading 1 is the ARTICLE COUNT — every weighed line carries it — and the
+ * price beside it is per kilo. So the host arrives with a multiplier already
+ * set, which is what defeated the first version of the fold: it took the weight
+ * only when the host had none, dropped the row, and left a line claiming one
+ * article at 8,99 that cost 1,35. Tidier than the phantom row and just as wrong.
+ *
+ * All seven of them, because the fix has to hold for the receipt and not for
+ * the one line that was easiest to reason about.
+ */
+{
+  const weighed = [
+    ['AARDAPPELEN/PDT', 149, 94, 0.631],
+    ['TOMATE(S)N', 299, 180, 0.602],
+    ['BONEN/HARICOTS PR', 399, 101, 0.253],
+    ['PAPRIK/POIVR.GR/VE', 349, 60, 0.172],
+    ['WORTELEN/CAROTTES', 125, 85, 0.68],
+    ['AUBERGINE', 249, 83, 0.333],
+    ['BULK LOOK', 899, 135, 0.15],
+  ];
+  const rows = [];
+  for (const [name, perKg, total, kg] of weighed) {
+    rows.push({ raw: name, kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
+      unit: null, unitPriceCents: perKg, unitPriceDp: 2, totalCents: total });
+    rows.push({ raw: `${String(kg).replace('.', ',')} Kg`, kind: 'item', multiplier: kg,
+      multiplierKind: 'measure', multiplierDp: 3, unit: 'kg',
+      unitPriceCents: null, unitPriceDp: null, totalCents: 0 });
+  }
+
+  const folded = foldContinuations(rows);
+  if (folded.length === weighed.length) ok(`all ${weighed.length} weight rows fold away`);
+  else fail('a weight row survived as a product', [`${folded.length} lines out of ${weighed.length}`]);
+
+  const kept = folded.filter((l, i) => l.multiplier === weighed[i]?.[3] && l.unit === 'kg');
+  if (kept.length === weighed.length) ok('...each leaving its weight on the item above');
+  else fail('the article count won over the weight', [`${kept.length} of ${weighed.length} adopted`]);
+
+  /*
+   * And the whole section reconciles, which is the claim that matters: the
+   * fold is only right if the receipt agrees with it afterwards.
+   */
+  const goods = weighed.reduce((n, w) => n + w[2], 0);
+  const res = reconcile(folded, { goodsCents: goods, paidCents: goods, articleCount: null });
+  if (res.badLines.length === 0) ok('...and every rebuilt line multiplies out');
+  else fail('rebuilt lines do not reconcile', [JSON.stringify(res.badLines), ...res.problems]);
+}
+
+/*
+ * The price may be printed on EITHER row, and the comparison has to find it.
+ *
+ * This till puts the name and the money on the first row and the whole
+ * measurement — weight and price per kilo — underneath. So the host has a
+ * multiplier (the article count) and NO price, and judging the fit against the
+ * host's own row alone finds nothing to judge with: the weight is refused and
+ * the line is left claiming one article for 1,80.
+ */
+{
+  const priceBelow = [
+    { raw: 'TOMATE(S)N', kind: 'item', multiplier: 1, multiplierKind: 'count', multiplierDp: 0,
+      unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 180 },
+    { raw: '0,602 kg x 2,99 EUR/kg', kind: 'item', multiplier: 0.602, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: 299, unitPriceDp: 2, totalCents: 0 },
+  ];
+  const [host] = foldContinuations(priceBelow);
+  if (host && host.multiplier === 0.602 && host.unitPriceCents === 299) {
+    ok('a price printed on the weight row is still found');
+  } else {
+    fail('the fit was judged with no price to judge it by', [JSON.stringify(host)]);
+  }
+}
+
+/*
+ * ...and a host that was ALREADY right is not overwritten.
+ *
+ * `better` is what makes this safe to run on every receipt. A stray row whose
+ * weight is worse than the one the item already carries must lose — adopting
+ * whatever the second row says would let one bad reading undo a good one.
+ */
+{
+  const hostIsRight = [
+    { raw: 'TOMATE(S)N', kind: 'item', multiplier: 0.602, multiplierKind: 'measure', multiplierDp: 3,
+      unit: 'kg', unitPriceCents: 299, unitPriceDp: 2, totalCents: 180 },
+    { raw: '0,999 kg', kind: 'item', multiplier: 0.999, multiplierKind: 'measure', multiplierDp: 3,
+      unit: 'kg', unitPriceCents: null, unitPriceDp: null, totalCents: 0 },
+  ];
+  const [host] = foldContinuations(hostIsRight);
+  if (host && host.multiplier === 0.602) ok('...and a worse weight never displaces a good one');
+  else fail('the fold overwrote a line that already reconciled', [JSON.stringify(host)]);
+}
+
+/*
  * A real product is never touched, and BOTH conditions are why. A line can be
  * named like a quantity — "1KG BANANEN" is a product — and a line can be free.
  * Only a line that is both is a row split by mistake.

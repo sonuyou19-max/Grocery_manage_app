@@ -168,19 +168,48 @@ export function foldContinuations<T extends Foldable>(lines: readonly T[]): T[] 
     }
 
     /*
-     * Give the row above what this row was carrying, but never overwrite what
-     * it already has. A line that read its own weight correctly is the better
-     * witness; this one exists because the reading went wrong somewhere.
+     * Which multiplier belongs on the row above, decided by ARITHMETIC.
      *
-     * The unit travels with the multiplier because it is what says the number
-     * is a WEIGHT: downstream, a multiplier with no unit and no fraction reads
-     * as a count of packs, so moving 0,602 across without its "kg" would turn
-     * six hundred grams of tomatoes into a line that fails its own arithmetic.
+     * The obvious rule — take the weight only if the host has none — is wrong
+     * on the receipt this was written for. Carrefour prints:
+     *
+     *     BULK LOOK            1   8,99    1,35
+     *     0,150 Kg
+     *
+     * That leading 1 is the ARTICLE COUNT, not a quantity: every weighed line
+     * carries it, and the price beside it is per kilo. So the host arrives with
+     * multiplier 1 already set, the null test never fires, and the row is
+     * dropped while its weight is thrown away — leaving a line claiming one
+     * article at 8,99 that cost 1,35. Tidier than the phantom row, and just as
+     * wrong.
+     *
+     * The receipt settles it without anyone guessing. 0,150 x 8,99 is 1,35 and
+     * 1 x 8,99 is not, so the weight is the multiplier that makes the line true.
+     * Adopted only when it fits BETTER, which is what stops this from damaging a
+     * host that was already right.
+     *
+     * The price may be printed on either row — beside the name here, under it on
+     * other tills — so the comparison uses whichever row has one.
      */
     const host = out[out.length - 1];
-    if (host.multiplier == null && line.multiplier != null) {
+    const price = host.unitPriceCents ?? line.unitPriceCents;
+    const fits = (m: number | null) =>
+      price == null || m == null ? Infinity : Math.abs(m * price - host.totalCents);
+    const better =
+      price != null && line.multiplier != null
+        ? fits(line.multiplier) < fits(host.multiplier ?? 1)
+        : host.multiplier == null;
+
+    if (better && line.multiplier != null) {
       host.multiplier = line.multiplier;
       host.multiplierDp = line.multiplierDp;
+      /*
+       * The unit travels with the number because it is what says the number is
+       * a WEIGHT: downstream, a multiplier with no unit and no fraction reads as
+       * a count of packs, so moving 0,602 across without its "kg" would turn six
+       * hundred grams of tomatoes into a line judged by a tolerance built for
+       * whole articles.
+       */
       if (line.unit != null) host.unit = line.unit;
     }
     if (host.unitPriceCents == null && line.unitPriceCents != null) {
