@@ -69,7 +69,7 @@ const src = readFileSync(join(SHARED, 'receipt-reconcile.ts'), 'utf8');
 const { outputText } = ts.transpileModule(src, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
-const { reconcile, classify, fingerprint, MONEY_CODES, outcomeOf, isBetter } = await import(
+const { reconcile, classify, fingerprint, foldContinuations, MONEY_CODES, outcomeOf, isBetter } = await import(
   'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 );
 
@@ -1493,6 +1493,106 @@ check_(
   'the retry label follows the clock, not the verdict',
   /retry: retryMs > 0 \?/.test(fn) && !/retry: result\.ok \|\|/.test(fn),
 );
+
+/* ------------------------------------------------------------------------- */
+/* A weighed item printed over two rows is one line                          */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * From a real review sheet: three rows offered for import called "0.253 KG",
+ * "0.334 KG" and "0.150 KG", each costing nothing. They are not products. They
+ * are the second row of a weighed item — Carrefour prints the money on one row
+ * and the measurement under it — and the extractor, told to transcribe every
+ * printing exactly once, transcribed both.
+ *
+ * Nothing about that is random: the same layout gives the same result every
+ * time, because the instruction and the paper are each unambiguous and disagree.
+ * The reconciliation caught the damage (the sheet said "2,18 off what the
+ * receipt says was paid") but a warning is not a fix — those rows were still
+ * on screen, ticked, above an Import button.
+ */
+{
+  const split = [
+    { raw: 'TOMATE(S)', kind: 'item', multiplier: null, multiplierKind: 'count',
+      multiplierDp: null, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 180 },
+    { raw: '0,602 kg x 2,99 EUR/kg', kind: 'item', multiplier: 0.602, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: 299, unitPriceDp: 2, totalCents: 0 },
+  ];
+  const folded = foldContinuations(split);
+
+  if (folded.length === 1) ok('a weight row is folded into the item above it');
+  else fail('the continuation row survived as a product', [`${folded.length} lines out of 2`]);
+
+  const host = folded[0];
+  if (host && host.multiplier === 0.602 && host.unit === 'kg' && host.unitPriceCents === 299) {
+    ok('...carrying its weight and unit price up with it');
+  } else {
+    fail('the fold dropped what the second row was holding', [JSON.stringify(host)]);
+  }
+
+  /*
+   * And the folded line has to RECONCILE, which is the whole point of moving
+   * the unit rather than only the number: 0.602 with no unit reads as a count
+   * of packs, and 0.602 x 299 would then be judged against a tolerance built
+   * for whole articles.
+   */
+  const res = reconcile(folded, { goodsCents: 180, paidCents: 180, articleCount: null });
+  if (res.badLines.length === 0) ok('...and the item it rebuilt multiplies out');
+  else fail('the rebuilt line does not reconcile', res.problems);
+}
+
+/*
+ * A real product is never touched, and BOTH conditions are why. A line can be
+ * named like a quantity — "1KG BANANEN" is a product — and a line can be free.
+ * Only a line that is both is a row split by mistake.
+ */
+{
+  const priced = [
+    { raw: 'BONI bananen', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 125, unitPriceDp: 2, totalCents: 125 },
+    { raw: '1 kg zak aardappelen', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 199, unitPriceDp: 2, totalCents: 199 },
+  ];
+  if (foldContinuations(priced).length === 2) ok('a quantity-shaped line that COSTS something is left alone');
+  else fail('the fold ate a real product', []);
+
+  const freeButNamed = [
+    { raw: 'BONI bananen', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 125, unitPriceDp: 2, totalCents: 125 },
+    { raw: 'GRATIS PROEFSTAAL', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 0, unitPriceDp: 2, totalCents: 0 },
+  ];
+  if (foldContinuations(freeButNamed).length === 2) ok('...and so is a free line with a real name');
+  else fail('the fold ate a free sample', []);
+}
+
+/*
+ * Nothing to fold onto. A continuation row cannot be the first line — there is
+ * no row above it — and folding into `out[-1]` would throw.
+ */
+{
+  const orphan = [
+    { raw: '0,602 kg', kind: 'item', multiplier: 0.602, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: null, unitPriceDp: null, totalCents: 0 },
+  ];
+  /*
+   * Wrapped, because without the guard this THROWS rather than returning the
+   * wrong answer — `out[out.length - 1]` on an empty array is undefined, and
+   * the fold then reads a property off it. In the function that lands in the
+   * catch around the read and becomes a 422: the whole receipt lost, after
+   * being paid for. A mutation should fail an assertion by name, not take the
+   * suite down with a stack trace that reads like a broken harness.
+   */
+  let kept = null;
+  try {
+    kept = foldContinuations(orphan);
+  } catch (err) {
+    fail('a leading weight row must not throw', [String(err)]);
+  }
+  if (kept && kept.length === 1) ok('a leading weight row has nothing to fold into and is kept');
+  else if (kept) fail('the fold dropped a row it could not attach', []);
+}
+
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

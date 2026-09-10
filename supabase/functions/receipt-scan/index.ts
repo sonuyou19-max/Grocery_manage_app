@@ -13,6 +13,7 @@ import { readJob, sweepJobs, writeJob } from '../_shared/scan-jobs.ts';
 import { offerToLexicon } from '../_shared/lexicon.ts';
 import {
   fingerprint,
+  foldContinuations,
   isBetter,
   MONEY_CODES,
   outcomeOf,
@@ -263,6 +264,17 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
   3, and reporting 2 would make the line fail a check it should pass.
 - totalCents: the line's own money as printed, in whole cents. Negative for
   discounts and deposit returns. This field is required on every line.
+
+A WEIGHED ITEM IS ONE LINE, however many rows it is printed on. Carrefour and
+others print the product and its money on one row and the measurement under it:
+
+    TOMATE(S)                        1,80
+      0,602 kg x 2,99 EUR/kg
+
+That is ONE line: raw "TOMATE(S)", multiplier 0.602, unit "kg",
+unitPriceCents 299, totalCents 180. The second row is not a product and must
+never become one — a line whose name is its own weight and whose total is zero
+is a row you have split by mistake.
 - store: the shop's name from the header, as printed. "Carrefour Market
   Heverlee", "ALDI SÜD", "EVEREST BVBA". Not the street, not the company number.
 - purchasedAt: the date and time PRINTED on the receipt, as ISO 8601. Not today.
@@ -923,6 +935,12 @@ Deno.serve(async (req) => {
 
   try {
     parsed = await ask(MODEL_FAST);
+    /*
+     * Before anything counts it or repairs it, so every index below means the
+     * same row as the one the shopper will see. A fold done after the repair
+     * would shift the indices the repair had just addressed.
+     */
+    parsed.lines = foldContinuations(parsed.lines);
     result = check(parsed);
   } catch (_err) {
     if (scanKey) void writeJob(caller, scanKey, 'failed', null, 'unreadable');

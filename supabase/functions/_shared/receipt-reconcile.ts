@@ -93,6 +93,104 @@ export interface ReceiptTotals {
  */
 export type ProblemCode = 'line' | 'goods' | 'paid' | 'count';
 
+/**
+ * A weighed item printed over two lines, put back together.
+ *
+ * ---------------------------------------------------------------------------
+ * What the paper does
+ * ---------------------------------------------------------------------------
+ *
+ * Colruyt prints a weighed line whole — name, weight, kg, price per kg, total,
+ * all on one row. Carrefour does not. It prints the product and its money on
+ * one row and the measurement underneath:
+ *
+ *     TOMATE(S)                        1,80
+ *       0,602 kg x 2,99 EUR/kg
+ *
+ * The extractor is told to transcribe everything it sees exactly once per
+ * PRINTING, and that second row is a printing. So it comes back as a line of
+ * its own: a product called "0,602 KG", costing nothing.
+ *
+ * Three of them reached a review sheet as items to import. Nothing about that
+ * is random — the same layout produces the same result every time, because the
+ * instruction and the paper are each unambiguous and disagree with one another.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the fix is here and not in the prompt
+ * ---------------------------------------------------------------------------
+ *
+ * The prompt is worth improving too, and it has been. But an instruction is a
+ * hope: it makes the fault rarer without making it impossible, and this fault
+ * puts invented rows in front of somebody about to press Import.
+ *
+ * A continuation line is mechanically recognisable and does not need reading:
+ * its total is EXACTLY zero and its raw text is nothing but a quantity. A
+ * product that costs nothing and is named after its own weight is not a
+ * product. So it is folded rather than trusted — and folded rather than merely
+ * dropped, because the measurement on it is the one the row above is missing.
+ */
+const QUANTITY_ONLY = /^\s*\d+(?:[.,]\d+)?\s*(kg|g|l|ml|cl)\b/i;
+
+/**
+ * Generic over the line, because it runs on the RICH one.
+ *
+ * The phantom rows have to leave the response, not just the arithmetic — the
+ * review sheet is what the shopper reads, and a row removed from the checks but
+ * left on the screen is the same three invented products with the totals now
+ * agreeing about them. So this folds the extractor's own line shape, which
+ * carries the name and the aisle as well, and the reconciler's narrower one is
+ * derived from the result afterwards.
+ */
+interface Foldable {
+  raw: string;
+  multiplier: number | null;
+  multiplierDp: number | null;
+  unit?: string | null;
+  unitPriceCents: number | null;
+  unitPriceDp: number | null;
+  totalCents: number;
+}
+
+export function foldContinuations<T extends Foldable>(lines: readonly T[]): T[] {
+  const out: T[] = [];
+  for (const line of lines) {
+    /*
+     * Both conditions, and the zero is the load-bearing one. A real product can
+     * be named oddly; a real product cannot be free. Requiring both means a
+     * genuine 1kg bag of something priced at 1,25 is never touched, whatever it
+     * is called.
+     */
+    const continuation =
+      line.totalCents === 0 && QUANTITY_ONLY.test(line.raw) && out.length > 0;
+    if (!continuation) {
+      out.push(line);
+      continue;
+    }
+
+    /*
+     * Give the row above what this row was carrying, but never overwrite what
+     * it already has. A line that read its own weight correctly is the better
+     * witness; this one exists because the reading went wrong somewhere.
+     *
+     * The unit travels with the multiplier because it is what says the number
+     * is a WEIGHT: downstream, a multiplier with no unit and no fraction reads
+     * as a count of packs, so moving 0,602 across without its "kg" would turn
+     * six hundred grams of tomatoes into a line that fails its own arithmetic.
+     */
+    const host = out[out.length - 1];
+    if (host.multiplier == null && line.multiplier != null) {
+      host.multiplier = line.multiplier;
+      host.multiplierDp = line.multiplierDp;
+      if (line.unit != null) host.unit = line.unit;
+    }
+    if (host.unitPriceCents == null && line.unitPriceCents != null) {
+      host.unitPriceCents = line.unitPriceCents;
+      host.unitPriceDp = line.unitPriceDp;
+    }
+  }
+  return out;
+}
+
 /** The failures that mean a NUMBER was misread, rather than a convention. */
 export const MONEY_CODES: readonly ProblemCode[] = ['line', 'goods', 'paid'];
 
