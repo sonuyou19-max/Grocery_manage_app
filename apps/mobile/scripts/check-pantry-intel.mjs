@@ -1004,95 +1004,138 @@ check(
 }
 
 /* ------------------------------------------------------------------------- */
-/* The confirmation says the number that was applied.                         */
+/* "Still good" is a pause, not a lesson                                      */
 /* ------------------------------------------------------------------------- */
 
 /*
- * Swiping a pantry row right stretches the interval and, usually, takes the row
- * out of Running low — so for a long time the entire visible result was a row
- * disappearing, which reads as a delete and is the opposite of what the gesture
- * means. The toast that fixes that quotes a number of days, and the one way it
- * can be worse than saying nothing is by quoting the WRONG number: nothing else
- * on screen would ever contradict it.
+ * It used to rewrite `intervalDays` and bump `sampleCount`, so a swipe counted
+ * as evidence about how fast the household gets through something. That is the
+ * one thing it is not. The burn rate comes from the gaps between real
+ * purchases, or from a cadence the shopper set; a swipe says "not this time".
  *
- * So this is checked against the real functions rather than against the source.
- * `stillGoodGainDays` is what the toast says; `applyStillGood` is what the model
- * does; the assertion is that they cannot disagree, at any interval, however
- * either is next tuned.
+ * Asserted against the real function, because the failure is invisible: a
+ * stretched interval looks like a plausible number and only shows up later, as
+ * a prediction that drifted for no reason anybody can point at.
  */
 for (const [what, s] of [
   ['a category default', stat()],
   ['a learned rate', stat({ intervalDays: 11, sampleCount: 4 })],
   ['a pinned cadence', stat({ cadenceDays: 30, intervalDays: 4, sampleCount: 6 })],
-  ['a one-day interval', stat({ intervalDays: 1, sampleCount: 3 })],
 ]) {
-  const before = Math.round(mod.effectiveInterval(s));
-  const after = mod.applyStillGood({ [s.key]: s }, s.key, now)[s.key].intervalDays;
-  check(`still-good announces the gain it applies (${what})`, mod.stillGoodGainDays(s), after - before);
+  const after = mod.applyStillGood({ [s.key]: s }, s.key, now)[s.key];
+  check(`still-good leaves the learned rate alone (${what})`,
+    [after.intervalDays, after.sampleCount],
+    [s.intervalDays, s.sampleCount]);
 }
 
-// And it is never a claim that nothing happened.
-check(
-  'the announced gain is always at least a day',
-  [stat(), stat({ intervalDays: 1, sampleCount: 3 }), stat({ cadenceDays: 1 })]
-    .map((s) => mod.stillGoodGainDays(s))
-    .every((d) => d >= 1),
-  true,
-);
+/*
+ * What it DOES do, and by the same number the toast quotes. The interval is
+ * picked so the answer (5) is not a number anyone would hard-code: a fixture
+ * that lands on 3 is satisfied by a flat three-day snooze, which is exactly the
+ * behaviour this replaced.
+ */
+{
+  const s = stat({ intervalDays: 20, sampleCount: 3 });
+  const after = mod.applyStillGood({ [s.key]: s }, s.key, now)[s.key];
+  check('...and snoozes it by exactly what it announces',
+    after.snoozeUntil, now + mod.stillGoodDays(s) * 24 * 60 * 60 * 1000);
+}
+
+/*
+ * The pause scales with the item and is bounded at both ends. A flat three days
+ * was fine for milk and absurd for a bag of rice — being asked again on
+ * Thursday about a six-week item is the app not listening.
+ */
+check('the pause grows with the interval',
+  mod.stillGoodDays(stat({ cadenceDays: 40 })) > mod.stillGoodDays(stat({ cadenceDays: 7 })),
+  true);
+check('...with a floor, so a fast item still gets a real rest',
+  mod.stillGoodDays(stat({ cadenceDays: 1 })) >= 2, true);
+check('...and a ceiling, so a slow one cannot vanish for a month',
+  mod.stillGoodDays(stat({ cadenceDays: 365 })) <= 14, true);
 
 /* ------------------------------------------------------------------------- */
-/* ...and the screen reads it BEFORE the write, and shows it.                 */
+/* A snoozed item is not low, and is not red                                  */
 /* ------------------------------------------------------------------------- */
 
 /*
- * The gain must come from the interval as it was BEFORE the stretch.
+ * `dueAt` has always honoured the snooze and `lifeRemaining` never did, and the
+ * split was visible on screen: after a swipe an aubergine read "~4 days left" —
+ * from dueAt — beside a red bar and a place in Running low, both from
+ * lifeRemaining. One item, two clocks, and a shopper told it was fine while
+ * being shown it was critical.
  *
- * `item` is a captured snapshot, so today the order genuinely does not change
- * the answer, and this assertion is honest about being about the shape rather
- * than about a live bug: the moment this handler reads from the store instead
- * of from a captured stat — which is the ordinary way such a handler drifts —
- * reading after markStillGood would measure the new interval against itself and
- * announce a stretch that had already happened.
+ * The fixture is that aubergine: bought ten days ago on a seven-day interval,
+ * so every reading that ignores the snooze says it is past due.
  */
 {
+  const DAYMS = 24 * 60 * 60 * 1000;
+  const overdue = stat({ intervalDays: 7, sampleCount: 4, lastPurchasedAt: now - 10 * DAYMS });
+  const snoozed = mod.applyStillGood({ [overdue.key]: overdue }, overdue.key, now)[overdue.key];
+  const none = new Set();
+
+  check('before the swipe it is low', mod.isLowStat(overdue, none, now), true);
+  check('...and its bar is red', mod.stockGeometry(overdue, now).tone, 'crit');
+
+  check('after the swipe it is not low', mod.isLowStat(snoozed, none, now), false);
+  check('...and its bar is not red', mod.stockGeometry(snoozed, now).tone, 'ok');
+
   /*
-   * Comments stripped. The handler right above this rule is commented at length
-   * and the prose names both `stillGoodGainDays` and `markStillGood` in the
-   * order the assertion looks for — so an uncommented read would pass on the
-   * explanation of the rule instead of on the rule.
+   * But being on a list still wins. A snooze must never hide a row the shopper
+   * is on their way to buy — that is the one case where the app knows something
+   * the swipe did not.
+   */
+  check('...unless it is on a list, which outranks the snooze',
+    mod.isLowStat(snoozed, new Set([snoozed.key]), now), true);
+
+  // And the snooze expires rather than settling in.
+  const later = now + mod.stillGoodDays(overdue) * DAYMS + 1;
+  check('...and it comes back when the pause is over', mod.isLowStat(snoozed, none, later), true);
+}
+
+/* ------------------------------------------------------------------------- */
+/* ...and the screen reads the number before it writes it                     */
+/* ------------------------------------------------------------------------- */
+
+{
+  /*
+   * Comments stripped. The handler is commented at length and the prose names
+   * both `stillGoodDays` and `markStillGood` in the order the assertion looks
+   * for — so an uncommented read would pass on the explanation of the rule
+   * instead of on the rule.
    */
   const screen = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
   const handler = /const onStillGood = \(item: ItemStat\) => \{([\s\S]*?)\n  \};/.exec(screen);
   const body = handler?.[1] ?? '';
-  check('the screen reads the gain before applying it',
-    body.indexOf('stillGoodGainDays(item)') > 0 &&
-      body.indexOf('stillGoodGainDays(item)') < body.indexOf('markStillGood('),
+  check('the screen reads the pause before applying it',
+    body.indexOf('stillGoodDays(item)') > 0 &&
+      body.indexOf('stillGoodDays(item)') < body.indexOf('markStillGood('),
     true);
   check('...and puts it in the toast as the count',
     /showToast\(\s*t\('pantry\.stillGoodToast', \{ item: item\.display, count: days \}\)/.test(body),
     true);
-}
 
-/* ------------------------------------------------------------------------- */
-/* The row leaves softly, and the gap closes.                                 */
-/* ------------------------------------------------------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /* The row leaves softly, and does NOT animate its own reordering           */
+  /* ----------------------------------------------------------------------- */
 
-/*
- * Both, on the same wrapper, or it is still a flicker: a row that fades while
- * its neighbours snap up is a snap, because the eye follows the movement and
- * the movement is the gap closing. See lib/cascade, which is why these are
- * named rather than written out here.
- */
-{
-  const screen = readFileSync(join(here, '..', 'src', 'app', '(tabs)', 'pantry.tsx'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+  /*
+   * `layout` was here and is deliberately gone. A LinearTransition alongside
+   * the exit left the list visibly broken on a real pantry: a row that MOVED
+   * rather than left — same key, new index, so React re-parents it and the exit
+   * never runs — came to rest overlapping its neighbour above with a hole where
+   * it used to be. This stack spaces its rows with a flex `gap`, which a layout
+   * animation does not account for when it interpolates a position.
+   *
+   * Asserted as an ABSENCE, because the tempting fix for a snappy reorder is to
+   * put it back.
+   */
   const wrapper = /<Animated\.View key=\{item\.key\}([^>]*)>/.exec(screen)?.[1] ?? '';
   check('the row wrapper animates in', /entering=\{cascade\(i\)\}/.test(wrapper), true);
-  check('...out', /exiting=\{depart\(\)\}/.test(wrapper), true);
-  check('...and the list closes over it', /layout=\{reflow\(\)\}/.test(wrapper), true);
+  check('...and out', /exiting=\{depart\(\)\}/.test(wrapper), true);
+  check('...and does not animate its own reorder', /layout=/.test(wrapper), false);
 }
 
 

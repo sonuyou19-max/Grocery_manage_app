@@ -673,8 +673,8 @@ const nl = {
     loggedOne: 'Aankoop van %{item} vastgelegd',
     addTo: '%{item} toevoegen aan',
     stillGoodToast: {
-      one: '%{item} — gaat naar verwachting %{count} dag langer mee',
-      other: '%{item} — gaat naar verwachting %{count} dagen langer mee',
+      one: '%{item} — genoteerd, we vragen het over %{count} dag opnieuw',
+      other: '%{item} — genoteerd, we vragen het over %{count} dagen opnieuw',
     },
   },
   category: {

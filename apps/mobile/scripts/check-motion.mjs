@@ -377,8 +377,10 @@ if (faded.length) {
    * would fail.
    *
    * Counted, not tested. This was one `.test()` back when `cascade` was the
-   * only export; `depart` and `reflow` arrived beside it and a single stated
-   * ReduceMotion anywhere in the file would have covered for both of them.
+   * only export; `depart` arrived beside it and a single stated ReduceMotion
+   * anywhere in the file would have covered for both of them. Counting keeps
+   * that true however many factories the file grows or loses — it has since
+   * lost one.
    */
   {
     const factories = (cascade.match(/^export function \w+\(/gm) ?? []).length;

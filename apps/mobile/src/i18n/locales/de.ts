@@ -674,8 +674,8 @@ const de = {
     loggedOne: '%{item} als Kauf erfasst',
     addTo: '%{item} hinzufügen zu',
     stillGoodToast: {
-      one: '%{item} — hält voraussichtlich %{count} Tag länger',
-      other: '%{item} — hält voraussichtlich %{count} Tage länger',
+      one: '%{item} — notiert, wir fragen in %{count} Tag wieder',
+      other: '%{item} — notiert, wir fragen in %{count} Tagen wieder',
     },
   },
   category: {

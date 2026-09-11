@@ -35,7 +35,7 @@ import { useToast } from '@/components/toast';
 import { categorizeSync, categoryLabel } from '@/lib/categorize';
 import { coachMarkDue, useCoachMark } from '@/lib/coach-marks';
 import { haptics } from '@/lib/haptics';
-import { cascade, depart, reflow } from '@/lib/cascade';
+import { cascade, depart } from '@/lib/cascade';
 import { rubberBand, springTo } from '@/lib/motion';
 import { usePlusGate } from '@/lib/plus-gate';
 import {
@@ -49,7 +49,7 @@ import {
   queuedKeys,
   sinceBoughtLabel,
   statusLabel,
-  stillGoodGainDays,
+  stillGoodDays,
   stockGeometry,
   type ItemStat,
   type StockTone,
@@ -281,20 +281,18 @@ function SignedInPantry() {
   /*
    * Swipe right: the item's fine — teach the model to wait longer (no delete).
    *
-   * The toast is the only thing that says what happened. This swipe usually
-   * takes the row out of Running low, so the whole visible result was a row
-   * disappearing — which reads as a delete, and is the opposite of what the
-   * gesture means. The number comes from stillGoodGainDays so it is the same
-   * number markStillGood is about to apply, not a second guess at it.
+   * The toast is the only thing that says what happened. This swipe takes the
+   * row out of Running low, so the whole visible result is a row disappearing —
+   * which reads as a delete, and is the opposite of what the gesture means. The
+   * number comes from stillGoodDays so it is the same number markStillGood is
+   * about to apply, not a second guess at it.
    *
-   * Read before the write. `item` is a snapshot, so today the order does not
-   * change the answer — it is written this way, and asserted, because the
-   * number has to be derived from the interval as it was BEFORE the stretch,
-   * and the day this reads from the store instead of from a captured stat the
-   * order becomes the whole of that.
+   * Read before the write, and asserted that way: the number has to be derived
+   * from the stat as it stands, and the day this reads from the store instead
+   * of from a captured one the order becomes the whole of that.
    */
   const onStillGood = (item: ItemStat) => {
-    const days = stillGoodGainDays(item);
+    const days = stillGoodDays(item);
     markStillGood(item.key);
     haptics.tick();
     showToast(t('pantry.stillGoodToast', { item: item.display, count: days }));
@@ -359,12 +357,24 @@ function SignedInPantry() {
          * expanding should cascade from its own top, not continue a count from
          * whatever was above it.
          *
-         * `depart` and `reflow` are why a swipe no longer flickers: swiping
-         * right stretches the interval, which takes the row out of Running low,
-         * and without these the row vanished and the next one jumped into its
-         * place on the same frame. They go together — see lib/cascade.
+         * `depart` is why a swipe no longer flickers: swiping right takes the
+         * row out of Running low, and without it the row vanished and the next
+         * one jumped into its place on the same frame.
+         *
+         * There is deliberately no `layout` here, and that is a retraction. A
+         * LinearTransition went on alongside it to close the gap smoothly, and
+         * on a real pantry it left the list visibly broken: a row that MOVED
+         * rather than left — same key, new index, so React re-parents it and the
+         * exit never runs — came to rest overlapping its neighbour above, with a
+         * hole where it used to be. Reported with a screenshot of exactly that.
+         *
+         * The gap this stack uses is a flex `gap`, which a layout animation does
+         * not account for when it interpolates a child's position, so every
+         * reorder accumulates the error. Since a still-good swipe now REMOVES
+         * the row from this section rather than re-sorting it within it, the
+         * departure is the case that matters and `depart` covers it alone.
          */
-        <Animated.View key={item.key} entering={cascade(i)} exiting={depart()} layout={reflow()}>
+        <Animated.View key={item.key} entering={cascade(i)} exiting={depart()}>
         <PantrySwipeRow
           /* Only the first row of the FIRST section carries a coach ref, and
              collapsable={false} inside the row keeps Android from flattening
@@ -952,9 +962,9 @@ function PantrySwipeRow({
        * stays — a left swipe, which makes the item queued and therefore still
        * low — is behind a sheet or a toast on that frame anyway.
        *
-       * The softness people asked for is NOT here. It is `depart` and `reflow`
-       * on the wrapper, which is the right place for it: what read as a flicker
-       * was the row vanishing and its neighbour jumping up, not this snap. And
+       * The softness people asked for is NOT here. It is `depart` on the
+       * wrapper, which is the right place for it: what read as a flicker was
+       * the row vanishing and its neighbour jumping up, not this snap. And
        * this snap is the half that has to stay instant — springing here would
        * put a running animation back on a view the JS side is about to unmount,
        * which is the shape of the crash the ordering above exists to prevent.

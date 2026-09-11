@@ -742,10 +742,10 @@ const pl = {
     loggedOne: 'Zapisano zakup: %{item}',
     addTo: 'Dodaj %{item} do',
     stillGoodToast: {
-      one: '%{item} — powinno wystarczyć o %{count} dzień dłużej',
-      few: '%{item} — powinno wystarczyć o %{count} dni dłużej',
-      many: '%{item} — powinno wystarczyć o %{count} dni dłużej',
-      other: '%{item} — powinno wystarczyć o %{count} dni dłużej',
+      one: '%{item} — zapisane, zapytamy ponownie za %{count} dzień',
+      few: '%{item} — zapisane, zapytamy ponownie za %{count} dni',
+      many: '%{item} — zapisane, zapytamy ponownie za %{count} dni',
+      other: '%{item} — zapisane, zapytamy ponownie za %{count} dni',
     },
   },
   category: {

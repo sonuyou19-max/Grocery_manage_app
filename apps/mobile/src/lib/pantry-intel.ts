@@ -256,6 +256,22 @@ export function isDue(stat: ItemStat, now: number): boolean {
  */
 export const LOW_THRESHOLD = 0.35;
 
+/**
+ * Has the shopper just said this one is fine?
+ *
+ * `dueAt` has always honoured the snooze and `lifeRemaining` never did, and
+ * that split is visible on screen: after a swipe an aubergine read "~4 days
+ * left" — from dueAt — beside a red bar and a place in Running low, both from
+ * lifeRemaining. The label and the colour were answering the same question from
+ * two different clocks.
+ *
+ * So the snooze is asked about once, here, and every reading of the item's
+ * state goes through it.
+ */
+export function isSnoozed(stat: ItemStat, now: number): boolean {
+  return stat.snoozeUntil != null && now < stat.snoozeUntil;
+}
+
 export function lifeRemaining(stat: ItemStat, now: number): number {
   if (!stat.lastPurchasedAt) return 1;
   const span = effectiveInterval(stat) * DAY;
@@ -373,7 +389,18 @@ export function stockGeometry(stat: ItemStat, now: number): StockGeometry {
   // section it sits under cannot drift apart. See above.
   const left = lifeRemaining(stat, now);
   return {
-    tone: left < CRIT_THRESHOLD ? 'crit' : left < LOW_THRESHOLD ? 'low' : 'ok',
+    /*
+     * A snoozed item is not low, whatever the arithmetic says about it. The
+     * shopper looked at the thing and told us; that outranks an estimate made
+     * from the gap between two receipts.
+     */
+    tone: isSnoozed(stat, now)
+      ? 'ok'
+      : left < CRIT_THRESHOLD
+        ? 'crit'
+        : left < LOW_THRESHOLD
+          ? 'low'
+          : 'ok',
     position: Math.min(progress / (1 + OVERDUE_ROOM), 1),
     progress,
     overdue: progress >= 1,
@@ -397,7 +424,11 @@ export function stockGeometry(stat: ItemStat, now: number): StockGeometry {
  * describing it in the Pantry's words.
  */
 export function isLowStat(stat: ItemStat, queued: Set<string>, now: number): boolean {
-  return queued.has(stat.key) || lifeRemaining(stat, now) < LOW_THRESHOLD;
+  // Queued first: something on a list is low BECAUSE it is on the list, and a
+  // snooze must not hide a row the shopper is about to go and buy.
+  if (queued.has(stat.key)) return true;
+  if (isSnoozed(stat, now)) return false;
+  return lifeRemaining(stat, now) < LOW_THRESHOLD;
 }
 
 /**
@@ -751,44 +782,54 @@ export function recordPurchase(
  * stretch the burn rate and snooze it out of the deck for a few days.
  */
 /**
- * The interval an item is given when somebody says it is still good.
+ * How long "still good" buys, in days.
  *
- * A named function rather than an expression inside applyStillGood, because the
- * confirmation the user sees has to quote this number and there must be exactly
- * one of it. A toast that says "3 days longer" while the model stretched by 4 is
- * worse than no toast: it is the app misreporting what it just did, and nothing
- * on screen would ever contradict it.
+ * ---------------------------------------------------------------------------
+ * Why this is a pause and no longer a lesson
+ * ---------------------------------------------------------------------------
+ *
+ * This used to rewrite `intervalDays` — the burn rate learned from the gaps
+ * between real purchases — and bump `sampleCount` so the new figure counted as
+ * evidence. It was wrong in a way that compounds: the next purchase blends its
+ * real gap against a guess rather than against the record, so one swipe moves
+ * the prediction permanently, and a habit of swiping moves it every time.
+ *
+ * A swipe is not evidence about how fast you get through something. It is a
+ * statement about TODAY: not this time, ask me later. The app already has a
+ * place for "I buy this every N days" — the cadence a shopper sets on the item
+ * — and a place for what actually happened, which is the purchase history. This
+ * is the third thing and it should not pretend to be either of the others.
+ *
+ * ---------------------------------------------------------------------------
+ * And the pause is proportional
+ * ---------------------------------------------------------------------------
+ *
+ * A flat three days was fine for milk and absurd for a bag of rice: saying a
+ * six-week item is still good and being asked again on Thursday is the app not
+ * listening. A quarter of the item's own interval scales with what the item is,
+ * floored so a fast-moving item still gets a real rest and capped so a long one
+ * cannot vanish for a month.
  */
-export function stillGoodInterval(stat: ItemStat): number {
-  return Math.round(effectiveInterval(stat) * 1.15) + 2;
+const STILL_GOOD_FRACTION = 0.25;
+const STILL_GOOD_MIN_DAYS = 2;
+const STILL_GOOD_MAX_DAYS = 14;
+
+export function stillGoodDays(stat: ItemStat): number {
+  const span = Math.round(effectiveInterval(stat) * STILL_GOOD_FRACTION);
+  return Math.min(STILL_GOOD_MAX_DAYS, Math.max(STILL_GOOD_MIN_DAYS, span));
 }
 
 /**
- * How many whole days that adds — the number the confirmation says.
+ * Swipe right — "still good". Pushes the horizon out; teaches nothing.
  *
- * Rounded on BOTH sides before subtracting, so the figure is the difference
- * between the two whole-day intervals a reader could actually observe, rather
- * than a fractional difference rounded once. The floor of 1 never binds today
- * (the formula's smallest gain is 2) and is there so no future tuning can make
- * the app announce that it changed something by nothing.
+ * `intervalDays` and `sampleCount` are deliberately untouched. See
+ * stillGoodDays: what this records is a snooze, and the rate stays whatever the
+ * purchases say it is.
  */
-export function stillGoodGainDays(stat: ItemStat): number {
-  return Math.max(1, stillGoodInterval(stat) - Math.round(effectiveInterval(stat)));
-}
-
 export function applyStillGood(stats: StatMap, key: string, now: number = Date.now()): StatMap {
   const s = stats[key];
   if (!s) return stats;
-  const stretched = stillGoodInterval(s);
-  return {
-    ...stats,
-    [key]: {
-      ...s,
-      intervalDays: stretched,
-      sampleCount: Math.max(1, s.sampleCount), // this feedback counts as learning
-      snoozeUntil: now + 3 * DAY,
-    },
-  };
+  return { ...stats, [key]: { ...s, snoozeUntil: now + stillGoodDays(s) * DAY } };
 }
 
 /**

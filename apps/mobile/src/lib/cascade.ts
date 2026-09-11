@@ -1,4 +1,4 @@
-import { FadeInDown, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
+import { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 
 import { DURATION } from '@/lib/motion';
 
@@ -59,10 +59,10 @@ export function cascade(order: number) {
 }
 
 /**
- * A row leaving, and the rows below closing over the gap.
+ * A row leaving.
  *
  * ---------------------------------------------------------------------------
- * Why both, and never one without the other
+ * Why this exists
  * ---------------------------------------------------------------------------
  *
  * Swiping a pantry row right takes it out of Running low, so the row unmounted
@@ -71,26 +71,34 @@ export function cascade(order: number) {
  * fast disappearing and the next item takes its place — it is creating a
  * flickering effect".
  *
- * `depart` is only half a fix. A row that fades while its neighbours snap is
- * still a snap — the eye follows the MOVEMENT, and the movement is the gap
- * closing, not the pixels dimming. `reflow` on the same wrapper is what makes
- * the list settle rather than cut, and the two belong together: exiting without
- * layout animates the wrong thing.
+ * The exiting view keeps its space while it fades, so nothing is ever
+ * double-booked and the gap opens at the speed of the fade rather than
+ * instantly.
  *
- * The exiting view keeps its space while it fades and the rows below travel
- * into it, so nothing is ever double-booked and no row moves before there is
- * somewhere for it to move to.
+ * ---------------------------------------------------------------------------
+ * Why there is no `reflow` beside it
+ * ---------------------------------------------------------------------------
  *
- * Durations from lib/motion, whose `exit` is described in as many words as
- * "something leaving on its own: a toast, a chip, a row". `settle` is the
- * longer of the two on purpose — the gap closing is the part meant to be
- * followed, and matching them reads as a cut with a crossfade over it.
+ * There was one — a LinearTransition on the same wrapper — and the comment here
+ * said the two belonged together, that exiting without layout animates the
+ * wrong thing. On a real pantry it did something worse than nothing: a row that
+ * MOVED rather than left came to rest overlapping its neighbour, with a hole
+ * where it had been. Reported as "there is a big gap between eggplant and the
+ * next item".
+ *
+ * Two reasons, and the second is the one that makes it unfixable here. A swipe
+ * usually REORDERS a row rather than removing it — same key, new index — so
+ * React re-parents the view and no exit ever runs; it is purely a layout
+ * animation, racing the re-parent. And the stack spaces its rows with a flex
+ * `gap`, which LinearTransition does not account for when it interpolates a
+ * position, so every animated move lands short by exactly one gap.
+ *
+ * So: fade what leaves, and let what stays be where the layout says it is.
+ * If a settled reorder is wanted, it needs a measured list, not this.
+ *
+ * Duration from lib/motion, whose `exit` is described in as many words as
+ * "something leaving on its own: a toast, a chip, a row".
  */
 export function depart() {
   return FadeOut.duration(DURATION.exit).reduceMotion(ReduceMotion.System);
-}
-
-/** The gap closing. Goes on the SAME wrapper as `depart` — see above. */
-export function reflow() {
-  return LinearTransition.duration(DURATION.settle).reduceMotion(ReduceMotion.System);
 }
