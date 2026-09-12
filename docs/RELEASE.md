@@ -386,12 +386,20 @@ Two ways off it, and they are not alternatives — use both.
 open it in Expo Go:
 
 ```
-cd apps/mobile && npx eas update --branch preview -m "what changed"
+pnpm run update:preview -m "what changed"
 ```
 
 That prints a QR. Scan it and the app runs from the CDN, on any network, with
 the laptop shut. Republish after every change; the phone picks it up on the next
 cold start.
+
+Use the script rather than the command it wraps, and use it from anywhere. Run
+`npx eas update` from the workspace root by hand and it dies on
+`ERR_PNPM_ADDING_TO_ROOT`: EAS reads the package.json next to you, finds no
+`expo-updates` in the root manifest — where it does not belong — and tries to
+install it there. The message names a missing dependency and a pnpm flag, and
+both readings are wrong; the command was simply one directory too high. The
+script is `cd apps/mobile && npx eas update` and exists to spare you that.
 
 **Android, a real installable app.** Build once, then feed it updates:
 
@@ -400,8 +408,8 @@ cd apps/mobile && npx eas build --profile preview --platform android
 ```
 
 EAS returns an `.apk` link — install it and the app is on the phone for good.
-Every later `npx eas update --branch preview` reaches it on the next cold start,
-with no rebuild.
+Every later `pnpm run update:preview` reaches it on the next cold start, with no
+rebuild.
 
 **A standalone iOS app** (an `.ipa` rather than Expo Go) needs the Apple
 Developer Program: internal distribution to a physical iPhone means ad-hoc

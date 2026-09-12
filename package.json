@@ -2,9 +2,11 @@
   "name": "korb-monorepo",
   "private": true,
   "version": "0.1.0",
-  "description": "Korb — shared grocery list and pantry tracker for European households",
+  "description": "Korb \u2014 shared grocery list and pantry tracker for European households",
   "scripts": {
     "mobile": "pnpm --filter mobile start",
+    "update:preview": "cd apps/mobile && npx eas update --branch preview",
+    "update:production": "cd apps/mobile && npx eas update --branch production",
     "typecheck": "pnpm -r typecheck",
     "reinstall": "node scripts/reinstall.mjs"
   },
