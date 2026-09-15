@@ -1693,5 +1693,209 @@ check_(
 }
 
 
+/*
+ * ---------------------------------------------------------------------------
+ * ALDI Leuven, 14-09-2026 — the measurement printed ABOVE its item
+ * ---------------------------------------------------------------------------
+ *
+ *     COCA COLA ZERO 1L          1,79
+ *     COCA-COLA REGULAR 1L       1,79
+ *       0,762 kg x 1,15 EUR/kg
+ *     BANAAN LOS                 0,88
+ *     ROYAL GALA 1,5KG           2,39
+ *     GEMENGD BOEKET             3,49
+ *     TE BETALEN                10,34
+ *
+ * The printed rows come to 10,34 exactly. The scan returned SIX lines coming to
+ * 11,22 — the bananas twice, once as themselves and once as their own weight —
+ * and the review sheet offered all six for import under a warning that it was
+ * 0,88 over. 0,88 is the bananas.
+ *
+ * Both signals the older rule relies on are missing here. The measurement is
+ * printed above its item rather than below, so the row above it is an unrelated
+ * bottle of Coke; and it is not free, because the extractor read the 0,88 onto
+ * it as well. Every fixture below is transcribed from the paper.
+ */
+{
+  const aldi = [
+    { raw: 'COCA COLA ZERO 1L', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 179, unitPriceDp: 2, totalCents: 179 },
+    { raw: 'COCA-COLA REGULAR 1L', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 179, unitPriceDp: 2, totalCents: 179 },
+    { raw: '0,762 kg x 1,15 €/kg', kind: 'item', multiplier: 0.762, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: 115, unitPriceDp: 2, totalCents: 88 },
+    { raw: 'BANAAN LOS', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 88 },
+    { raw: 'ROYAL GALA 1,5KG', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 239, unitPriceDp: 2, totalCents: 239 },
+    { raw: 'GEMENGD BOEKET', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 349, unitPriceDp: 2, totalCents: 349 },
+  ];
+  const folded = foldContinuations(aldi);
+
+  if (folded.length === 5) ok('a weight row printed ABOVE its item is folded downward');
+  else fail('the ALDI measurement row survived as a product', [`${folded.length} lines out of 6`]);
+
+  /*
+   * Into the bananas, not into the Coke above it. Asserted by NAME, because a
+   * fold that removes the row and attaches it to the wrong neighbour restores
+   * the total while quietly turning a 1,79 bottle into 0,762 kg of something —
+   * the count would pass and the line would be nonsense.
+   */
+  const host = folded.find((l) => l.raw === 'BANAAN LOS');
+  if (host && host.multiplier === 0.762 && host.unit === 'kg' && host.unitPriceCents === 115) {
+    ok('...into the item below it, carrying its weight and unit price');
+  } else {
+    fail('the weight landed on the wrong neighbour', [JSON.stringify(host ?? null)]);
+  }
+
+  const coke = folded.find((l) => l.raw === 'COCA-COLA REGULAR 1L');
+  if (coke && coke.multiplier === 1 && coke.unit == null) ok('...leaving the row above untouched');
+  else fail('the fold rewrote the line above the measurement', [JSON.stringify(coke ?? null)]);
+
+  /*
+   * And the receipt adds up again. This is the number the shopper was shown:
+   * 11,22 against a printed 10,34, with an Import button under it.
+   */
+  const sum = folded.reduce((acc, l) => acc + l.totalCents, 0);
+  if (sum === 1034) ok('...and the six lines that came to 11,22 now come to 10,34');
+  else fail('the folded receipt still does not match what was paid', [`${sum} vs 1034`]);
+
+  const res = reconcile(folded, { goodsCents: null, paidCents: 1034, articleCount: null });
+  if (res.badLines.length === 0 && res.problems.length === 0) ok('...with every line multiplying out');
+  else fail('the rebuilt ALDI receipt does not reconcile', res.problems);
+}
+
+/*
+ * The named-weight product on that same receipt, which must NOT fold.
+ *
+ * "ROYAL GALA 1,5KG" is a bag of apples whose name happens to contain a weight,
+ * sitting directly under the item the measurement row was folded into. It is
+ * the line most at risk from a pattern that reaches for anything with a "kg" in
+ * it, and the app read it correctly — so this is a regression fixture, not a
+ * hypothetical.
+ */
+{
+  const named = [
+    { raw: 'BANAAN LOS', kind: 'item', multiplier: 0.762, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: 115, unitPriceDp: 2, totalCents: 88 },
+    { raw: 'ROYAL GALA 1,5KG', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 239, unitPriceDp: 2, totalCents: 239 },
+  ];
+  if (foldContinuations(named).length === 2) ok('a product whose NAME carries a weight is left alone');
+  else fail('the fold ate a bag of apples', []);
+}
+
+/*
+ * The same arithmetic row, printed BELOW its item and charged for.
+ *
+ * Carrefour's layout with ALDI's misread: the measurement is under the name,
+ * where it has always been, but the extractor put the line's money on it too,
+ * so the zero-total rule does not fire and it arrives at the new pattern. The
+ * direction now has to be worked out rather than assumed, and this is the
+ * fixture that says it can still be worked out UPWARD — without it, a fold
+ * hard-coded downward passes everything.
+ *
+ * 0,602 x 2,99 is 1,80, which is the tomatoes above and not the bananas below.
+ */
+{
+  const below = [
+    { raw: 'TOMATE(S)', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 180 },
+    { raw: '0,602 kg x 2,99 EUR/kg', kind: 'item', multiplier: 0.602, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: 299, unitPriceDp: 2, totalCents: 180 },
+    { raw: 'BANANEN', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 250, unitPriceDp: 2, totalCents: 250 },
+  ];
+  const folded = foldContinuations(below);
+
+  if (folded.length === 2) ok('a charged weight row printed BELOW its item is folded upward');
+  else fail('the charged measurement row survived', [`${folded.length} lines out of 3`]);
+
+  const host = folded.find((l) => l.raw === 'TOMATE(S)');
+  if (host && host.multiplier === 0.602 && host.unit === 'kg') ok('...onto the item above it');
+  else fail('the weight skipped past its own item', [JSON.stringify(host ?? null)]);
+
+  const past = folded.find((l) => l.raw === 'BANANEN');
+  if (past && past.multiplier === 1 && past.unit == null) ok('...and not onto the one below');
+  else fail('the fold reached down to the wrong line', [JSON.stringify(past ?? null)]);
+}
+
+/*
+ * A multi-buy line that BEGINS with its own arithmetic and then names itself.
+ *
+ * Plenty of tills print "2 x 1,25" as a row of its own above the product, and
+ * that row is a measurement to be folded. Plenty of others print the same
+ * arithmetic as the head of the product's own line:
+ *
+ *     2 x 1,25 BONI MELK           2,50
+ *
+ * The only thing separating them is where the row ENDS, which is why the
+ * pattern is anchored at both ends. Unanchored, this is a real product that
+ * disappears into its neighbour and takes 2,50 off the receipt with it.
+ */
+{
+  const inline = [
+    { raw: 'APPELSIENEN', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 199, unitPriceDp: 2, totalCents: 199 },
+    { raw: '2 x 1,25 BONI MELK', kind: 'item', multiplier: 2, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 125, unitPriceDp: 2, totalCents: 250 },
+  ];
+  const folded = foldContinuations(inline);
+  if (folded.length === 2) ok('a line that begins with arithmetic but names itself is a product');
+  else fail('the fold ate a multi-buy product line', [`${folded.length} lines out of 2`]);
+
+  /* And the bare row, with nothing after the numbers, still folds. */
+  const bare = [
+    { raw: 'APPELSIENEN', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 199, unitPriceDp: 2, totalCents: 199 },
+    { raw: '2 x 1,25', kind: 'item', multiplier: 2, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 125, unitPriceDp: 2, totalCents: 250 },
+    { raw: 'BONI MELK', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 250 },
+  ];
+  if (foldContinuations(bare).length === 2) ok('...while the same arithmetic alone on a row is not');
+  else fail('a bare multi-buy row was left as a product', []);
+}
+
+/*
+ * An arithmetic row carrying a quantity but no price, and no money of its own.
+ *
+ * With nothing to multiply there is no way to work out which neighbour it
+ * describes, so the direction falls back to the row above — the commoner
+ * layout, and the behaviour this function had before it could fold either way.
+ *
+ * The quantity has to be REAL for this to prove anything. A row with no numbers
+ * at all folds into whichever host you like and carries nothing across, so both
+ * directions leave identical output and the fixture asserts nothing; the first
+ * version of this one did exactly that and passed with the default reversed.
+ * Here the 2 lands on one neighbour or the other, visibly.
+ *
+ * "2 x 1,25" and not "0,602 kg x 2,99", because a row that opens with a unit is
+ * caught by the zero-total rule above and never reaches this decision.
+ */
+{
+  const priceless = [
+    { raw: 'APPELSIENEN', kind: 'item', multiplier: null, multiplierKind: 'count',
+      multiplierDp: null, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 199 },
+    { raw: '2 x 1,25', kind: 'item', multiplier: 2, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 0 },
+    { raw: 'BONI MELK', kind: 'item', multiplier: null, multiplierKind: 'count',
+      multiplierDp: null, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 250 },
+  ];
+  const folded = foldContinuations(priceless);
+  const above = folded.find((l) => l.raw === 'APPELSIENEN');
+  const below = folded.find((l) => l.raw === 'BONI MELK');
+
+  if (folded.length === 2 && above?.multiplier === 2 && below?.multiplier == null) {
+    ok('a measurement row with nothing to multiply folds upward by default');
+  } else {
+    fail('the undecidable measurement row changed direction', [
+      JSON.stringify({ above: above?.multiplier ?? null, below: below?.multiplier ?? null }),
+    ]);
+  }
+}
+
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

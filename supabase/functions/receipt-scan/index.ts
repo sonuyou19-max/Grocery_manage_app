@@ -265,16 +265,33 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
 - totalCents: the line's own money as printed, in whole cents. Negative for
   discounts and deposit returns. This field is required on every line.
 
-A WEIGHED ITEM IS ONE LINE, however many rows it is printed on. Carrefour and
-others print the product and its money on one row and the measurement under it:
+A WEIGHED ITEM IS ONE LINE, however many rows it is printed on, and the rows
+come in either order. Carrefour prints the name and its money first with the
+measurement under it; ALDI prints the measurement first and the name and money
+on the row below it:
 
     TOMATE(S)                        1,80
       0,602 kg x 2,99 EUR/kg
 
-That is ONE line: raw "TOMATE(S)", multiplier 0.602, unit "kg",
-unitPriceCents 299, totalCents 180. The second row is not a product and must
-never become one — a line whose name is its own weight and whose total is zero
-is a row you have split by mistake.
+    COCA-COLA REGULAR 1L             1,79
+      0,762 kg x 1,15 €/kg
+    BANAAN LOS                       0,88
+
+Each of those weighings is ONE line, and its name comes from the row that has
+one: raw "TOMATE(S)", multiplier 0.602, unit "kg", unitPriceCents 299,
+totalCents 180; and raw "BANAAN LOS", multiplier 0.762, unit "kg",
+unitPriceCents 115, totalCents 88.
+
+A measurement row is nothing but arithmetic — a quantity, a unit and a price
+per unit, with no product name — and multiplying it out gives the total printed
+on the row it belongs to: 0,762 x 1,15 is 0,88, the bananas below it and not
+the cola above. Such a row is never a product, whichever side of the name it is
+printed on and whatever amount you would otherwise put on it. Written out as a
+line of its own it charges the shopper for that weighing twice.
+
+A weight in the NAME is the other case and stays an ordinary line: "ROYAL GALA
+1,5KG" at 2,39 is a pack of a nominal size — packSize 1.5, packUnit "kg",
+multiplier 1 — because nothing was weighed at the till.
 - store: the shop's name from the header, as printed. "Carrefour Market
   Heverlee", "ALDI SÜD", "EVEREST BVBA". Not the street, not the company number.
 - purchasedAt: the date and time PRINTED on the receipt, as ISO 8601. Not today.

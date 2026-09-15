@@ -132,6 +132,45 @@ export type ProblemCode = 'line' | 'goods' | 'paid' | 'count';
 const QUANTITY_ONLY = /^\s*\d+(?:[.,]\d+)?\s*(kg|g|l|ml|cl)\b/i;
 
 /**
+ * The same phantom row, on tills that print it ABOVE the name and charge for it.
+ *
+ * ---------------------------------------------------------------------------
+ * The receipt that broke the rule above
+ * ---------------------------------------------------------------------------
+ *
+ * ALDI Leuven, 14-09-2026:
+ *
+ *     COCA-COLA REGULAR 1L         1,79
+ *       0,762 kg x 1,15 EUR/kg
+ *     BANAAN LOS                   0,88
+ *
+ * The measurement belongs to the line BELOW it, and both of the signals the
+ * rule above depends on are absent. It is not free — the extractor read the
+ * 0,88 onto it as well as onto BANAAN LOS — and there is no host above it to
+ * fold into, only an unrelated bottle of Coke. So the bananas were imported
+ * twice and the sheet reported being 0,88 over what was paid, which is exactly
+ * the weight of the row that should not have existed.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is a second pattern rather than a loosened one
+ * ---------------------------------------------------------------------------
+ *
+ * Dropping the zero-total condition from QUANTITY_ONLY would catch this row and
+ * eat real products with it: that pattern is anchored only at the start, so
+ * "1 kg zak aardappelen" satisfies it, and the zero is what has been keeping
+ * that bag of potatoes on the receipt.
+ *
+ * This one is anchored at BOTH ends and describes a row that is nothing but
+ * arithmetic — a quantity, optionally a unit, a times sign, a price. No product
+ * name can survive it, because a name is letters and there is nowhere in the
+ * pattern for letters to go. That makes the total irrelevant: whatever money
+ * was printed or misread onto a row like this, the row is a measurement of the
+ * item beside it and never an item of its own.
+ */
+const MEASURED_ROW =
+  /^\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl)?\s*[x×*@]\s*[€$£]?\s*\d+(?:[.,]\d+)?\s*(?:€|eur)?\s*(?:\/\s*(?:kg|g|l|ml|cl|st|stuk))?\s*[€$£]?\s*$/i;
+
+/**
  * Generic over the line, because it runs on the RICH one.
  *
  * The phantom rows have to leave the response, not just the arithmetic — the
@@ -151,71 +190,123 @@ interface Foldable {
   totalCents: number;
 }
 
+/*
+ * What the measurement row was holding, moved onto the row that is the product.
+ *
+ * Which multiplier wins is decided by ARITHMETIC.
+ *
+ * The obvious rule — take the weight only if the host has none — is wrong on
+ * the Carrefour receipt this was written for:
+ *
+ *     BULK LOOK            1   8,99    1,35
+ *     0,150 Kg
+ *
+ * That leading 1 is the ARTICLE COUNT, not a quantity: every weighed line
+ * carries it, and the price beside it is per kilo. So the host arrives with
+ * multiplier 1 already set, the null test never fires, and the row is dropped
+ * while its weight is thrown away — leaving a line claiming one article at 8,99
+ * that cost 1,35. Tidier than the phantom row, and just as wrong.
+ *
+ * The receipt settles it without anyone guessing. 0,150 x 8,99 is 1,35 and
+ * 1 x 8,99 is not, so the weight is the multiplier that makes the line true.
+ * Adopted only when it fits BETTER, which is what stops this from damaging a
+ * host that was already right.
+ *
+ * The price may be printed on either row — beside the name on some tills, under
+ * it on others — so the comparison uses whichever row has one.
+ */
+function absorb<T extends Foldable>(host: T, row: T): void {
+  const price = host.unitPriceCents ?? row.unitPriceCents;
+  const fits = (m: number | null) =>
+    price == null || m == null ? Infinity : Math.abs(m * price - host.totalCents);
+  const better =
+    price != null && row.multiplier != null
+      ? fits(row.multiplier) < fits(host.multiplier ?? 1)
+      : host.multiplier == null;
+
+  if (better && row.multiplier != null) {
+    host.multiplier = row.multiplier;
+    host.multiplierDp = row.multiplierDp;
+    /*
+     * The unit travels with the number because it is what says the number is a
+     * WEIGHT: downstream, a multiplier with no unit and no fraction reads as a
+     * count of packs, so moving 0,602 across without its "kg" would turn six
+     * hundred grams of tomatoes into a line judged by a tolerance built for
+     * whole articles.
+     */
+    if (row.unit != null) host.unit = row.unit;
+  }
+  if (host.unitPriceCents == null && row.unitPriceCents != null) {
+    host.unitPriceCents = row.unitPriceCents;
+    host.unitPriceDp = row.unitPriceDp;
+  }
+}
+
+/**
+ * Which neighbour a measurement row belongs to.
+ *
+ * Asked only for MEASURED_ROW, which can be printed on either side of its name,
+ * so the direction cannot be assumed the way it can for a trailing free row.
+ * The paper answers it: the row multiplies out to its own item's money and to
+ * nobody else's. On the ALDI receipt 0,762 x 1,15 is 0,88 — the bananas below,
+ * not the 1,79 bottle of Coke above — and no reading of the layout is needed.
+ *
+ * When the row carries no numbers to multiply, its own printed total stands in.
+ * When it has neither, there is nothing to reason with and it folds upward,
+ * which is the commoner layout and the behaviour this function already had.
+ */
+function chooseHost<T extends Foldable>(row: T, prev: T | null, next: T | null): T | null {
+  if (!prev) return next;
+  if (!next) return prev;
+
+  const expected =
+    row.multiplier != null && row.unitPriceCents != null
+      ? row.multiplier * row.unitPriceCents
+      : row.totalCents !== 0
+        ? row.totalCents
+        : null;
+  if (expected == null) return prev;
+
+  const miss = (host: T) => Math.abs(expected - host.totalCents);
+  return miss(next) < miss(prev) ? next : prev;
+}
+
 export function foldContinuations<T extends Foldable>(lines: readonly T[]): T[] {
   const out: T[] = [];
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+
     /*
+     * A free row named after its own weight, printed under its item.
+     *
      * Both conditions, and the zero is the load-bearing one. A real product can
      * be named oddly; a real product cannot be free. Requiring both means a
      * genuine 1kg bag of something priced at 1,25 is never touched, whatever it
      * is called.
      */
-    const continuation =
-      line.totalCents === 0 && QUANTITY_ONLY.test(line.raw) && out.length > 0;
-    if (!continuation) {
-      out.push(line);
+    if (line.totalCents === 0 && QUANTITY_ONLY.test(line.raw) && out.length > 0) {
+      absorb(out[out.length - 1], line);
       continue;
     }
 
     /*
-     * Which multiplier belongs on the row above, decided by ARITHMETIC.
-     *
-     * The obvious rule — take the weight only if the host has none — is wrong
-     * on the receipt this was written for. Carrefour prints:
-     *
-     *     BULK LOOK            1   8,99    1,35
-     *     0,150 Kg
-     *
-     * That leading 1 is the ARTICLE COUNT, not a quantity: every weighed line
-     * carries it, and the price beside it is per kilo. So the host arrives with
-     * multiplier 1 already set, the null test never fires, and the row is
-     * dropped while its weight is thrown away — leaving a line claiming one
-     * article at 8,99 that cost 1,35. Tidier than the phantom row, and just as
-     * wrong.
-     *
-     * The receipt settles it without anyone guessing. 0,150 x 8,99 is 1,35 and
-     * 1 x 8,99 is not, so the weight is the multiplier that makes the line true.
-     * Adopted only when it fits BETTER, which is what stops this from damaging a
-     * host that was already right.
-     *
-     * The price may be printed on either row — beside the name here, under it on
-     * other tills — so the comparison uses whichever row has one.
+     * A row that is nothing but arithmetic, whichever side of the name it sits
+     * on and whatever money ended up on it. Tried second, so the rule above
+     * keeps deciding every receipt it already decided.
      */
-    const host = out[out.length - 1];
-    const price = host.unitPriceCents ?? line.unitPriceCents;
-    const fits = (m: number | null) =>
-      price == null || m == null ? Infinity : Math.abs(m * price - host.totalCents);
-    const better =
-      price != null && line.multiplier != null
-        ? fits(line.multiplier) < fits(host.multiplier ?? 1)
-        : host.multiplier == null;
+    if (MEASURED_ROW.test(line.raw)) {
+      const host = chooseHost(
+        line,
+        out.length > 0 ? out[out.length - 1] : null,
+        i + 1 < lines.length ? lines[i + 1] : null,
+      );
+      if (host) {
+        absorb(host, line);
+        continue;
+      }
+    }
 
-    if (better && line.multiplier != null) {
-      host.multiplier = line.multiplier;
-      host.multiplierDp = line.multiplierDp;
-      /*
-       * The unit travels with the number because it is what says the number is
-       * a WEIGHT: downstream, a multiplier with no unit and no fraction reads as
-       * a count of packs, so moving 0,602 across without its "kg" would turn six
-       * hundred grams of tomatoes into a line judged by a tolerance built for
-       * whole articles.
-       */
-      if (line.unit != null) host.unit = line.unit;
-    }
-    if (host.unitPriceCents == null && line.unitPriceCents != null) {
-      host.unitPriceCents = line.unitPriceCents;
-      host.unitPriceDp = line.unitPriceDp;
-    }
+    out.push(line);
   }
   return out;
 }
