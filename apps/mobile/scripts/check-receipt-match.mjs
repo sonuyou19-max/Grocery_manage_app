@@ -747,5 +747,80 @@ eq(
   eq('the offline result is left untouched', base.get(ps[0].key).kind, 'unmatched');
 }
 
+/* ------------------------------------------ the name the shopper is shown -- */
+
+/*
+ * ALDI Leuven, 14-09-2026. `GEMENGD BOEKET` came back with product "flowers",
+ * the list held `Flowers`, and the review sheet printed
+ *
+ *     flowers
+ *     GEMENGD BOEKET
+ *     NOT ON YOUR LIST
+ *
+ * with `Flowers` listed underneath as a row the receipt had missed. Two
+ * spellings of one word on one screen, reported as strangers.
+ *
+ * The sheet shows productName, which prefers `product`; the ladder compared the
+ * raw line, the expansion and the translation and never `product`. All three of
+ * those answer "what did I buy" and come back long — "mixed bouquet" — where a
+ * list row is somebody's short name for a thing. The one string on screen was
+ * the one string never compared.
+ */
+{
+  const flowers = {
+    key: 'k1', raw: ['GEMENGD BOEKET'], name: 'GEMENGD BOEKET',
+    product: 'flowers', expanded: 'mixed bouquet', translated: 'mixed bouquet',
+    brand: null, section: null, packs: 1, quantity: null, unit: null,
+    priceCents: 349, emoji: '\u{1F338}', category: 'other', confidence: 'high',
+  };
+  const list = [{ id: 'i1', name: 'Flowers', category: 'other' }];
+
+  eq('the name on screen is the name that gets matched',
+    matchPurchases([flowers], list).get('k1'),
+    { kind: 'matched', itemId: 'i1', how: 'exact' });
+
+  /*
+   * Stated as a relationship rather than a constant: the guarantee is that
+   * whatever the sheet PRINTS is among the strings the ladder tries, and a
+   * fixture asserting the literal "flowers" would still pass if productName
+   * started preferring something else.
+   */
+  const shown = productName(flowers);
+  const reached = matchPurchases([flowers], [{ id: 'i2', name: shown, category: 'other' }]).get('k1');
+  eq('...whatever productName decides that name is', reached?.kind, 'matched');
+}
+
+/*
+ * And why `product` is consulted LAST, which is the half that is easy to undo.
+ *
+ * `product` drops the brand, the size and the variant, so both bottles on that
+ * same ALDI receipt come back as plain "cola". The list held `Cola` and `Cola
+ * Zero`, and the sheet matched each bottle to the right row — through the
+ * expansion, which still knows which is which.
+ *
+ * Consult "cola" first and the ZERO bottle reaches `Cola` on the exact rung and
+ * claims it, before the expansion is ever asked. The wrong row, settled early,
+ * by the most lossy reading available.
+ */
+{
+  const bottles = [
+    { key: 'z', raw: ['COCA COLA ZERO 1L'], name: 'COCA COLA ZERO 1L', product: 'cola',
+      expanded: 'Coca-Cola Zero 1L', translated: 'Cola Zero', brand: 'Coca-Cola', section: null,
+      packs: 1, quantity: null, unit: 'l', priceCents: 179, emoji: '\u{1F964}',
+      category: 'drinks', confidence: 'high' },
+    { key: 'r', raw: ['COCA-COLA REGULAR 1L'], name: 'COCA-COLA REGULAR 1L', product: 'cola',
+      expanded: 'Coca-Cola Regular 1L', translated: 'Cola', brand: 'Coca-Cola', section: null,
+      packs: 1, quantity: null, unit: 'l', priceCents: 179, emoji: '\u{1F964}',
+      category: 'drinks', confidence: 'high' },
+  ];
+  const list = [
+    { id: 'cola', name: 'Cola', category: 'drinks' },
+    { id: 'zero', name: 'Cola Zero', category: 'drinks' },
+  ];
+  const m = matchPurchases(bottles, list);
+  eq('the zero bottle still reaches the zero row', m.get('z')?.itemId, 'zero');
+  eq('...and the regular one the plain row', m.get('r')?.itemId, 'cola');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

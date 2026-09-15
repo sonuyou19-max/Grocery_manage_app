@@ -313,8 +313,10 @@ function glyph(name: string, category: ItemCategory = 'other'): string | null {
 function purchaseGlyph(p: ReceiptPurchase): string | null {
   return (
     p.emoji ??
-    [p.name, p.expanded, p.translated]
-      .filter((n): n is string => !!n)
+    // Same four readings the name rungs use, in the same order and for the same
+    // reason — see namesOf. This chain only runs when the extractor returned no
+    // emoji at all, so `product` here is a last resort behind a last resort.
+    namesOf(p)
       .map((n) => glyph(n, p.category ?? 'other'))
       .find((x): x is string => x != null) ??
     null
@@ -384,9 +386,43 @@ export function refutes(p: ReceiptPurchase, candidate: ListCandidate): string | 
   return null;
 }
 
-/** The three readings of a line, widest first. */
+/**
+ * The readings of a line, most literal first — and `product` last of all.
+ *
+ * ---------------------------------------------------------------------------
+ * Why `product` has to be in here
+ * ---------------------------------------------------------------------------
+ *
+ * It was not, and the review sheet said so out loud. An ALDI line `GEMENGD
+ * BOEKET` came back with product "flowers", the shopper had `Flowers` on their
+ * list, and the sheet printed "flowers" above "NOT ON YOUR LIST" — while
+ * listing `Flowers` underneath as a row the receipt had missed. Two spellings
+ * of the same word, on one screen, reported as strangers.
+ *
+ * The cause is that the review sheet shows `productName`, which prefers
+ * `product`, and this compared everything BUT it: the raw line, the expansion
+ * and the translation, all three of which answer "what did I buy" and come back
+ * long — "mixed bouquet". A list row is not a description of a purchase. It is
+ * somebody's short name for a thing, which is exactly what `product` is for.
+ * So the one string the app put in front of the shopper was the one string it
+ * never compared.
+ *
+ * ---------------------------------------------------------------------------
+ * And why it goes LAST
+ * ---------------------------------------------------------------------------
+ *
+ * Because it is deliberately lossy. `product` drops the brand, the size and the
+ * variant, so both bottles on that same receipt — COCA COLA ZERO 1L and
+ * COCA-COLA REGULAR 1L — come back as plain "cola". A list holding both `Cola`
+ * and `Cola Zero` is matched correctly today by the expansion, which still
+ * knows which is which; consulted first, "cola" would reach `Cola` from the
+ * ZERO bottle and settle it wrongly before the expansion ever spoke.
+ *
+ * Last means this only ever answers where the other three had nothing to say,
+ * so it adds matches and moves none.
+ */
 const namesOf = (p: ReceiptPurchase): string[] =>
-  [p.name, p.expanded, p.translated].filter((n): n is string => !!n);
+  [p.name, p.expanded, p.translated, p.product].filter((n): n is string => !!n);
 
 /**
  * The free rows the FIRST of a line's readings can reach.
