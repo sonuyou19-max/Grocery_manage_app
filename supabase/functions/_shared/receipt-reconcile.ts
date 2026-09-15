@@ -277,22 +277,25 @@ export function foldContinuations<T extends Foldable>(lines: readonly T[]): T[] 
     const line = lines[i];
 
     /*
-     * A free row named after its own weight, printed under its item.
-     *
-     * Both conditions, and the zero is the load-bearing one. A real product can
-     * be named oddly; a real product cannot be free. Requiring both means a
-     * genuine 1kg bag of something priced at 1,25 is never touched, whatever it
-     * is called.
-     */
-    if (line.totalCents === 0 && QUANTITY_ONLY.test(line.raw) && out.length > 0) {
-      absorb(out[out.length - 1], line);
-      continue;
-    }
-
-    /*
      * A row that is nothing but arithmetic, whichever side of the name it sits
-     * on and whatever money ended up on it. Tried second, so the rule above
-     * keeps deciding every receipt it already decided.
+     * on and whatever money ended up on it.
+     *
+     * Tried FIRST, and the order is a fix rather than a preference. Both
+     * patterns match the ALDI row, because "0,762 kg x 1,15 EUR/kg" opens with a
+     * quantity and a unit — and when the extractor transcribes it honestly, with
+     * no money on it, the rule below matches too and folds it into whatever
+     * happens to be above. On this receipt that is a bottle of Coke:
+     *
+     *     COCA-COLA REGULAR 1L         1,79
+     *       0,762 kg x 1,15 EUR/kg
+     *     BANAAN LOS                   0,88
+     *
+     * The absorb is then refused on its own arithmetic — 1 x 1,79 already makes
+     * 1,79 and 0,762 does not — so nothing is corrupted and the receipt still
+     * adds up. The weight is simply thrown away, and the bananas arrive with no
+     * measurement at all. A silent loss that no total can detect, which is why
+     * the narrower pattern, the one that can work out where the row BELONGS,
+     * gets to answer before the one that can only guess upward.
      */
     if (MEASURED_ROW.test(line.raw)) {
       const host = chooseHost(
@@ -304,6 +307,20 @@ export function foldContinuations<T extends Foldable>(lines: readonly T[]): T[] 
         absorb(host, line);
         continue;
       }
+    }
+
+    /*
+     * A free row named after its own weight, printed under its item — a bare
+     * "0,150 Kg", with no price on it for the rule above to reason from.
+     *
+     * Both conditions, and the zero is the load-bearing one. A real product can
+     * be named oddly; a real product cannot be free. Requiring both means a
+     * genuine 1kg bag of something priced at 1,25 is never touched, whatever it
+     * is called.
+     */
+    if (line.totalCents === 0 && QUANTITY_ONLY.test(line.raw) && out.length > 0) {
+      absorb(out[out.length - 1], line);
+      continue;
     }
 
     out.push(line);

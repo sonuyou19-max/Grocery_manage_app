@@ -265,31 +265,32 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
 - totalCents: the line's own money as printed, in whole cents. Negative for
   discounts and deposit returns. This field is required on every line.
 
-A WEIGHED ITEM IS ONE LINE, however many rows it is printed on, and the rows
-come in either order. Carrefour prints the name and its money first with the
-measurement under it; ALDI prints the measurement first and the name and money
-on the row below it:
+A WEIGHED ITEM IS PRINTED ON TWO ROWS, and the rows come in either order.
+Carrefour prints the name and its money first with the measurement under it;
+ALDI prints the measurement first, with the name and the money on the row below:
 
     TOMATE(S)                        1,80
       0,602 kg x 2,99 EUR/kg
 
     COCA-COLA REGULAR 1L             1,79
-      0,762 kg x 1,15 €/kg
+      0,762 kg x 1,15 EUR/kg
     BANAAN LOS                       0,88
 
-Each of those weighings is ONE line, and its name comes from the row that has
-one: raw "TOMATE(S)", multiplier 0.602, unit "kg", unitPriceCents 299,
-totalCents 180; and raw "BANAAN LOS", multiplier 0.762, unit "kg",
-unitPriceCents 115, totalCents 88.
+TRANSCRIBE BOTH ROWS AND DO NOT JOIN THEM YOURSELF. The measurement row is a
+line of its own — multiplier 0.762, unit "kg", unitPriceCents 115, totalCents 0,
+because no money is printed on it. It is the one row not expected to multiply
+out to its own total. Joining it to its product happens after you answer, from
+the arithmetic: 0,762 x 1,15 is 0,88, which is the bananas below it and not the
+cola above.
 
-A measurement row is nothing but arithmetic — a quantity, a unit and a price
-per unit, with no product name — and multiplying it out gives the total printed
-on the row it belongs to: 0,762 x 1,15 is 0,88, the bananas below it and not
-the cola above. Such a row is never a product, whichever side of the name it is
-printed on and whatever amount you would otherwise put on it. Written out as a
-line of its own it charges the shopper for that weighing twice.
+EVERY ROW KEEPS THE MONEY PRINTED ON IT. Deciding the pairing yourself and
+moving money to make it fit is how the receipt above became wrong: the weight
+was attached to COCA-COLA REGULAR 1L and its total written as 0,88, which
+destroyed the 1,79 printed beside it — and nothing left in the answer could put
+it back. Copy each amount onto the row it is printed on and leave the joining
+alone.
 
-A weight in the NAME is the other case and stays an ordinary line: "ROYAL GALA
+A weight in the NAME is not a weighing and stays an ordinary line: "ROYAL GALA
 1,5KG" at 2,39 is a pack of a nominal size — packSize 1.5, packUnit "kg",
 multiplier 1 — because nothing was weighed at the till.
 - store: the shop's name from the header, as printed. "Carrefour Market
@@ -392,7 +393,9 @@ RULES.
   eighth of May. 12/08/26 is the twelfth of August 2026 — not the eighth of
   December, and not June. The middle number is the month.
 - Every line's multiplier times its unit price must equal its total. If they do
-  not, you have read one of the three wrongly — look again before answering.
+  not, you have read one of the three wrongly — look again before answering. A
+  measurement row is the one exception: it has no total of its own, so send
+  totalCents 0 and leave it alone. See WEIGHED ITEMS above.
 - Points balances, loyalty totals, VAT breakdowns, card numbers and anything
   printed AFTER the total are not lines. Do not include them.
 - THE SAME REDUCTION IS OFTEN PRINTED TWICE. Belgian tills show a discount

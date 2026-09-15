@@ -1192,6 +1192,56 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
   check_('...but never a number', /never a number/.test(defs));
 }
 
+/*
+ * The weighed-item lesson, which has now been wrong in two opposite directions
+ * and is the only part of this prompt with a scar worth guarding.
+ *
+ * It first taught one layout — Carrefour, measurement UNDER the name — and
+ * keyed the split-row test to a zero total. An ALDI receipt prints the
+ * measurement ABOVE the name, and the extractor put money on it, so the row
+ * became a seventh product and the bananas were imported twice.
+ *
+ * The repair taught both layouts and asked the model to join the rows itself.
+ * That was worse. It joined the ALDI measurement to the row above — an
+ * unrelated bottle of Coke — and, needing a total for the line it had invented,
+ * wrote 0,88 over the 1,79 printed beside the Coke. The receipt came to 9,43
+ * against a printed 10,34, and the 1,79 was gone: no arithmetic downstream can
+ * recover money that was never transcribed.
+ *
+ * So the model no longer decides. It transcribes both rows and foldContinuations
+ * joins them, from the arithmetic, under the fixtures above. These assertions
+ * hold that line, because the tempting edit is always to ask the model for a
+ * tidier answer.
+ */
+{
+  const promptText = fn.slice(fn.indexOf('const SYSTEM_PROMPT'));
+  const weighed = promptText.slice(
+    promptText.indexOf('A WEIGHED ITEM'),
+    promptText.indexOf('- store:'),
+  );
+
+  check_('the prompt shows the measurement printed ABOVE its item', /0,762 kg x 1,15 EUR\/kg\s*\n\s*BANAAN LOS/.test(weighed));
+  check_('...as well as below it', /TOMATE\(S\)[^\n]*\n\s*0,602 kg x 2,99 EUR\/kg/.test(weighed));
+
+  /*
+   * The two that matter. The model must be told NOT to join the rows, and told
+   * the measurement row carries no money — without the second, the arithmetic
+   * rule further down the prompt makes a zero total look like a mistake and the
+   * model invents one, which is how the 1,79 was destroyed.
+   */
+  check_('...and is told to leave the joining alone', /DO NOT JOIN THEM YOURSELF/.test(weighed));
+  check_('...and that a measurement row carries no money of its own', /totalCents 0/.test(weighed));
+  check_('...with the exception spelled out where the arithmetic rule is stated',
+    /measurement row is the one exception/.test(promptText));
+
+  /*
+   * Asserted as an ABSENCE. "A WEIGHED ITEM IS ONE LINE" is the retracted
+   * instruction: it reads as a tidier, more confident rule than the one that
+   * replaced it, and it is the sentence that asks the model to do the joining.
+   */
+  check_('...and is NOT asked for one merged line', !/A WEIGHED ITEM IS ONE LINE/.test(promptText));
+}
+
 /* --------------------------------------- the retry, and what it is worth --- */
 
 /*
@@ -1896,6 +1946,52 @@ check_(
   }
 }
 
+
+/*
+ * The ALDI row again, transcribed HONESTLY — no money on it.
+ *
+ * The fixture above gave the measurement row the duplicated 0,88, because that
+ * is what the extractor returned the first time. This is the same receipt when
+ * it does the right thing and leaves the row free, and it is the case that
+ * nearly escaped: both patterns match a free "0,762 kg x 1,15 EUR/kg", so
+ * whichever is tried first decides the answer.
+ *
+ * Tried the other way round it looks harmless. The row folds into the Coke
+ * above, absorb refuses the weight on its own arithmetic (1 x 1,79 is already
+ * 1,79 and 0,762 is not), nothing is corrupted, and the receipt still adds up
+ * to 10,34 — so every total in this file agrees and the bananas quietly arrive
+ * with no weight on them. That is why this asserts the MEASUREMENT and not the
+ * sum: the sum cannot see this failure.
+ */
+{
+  const honest = [
+    { raw: 'COCA COLA ZERO 1L', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 179, unitPriceDp: 2, totalCents: 179 },
+    { raw: 'COCA-COLA REGULAR 1L', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: 179, unitPriceDp: 2, totalCents: 179 },
+    { raw: '0,762 kg x 1,15 €/kg', kind: 'item', multiplier: 0.762, multiplierKind: 'measure',
+      multiplierDp: 3, unit: 'kg', unitPriceCents: 115, unitPriceDp: 2, totalCents: 0 },
+    { raw: 'BANAAN LOS', kind: 'item', multiplier: 1, multiplierKind: 'count',
+      multiplierDp: 0, unit: null, unitPriceCents: null, unitPriceDp: null, totalCents: 88 },
+  ];
+  const folded = foldContinuations(honest);
+
+  const banana = folded.find((l) => l.raw === 'BANAAN LOS');
+  if (banana && banana.multiplier === 0.762 && banana.unit === 'kg' && banana.unitPriceCents === 115) {
+    ok('a FREE weight row above its item still reaches the item, not the row above');
+  } else {
+    fail('the free ALDI weight row was folded upward and its measurement lost', [
+      JSON.stringify(banana ?? null),
+    ]);
+  }
+
+  const coke = folded.find((l) => l.raw === 'COCA-COLA REGULAR 1L');
+  if (coke && coke.multiplier === 1 && coke.unit == null && coke.totalCents === 179) {
+    ok('...and the bottle above keeps its own weightless 1,79');
+  } else {
+    fail('the row above was altered', [JSON.stringify(coke ?? null)]);
+  }
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
