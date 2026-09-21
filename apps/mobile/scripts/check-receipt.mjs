@@ -1260,9 +1260,24 @@ check_('...and the prompt says a future date is a misreading', /A receipt cannot
 {
   const promptText = fn.slice(fn.indexOf('const SYSTEM_PROMPT'));
   const weighed = promptText.slice(
-    promptText.indexOf('A WEIGHED ITEM'),
+    promptText.indexOf('WEIGHED ITEMS ARE PRINTED'),
     promptText.indexOf('- store:'),
   );
+  check_('the weighed-item lesson is findable at all', promptText.includes('WEIGHED ITEMS ARE PRINTED'));
+
+  /*
+   * The ONE-row till, and the reason this assertion exists. The replacement
+   * text opened "A WEIGHED ITEM IS PRINTED ON TWO ROWS" — a flat statement that
+   * is false for Colruyt, which prints the name, the weight, the price per kilo
+   * and the total on a single row. The sentence it replaced ("however many rows
+   * it is printed on") covered both, and nothing in this file could have caught
+   * the loss: every fixture here is hand-written lines, so no guard exercises
+   * the prompt's effect on a layout it describes wrongly.
+   */
+  check_('...and covers the till that prints a weighing on ONE row',
+    /ONE row/.test(weighed) && /Colruyt/.test(weighed));
+  check_('...telling the model that row is already complete',
+    /nothing to join/.test(weighed));
 
   check_('the prompt shows the measurement printed ABOVE its item', /0,762 kg x 1,15 EUR\/kg\s*\n\s*BANAAN LOS/.test(weighed));
   check_('...as well as below it', /TOMATE\(S\)[^\n]*\n\s*0,602 kg x 2,99 EUR\/kg/.test(weighed));

@@ -266,7 +266,17 @@ WHAT EVERY FIELD MEANS. Read this before writing anything.
 - totalCents: the line's own money as printed, in whole cents. Negative for
   discounts and deposit returns. This field is required on every line.
 
-A WEIGHED ITEM IS PRINTED ON TWO ROWS, and the rows come in either order.
+WEIGHED ITEMS ARE PRINTED IN MORE THAN ONE WAY. Transcribe the way the till in
+front of you does it, and do not go looking for a shape that is not there.
+
+Colruyt prints the whole weighing on ONE row — the name, the weight, the price
+per kilo and the total, together:
+
+    Rode uien            1,208 kg x 1,79 EUR/kg        2,16
+
+That row is already complete. It is one line, and there is nothing to join.
+
+Carrefour and ALDI split the same thing across TWO rows, in opposite orders.
 Carrefour prints the name and its money first with the measurement under it;
 ALDI prints the measurement first, with the name and the money on the row below:
 
