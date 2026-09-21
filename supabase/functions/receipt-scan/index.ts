@@ -18,6 +18,7 @@ import {
   MONEY_CODES,
   outcomeOf,
   reconcile,
+  unexplainedCents,
   type Outcome,
   type Problem,
   type ReceiptLine,
@@ -503,6 +504,38 @@ const MODEL_CAREFUL = 'claude-sonnet-5';
  */
 const REPAIR_TOKENS = 1024;
 
+/**
+ * The one thing a re-read is told, and only when the arithmetic has earned it.
+ *
+ * A re-read is otherwise sent in blind, deliberately: shown the first answer it
+ * would anchor on the thing being doubted. But blind also means it repeats
+ * whatever made the first attempt fail, and on the Carrefour receipt that
+ * produced `unexplainedCents` the failure is a property of the LAYOUT — a wide
+ * gap between the description and the amount — so a second pass over the same
+ * pixels slips the same way.
+ *
+ * This says what went wrong without saying what was read. No line, no name, no
+ * amount from the first attempt: only the shape of the fault, which the
+ * arithmetic established rather than guessed, and which the model cannot infer
+ * from the image alone because it has no way to know it got it wrong.
+ */
+const RE_READ_PAIRING = `A previous reading of these same photographs produced rows that each multiplied
+out correctly and still did not add up to the total printed on the paper.
+
+A row whose quantity, unit price and amount agree with one another cannot be
+wrong by a misread digit — a wrong digit breaks that row's own arithmetic. So
+the amounts were put against the wrong descriptions, or a row was skipped.
+
+Both come from the same place: the description is on the left and the amount is
+on the right with empty space between them, and the eye crosses that space onto
+a neighbouring row. Work one row at a time. Put a finger on a description, track
+straight across to the amount on ITS line, and take the quantity and the unit
+price from that same line. Do not read the amounts as a column. When a row's
+amount looks far from its description, it belongs to the row above or below.
+
+Transcribe every printed row exactly once, including any row that is a discount
+or a deposit.`;
+
 const REPAIR_PROMPT = `You are correcting ONE READING of a supermarket receipt.
 
 You are given the photographs, the lines somebody already transcribed from them,
@@ -732,7 +765,7 @@ Deno.serve(async (req) => {
   let tokensIn = 0;
   let tokensOut = 0;
 
-  const ask = async (model: string) => {
+  const ask = async (model: string, brief: string | null = null) => {
     const message = await anthropic.messages.create({
       model,
       max_tokens: MAX_TOKENS,
@@ -758,6 +791,11 @@ Deno.serve(async (req) => {
               type: 'text',
               text: `Today is ${new Date().toISOString().slice(0, 10)}. A receipt cannot be dated after this.`,
             },
+            /*
+             * Only ever present on a re-read, and never carrying the answer it
+             * is doubting — see RE_READ_PAIRING.
+             */
+            ...(brief ? [{ type: 'text' as const, text: brief }] : []),
           ],
         },
       ],
@@ -1044,6 +1082,18 @@ Deno.serve(async (req) => {
   const reReadThreshold = Math.max(100, Math.round(0.01 * (parsed.paidCents ?? 0)));
   const misreadLine = gapCents > reReadThreshold;
 
+  /*
+   * ...and WHICH re-read, once it is a re-read.
+   *
+   * The gap says a line was read wrong; it cannot say whether the digits were
+   * misread or the amounts were put against the wrong rows, and the second is
+   * invisible to every other check here because such rows multiply out. See
+   * unexplainedCents: when the disputed rows cannot account for the gap, rows
+   * that look perfect are carrying it, and the re-read is told so.
+   */
+  const unexplained = unexplainedCents(parsed.lines, result);
+  const pairingSuspect = unexplained > reReadThreshold;
+
   if (!result.ok && worthRetrying) {
     /*
      * One retry, never a loop. A receipt that will not reconcile twice is
@@ -1063,7 +1113,7 @@ Deno.serve(async (req) => {
          * was shown the first answer would anchor on it, and the first answer
          * is the thing being doubted.
          */
-        candidate = await ask(MODEL_CAREFUL);
+        candidate = await ask(MODEL_CAREFUL, pairingSuspect ? RE_READ_PAIRING : null);
       } else {
         candidate = applyFixes(parsed, await repair(parsed, result.badLines, result.details));
       }
@@ -1130,6 +1180,14 @@ Deno.serve(async (req) => {
        * threshold between them is set anywhere near right.
        */
       gapCents,
+      /*
+       * How much of that gap the disputed rows could not have caused, and so
+       * which re-read was sent. Logged because the threshold between a blind
+       * re-read and a briefed one is a guess until there are scans either side
+       * of it.
+       */
+      unexplained,
+      pairingSuspect,
       /*
        * Whether a retry HAPPENED, not whether one would have been chosen.
        *

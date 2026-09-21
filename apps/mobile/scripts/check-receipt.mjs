@@ -69,7 +69,7 @@ const src = readFileSync(join(SHARED, 'receipt-reconcile.ts'), 'utf8');
 const { outputText } = ts.transpileModule(src, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
-const { reconcile, classify, fingerprint, foldContinuations, MONEY_CODES, outcomeOf, isBetter } = await import(
+const { reconcile, classify, fingerprint, foldContinuations, MONEY_CODES, outcomeOf, isBetter, unexplainedCents } = await import(
   'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 );
 
@@ -858,8 +858,52 @@ check_(
 );
 check_(
   '...and the second time only when a whole line looks wrong',
-  /if \(misreadLine\) \{[\s\S]{0,400}?candidate = await ask\(MODEL_CAREFUL\);/.test(fn),
+  /if \(misreadLine\) \{[\s\S]{0,400}?candidate = await ask\(MODEL_CAREFUL,/.test(fn),
 );
+
+/*
+ * ---------------------------------------------------------------------------
+ * WHICH re-read, once it is a re-read
+ * ---------------------------------------------------------------------------
+ *
+ * Carrefour Market Heverlee, 18-09-2026: 146,42 against a printed 128,11,
+ * because for seventeen consecutive rows the amount, the quantity and the unit
+ * price all came from the row BELOW the description. Every one of those rows
+ * multiplies out, so not one is in badLines — and the re-read that the gap
+ * correctly triggered was sent in blind, looked at the same wide gap between
+ * the description column and the amount column, and slipped the same way.
+ *
+ * unexplainedCents is what lets the code tell that case apart from a misread
+ * digit, and these assert that the answer is actually USED: a brief that is
+ * computed and not sent changes nothing, and nothing else here would notice.
+ */
+check_(
+  'how much of the gap the disputed rows cannot explain is computed',
+  /const unexplained = unexplainedCents\(parsed\.lines, result\);/.test(fn),
+);
+check_(
+  '...and a gap they cannot explain means the PAIRING is suspect',
+  /const pairingSuspect = unexplained > reReadThreshold;/.test(fn),
+);
+check_(
+  '...and that is what decides whether the re-read is briefed',
+  /candidate = await ask\(MODEL_CAREFUL, pairingSuspect \? RE_READ_PAIRING : null\);/.test(fn),
+);
+
+/*
+ * The brief must not carry the first answer. A re-read is sent in blind on
+ * purpose — shown the reading it is doubting, it anchors on it — so this one
+ * says what SHAPE the fault is and never what was read. Asserted as an absence,
+ * because the tempting way to make a re-read more accurate is to show it more.
+ */
+{
+  const brief = fn.slice(fn.indexOf('const RE_READ_PAIRING'), fn.indexOf('const REPAIR_PROMPT'));
+  check_('the brief names the fault', /multiplied\s*\n?out correctly and still did not add up/.test(brief));
+  check_('...and tells the reader to work across a row, not down a column',
+    /Do not read the amounts as a column/.test(brief));
+  check_('...and carries no line, name or amount from the reading it doubts',
+    !/\$\{/.test(brief) && !/parsed\.|result\.|lines\[/.test(brief));
+}
 check_(
   '...with a small gap still taking the cheap patch',
   /\} else \{\s*candidate = applyFixes\(parsed, await repair\(/.test(fn),
@@ -1992,6 +2036,107 @@ check_(
     fail('the row above was altered', [JSON.stringify(coke ?? null)]);
   }
 }
+
+/* ------------------------------- a gap the disputed rows cannot account for -- */
+
+/*
+ * Carrefour Market Heverlee, 18-09-2026, transcribed from the paper and from
+ * the reading the app produced from it.
+ *
+ * For seventeen consecutive rows the amount, the quantity AND the unit price
+ * came from the row below the description, so every one of those rows
+ * multiplies out and not one is disputed. Two rows are disputed, for an
+ * unrelated reason (their weight was dropped), and between them they could
+ * account for 4,20 of an 18,31 gap. The other 14,11 is sitting on rows that
+ * look perfect — which is the fact that tells a slipped column apart from a
+ * misread digit, and the only one available.
+ */
+const L = (raw, m, up, total) => ({
+  raw, kind: 'item', multiplier: m, multiplierKind: Number.isInteger(m) ? 'count' : 'measure',
+  multiplierDp: 0, unit: null, unitPriceCents: up, unitPriceDp: 2, totalCents: total,
+});
+
+{
+  // As the app read it: each row internally consistent, except the two weighed
+  // rows whose measurement was lost.
+  const read = [
+    L('NU3 VEGAN PROT500G', 1, 1879, 1879), L('LAYS DU BKD PIZZA', 1, 899, 899),
+    L('CAR EIREN X30', 1, 599, 599), L('SAU ICE CREAM', 2, 799, 1598),
+    L('WIJNEN', 1, 299, 299), L('ALPRO BARISTA COCO', 1, 135, 135),
+    L('BROCCOLI 500G', 1, 199, 199), L('SPINAZIE 450G', 1, 675, 675),
+    L('CAR MELK 0.5L', 2, 225, 450), L('COCA ZER.NANO CAF 1L', 2, 99, 198),
+    L('STMPL BANANES 750G', 1, 329, 329), L('EGG AIL/KA LOOK', 1, 245, 245),
+    L('ELUER 4X70G', 1, 199, 199), L('HUTTI TON CONCENTR', 3, 299, 897),
+    L('ALPRO PROT DRK OAT', 3, 69, 207), L('KIWI SUMOLIU', 2, 105, 210),
+    L('KONKUMMER/CONCHMBR', 2, 179, 358), L('URAC RODE ROIJN 20', 1, 363, 363),
+    L('RIJSTAFELS', 1, 194, 194),
+    // The two the reconciler does dispute: the weight never arrived, so a
+    // multiplier of 1 against the printed price per kilo misses the total.
+    L('COURGETTES/N', 1, 249, 97), L('PAPRIK/POIJOR.GR/UE', 1, 349, 81),
+    L('CLEMENTIINEN 750G', 1, 349, 349), L('CAR VODKA VIK 70CL', 1, 1249, 1249),
+    L('LINDT CHOCO EXCELL', 1, 449, 449), L('ALPRO KOKO 1L', 3, 272, 816),
+    L('CAR AMAZONIA NOTEN', 1, 500, 500), L('TOMATE(S) 0,496 KG', 1, 149, 149),
+    L('CAR KERSMOZZA 125G', 1, 119, 119), L('CAR PARMIG REG 80P', 1, 265, 265),
+    L('CAR VALNOOTPITTEN', 1, 350, 350), L('CAR BIG CHOC X4', 1, 285, 285),
+  ];
+  const totals = { goodsCents: 12811, paidCents: 12811, articleCount: 39 };
+  const res = reconcile(read, totals);
+
+  check_('the reading is 18,31 over what the paper says', outcomeOf(res).gapCents === 1831);
+  check_('...with only the two weighed rows disputed', res.badLines.length === 2);
+
+  /*
+   * 1831 - (249-97) - (349-81) = 1831 - 152 - 268 = 1411.
+   * Asserted exactly, because the whole value of the number is that it is
+   * arithmetic rather than a heuristic about how bad a receipt looks.
+   */
+  check_('...leaving 14,11 that those two rows could not have caused', unexplainedCents(read, res) === 1411);
+
+  /*
+   * And it is far past the threshold the function uses to choose a re-read —
+   * a euro, or one percent of the shop. On this receipt that is 128 cents.
+   */
+  check_('...which is past the threshold that briefs the re-read', unexplainedCents(read, res) > Math.max(100, Math.round(0.01 * 12811)) === true);
+}
+
+/*
+ * The opposite case, and the one that must NOT be briefed: a single row whose
+ * total was misread. The gap is entirely explained by the row that fails, so
+ * the fault is a digit and the cheap patch is the right answer.
+ */
+{
+  const digit = [L('MELK', 1, 199, 199), L('BROOD', 1, 249, 149), L('KAAS', 1, 350, 350)];
+  const res = reconcile(digit, { goodsCents: 798, paidCents: 798, articleCount: 3 });
+  check_('a single misread total is a gap of exactly that row', outcomeOf(res).gapCents === 100);
+  check_('...and nothing is left unexplained by it', unexplainedCents(digit, res) === 0);
+}
+
+/*
+ * A receipt that reconciles has nothing to explain, briefed or otherwise.
+ */
+{
+  const fine = [L('MELK', 1, 199, 199), L('BROOD', 1, 249, 249)];
+  const res = reconcile(fine, { goodsCents: 448, paidCents: 448, articleCount: 2 });
+  check_('a receipt that adds up leaves nothing unexplained', unexplainedCents(fine, res) === 0);
+}
+
+/*
+ * A row that prints only a total — common on German tills — is never disputed,
+ * because there is no product to test it against. So a gap it causes counts as
+ * unexplained, and that is right: a total nothing can check is exactly the kind
+ * of number a patch cannot fix and a second look at the pixels can.
+ */
+{
+  const totalOnly = [
+    { ...L('MELK', 1, 199, 199), multiplier: null, unitPriceCents: null, totalCents: 199 },
+    L('BROOD', 1, 249, 249),
+  ];
+  const res = reconcile(totalOnly, { goodsCents: 900, paidCents: 900, articleCount: 2 });
+  check_('an unbounded total-only row disputes nothing', res.badLines.length === 0);
+  check_('...so the gap it leaves counts as unexplained',
+    unexplainedCents(totalOnly, res) === 452);
+}
+
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

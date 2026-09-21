@@ -924,6 +924,75 @@ export function outcomeOf(result: ReconcileResult): Outcome {
 }
 
 /**
+ * How much of the gap the DISPUTED rows could not have caused.
+ *
+ * ---------------------------------------------------------------------------
+ * The receipt that needed this
+ * ---------------------------------------------------------------------------
+ *
+ * Carrefour Market Heverlee, 18-09-2026. The reading came back at 146,42
+ * against a printed 128,11, and for seventeen consecutive rows every amount
+ * belonged to the row BELOW its description:
+ *
+ *     LAYS OV BKD PIZZA     2,40      read as   crisps     8,99
+ *     CAR EIREN X30         8,99                eggs       5,99
+ *     BROCCOLI 500G         1,35                broccoli   1,99
+ *     SPINAZIE 450G         1,99                spinach    6,75
+ *
+ * The quantity and the unit price slipped with the amount, so every one of
+ * those rows MULTIPLIES OUT PERFECTLY. None is in `badLines`, none is disputed,
+ * and each is completely wrong — the exact fault the retry was split in two to
+ * catch, arriving in a shape neither half could name.
+ *
+ * ---------------------------------------------------------------------------
+ * What the arithmetic can still say
+ * ---------------------------------------------------------------------------
+ *
+ * The size of the gap alone cannot tell a slipped column from one badly misread
+ * row, and the two want different retries. But the disputed rows can be ASKED
+ * how much they could possibly account for: a row that fails its own
+ * multiplication is off by at most the amount by which it fails. Credit every
+ * disputed row with that much, and whatever is left over has to come from rows
+ * that look perfect.
+ *
+ * On this receipt the two disputed rows could explain 4,20 of an 18,31 gap.
+ * The other 14,11 sits on rows whose numbers agree with each other, which no
+ * misread digit can produce: a wrong digit inside a row breaks that row's own
+ * arithmetic. So the fault is in the PAIRING, or a row is missing — and a
+ * re-read that is told which of those it is looking for is a different request
+ * from one sent in blind.
+ *
+ * Deliberately generous to the disputed rows, in both directions it can be
+ * wrong. Where a row's TOTAL is the misread number, its failure is exactly its
+ * contribution and the credit is right. Where its UNIT PRICE is the misread one
+ * the total is fine and the row contributes nothing, so the credit is too
+ * large. Erring that way under-reports the slip and leaves the blind re-read in
+ * place, which is the behaviour this replaces — the opposite error would send
+ * the wrong brief on an ordinary misread digit.
+ */
+export function unexplainedCents(
+  lines: readonly ReceiptLine[],
+  result: ReconcileResult,
+): number {
+  const gap = outcomeOf(result).gapCents;
+  if (gap === 0) return 0;
+
+  let explainable = 0;
+  for (const i of result.badLines) {
+    const line = lines[i];
+    /*
+     * Always answerable in practice: the LINE check returns early on a row that
+     * prints only a total, so a row with no multiplier or no unit price is
+     * never disputed in the first place. Skipped rather than asserted, because
+     * this is exported and a caller could hand it a result it did not build.
+     */
+    if (line?.multiplier == null || line.unitPriceCents == null) continue;
+    explainable += Math.abs(Math.round(line.multiplier * line.unitPriceCents) - line.totalCents);
+  }
+  return Math.max(0, gap - explainable);
+}
+
+/**
  * Whether `candidate` is worth keeping over `incumbent`.
  *
  * Strictly better on the first thing they disagree about, so an answer that is
