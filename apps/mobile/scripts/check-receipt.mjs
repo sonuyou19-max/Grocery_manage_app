@@ -2153,6 +2153,42 @@ const L = (raw, m, up, total) => ({
 }
 
 
+/* ------------------------- what a bad reading is allowed to teach everyone -- */
+
+/*
+ * The shared lexicon is the only thing a single scan can damage permanently,
+ * and the damage is invisible from the receipt that caused it.
+ *
+ * Migration 0019 put four gates on it — the term must look like a grocery term,
+ * the model must certify it generic, the emoji must be allowed, and three
+ * unrelated households must have seen it. All four are about ODDITY or MALICE.
+ * None asks whether the line was read correctly.
+ *
+ * On the Carrefour scan that is 18,31 out, "MUTTI TOM CONCENTR" came back as
+ * "HUTTI TON CONCENTR" and became tuna — `ton` really is tuna in French and
+ * Dutch, so it is a good reading of a bad transcription, which is precisely
+ * when the model reports HIGH confidence. The generic gate IS that confidence,
+ * so it passes too, and a tuna is filed under a string no till ever printed.
+ *
+ * Asserted at the filter, because there is no other way to see it: the write is
+ * fire-and-forget inside waitUntil, so a scan that teaches the wrong word looks
+ * exactly like one that teaches nothing.
+ */
+check_('a reading the money contradicts teaches the shared lexicon nothing',
+  /const misreadSomething = result\.details\.some\(\(d\) => MONEY_CODES\.includes\(d\.code\)\);/.test(fn));
+check_('...applied to the lines before they are offered',
+  /\(misreadSomething \? \[\] : parsed\.lines\)\s*\n\s*\.filter\(\(l\) => l\.kind === 'item' && l\.confidence === 'high' && l\.emoji\)/.test(fn));
+
+/*
+ * MONEY problems only, and the same predicate the retry uses. A COUNT or SAVED
+ * disagreement means a line was duplicated or a discount missed — neither
+ * implicates a product NAME — and the count check has a history in this file of
+ * firing on receipts that were read perfectly. Gating on result.ok instead would
+ * pay a silent cost on the word of the weakest check here.
+ */
+check_('...on the money checks, not on every warning',
+  !/const misreadSomething = !result\.ok/.test(fn));
+
 /* ------------------------------------- the savings line, end to end ------- */
 
 /*

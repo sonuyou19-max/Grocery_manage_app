@@ -1316,8 +1316,56 @@ Deno.serve(async (req) => {
    * was generic enough to share. Nothing here is awaited: the shopper waiting
    * on their receipt must not wait on a dictionary write.
    */
+  /*
+   * ...and nothing at all from a reading the receipt contradicted.
+   *
+   * ---------------------------------------------------------------------------
+   * The gate the other four do not cover
+   * ---------------------------------------------------------------------------
+   *
+   * Migration 0019 built four: the term must look like a grocery term, the
+   * model must certify it is generic, the emoji must be in the allowed set, and
+   * three unrelated households must have seen it. Every one of them is about
+   * ODDITY or MALICE. None asks whether the line was read correctly.
+   *
+   * A Carrefour scan showed what that leaves open. The reading was 18,31 over
+   * the printed total, and six products were not the things on the paper — each
+   * one downstream of a character misread in the raw line:
+   *
+   *     MUTTI TOM CONCENTR   ->  HUTTI TON CONCENTR   ->  tuna
+   *     VRAC RODE AJUIN      ->  URAC RODE ROIJN      ->  grapes
+   *     SALICE SALENT.75     ->  SAU ICE CREAM        ->  ice cream
+   *
+   * `ton` really is tuna in French and Dutch, so the expansion is a good reading
+   * of a bad transcription — which is exactly when the model reports HIGH
+   * confidence. Its doubt is about the expansion, and there is nothing doubtful
+   * about it; the error is a glyph upstream, and no field in the answer can see
+   * that far back. The generic gate is that same confidence, so it passes too.
+   *
+   * So four gates open and a tuna is filed under HUTTI TON CONCENTR, in a table
+   * every household reads. Consensus bounds it — three callers must agree — but
+   * a systematic misread is reproducible by construction: the same layout gives
+   * the same result every time, which is the one kind of error that can collect
+   * three votes.
+   *
+   * The reconciler already knows. A receipt whose money does not add up is a
+   * photograph we could not read reliably, and the names on it were read from
+   * the same pixels as the numbers.
+   *
+   * MONEY problems only, matching the retry's own test. A COUNT or SAVED
+   * disagreement says a line was duplicated or a discount was missed, neither of
+   * which implicates a product name — and the count check has a documented
+   * history of firing on receipts that were perfectly read, so learning nothing
+   * from those would be a silent cost paid on the word of the weakest check here.
+   *
+   * Refusing to learn costs a later scan teaching the same term for free. The
+   * other way costs a word in a shared dictionary that nobody can trace back to
+   * the receipt that invented it.
+   */
+  const misreadSomething = result.details.some((d) => MONEY_CODES.includes(d.code));
+
   const offers = Promise.all(
-    parsed.lines
+    (misreadSomething ? [] : parsed.lines)
       .filter((l) => l.kind === 'item' && l.confidence === 'high' && l.emoji)
       .map((l) =>
         offerToLexicon(
