@@ -57,7 +57,9 @@ export type ReceiptProblem =
   | { code: 'line'; lines: number }
   | { code: 'goods'; got: number; printed: number }
   | { code: 'paid'; got: number; printed: number }
-  | { code: 'count'; units: number; asLines: number; printed: number };
+  | { code: 'count'; units: number; asLines: number; printed: number }
+  /** The discount lines do not add up to the savings total the receipt prints. */
+  | { code: 'saved'; got: number; printed: number };
 
 export interface ScannedReceipt {
   store: string | null;

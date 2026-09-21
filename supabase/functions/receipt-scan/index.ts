@@ -153,6 +153,7 @@ const receiptSchema = z.object({
   goodsCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
   paidCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
   articleCount: z.coerce.number().int().nullable().optional().default(null).catch(null),
+  savedCents: z.coerce.number().finite().nullable().optional().default(null).catch(null),
   lines: z.array(lineSchema).min(1).max(120),
 });
 
@@ -175,7 +176,8 @@ below is identical.
 Return ONLY a JSON object of this exact shape:
 
 {"store":"...","purchasedAt":"...","currency":"EUR","language":"nl",
- "goodsCents":6110,"paidCents":6110,"articleCount":23,"decimalComma":true,
+ "goodsCents":6110,"paidCents":6110,"articleCount":23,"savedCents":null,
+ "decimalComma":true,
  "lines":[
   {"raw":"4 X 1L DLL VOLLE MELK","kind":"item","product":"milk",
    "translated":"full fat milk 1L","brand":"Delhaize","multiplier":4,
@@ -307,6 +309,16 @@ multiplier 1 — because nothing was weighed at the till.
 - store: the shop's name from the header, as printed. "Carrefour Market
   Heverlee", "ALDI SÜD", "EVEREST BVBA". Not the street, not the company number.
 - purchasedAt: the date and time PRINTED on the receipt, as ISO 8601. Not today.
+- savedCents: what the receipt says the shopper SAVED in total, in cents, if it
+  prints such a line — "Uw voordeel", "U bespaarde", "Totaal voordeel", "Votre
+  avantage", "Ihre Ersparnis". Positive. Null when there is no such line.
+
+  This is the savings block from the rule above, and putting it HERE is what
+  keeps it from becoming a line: it is the reductions already taken off,
+  summed again for the shopper. It is never subtracted from anything. It is
+  read so the reductions you did transcribe have something to be checked
+  against, which is the only reason it is worth a field.
+
 - decimalComma: true when THIS receipt writes decimals with a comma, false when
   it writes them with a point. Judge it from the amounts printed on the paper,
   not from the language: a British or Irish till prints 1.67 and groups with a
@@ -409,6 +421,19 @@ RULES.
   totalCents 0 and leave it alone. See WEIGHED ITEMS above.
 - Points balances, loyalty totals, VAT breakdowns, card numbers and anything
   printed AFTER the total are not lines. Do not include them.
+- THE MINUS COMES AFTER THE NUMBER. European tills print a reduction as
+  "7,99-", not "-7,99", and a sign at the end of a line is the easiest mark on
+  the paper to lose. "7,99-" is minus seven ninety-nine; totalCents -799.
+
+  A row marked that way is a reduction WHATEVER its description says. Carrefour
+  prints its promotions against a department rather than a product:
+
+      SALICE SALENT.75       2    7,99    15,98
+      * WIJNEN                             7,99-
+
+  "* WIJNEN" is seven ninety-nine off the wine above it: kind "discount",
+  totalCents -799. It is not a product called WIJNEN, and the leading asterisk
+  with no quantity and no unit price is the till saying so.
 - THE SAME REDUCTION IS OFTEN PRINTED TWICE. Belgian tills show a discount
   beside the item it came off AND again in a savings block lower down — "TOTAAL
   VOORDEEL", "U BESPAARDE", "TOTALE KORTING". That block is a restatement, not a
@@ -970,6 +995,7 @@ Deno.serve(async (req) => {
       goodsCents: parsed.goodsCents,
       paidCents: parsed.paidCents,
       articleCount: parsed.articleCount,
+      savedCents: parsed.savedCents,
     });
   };
 

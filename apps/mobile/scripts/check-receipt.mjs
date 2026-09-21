@@ -2153,5 +2153,133 @@ const L = (raw, m, up, total) => ({
 }
 
 
+/* ------------------------------------- the savings line, end to end ------- */
+
+/*
+ * The check above is worth nothing if the number never arrives. A field the
+ * prompt asks for, the schema accepts and the call site forgets is invisible:
+ * reconcile sees undefined, skips the check, and every fixture still passes.
+ * Asserted at the seam, because that is the only place it can be seen.
+ */
+check_('the savings total reaches the reconciler',
+  /savedCents: parsed\.savedCents,/.test(fn));
+
+{
+  const promptText = fn.slice(fn.indexOf('const SYSTEM_PROMPT'));
+
+  check_('the prompt asks for the savings total', /- savedCents: what the receipt says/.test(promptText));
+
+  /*
+   * And says what it is NOT. A savings block is the reductions already taken
+   * off, summed again — subtracting it takes every discount twice, which is the
+   * fault doubledDiscountsIn exists to undo when the same block arrives as a
+   * line. This field is the reason it need not arrive as one.
+   */
+  check_('...and that it is never subtracted', /never subtracted from anything/.test(promptText));
+
+  /*
+   * The convention that lost 10,84 on a real receipt. European tills print a
+   * reduction as "7,99-", and a sign at the end of a line is the easiest mark
+   * on the paper to miss — the reading turned "* WIJNEN  7,99-" into a product
+   * called WIJNEN costing 2,99.
+   */
+  check_('the prompt teaches the trailing minus', /THE MINUS COMES AFTER THE NUMBER/.test(promptText));
+  check_('...with the department-promotion row that showed it up',
+    /\* WIJNEN/.test(promptText) && /totalCents -799/.test(promptText));
+}
+
+/* --------------------------------- the savings the receipt adds up itself -- */
+
+/*
+ * Carrefour Market Heverlee, 18-09-2026, prints its promotions against a
+ * DEPARTMENT rather than a product, with the minus after the number:
+ *
+ *     SALICE SALENT.75       2    7,99    15,98
+ *     * WIJNEN                             7,99-
+ *     ...
+ *     CAR BIG CHOC X4        1    2,85     2,85
+ *     * DIEPVRIES                          2,85-
+ *     Uw voordeel                         10,84
+ *
+ * The reading turned "* WIJNEN" into an ITEM called wine costing 2,99 and lost
+ * "* DIEPVRIES" entirely, so the review sheet showed DISCOUNTS 0,00 on a
+ * receipt that says in print that 10,84 came off. Nothing checked the one
+ * number that could have said so.
+ */
+const shop = (lines, totals) => reconcile(lines, { articleCount: null, savedCents: null, ...totals });
+const wine = { ...flat('* WIJNEN', -799), kind: 'discount' };
+const frozen = { ...flat('* DIEPVRIES', -285), kind: 'discount' };
+const basket = [count('SALICE SALENT.75', 2, 799, 1598), count('CAR BIG CHOC X4', 1, 285, 285)];
+// Goods is the subtotal BEFORE the reductions; paid is what is left after them.
+const goods = 1598 + 285;
+const paid = goods - 799 - 285;
+
+{
+  const res = shop([...basket, wine, frozen], { goodsCents: goods, paidCents: paid, savedCents: 1084 });
+  check_('the two reductions add up to the printed saving', res.ok);
+  check_('...and are credited once', res.discountCents === -1084);
+}
+
+/*
+ * The failure as it happened. Both reductions gone, and — because the wine
+ * discount was read as a product — the money still lands somewhere, so this is
+ * asserted on the SAVED check alone rather than on the totals.
+ */
+{
+  const res = shop([...basket, count('WIJNEN', 1, 299, 299)],
+    { goodsCents: null, paidCents: goods + 299, savedCents: 1084 });
+  const saved = res.details.find((d) => d.code === 'saved');
+  check_('discounts read as nothing is caught by the savings line', saved != null);
+  check_('...saying what we read and what the paper says',
+    saved?.got === 0 && saved?.printed === 1084);
+}
+
+/* One of two missed — the half-failure a total can hide. */
+{
+  const res = shop([...basket, wine], { goodsCents: null, paidCents: goods - 799, savedCents: 1084 });
+  const saved = res.details.find((d) => d.code === 'saved');
+  check_('one reduction of two missed is caught', saved?.got === 799 && saved?.printed === 1084);
+}
+
+/*
+ * A WARNING, not a money problem. It must not buy a second vision call: a
+ * savings block can hold loyalty value and points that were never lines, and
+ * there is one receipt in this file that prints one.
+ */
+check_('a savings mismatch is not a money problem',
+  !MONEY_CODES.includes('saved'));
+
+/*
+ * You cannot save more than the shop cost. A bigger figure was never a savings
+ * total, and complaining about it would repeat the article-count mistake: a
+ * confident warning about arithmetic that is perfectly correct.
+ */
+{
+  const res = shop([...basket, wine, frozen], { goodsCents: goods, paidCents: paid, savedCents: 500000 });
+  check_('an impossible savings total is ignored', res.ok);
+  check_('...and noted rather than silently dropped',
+    res.notes.some((n) => /implausible savings total/.test(n)));
+}
+
+/* Absent on most receipts, and absence checks nothing. */
+{
+  const res = shop([...basket, wine, frozen], { goodsCents: goods, paidCents: paid, savedCents: null });
+  check_('a receipt with no savings line is not checked against one', res.ok);
+}
+
+/*
+ * And it cooperates with the reduction printed TWICE. Colruyt's savings block
+ * arrives as a discount LINE as well; doubledDiscountsIn drops the copy, and
+ * this must be measured against what survived — counting the dropped line
+ * would report exactly double and blame a reading that is now right.
+ */
+{
+  const res = shop([...basket, wine, frozen, { ...flat('TOTAAL VOORDEEL', -1084), kind: 'discount' }],
+    { goodsCents: goods, paidCents: paid, savedCents: 1084 });
+  check_('a savings block transcribed as a line is still one saving', res.discountCents === -1084);
+  check_('...and the savings check agrees with what survived',
+    res.details.every((d) => d.code !== 'saved'));
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

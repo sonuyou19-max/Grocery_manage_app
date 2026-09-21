@@ -95,6 +95,7 @@ const es = {
     problemPaid: 'Las líneas suman %{got}, y leímos el total pagado como %{printed}.',
     numberUnreadable: 'No hemos podido leer ese número; la línea no ha cambiado',
     problemCount: 'Contamos %{units} artículos (o %{lines} líneas); el tique dice %{printed}.',
+    problemSaved: 'Los descuentos que leemos suman %{got}; el tique dice que ahorraste %{printed}.',
   },
   receiptSource: {
     title: '¿Dónde está el ticket?',

@@ -105,6 +105,7 @@ const pl = {
     problemPaid: 'Pozycje dają %{got}, a zapłaconą kwotę odczytaliśmy jako %{printed}.',
     numberUnreadable: 'Nie udało się odczytać tej liczby — wiersz bez zmian',
     problemCount: 'Liczymy %{units} artykułów (lub %{lines} pozycji); paragon podaje %{printed}.',
+    problemSaved: 'Rabaty, które odczytaliśmy, to %{got}; paragon podaje oszczędność %{printed}.',
   },
   receiptSource: {
     title: 'Gdzie jest paragon?',

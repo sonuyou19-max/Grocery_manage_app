@@ -95,6 +95,7 @@ const fr = {
     problemPaid: 'Les lignes totalisent %{got}, et nous avons lu le total payé comme %{printed}.',
     numberUnreadable: 'Nombre illisible : la ligne reste inchangée',
     problemCount: 'Nous comptons %{units} articles (ou %{lines} lignes) ; le ticket dit %{printed}.',
+    problemSaved: 'Les remises que nous lisons font %{got} ; le ticket dit que vous avez économisé %{printed}.',
   },
   receiptSource: {
     title: 'Où est le ticket ?',

@@ -95,6 +95,7 @@ const de = {
     problemPaid: 'Die Zeilen ergeben %{got}, und wir haben den Gesamtbetrag als %{printed} gelesen.',
     numberUnreadable: 'Diese Zahl war nicht lesbar — die Zeile bleibt unverändert',
     problemCount: 'Wir zählen %{units} Artikel (oder %{lines} Zeilen); der Bon sagt %{printed}.',
+    problemSaved: 'Die Rabatte, die wir lesen, ergeben %{got}; der Bon sagt, du hast %{printed} gespart.',
   },
   receiptSource: {
     title: 'Wo ist der Kassenbon?',

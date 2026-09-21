@@ -104,6 +104,7 @@ const en = {
     problemPaid: 'The lines come to %{got}, and we read the total paid as %{printed}.',
     numberUnreadable: 'We could not read that number, so the line is unchanged',
     problemCount: 'We counted %{units} articles (or %{lines} lines); the receipt says %{printed}.',
+    problemSaved: 'The discounts we read come to %{got}; the receipt says you saved %{printed}.',
   },
   receiptSource: {
     title: 'Where is the receipt?',

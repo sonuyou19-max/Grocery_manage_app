@@ -81,6 +81,17 @@ export interface ReceiptTotals {
   paidCents: number | null;
   /** The printed article count, where the receipt prints one. */
   articleCount: number | null;
+  /**
+   * What the receipt says the shopper SAVED — "Uw voordeel", "Votre avantage",
+   * "Ihre Ersparnis". Null when absent, which is most receipts.
+   *
+   * A summary, never an adjustment. It is the reductions already taken off
+   * above, added up again for the shopper's benefit, so subtracting it would
+   * take every discount twice — which is the exact fault doubledDiscountsIn
+   * exists to undo when the same block arrives as a LINE. Held here only so the
+   * discount lines have something to be checked against.
+   */
+  savedCents: number | null;
 }
 
 /**
@@ -90,8 +101,9 @@ export interface ReceiptTotals {
  * `goods` — the item lines do not add up to the printed goods subtotal.
  * `paid`  — everything together does not add up to what was paid.
  * `count` — the article count disagrees with both ways of counting.
+ * `saved` — the discount lines do not add up to the printed savings total.
  */
-export type ProblemCode = 'line' | 'goods' | 'paid' | 'count';
+export type ProblemCode = 'line' | 'goods' | 'paid' | 'count' | 'saved';
 
 /**
  * A weighed item printed over two lines, put back together.
@@ -353,7 +365,8 @@ export type Problem =
   | { code: 'line'; lines: number }
   | { code: 'goods'; got: number; printed: number }
   | { code: 'paid'; got: number; printed: number }
-  | { code: 'count'; units: number; asLines: number; printed: number };
+  | { code: 'count'; units: number; asLines: number; printed: number }
+  | { code: 'saved'; got: number; printed: number };
 
 export interface ReconcileResult {
   ok: boolean;
@@ -826,6 +839,65 @@ export function reconcile(lines: ReceiptLine[], totals: ReceiptTotals): Reconcil
         `counted ${asUnits} articles (or ${asLines} lines), the receipt says ${totals.articleCount}`,
       );
       details.push({ code: 'count', units: asUnits, asLines, printed: totals.articleCount });
+    }
+  }
+
+  /* ---------------------------------------------------- SAVED ------------- */
+
+  /*
+   * The receipt adds up its own reductions, and nothing was reading it.
+   *
+   * Carrefour Market Heverlee prints two of them inside the item block, each
+   * with the minus AFTER the number in the European way:
+   *
+   *     * WIJNEN                                 7,99-
+   *     * DIEPVRIES                              2,85-
+   *     Uw voordeel                             10,84
+   *
+   * The reading turned the first into an ITEM called "wine" costing 2,99 and
+   * dropped the second, so the review sheet offered a phantom product and put
+   * DISCOUNTS at 0,00 — on a receipt that says, in print, that 10,84 came off.
+   * Every other check saw only that the total was out; none could say the
+   * reductions were what went missing.
+   *
+   * This is the cheapest cross-check on the paper. It needs no image and no
+   * model: the shopper's own savings line, against the reductions we believe
+   * in.
+   *
+   * ---------------------------------------------------------------------------
+   * A WARNING, not a money problem
+   * ---------------------------------------------------------------------------
+   *
+   * Deliberately kept out of MONEY_CODES, so a mismatch tells the shopper and
+   * does not buy a second vision call.
+   *
+   * A savings total is not certain to be the sum of the printed reductions.
+   * Chains put loyalty-card value, points and future vouchers under the same
+   * heading, and a receipt whose lines are all correct can still disagree with
+   * it. There is one receipt with one of these blocks to reason from, which is
+   * not enough to start spending a retry on — the article count is kept out for
+   * the same reason and was right to be. If more chains turn out to print a
+   * savings block that means exactly the lines, this can be promoted then.
+   */
+  if (totals.savedCents != null && totals.savedCents > 0) {
+    const taken = Math.abs(discountCents);
+
+    /*
+     * You cannot save more than the shop cost. A figure above the goods total
+     * was never a savings total — it is some other number near the foot of the
+     * receipt — and warning about it would be the article-count mistake again:
+     * a confident complaint about arithmetic that is perfectly correct.
+     */
+    const ceiling = Math.abs(totals.goodsCents ?? goodsCents);
+    if (ceiling > 0 && totals.savedCents > ceiling) {
+      notes.push(
+        `ignored an implausible savings total: ${totals.savedCents} against goods of ${ceiling}`,
+      );
+    } else if (round(taken) !== round(totals.savedCents)) {
+      problems.push(
+        `discounts come to ${taken}, the receipt says the shopper saved ${totals.savedCents}`,
+      );
+      details.push({ code: 'saved', got: taken, printed: totals.savedCents });
     }
   }
 

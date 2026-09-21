@@ -95,6 +95,7 @@ const it = {
     problemPaid: 'Le righe fanno %{got}, e abbiamo letto il totale pagato come %{printed}.',
     numberUnreadable: 'Numero illeggibile: la riga resta invariata',
     problemCount: 'Contiamo %{units} articoli (o %{lines} righe); lo scontrino dice %{printed}.',
+    problemSaved: 'Gli sconti che leggiamo fanno %{got}; lo scontrino dice che hai risparmiato %{printed}.',
   },
   receiptSource: {
     title: 'Dov’è lo scontrino?',

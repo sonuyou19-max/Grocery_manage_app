@@ -95,6 +95,7 @@ const nl = {
     problemPaid: 'De regels komen op %{got}, en we lazen het betaalde totaal als %{printed}.',
     numberUnreadable: 'Dat getal was niet leesbaar — de regel blijft ongewijzigd',
     problemCount: 'Wij tellen %{units} artikelen (of %{lines} regels); het bonnetje zegt %{printed}.',
+    problemSaved: 'De kortingen die wij lezen komen op %{got}; het bonnetje zegt dat je %{printed} bespaarde.',
   },
   receiptSource: {
     title: 'Waar is het kasticket?',

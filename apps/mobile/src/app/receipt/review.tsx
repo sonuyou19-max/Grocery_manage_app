@@ -1518,6 +1518,8 @@ function phrase(
         lines: p.asLines,
         printed: p.printed,
       });
+    case 'saved':
+      return t('receipt.problemSaved', { got: money(p.got), printed: money(p.printed) });
   }
 }
 
