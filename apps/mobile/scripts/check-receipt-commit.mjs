@@ -166,6 +166,35 @@ eq('a receipt from 1970 falls back to now', purchaseInstant('1970-01-04T00:00:00
 eq('a receipt from 2087 falls back to now', purchaseInstant('2087-01-01T00:00:00Z', NOW), NOW);
 eq('yesterday is kept', purchaseInstant('2026-08-23T09:00:00Z', NOW), Date.parse('2026-08-23T09:00:00Z'));
 
+/*
+ * ...and the RECEIPT ROW files under the same instant the purchases do.
+ *
+ * These disagreed. `at` went through purchaseInstant and the planned receipt
+ * carried the raw string off the paper, so a Colruyt receipt printed 30/07/2026
+ * and read as 2028 filed its purchases under today and its receipt row under
+ * July 2028. The Insights list orders by that column, so it sat above two years
+ * of real shopping — which reads as a list that is not sorted at all.
+ *
+ * Asserted as an EQUALITY between the two, not against a literal: the point is
+ * that one fact has one answer, and a fixture pinning the date would still pass
+ * if the two drifted apart again in some other year.
+ */
+{
+  const future = { ...RECEIPT, purchasedAt: '2028-07-30T19:55:00Z' };
+  const plan = planCommit(future, [], { matches: new Map(), chosen: new Map() }, [], NOW, 'import');
+  eq('a receipt dated two years out is not filed two years out',
+    Date.parse(plan.receipt.purchasedAt), NOW);
+  eq('...and the row agrees with the purchases it wrote',
+    Date.parse(plan.receipt.purchasedAt), plan.at);
+}
+
+{
+  const plan = planCommit(RECEIPT, [], { matches: new Map(), chosen: new Map() }, [], NOW, 'import');
+  eq('a believable date is kept, and still agrees',
+    Date.parse(plan.receipt.purchasedAt), plan.at);
+  eq('...which is the time off the paper', plan.at, Date.parse(LAST_NIGHT));
+}
+
 /* ------------------------------------------------------- units cross over */
 
 console.log('\nlistAmount');
@@ -844,6 +873,26 @@ console.log('\nlines that matched nothing');
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const review = strip(readFileSync(join(SRC, 'app', 'receipt', 'review.tsx'), 'utf8'));
   const store = strip(readFileSync(join(SRC, 'store', 'groceries.tsx'), 'utf8'));
+
+  /*
+   * The correction reaches the receipts ROW, carrying the plan's own values.
+   *
+   * An amendment writes three things: the purchases, the stored scan, and the
+   * row the Insights list draws. The third was missing, so a shop corrected to
+   * Colruyt moved the spending breakdown and left the list calling the same
+   * receipt CADI HEVERLEE.
+   *
+   * Asserted from `plan.receipt` specifically, not just "some store is passed":
+   * the plan is where the edit and purchaseInstant have both been applied, and
+   * passing anything else would put a third answer on screen rather than the
+   * agreed one.
+   */
+  const correction = /await saveCorrectedReceipt\(receiptId, \{[\s\S]*?\}\);/.exec(review)?.[0] ?? '';
+  eq('an amendment writes the corrected header back to the row', correction !== '', true);
+  for (const field of ['store: plan.receipt.store', 'storeId: plan.receipt.storeId',
+                       'purchasedAt: plan.receipt.purchasedAt', 'totalCents: plan.receipt.totalCents']) {
+    eq(`...taking ${field.split(':')[0]} from the plan`, correction.includes(field), true);
+  }
 
   eq('the review applies the adds', /for \(const row of plan\.adds\) addBoughtItem\(list\.id, row, row\.detail\)/.test(review), true);
   // Last of the three list writes. A failure part-way through must not leave a

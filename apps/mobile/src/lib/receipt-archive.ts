@@ -319,18 +319,55 @@ export async function saveScan(
 /**
  * The receipt-level figures, rewritten after a correction.
  *
- * Only the ones a correction can move. The fingerprint, the store and the
- * printed total are properties of the PAPER — they do not change because
- * somebody fixed a price, and a correction that could rewrite the fingerprint
- * could smuggle a second import of the same receipt past the unique index.
+ * ---------------------------------------------------------------------------
+ * What a correction MAY move, and what it may not
+ * ---------------------------------------------------------------------------
+ *
+ * This used to write `reconciled` and nothing else, on the reasoning that the
+ * store, the printed total and the date are properties of the PAPER and do not
+ * change because somebody fixed a price.
+ *
+ * That is true of the paper and false of the row. The review sheet offers all
+ * three as editable chips — SHOP, DATE, PAID — because the thing being
+ * corrected is not the paper, it is what we READ off it, and a misread shop is
+ * exactly the kind of thing a person opens a receipt to fix.
+ *
+ * So the edit went to the purchases, which the amendment rewrites, and to the
+ * stored scan, which is what reopening shows — and not to the row the Insights
+ * list reads. Correct a shop to Colruyt, go back, and the list still says CADI
+ * HEVERLEE while the spending breakdown underneath it has already moved to
+ * Colruyt. One shop, two answers, and the one on screen is the stale one.
+ *
+ * ---------------------------------------------------------------------------
+ * The fingerprint is still untouchable
+ * ---------------------------------------------------------------------------
+ *
+ * It identifies the paper, the unique index is ON it, and a correction that
+ * could rewrite it could smuggle a second import of the same receipt past that
+ * index — or collide with somebody else's. The original reasoning was right
+ * about the fingerprint and over-applied to three columns that only FEED it:
+ * the index is `(household_id, fingerprint)`, not the store, so rewriting what
+ * is displayed cannot reach it.
  */
-export async function saveReconciled(
+export async function saveCorrectedReceipt(
   receiptId: string,
-  reconciled: boolean,
+  r: {
+    reconciled: boolean;
+    store: string | null;
+    storeId: string | null;
+    purchasedAt: string;
+    totalCents: number | null;
+  },
 ): Promise<void> {
   const { error } = await supabase
     .from('receipts')
-    .update({ reconciled })
+    .update({
+      reconciled: r.reconciled,
+      store: r.store,
+      store_id: r.storeId,
+      purchased_at: r.purchasedAt,
+      total_cents: r.totalCents,
+    })
     .eq('id', receiptId);
   reportWriteFailure('receipts.reconciled', error);
 }

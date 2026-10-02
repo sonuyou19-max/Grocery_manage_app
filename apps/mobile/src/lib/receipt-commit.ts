@@ -74,7 +74,22 @@ export interface PlannedReceipt {
   store: string | null;
   /** Matched to the chain catalogue, or null for a shop we do not know. */
   storeId: string | null;
-  purchasedAt: string | null;
+  /**
+   * The instant the import ACTUALLY uses, not the string off the paper.
+   *
+   * These were different, and the difference reached the screen. `at` is run
+   * through purchaseInstant, which refuses a date more than a year out; the
+   * receipts row was written from the raw parse and kept whatever the model
+   * said. A Colruyt receipt printed 30/07/2026 came back as 2028, so its
+   * purchases filed under today and its receipt row filed under July 2028 —
+   * and the Insights list, which orders by that column, showed it above two
+   * years of real shopping.
+   *
+   * The screen already shows the instant that will be used, and says when the
+   * printed date was not believed. This is the third reader of the same fact,
+   * and it now gets the same answer as the other two.
+   */
+  purchasedAt: string;
   totalCents: number | null;
   currency: string;
   reconciled: boolean;
@@ -461,7 +476,7 @@ export function planCommit(
       fingerprint: receipt.fingerprint,
       store: receipt.store,
       storeId: storeIdFor(receipt.store),
-      purchasedAt: receipt.purchasedAt,
+      purchasedAt: new Date(at).toISOString(),
       /*
        * What the paper says was paid, kept whether or not the lines agree with
        * it. It is the number the bank saw. Storing the sum of the lines instead

@@ -64,7 +64,7 @@ import { takeRun, type ScanRun } from '@/lib/receipt-run';
 import {
   loadScan,
   packScan,
-  saveReconciled,
+  saveCorrectedReceipt,
   saveScan,
   type SavedScan,
 } from '@/lib/receipt-archive';
@@ -595,7 +595,13 @@ export default function ReceiptReviewScreen() {
        * a receipt that still carried its warning would be telling them their
        * own correction had not worked.
        */
-      await saveReconciled(receiptId, gap == null || gap === 0);
+      await saveCorrectedReceipt(receiptId, {
+        reconciled: gap == null || gap === 0,
+        store: plan.receipt.store,
+        storeId: plan.receipt.storeId,
+        purchasedAt: plan.receipt.purchasedAt,
+        totalCents: plan.receipt.totalCents,
+      });
       haptics.success();
       showToast(t('receipt.amended', { count: plan.purchases.length }));
       goBack();

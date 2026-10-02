@@ -266,13 +266,26 @@ assert('a failed scan write is reported, not swallowed',
   /reportWriteFailure\('receipts\.scan', error\)/.test(archive));
 
 /*
- * A correction may not rewrite the fingerprint. It identifies the PAPER, and a
- * correction that could change it could smuggle a second import of the same
- * receipt past the unique index — which is the one thing 0038 exists to stop.
+ * A correction may not rewrite the FINGERPRINT. It identifies the paper, the
+ * unique index is on it, and a correction that could change it could smuggle a
+ * second import of the same receipt past that index — the one thing 0038
+ * exists to stop.
+ *
+ * That rule used to ban `store` and `total_cents` alongside it, and banning
+ * them was the bug. The review sheet offers SHOP, DATE and PAID as editable
+ * chips: what is being corrected is not the paper, it is what we read off it.
+ * The edit reached the purchases and the stored scan and not the row the
+ * Insights list draws, so a receipt corrected to Colruyt went on calling itself
+ * CADI HEVERLEE above a spending breakdown that had already moved. The index is
+ * `(household_id, fingerprint)` — rewriting what is DISPLAYED cannot reach it.
  */
-const reconciled = /export async function saveReconciled[\s\S]*?\n}/.exec(archive)?.[0] ?? '';
-assert('a correction rewrites only what a correction can move',
-  reconciled.includes('reconciled') && !/fingerprint|total_cents|store/.test(reconciled));
+const corrected = /export async function saveCorrectedReceipt[\s\S]*?\n}/.exec(archive)?.[0] ?? '';
+assert('a correction never touches the fingerprint', !/fingerprint/.test(corrected));
+assert('...and does carry the corrected shop back to the row',
+  /store: r\.store,/.test(corrected) && /store_id: r\.storeId,/.test(corrected));
+assert('...with the date and the total it was corrected to',
+  /purchased_at: r\.purchasedAt,/.test(corrected) && /total_cents: r\.totalCents,/.test(corrected));
+assert('...and whether it adds up now', /reconciled: r\.reconciled,/.test(corrected));
 
 // The column, and the mtime that is not the scan time.
 assert('the scan has somewhere to live', /add column if not exists scan jsonb/.test(migration));
