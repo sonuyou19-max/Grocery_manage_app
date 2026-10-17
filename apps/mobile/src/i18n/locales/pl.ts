@@ -63,6 +63,8 @@ const pl = {
     storeUsed: 'Tu robisz zakupy',
     date: 'Data',
     dateChange: 'Zmień datę tych zakupów',
+    datePick: 'Wybierz datę',
+    dateRequired: 'Wybierz datę paragonu, aby zaimportować.',
     dateTitle: 'Kiedy były te zakupy?',
     paidChange: 'Popraw zapłaconą kwotę',
     discountChange: 'Popraw rabaty',

@@ -59,7 +59,13 @@ import {
   unclaimed,
   type Decisions,
 } from '@/lib/receipt-review';
-import { claimReceipt, planCommit, purchaseInstant, type ListRow } from '@/lib/receipt-commit';
+import {
+  claimReceipt,
+  isFutureDay,
+  planCommit,
+  purchaseInstant,
+  type ListRow,
+} from '@/lib/receipt-commit';
 import { takeRun, type ScanRun } from '@/lib/receipt-run';
 import {
   loadScan,
@@ -258,6 +264,8 @@ export default function ReceiptReviewScreen() {
   }>({});
   const [pickingStore, setPickingStore] = useState(false);
   const [pickingDate, setPickingDate] = useState(false);
+  /** Import was pressed while the date was blank; the chip stays red until one is picked. */
+  const [dateFlagged, setDateFlagged] = useState(false);
 
 
   const source = run ?? saved;
@@ -428,16 +436,25 @@ export default function ReceiptReviewScreen() {
    */
   const chosen = purchaseInstant(receipt.purchasedAt, Date.now());
   const printed = receipt.purchasedAt ? Date.parse(receipt.purchasedAt) : NaN;
+  /*
+   * A date still to come is left BLANK rather than shown. It is a misread —
+   * 13 Oct read as 19 Oct — and displaying it would invite the shopper to
+   * accept it. See isFutureDay. The import refuses until a day is picked.
+   */
+  const dateBlank = isFutureDay(receipt.purchasedAt, Date.now());
   const when = {
-    label: new Date(chosen).toLocaleDateString(undefined, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }),
+    label: dateBlank
+      ? t('receipt.datePick')
+      : new Date(chosen).toLocaleDateString(undefined, {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }),
     // Only when the paper gave a date AND we declined to use it. A receipt with
     // no legible date at all is ordinary and needs no explaining.
-    substituted: Number.isFinite(printed) && printed !== chosen,
+    substituted: !dateBlank && Number.isFinite(printed) && printed !== chosen,
   };
+  const dateInvalid = dateFlagged && dateBlank;
 
   const sections = [
     { key: 'matched' as const, title: t('receipt.groupMatched'), data: matched },
@@ -551,6 +568,14 @@ export default function ReceiptReviewScreen() {
    */
   const commit = async () => {
     if (committing || !source) return;
+    if (dateBlank) {
+      // Nothing gets filed under a day nobody chose. The chip turns red and
+      // stays red until one is picked; picking clears it by itself.
+      setDateFlagged(true);
+      haptics.snap();
+      showToast(t('receipt.dateRequired'));
+      return;
+    }
     if (!activeId) {
       // No household, nowhere to write: receipts.household_id is not null and
       // RLS answers to membership. Reachable by signing out mid-review.
@@ -1002,6 +1027,8 @@ export default function ReceiptReviewScreen() {
                 <TapChip
                   label={t('receipt.date')}
                   value={when.label}
+                  empty={dateBlank}
+                  invalid={dateInvalid}
                   onPress={() => setPickingDate(true)}
                   accessibilityLabel={t('receipt.dateChange')}
                   colors={colors}
@@ -1128,6 +1155,11 @@ export default function ReceiptReviewScreen() {
               <Text style={[type.h2, { color: colors.ink }]}>{money(total)}</Text>
               {/* Only when every line is in and the gap is real. A receipt that
                   adds up says nothing here. */}
+              {dateInvalid && (
+                <Text style={[type.label, { color: colors.crit }]}>
+                  {t('receipt.dateRequired')}
+                </Text>
+              )}
               {gap != null && (
                 <Text style={[type.label, { color: colors.warn }]}>
                   {t('receipt.offBy', { amount: money(Math.abs(gap)) })}
@@ -1201,7 +1233,7 @@ export default function ReceiptReviewScreen() {
           <View style={styles.dateBody}>
             <Text style={[type.h2, { color: colors.ink }]}>{t('receipt.dateTitle')}</Text>
             <DayPicker
-              value={chosen}
+              value={dateBlank ? Date.now() : chosen}
               onChange={(ms) => {
                 setEdits((e) => ({ ...e, purchasedAt: new Date(ms).toISOString() }));
                 setPickingDate(false);
@@ -1357,6 +1389,7 @@ function TapChip({
   label,
   value,
   empty,
+  invalid,
   onPress,
   accessibilityLabel,
   colors,
@@ -1364,9 +1397,11 @@ function TapChip({
   label: string;
   value: string;
   empty?: boolean;
+  /** Required and missing: the outline and the value turn the alarm colour. */
+  invalid?: boolean;
   onPress: () => void;
   accessibilityLabel: string;
-  colors: { ink: string; muted: string; line: string; accent: string };
+  colors: { ink: string; muted: string; line: string; accent: string; crit: string };
 }) {
   return (
     <View style={styles.total}>
@@ -1379,10 +1414,16 @@ function TapChip({
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        style={[styles.editChip, { borderColor: empty ? colors.line : colors.accent }]}
+        style={[
+          styles.editChip,
+          { borderColor: invalid ? colors.crit : empty ? colors.line : colors.accent },
+        ]}
       >
         <Text
-          style={[styles.chipText, { color: empty ? colors.muted : colors.ink }]}
+          style={[
+            styles.chipText,
+            { color: invalid ? colors.crit : empty ? colors.muted : colors.ink },
+          ]}
           numberOfLines={1}
         >
           {value}

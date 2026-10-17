@@ -53,6 +53,8 @@ const it = {
     storeUsed: 'Fai la spesa qui',
     date: 'Data',
     dateChange: 'Cambia la data di questa spesa',
+    datePick: 'Scegli la data',
+    dateRequired: 'Scegli la data dello scontrino per importare.',
     dateTitle: 'Quando è stata questa spesa?',
     paidChange: 'Correggi il totale pagato',
     discountChange: 'Correggi gli sconti',

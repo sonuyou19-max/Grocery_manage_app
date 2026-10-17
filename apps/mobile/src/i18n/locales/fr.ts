@@ -53,6 +53,8 @@ const fr = {
     storeUsed: 'Vous y faites vos courses',
     date: 'Date',
     dateChange: 'Changer la date de ces courses',
+    datePick: 'Choisir la date',
+    dateRequired: 'Choisis la date du ticket pour importer.',
     dateTitle: 'C’était quand ?',
     paidChange: 'Corriger le total payé',
     discountChange: 'Corriger les remises',

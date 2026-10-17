@@ -53,6 +53,8 @@ const es = {
     storeUsed: 'Compras aquí',
     date: 'Fecha',
     dateChange: 'Cambiar la fecha de esta compra',
+    datePick: 'Elige la fecha',
+    dateRequired: 'Elige la fecha del tique para importar.',
     dateTitle: '¿Cuándo fue esta compra?',
     paidChange: 'Corregir el total pagado',
     discountChange: 'Corregir los descuentos',

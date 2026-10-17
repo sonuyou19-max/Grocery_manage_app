@@ -277,6 +277,36 @@ export function listAmount(
   };
 }
 
+/**
+ * Whether the receipt's date is a day that has not happened yet.
+ *
+ * A scan that reads 13 Oct as 19 Oct is wrong in a way purchaseInstant cannot
+ * see: six days out is well inside its year-either-side window, so the import
+ * would file a whole shop under a day still to come, and the pantry would wait
+ * for that day before counting anything as used. The review screen leaves such
+ * a date BLANK and will not import until the shopper picks one.
+ *
+ * Compared by calendar day on the shopper's clock, not by instant. A receipt
+ * printed at 19:55 and scanned at 18:00 the same day is clock skew between a
+ * till and a phone, not a misread. A bare `YYYY-MM-DD` is read as that day, not
+ * as UTC midnight — which would be the previous day west of Greenwich.
+ */
+export function isFutureDay(purchasedAt: string | null, now: number): boolean {
+  if (!purchasedAt) return false;
+  const bare = /^(\d{4})-(\d{2})-(\d{2})$/.exec(purchasedAt);
+  let day: Date;
+  if (bare) {
+    day = new Date(Number(bare[1]), Number(bare[2]) - 1, Number(bare[3]));
+  } else {
+    const parsed = Date.parse(purchasedAt);
+    if (!Number.isFinite(parsed)) return false;
+    day = new Date(parsed);
+  }
+  const today = new Date(now);
+  const key = (d: Date) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  return key(day) > key(today);
+}
+
 export function purchaseInstant(purchasedAt: string | null, now: number): number {
   if (!purchasedAt) return now;
   const parsed = Date.parse(purchasedAt);

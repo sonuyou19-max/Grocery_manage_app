@@ -53,6 +53,8 @@ const de = {
     storeUsed: 'Hier kaufst du ein',
     date: 'Datum',
     dateChange: 'Datum dieses Einkaufs ändern',
+    datePick: 'Datum wählen',
+    dateRequired: 'Wähle das Datum des Kassenbons, um zu importieren.',
     dateTitle: 'Wann war dieser Einkauf?',
     paidChange: 'Gezahlten Betrag korrigieren',
     discountChange: 'Rabatte korrigieren',

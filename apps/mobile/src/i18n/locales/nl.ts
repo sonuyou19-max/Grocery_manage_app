@@ -53,6 +53,8 @@ const nl = {
     storeUsed: 'Hier doe je boodschappen',
     date: 'Datum',
     dateChange: 'Datum van deze boodschappen wijzigen',
+    datePick: 'Kies datum',
+    dateRequired: 'Kies de datum van het bonnetje om te importeren.',
     dateTitle: 'Wanneer was dit?',
     paidChange: 'Betaald bedrag corrigeren',
     discountChange: 'Kortingen corrigeren',

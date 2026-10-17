@@ -62,6 +62,8 @@ const en = {
     storeUsed: 'You shop here',
     date: 'Date',
     dateChange: 'Change the date of this shop',
+    datePick: 'Select date',
+    dateRequired: 'Select the receipt date to import.',
     dateTitle: 'When was this shop?',
     paidChange: 'Correct the total paid',
     discountChange: 'Correct the discounts',

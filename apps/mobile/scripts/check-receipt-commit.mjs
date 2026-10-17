@@ -94,7 +94,7 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64'));
-const { planCommit, purchaseInstant, storeIdFor, listAmount } = mod;
+const { planCommit, purchaseInstant, isFutureDay, storeIdFor, listAmount } = mod;
 
 /* --------------------------------------------------------------- fixtures */
 
@@ -165,6 +165,29 @@ eq('an unparseable date falls back to now', purchaseInstant('sometime tuesday', 
 eq('a receipt from 1970 falls back to now', purchaseInstant('1970-01-04T00:00:00Z', NOW), NOW);
 eq('a receipt from 2087 falls back to now', purchaseInstant('2087-01-01T00:00:00Z', NOW), NOW);
 eq('yesterday is kept', purchaseInstant('2026-08-23T09:00:00Z', NOW), Date.parse('2026-08-23T09:00:00Z'));
+
+/* ----------------------------------------------------- a future date -- */
+
+console.log('\nisFutureDay');
+
+{
+  // Built from local fields so the cases mean the same day in every timezone.
+  const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime();
+  const iso = (y, m, d, h = 12) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${y}-${p(m)}-${p(d)}T${p(h)}:00:00`;
+  };
+  const TODAY = at(2026, 10, 17, 18);
+  eq('19 Oct scanned on 17 Oct is in the future', isFutureDay(iso(2026, 10, 19), TODAY), true);
+  eq('tomorrow is in the future', isFutureDay(iso(2026, 10, 18, 0), TODAY), true);
+  eq('13 Oct is not', isFutureDay(iso(2026, 10, 13), TODAY), false);
+  eq('later today is not: till and phone clocks disagree', isFutureDay(iso(2026, 10, 17, 23), TODAY), false);
+  eq('a bare date is that day, not UTC midnight', isFutureDay('2026-10-18', TODAY), true);
+  eq('a bare today is not', isFutureDay('2026-10-17', TODAY), false);
+  eq('no date is not a future date', isFutureDay(null, TODAY), false);
+  eq('an unparseable date is not a future date', isFutureDay('sometime tuesday', TODAY), false);
+  eq('a picked day round-trips as not future', isFutureDay(new Date(at(2026, 10, 17)).toISOString(), TODAY), false);
+}
 
 /*
  * ...and the RECEIPT ROW files under the same instant the purchases do.
