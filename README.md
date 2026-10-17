@@ -56,9 +56,15 @@ inversion.
 ## Roadmap
 
 1. ✅ Scaffold: monorepo, themed tab app, schema + RLS, AI parse function
-2. Auth + household create/invite flows
-3. List CRUD with realtime sync
-4. Pantry + consumption events + prediction job
-5. AI quick-add wired into the list screen (text first, then voice)
-6. Insights (habit view; budget view where prices are logged)
-7. Receipt scanning, store submissions (EAS), subscription groundwork
+2. ✅ Auth + household create/invite flows (passwordless codes, multiple
+   households, owner-approved joins)
+3. ✅ List CRUD with realtime sync (plus live claims and presence)
+4. ✅ Pantry + consumption events + prediction job (derived from the purchase log)
+5. ✅ AI quick-add wired into the list screen, and AI recipe import
+6. ✅ Insights (habit view; budget view where prices are logged; Climate Mix)
+7. ✅ Receipt scanning, Korb Plus subscription (RevenueCat), EAS builds + OTA
+   updates. 🔄 Store submission is still pending.
+
+The post-v1.0 work and what is still open (restock push reminders, device
+verification, native and legal review) are tracked in
+[`docs/FEATURE_ROADMAP.md`](docs/FEATURE_ROADMAP.md).

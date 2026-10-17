@@ -24,9 +24,11 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Local + cloud parity:** lists exist in two modes — on-device and cloud
   (household). Any new item field must be handled in **both** the local store
   *and* the Supabase schema, or the feature silently breaks for one kind of user.
-- **Every schema change is a new migration** (next is `0016_`; 0013–0015 are the
-  purchase log, restock cadence and item claims), never an edit to an existing
-  one. Add RLS for anything household-shared.
+- **Every schema change is a new migration** (next is `0046_`; the latest are
+  0042–0045: join requests, join signals, the device-token RPC and receipt scan
+  jobs. `0031` is a deliberate gap — its "Don't predict" migration was
+  reverted), never an edit to an existing one. Add RLS for anything
+  household-shared. `pnpm --filter mobile check:migrations` guards the ledger.
 - **The dead-end rule** (learned from the edit-mode bug): any UI mode that hides
   the primary action must keep an always-visible exit.
 - **Definition of done per feature:** typecheck clean → Android bundle exports →
@@ -72,11 +74,93 @@ introduces a parallel, independently-tracked data store. Concretely:
 - **Wave 3 — ✅ complete, not yet device-verified:** #4b price history
   (0013), #7a recurring-staple cadence (0014), #5 live household shopping
   (0015). All three are household-scoped, so multi-household came free.
-- **Wave 4 — next:** #7b auto-restock push reminders. The only remaining
-  feature, and the only one needing a native capability.
+- **Wave 4 — still open:** #7b auto-restock push reminders. The native groundwork
+  now exists (`expo-notifications` in the binary, `lib/push.ts`, device tokens
+  via the 0044 RPC), but it currently only sends **household join** notices.
+  Restock reminders still need scheduling and their own permission moment.
 - **i18n — ✅ complete, not yet verified on a real build.** Six languages, the
   localized recap, and the layout pass have all passed typecheck + Android
   bundle, but none of it has been seen on a device yet.
+- **Since the waves (late July → early October 2026)** — the work below was not
+  in the original seven-feature plan. See "Shipped since the waves" for details.
+  Korb Plus, purchase log as source of truth, AI recipe import, Climate Mix and
+  seasonality, receipt scanning, household join approval, storage tips, a
+  motion/sheet system, and Expo SDK 57.
+
+## Shipped since the waves (last updated 2026-10-17)
+
+Same convention as above: "shipped" means committed with `check:all` covering
+it, not necessarily seen on a device.
+
+- **Purchase log is the spine (0020, 0023, 0029–0030, 0036).** Insights and
+  Pantry now read a transaction log instead of live list rows. Pantry stats are
+  derived from that log, with correction windows so an untick really undoes a
+  tick, including its effect on the burn rate. Checked items carry a structural
+  `checked_at`, and yesterday's shop is swept off the list. Pack counts are
+  recorded, so you enter the price of one pack and the app multiplies. Guests
+  keep only the log; Pantry and Insights need an account, and a guest's
+  history carries over when they sign up.
+- **Shared item lexicon (0019, 0021, 0032, 0035).** An item's emoji, unit, food
+  group and canonical key are learned once and reused for everyone. 646 grocery
+  terms are categorised on-device in all seven languages, plurals count as the
+  same item, and one rule decides "is this the same item" (0018 blocks
+  duplicates).
+- **Korb Plus (0024–0028).** The paywall uses RevenueCat, and `billing-webhook`
+  grants the entitlement. The free tier has a five-week history window; Plus
+  gets twelve months. `lib/plus-pillars.ts` is the single list of Plus features,
+  grouped under three pillars: spend less, save time, eat better.
+  `check:plus-gate` makes sure the paywall, the Plus card and the Terms all
+  agree. There is also a household limit, and the receipt archive is behind
+  Plus.
+- **AI cost control (0022).** AI spend is capped in money per user, with a
+  ceiling across all users, on top of the per-IP rate limits. Tokens are logged
+  for every scan.
+- **AI recipe import.** Import from a link (YouTube descriptions included) or
+  pasted text. The recipe is scaled and checked against the pantry. The list is
+  segmented in code rather than by the model, the source language is enforced,
+  and the import is a Plus feature with its own call cap.
+- **Sustainability: Climate Mix and seasonality (0027, 0033–0035).** Each item
+  gets an impact band. The Climate Mix page is scored from the purchase log and
+  offers lower-impact swaps (`suggest-swaps`); swaps are scored on the
+  substitute and matched on the item's form. "In season now" follows the
+  user's own region, and the biggest lever is named in the weekly recap.
+- **Insights and Pantry redesign.** Pantry mix donut, a basket breakdown page,
+  per-unit "cheaper elsewhere", heavy hitters, a stock gauge on each pantry card,
+  and "Stopped buying" as a resting state with Undo. Swiping "still good" now
+  pauses the item instead of teaching the model (49ca495). Each pantry item has
+  a home list shared across the household (0037) and a storage tip (0040):
+  hand-written for common items, AI for the long tail.
+- **Receipt scanning (0038, 0039, 0041, 0045).** Covers capture (camera, gallery,
+  or a PDF the shop emailed), `receipt-scan` extraction, `receipt-match` against
+  list rows, a review sheet, and import into the purchase log. The work since
+  has been about not lying:
+  arithmetic guards on subtotals, discounts and weighed lines; a re-read when a
+  whole line or a pairing is wrong; decimal marks taken from the receipt's
+  country; savings lines and trailing minus signs; and no lexicon learning
+  from a receipt that does not add up. Scans run as server-side jobs, so a read
+  survives the phone sleeping or leaving the app. Receipts are kept and can be
+  reopened and corrected, including the header (shop and date).
+- **Households: joining is the owner's decision (0042–0044).** An invite code
+  now creates a request that the owner must approve. The old `join_household`
+  path is closed. Push notifications (`notify-join`) fire only at the two
+  moments someone is waiting on someone else: a new request for the owner, and
+  the answer for the requester. Multi-household switching also shipped
+  (8512ecd).
+- **Interaction and platform.** One `<Sheet>` for every dialog, a motion
+  vocabulary enforced by `check:motion`, coach marks on real rows instead of a
+  card-deck tour, a five-slot nav with a central create button, and a new
+  basket logo and app icon. The app moved to Expo SDK 57, because iOS Expo Go
+  only runs the newest SDK. OTA updates are published with
+  `pnpm run update:preview`, and `scripts/reinstall.mjs` does a portable clean
+  reinstall.
+- **Release plumbing.** Email via Resend works (DNS postmortem in `RELEASE.md`),
+  Sentry is wired, and the store listing and data-safety answers now cover the
+  paid tier in all seven languages.
+
+**Still open across all of this:** device verification on a real build (the
+backlog of "not yet device-verified" items keeps growing), #7b restock
+reminders, native review of the translations, and professional review of the
+legal texts.
 
 ## TOP PRIORITY — Internationalization (i18n) for all of Europe
 
