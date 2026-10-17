@@ -660,6 +660,41 @@ const MEDIA = ['image/jpeg', 'image/png', 'image/webp'] as const;
 const PDF_MEDIA = 'application/pdf';
 const MAX_PDF_CHARS = 4_000_000;
 
+/**
+ * Thinking off, on both models, by asking for it.
+ *
+ * MODEL_CAREFUL thinks by default when `thinking` is omitted, and its reply then
+ * OPENS with a thinking block. That cost every retry since receipt scanning
+ * shipped: the thinking ate the token budget (8192 on a re-read, 1024 on a
+ * patch), and the answer behind it was never read — see replyText. A
+ * 74-second retry and a 2.6-second one both ended in the same SyntaxError.
+ *
+ * Nothing here benefits from it. The arithmetic is done by `reconcile`, not
+ * the model; the model's job is to read printed figures, and every token of
+ * thinking is a token the shopper waits for.
+ */
+const NO_THINKING = { type: 'disabled' } as const;
+
+/** A reply that hit max_tokens, named so the log says so instead of "SyntaxError". */
+class TruncatedReply extends Error {
+  override name = 'TruncatedReply';
+}
+
+/**
+ * The answer's text — the first TEXT block, not the first block.
+ *
+ * `content[0]` assumed the answer always comes first. A reply that opens with
+ * a thinking block made that an empty string, and `JSON.parse('')` reported
+ * it as a syntax error in an answer that was never looked at.
+ */
+function replyText(message: Anthropic.Message): string {
+  if (message.stop_reason === 'max_tokens') {
+    throw new TruncatedReply(`reply cut off at ${message.usage?.output_tokens ?? '?'} output tokens`);
+  }
+  const block = message.content.find((b) => b.type === 'text');
+  return block?.type === 'text' ? block.text : '';
+}
+
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fenced ? fenced[1] : text;
@@ -804,6 +839,7 @@ Deno.serve(async (req) => {
     const message = await anthropic.messages.create({
       model,
       max_tokens: MAX_TOKENS,
+      thinking: NO_THINKING,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -848,7 +884,7 @@ Deno.serve(async (req) => {
      */
     tokensIn += message.usage?.input_tokens ?? 0;
     tokensOut += message.usage?.output_tokens ?? 0;
-    const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
+    const raw = replyText(message);
     return receiptSchema.parse(JSON.parse(extractJson(raw)));
   };
 
@@ -882,6 +918,7 @@ Deno.serve(async (req) => {
     const message = await anthropic.messages.create({
       model: MODEL_CAREFUL,
       max_tokens: REPAIR_TOKENS,
+      thinking: NO_THINKING,
       system: REPAIR_PROMPT,
       messages: [
         {
@@ -930,7 +967,7 @@ Deno.serve(async (req) => {
     // from a number that only counts the first call.
     tokensIn += message.usage?.input_tokens ?? 0;
     tokensOut += message.usage?.output_tokens ?? 0;
-    const raw = message.content[0]?.type === 'text' ? message.content[0].text : '';
+    const raw = replyText(message);
     return repairSchema.parse(JSON.parse(extractJson(raw)));
   };
 
