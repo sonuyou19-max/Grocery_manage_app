@@ -13,6 +13,7 @@ import {
 import type { ItemCategory } from '@korb/shared';
 
 import { categorizeSync } from '@/lib/categorize';
+import { singularKey } from '@/lib/item-plural';
 import { recallItemList } from '@/lib/item-home-list';
 import { reportWriteFailure } from '@/lib/monitoring';
 import { supabase } from '@/lib/supabase';
@@ -356,6 +357,30 @@ const DEMO: Array<[string, ItemCategory, number]> = [
 ];
 
 /** Normalized keys of the dev sample items (for repeatable previews). */
+/**
+ * The pantry's own spelling of a name that is the same item up to plural.
+ *
+ * Adding to a LIST already asks this (findEquivalent), so "Carrot" never sits
+ * beside "Carrots" on one list. The pantry did not: logPurchase keyed on
+ * normalizeKey, which is the database's question and treats the two as
+ * different things. A receipt line read as "Carrot" therefore started a second
+ * pantry item next to seven weeks of "Carrots" — with its own empty history,
+ * its own default burn rate, and the real one left to go stale.
+ *
+ * An exact key wins, so a household that genuinely tracks both keeps both. Only
+ * when there is no exact match does a plural twin take the purchase, and then
+ * under the twin's name, so the purchase log and the stat agree on one key.
+ */
+function pantryNameFor(stats: StatMap, name: string): string {
+  if (stats[normalizeKey(name)]) return name;
+  const key = singularKey(name);
+  if (!key) return name;
+  for (const stat of Object.values(stats)) {
+    if (singularKey(stat.display) === key) return stat.display;
+  }
+  return name;
+}
+
 export const DEMO_KEYS = DEMO.map(([name]) => normalizeKey(name));
 
 const seededDemoStats = (base: StatMap): StatMap => {
@@ -965,7 +990,8 @@ function CloudPantryIntelProvider({
     return {
       stats,
       purchases,
-      logPurchase: (name, category, detail) => {
+      logPurchase: (typed, category, detail) => {
+        const name = pantryNameFor(statsRef.current, typed);
         const next = recordPurchase(statsRef.current, name, category, detail?.at ?? Date.now());
         apply(next);
         upsert([normalizeKey(name)], next);
@@ -1015,8 +1041,10 @@ function CloudPantryIntelProvider({
           if (error) void fetchPurchases();
         });
       },
-      unlogRecent: (name) => {
-        const key = normalizeKey(name);
+      unlogRecent: (typed) => {
+        // The same resolution as logPurchase, or unticking "Carrot" would look
+        // for a purchase that was filed under "Carrots" and find nothing.
+        const key = normalizeKey(pantryNameFor(statsRef.current, typed));
         const doomed = undoableRecordFor(purchasesRef.current, key, Date.now(), MISTAKE_WINDOW_MS);
         if (!doomed) return;
         const remaining = purchasesRef.current.filter((p) => p.id !== doomed.id);
