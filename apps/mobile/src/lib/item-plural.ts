@@ -116,8 +116,117 @@ function singularizeWord(word: string): string {
 export function singularKey(name: string): string {
   const folded = fold(name);
   if (!folded) return '';
-  return folded.split(' ').map(singularizeWord).join(' ');
+  return folded
+    .split(' ')
+    .map((word) => {
+      const stem = singularizeWord(word);
+      return KNOWN_PLURALS.get(stem) ?? stem;
+    })
+    .join(' ');
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * The plurals no suffix rule can reach, listed by hand
+ * ---------------------------------------------------------------------------
+ *
+ * Italian, Polish and the Dutch plurals that change their stem are left out of
+ * the rules above for a reason that still holds: a RULE broad enough to catch
+ * pomodori would also merge unrelated words. A LIST cannot over-reach. It
+ * merges exactly the pairs written here, all of them groceries, and nothing
+ * else — a word missing from it behaves exactly as it did before.
+ *
+ * [singular, plural], spelled as people type them; fold() takes the accents
+ * and ł off on the way in. Polish is nominative plural only ("jabłka"), not
+ * the genitive after a number ("5 jabłek").
+ */
+const PLURAL_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  // Italian
+  ['pomodoro', 'pomodori'], ['mela', 'mele'], ['pera', 'pere'], ['banana', 'banane'],
+  ['arancia', 'arance'], ['limone', 'limoni'], ['patata', 'patate'], ['carota', 'carote'],
+  ['cipolla', 'cipolle'], ['zucchina', 'zucchine'], ['zucchino', 'zucchini'],
+  ['melanzana', 'melanzane'], ['peperone', 'peperoni'], ['uovo', 'uova'],
+  ['fragola', 'fragole'], ['pesca', 'pesche'], ['albicocca', 'albicocche'],
+  ['prugna', 'prugne'], ['ciliegia', 'ciliegie'], ['fagiolo', 'fagioli'],
+  ['pisello', 'piselli'], ['cece', 'ceci'], ['fungo', 'funghi'], ['carciofo', 'carciofi'],
+  ['cetriolo', 'cetrioli'], ['broccolo', 'broccoli'], ['cavolfiore', 'cavolfiori'],
+  ['cavolo', 'cavoli'], ['porro', 'porri'], ['mandarino', 'mandarini'], ['melone', 'meloni'],
+  ['anguria', 'angurie'], ['oliva', 'olive'], ['noce', 'noci'], ['mandorla', 'mandorle'],
+  ['nocciola', 'nocciole'], ['biscotto', 'biscotti'], ['cornetto', 'cornetti'],
+  ['panino', 'panini'], ['salsiccia', 'salsicce'], ['petto', 'petti'], ['coscia', 'cosce'],
+  ['filetto', 'filetti'], ['gambero', 'gamberi'], ['cozza', 'cozze'], ['vongola', 'vongole'],
+  ['lampone', 'lamponi'], ['mirtillo', 'mirtilli'], ['ravanello', 'ravanelli'],
+  ['peperoncino', 'peperoncini'], ['scalogno', 'scalogni'], ['sedano', 'sedani'],
+  ['finocchio', 'finocchi'], ['asparago', 'asparagi'], ['dattero', 'datteri'],
+  ['fico', 'fichi'], ['pompelmo', 'pompelmi'], ['tovagliolo', 'tovaglioli'],
+  ['rotolo', 'rotoli'], ['sacchetto', 'sacchetti'],
+  // Polish
+  ['jabłko', 'jabłka'], ['gruszka', 'gruszki'], ['śliwka', 'śliwki'],
+  ['truskawka', 'truskawki'], ['malina', 'maliny'], ['borówka', 'borówki'],
+  ['wiśnia', 'wiśnie'], ['czereśnia', 'czereśnie'], ['pomarańcza', 'pomarańcze'],
+  ['cytryna', 'cytryny'], ['limonka', 'limonki'], ['mandarynka', 'mandarynki'],
+  ['brzoskwinia', 'brzoskwinie'], ['morela', 'morele'], ['banan', 'banany'],
+  ['winogrono', 'winogrona'], ['pomidor', 'pomidory'], ['ogórek', 'ogórki'],
+  ['ziemniak', 'ziemniaki'], ['marchewka', 'marchewki'], ['cebula', 'cebule'],
+  ['papryka', 'papryki'], ['pieczarka', 'pieczarki'], ['grzyb', 'grzyby'],
+  ['jajko', 'jajka'], ['jajo', 'jaja'], ['bułka', 'bułki'], ['rogal', 'rogale'],
+  ['rogalik', 'rogaliki'], ['cukinia', 'cukinie'], ['dynia', 'dynie'],
+  ['kiełbasa', 'kiełbasy'], ['parówka', 'parówki'], ['udko', 'udka'], ['pierś', 'piersi'],
+  ['orzech', 'orzechy'], ['migdał', 'migdały'], ['rzodkiewka', 'rzodkiewki'],
+  ['burak', 'buraki'], ['szparag', 'szparagi'], ['ciastko', 'ciastka'],
+  ['herbatnik', 'herbatniki'], ['jogurt', 'jogurty'], ['serek', 'serki'],
+  ['baton', 'batony'], ['chusteczka', 'chusteczki'], ['worek', 'worki'],
+  ['rolka', 'rolki'], ['puszka', 'puszki'], ['butelka', 'butelki'],
+  // Dutch: the -en plurals that change their stem, and the 's plurals
+  ['tomaat', 'tomaten'], ['peer', 'peren'], ['boon', 'bonen'], ['ui', 'uien'], ['ei', 'eieren'],
+  ['kaas', 'kazen'], ['brood', 'broden'], ['noot', 'noten'], ['druif', 'druiven'],
+  ['appel', 'appelen'], ['aardappel', 'aardappelen'], ['sinaasappel', 'sinaasappelen'],
+  ['wortel', 'wortelen'], ['citroen', 'citroenen'], ['meloen', 'meloenen'],
+  ['limoen', 'limoenen'], ['pompoen', 'pompoenen'], ['aardbei', 'aardbeien'],
+  ['framboos', 'frambozen'], ['perzik', 'perziken'], ['pruim', 'pruimen'],
+  ['olijf', 'olijven'], ['erwt', 'erwten'], ['biet', 'bieten'], ['radijs', 'radijzen'],
+  ['garnaal', 'garnalen'], ['mossel', 'mosselen'], ['amandel', 'amandelen'],
+  ['walnoot', 'walnoten'], ['hazelnoot', 'hazelnoten'], ['mandarijn', 'mandarijnen'],
+  ['ananas', 'ananassen'], ['sjalot', 'sjalotten'], ['worst', 'worsten'],
+  ['gehaktbal', 'gehaktballen'], ['bes', 'bessen'], ['vis', 'vissen'], ['fles', 'flessen'],
+  ['zak', 'zakken'], ['paprika', "paprika's"], ['avocado', "avocado's"],
+  ['mango', "mango's"], ['kiwi', "kiwi's"],
+];
+
+/**
+ * Every listed form, stemmed, mapped to one representative per group.
+ *
+ * Keyed on the RULES' output, not the raw word, because the rules run first and
+ * other languages reach the same stems: German "Tomaten" stems to "tomate"
+ * just as Dutch "tomaten" does, and German "Bananen" to "banane", which is also
+ * the Italian plural. Mapping raw words would have pulled "Tomaten" away from
+ * German "Tomate". Mapping stems keeps every pair the rules already merged and
+ * joins the listed ones to them.
+ *
+ * Grouped rather than paired, since a stem can sit in more than one pair —
+ * Dutch peren and Italian pere both stem to "pere" — and both pears must land
+ * on one key. Built once, at load.
+ */
+const KNOWN_PLURALS: ReadonlyMap<string, string> = (() => {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let root = x;
+    while (parent.has(root) && parent.get(root) !== root) root = parent.get(root)!;
+    return root;
+  };
+  for (const [one, many] of PLURAL_PAIRS) {
+    const a = find(singularizeWord(fold(one)));
+    const b = find(singularizeWord(fold(many)));
+    parent.set(a, a);
+    if (a !== b) parent.set(b, a);
+  }
+  const out = new Map<string, string>();
+  for (const stem of parent.keys()) {
+    const root = find(stem);
+    if (root !== stem) out.set(stem, root);
+  }
+  return out;
+})();
 
 /**
  * Whether two names are the same item up to plural form.

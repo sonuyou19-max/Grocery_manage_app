@@ -76,6 +76,20 @@ const MERGE = [
   ['case and accents fold on the way in', 'TOMATÉ', 'tomate'],
   ['a phrase pluralises on its own head', 'Spring onion', 'spring onions'],
   ['identical names still match', 'Milk', 'Milk'],
+  // The hand-written lists, for the plurals no suffix rule can reach.
+  ['Italian, listed', 'Pomodoro', 'Pomodori'],
+  ['Italian, listed', 'Uovo', 'Uova'],
+  ['Polish, listed, ł folded', 'Jabłko', 'Jabłka'],
+  ['Polish, listed', 'Pomidor', 'Pomidory'],
+  ['Dutch vowel doubling, listed', 'Tomaat', 'Tomaten'],
+  ['Dutch, listed', 'Ei', 'Eieren'],
+  ["Dutch 's, listed", 'Avocado', "Avocado's"],
+  // ...without pulling apart what the rules already merged in other languages.
+  ['German Tomate still meets Tomaten', 'Tomate', 'Tomaten'],
+  ['and Dutch tomaat lands on the same key', 'Tomaat', 'Tomate'],
+  ['German Banane still meets Bananen', 'Banane', 'Bananen'],
+  ['English Olive still meets Olives', 'Olive', 'Olives'],
+  ['Dutch and Italian pears share one key', 'Peren', 'Pere'],
 ];
 for (const [what, a, b] of MERGE) {
   check(`${what}: "${a}" = "${b}"`, samePlural(a, b), true);
@@ -91,14 +105,10 @@ const KEEP_APART = [
   ['-ss is left alone', 'Dress', 'Dres'],
   ['short words are not stemmed', 'Gas', 'Ga'],
   ['two real items that merely rhyme', 'Pear', 'Pea'],
-  ['Italian is not attempted', 'Pomodoro', 'Pomodori'],
-  ['Polish is not attempted', 'Jablko', 'Jablka'],
-  // Dutch -en plurals that also change the stem's spelling. "tomaten" strips to
-  // "tomat", and only Dutch's open/closed-syllable rule turns that back into
-  // "tomaat". Recorded as a known miss rather than papered over: undoing vowel
-  // doubling in general would merge words that have nothing to do with each
-  // other, and a missed plural costs one deletable row.
-  ['Dutch vowel doubling is a known miss', 'Tomaat', 'Tomaten'],
+  // Italian and Polish have no RULE, only a list: a word off the list is still
+  // left alone, which is what keeps the list from becoming a rule by accident.
+  ['Italian off the list is not attempted', 'Cono', 'Coni'],
+  ['Polish off the list is not attempted', 'Kubek', 'Kubki'],
   ['different items stay different', 'Milk', 'Bread'],
 ];
 for (const [what, a, b] of KEEP_APART) {
@@ -110,6 +120,57 @@ for (const [what, a, b] of KEEP_APART) {
 check('an empty name has no key', singularKey('   '), '');
 check('an empty name never matches another empty one', samePlural('', ''), false);
 check('the key is idempotent', singularKey(singularKey('Potatoes')), singularKey('Potatoes'));
+
+/* --- every listed pair, and nothing else --------------------------------- */
+
+// Read from the source rather than retyped, so a pair added there is checked
+// here without anyone remembering to.
+const pluralSrc = readFileSync(join(src, 'lib', 'item-plural.ts'), 'utf8');
+const listBody = pluralSrc.match(/const PLURAL_PAIRS[\s\S]*?\n\];/);
+check('the plural list is where the guard expects it', listBody != null, true);
+const pairs = [...(listBody?.[0] ?? '').matchAll(/\[\s*(['"])(.*?)\1\s*,\s*(['"])(.*?)\3\s*\]/g)].map(
+  (m) => [m[2], m[4]],
+);
+check('the list was read', pairs.length > 100, true);
+let pairMisses = 0;
+let notIdempotent = 0;
+for (const [one, many] of pairs) {
+  if (!samePlural(one, many)) {
+    pairMisses += 1;
+    console.log(`  ✗ listed pair does not merge: ${one} / ${many}`);
+  }
+  for (const w of [one, many]) {
+    if (singularKey(singularKey(w)) !== singularKey(w)) {
+      notIdempotent += 1;
+      console.log(`  ✗ key not idempotent: ${w}`);
+    }
+  }
+}
+check('every listed pair merges', pairMisses, 0);
+check('every listed word has an idempotent key', notIdempotent, 0);
+
+// No two DIFFERENT pairs may share a key unless they are the same food.
+// Each group below is a cross-language merge that was looked at and is meant.
+const INTENDED = new Set([
+  'pera|pere|peer|peren',
+  'banana|banane',
+  'zucchina|zucchine|zucchino|zucchini',
+]);
+const groups = new Map();
+for (const [one, many] of pairs) {
+  const k = singularKey(one);
+  groups.set(k, [...(groups.get(k) ?? []), one, many]);
+}
+let surprise = 0;
+for (const words of groups.values()) {
+  if (words.length <= 2) continue;
+  const id = words.join('|');
+  if (!INTENDED.has(id)) {
+    surprise += 1;
+    console.log(`  ✗ unexpected merge across pairs: ${id}`);
+  }
+}
+check('listed pairs only merge where intended', surprise, 0);
 
 /* --------------------------------------------- 2. the use-site split holds */
 
