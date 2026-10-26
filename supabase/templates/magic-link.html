@@ -1,0 +1,46 @@
+<!-- Supabase · Authentication · Email Templates · "Magic Link"
+     Subject: Your Korb login code
+     Used when an existing user signs in. The app verifies a typed code,
+     so this shows {{ .Token }}, not a link. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F7F0;margin:0;padding:24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:100%;background:#FFFFFF;border:1px solid #CBD0BF;border-radius:16px;overflow:hidden;">
+        <tr>
+          <td style="padding:32px 32px 8px 32px;">
+            <div style="font-size:20px;font-weight:700;color:#2E7442;letter-spacing:-0.2px;">Korb</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 32px 0 32px;">
+            <h1 style="margin:0 0 8px 0;font-size:22px;line-height:1.3;color:#141A10;font-weight:700;">Your login code</h1>
+            <p style="margin:0 0 24px 0;font-size:15px;line-height:1.5;color:#5E6857;">
+              Enter this code in Korb to sign in.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px;">
+            <div style="background:#E4EFE4;border-radius:12px;padding:20px;text-align:center;">
+              <div style="font-size:34px;font-weight:700;letter-spacing:8px;color:#141A10;font-family:'SF Mono',Menlo,Consolas,monospace;">{{ .Token }}</div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px 0 32px;">
+            <p style="margin:0;font-size:13px;line-height:1.5;color:#5E6857;">
+              This code expires in one hour. If you didn’t try to sign in to Korb, you can safely ignore this email — your account stays locked.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 32px 32px 32px;border-top:1px solid #CBD0BF;">
+            <p style="margin:24px 0 0 0;font-size:12px;line-height:1.5;color:#5E6857;">
+              Need help? Reach us at <a href="mailto:support@korb.app" style="color:#2E7442;text-decoration:none;">support@korb.app</a>.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
