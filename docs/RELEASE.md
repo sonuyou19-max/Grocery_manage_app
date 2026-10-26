@@ -414,8 +414,38 @@ rebuild.
 **A standalone iOS app** (an `.ipa` rather than Expo Go) needs the Apple
 Developer Program: internal distribution to a physical iPhone means ad-hoc
 provisioning, which means a paid account and the device's UDID registered.
-Until then Expo Go is the iPhone story, and it is not a downgrade — it runs the
-same published bundle the APK does.
+
+### Why Expo Go stopped being the iPhone story
+
+Expo Go for iOS only ever carries the **latest** Expo SDK — the App Store gives
+no older version — so the week Expo Go ships SDK 58 it refuses a project pinned
+to SDK 57 with "Project is incompatible with this version of Expo Go." There is
+no older Expo Go to install on a device to get around it.
+
+It was always a partial story anyway: Expo Go contains only the stock SDK
+modules, and this app links two that are not in it — `react-native-purchases`
+(RevenueCat, `lib/billing.ts`) and `@sentry/react-native` (`lib/monitoring.ts`).
+Billing and crash reporting could never run under Expo Go whatever the SDK.
+
+**The replacement is a development build** — the same `expo start` dev-server
+loop, but the phone runs a custom "Korb (dev)" client that contains our native
+modules and is pinned to our SDK, so an Expo Go release never breaks it again.
+Build the client once, then iterate on JS exactly as before. `eas.json` already
+carries the profiles; the scripts wrap them:
+
+```
+cd apps/mobile
+
+pnpm build:dev:ios        # iOS Simulator build (no Apple account needed)
+pnpm build:dev:device     # physical iPhone (ad-hoc: paid account + UDID)
+pnpm build:dev:android    # installable dev-client APK
+
+pnpm dev                  # expo start --dev-client — open in the dev client, not Expo Go
+```
+
+Rebuild the client only when the native side changes (see *When an update is NOT
+enough* below); for JS-only edits, `pnpm dev` and the OTA `update:preview` flow
+above reach it unchanged.
 
 ### When an update is NOT enough
 
