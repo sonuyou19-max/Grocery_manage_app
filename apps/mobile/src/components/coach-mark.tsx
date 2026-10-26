@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   BackHandler,
   Pressable,
@@ -120,7 +120,7 @@ export function CoachMarkOverlay({ content }: { content: CoachMarkContent }) {
   const enter = useSharedValue(0);
 
   /** This overlay's own origin in window coordinates — see the header. */
-  const rootRef = useRef<View>(null);
+  const rootRef = useRef<ComponentRef<typeof View>>(null);
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {

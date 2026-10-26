@@ -76,7 +76,10 @@ export function Safe({ style, edges = ALL, children }: SafeProps) {
   const insets = useSafeAreaInsets();
   const flat = (StyleSheet.flatten(style) ?? {}) as ViewStyle;
 
-  const padding: ViewStyle = {};
+  // A plain record, not ViewStyle: RN 0.88 made the style props read-only, so
+  // the per-side keys can no longer be assigned on a ViewStyle in a loop. The
+  // shape is identical; it is cast back to ViewStyle where it is applied.
+  const padding: Record<string, number> = {};
   for (const edge of edges) {
     const key = `padding${edge[0].toUpperCase()}${edge.slice(1)}` as
       | 'paddingTop'
@@ -86,5 +89,5 @@ export function Safe({ style, edges = ALL, children }: SafeProps) {
     padding[key] = ownPadding(flat, edge) + insets[edge];
   }
 
-  return <View style={[style, padding]}>{children}</View>;
+  return <View style={[style, padding as ViewStyle]}>{children}</View>;
 }

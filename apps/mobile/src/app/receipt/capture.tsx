@@ -4,7 +4,6 @@ import { Image } from 'expo-image';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MeshBackground } from '@/components/mesh-background';
-import { InteractionManager } from 'react-native';
 import { goBack } from '@/lib/navigate';
 import {
   isReceiptSource,
@@ -437,10 +436,13 @@ export default function ReceiptCaptureScreen() {
   useEffect(() => {
     if (source !== 'photos' || opened.current) return;
     opened.current = true;
-    const task = InteractionManager.runAfterInteractions(() => {
+    // InteractionManager was removed from react-native core in SDK 58 (RN 0.88);
+    // requestIdleCallback is the replacement core itself points to. Same intent:
+    // open the picker once the JS thread is quiet, not during the mount frame.
+    const handle = requestIdleCallback(() => {
       void openPicker();
     });
-    return () => task.cancel();
+    return () => cancelIdleCallback(handle);
   }, [source, openPicker]);
 
   /* ----------------------------------------------------------- permission */

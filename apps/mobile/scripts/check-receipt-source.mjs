@@ -131,17 +131,21 @@ assert(
  * than either picker.
  */
 assert(
-  'the picker waits for the navigation animation to finish',
-  /InteractionManager\.runAfterInteractions\(\(\) => \{\s*void openPicker\(\);/.test(capture),
+  'the picker is deferred past the mount frame, not opened on it',
+  /requestIdleCallback\(\(\) => \{\s*void openPicker\(\);/.test(capture),
   ['Presented mid-transition, UIKit declines it and says nothing.'],
 );
 assert(
   '...and the effect cancels the task it scheduled',
-  /return \(\) => task\.cancel\(\);/.test(capture),
+  /return \(\) => cancelIdleCallback\(handle\);/.test(capture),
   ['A picker opening onto a screen that has been left is worse than none.'],
 );
 /*
- * The manual button is not a nicety. runAfterInteractions is a promise about
+ * SDK 58 (RN 0.88) removed InteractionManager from core; requestIdleCallback is
+ * the replacement it points to, and keeps the same two promises this guards —
+ * open after the frame settles, and cancel if the screen is left first.
+ *
+ * The manual button is not a nicety. requestIdleCallback is a promise about
  * scheduling, not a guarantee — so the screen has to have a way forward that
  * does not depend on it, and a way out. Its absence is what turned a picker
  * that did not open into a screen nobody could leave except by the camera's

@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
-import { Pressable, type PressableProps, type View, type ViewStyle } from 'react-native';
+import { forwardRef, type ComponentRef } from 'react';
+import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -57,7 +57,7 @@ import { SPRING } from '@/lib/motion';
  */
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export const PressScale = forwardRef<View, PressableProps & { style?: ViewStyle | ViewStyle[] }>(
+export const PressScale = forwardRef<ComponentRef<typeof Pressable>, PressableProps & { style?: StyleProp<ViewStyle> }>(
   function PressScale({ style, onPressIn, onPressOut, disabled, ...rest }, ref) {
     const scale = useSharedValue(1);
     const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -66,7 +66,7 @@ export const PressScale = forwardRef<View, PressableProps & { style?: ViewStyle 
       <AnimatedPressable
         ref={ref}
         disabled={disabled}
-        style={[...styleAsArray(style), animated]}
+        style={[style, animated]}
         // Both handlers are forwarded, not swallowed: a caller may want the press
         // for its own reasons (a haptic, a preview) and should not have to choose
         // between that and the animation.
@@ -84,11 +84,3 @@ export const PressScale = forwardRef<View, PressableProps & { style?: ViewStyle 
   },
 );
 
-/**
- * Callers pass either a style or an array of them, and spreading one into the
- * other silently drops the array case.
- */
-function styleAsArray(style: ViewStyle | ViewStyle[] | undefined): ViewStyle[] {
-  if (!style) return [];
-  return Array.isArray(style) ? style : [style];
-}

@@ -31,7 +31,6 @@ import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
-  type PanGesture,
 } from "react-native-gesture-handler";
 
 import { useDeferUntilClosed } from "@/lib/modal-nav";
@@ -85,7 +84,7 @@ interface SheetApi {
    */
   dismiss: (action?: () => void) => void;
   /** The pull-down gesture, for sheets that slide. Null for the others. */
-  drag: PanGesture | null;
+  drag: ReturnType<typeof Gesture.Pan> | null;
   /**
    * Whether this sheet dims the page behind it.
    *

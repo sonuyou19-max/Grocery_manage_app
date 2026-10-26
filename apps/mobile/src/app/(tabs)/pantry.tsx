@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ItemCategory } from '@korb/shared';
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
 import {
   Alert,
   LayoutAnimation,
@@ -332,7 +332,7 @@ function SignedInPantry() {
    * only sensible once there IS a first row, which on a new install is several
    * shops away.
    */
-  const coachRef = useRef<View>(null);
+  const coachRef = useRef<ComponentRef<typeof View>>(null);
   const swipeCoach = useCoachMark('pantrySwipe', low.length > 0, coachRef);
   const detailsCoach = useCoachMark(
     'pantryDetails',
@@ -894,7 +894,7 @@ function PantrySwipeRow({
   hasHistory: boolean;
   onOpenHistory: () => void;
   /** Set on the first row only, so a coach mark can measure where it sits. */
-  coachRef?: RefObject<View | null>;
+  coachRef?: RefObject<ComponentRef<typeof View> | null>;
 }) {
   const t = useT();
   const tx = useSharedValue(0);

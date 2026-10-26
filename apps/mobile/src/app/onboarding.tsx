@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { goBack } from '@/lib/navigate';
-import { type ComponentProps, useRef, useState } from 'react';
+import { type ComponentProps, type ComponentRef, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -43,7 +43,7 @@ export default function OnboardingScreen() {
   const t = useT();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const [index, setIndex] = useState(0);
 
   const isLast = index === SLIDES.length - 1;

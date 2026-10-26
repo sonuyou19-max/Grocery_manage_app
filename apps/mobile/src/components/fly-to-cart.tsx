@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type ComponentRef } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { DURATION } from '@/lib/motion';
 import Animated, {
@@ -116,7 +116,7 @@ export const FlyToCart = forwardRef<FlyToCartHandle, { onArrive?: () => void }>(
       });
     }, []);
 
-    const selfRef = useRef<View>(null);
+    const selfRef = useRef<ComponentRef<typeof View>>(null);
 
     return (
       <View

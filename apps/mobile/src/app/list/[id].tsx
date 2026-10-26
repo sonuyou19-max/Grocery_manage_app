@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { goBack } from '@/lib/navigate';
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import {
   Alert,
   LayoutAnimation,
@@ -135,11 +135,11 @@ export default function ListDetailScreen() {
   // few seconds out; unchecking cancels it — so a mistaken tick never reaches
   // the burn-rate engine. Anything still pending is flushed on leaving.
   /** Row views, so a check-off can measure where its item currently sits. */
-  const rowRefs = useRef(new Map<string, View>());
+  const rowRefs = useRef(new Map<string, ComponentRef<typeof View>>());
   const flightRef = useRef<FlyToCartHandle>(null);
   /** The bag's centre in window coords — the destination every flight aims at. */
   const bagPoint = useRef<{ x: number; y: number } | null>(null);
-  const bagRef = useRef<View>(null);
+  const bagRef = useRef<ComponentRef<typeof View>>(null);
   /** Bumps when a glyph lands, so the bag acknowledges the arrival. */
   const bagScale = useSharedValue(1);
   // Declared here, with the other hooks, and NOT next to the bag markup that
@@ -245,7 +245,7 @@ export default function ListDetailScreen() {
    * `grouped` is empty on that render, so the readiness gate is simply false.
    */
   const firstOpenId = grouped.find((g) => g.items.length > 0)?.items[0]?.id ?? null;
-  const coachRef = useRef<View | null>(null);
+  const coachRef = useRef<ComponentRef<typeof View> | null>(null);
   const deleteCoach = useCoachMark("listSwipeDelete", firstOpenId != null, coachRef);
 
   if (!list) {
@@ -1014,7 +1014,7 @@ function SwipeableItemRow({
   justAdded = false,
 }: {
   /** Registered so a check-off can measure where this row currently sits. */
-  rowRef?: (v: View | null) => void;
+  rowRef?: (v: ComponentRef<typeof View> | null) => void;
   item: Item;
   /** True for a moment after this row was typed, so it can announce itself. */
   justAdded?: boolean;

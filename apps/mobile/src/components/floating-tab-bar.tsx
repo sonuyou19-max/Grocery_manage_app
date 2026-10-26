@@ -91,7 +91,7 @@ const ICONS: Record<string, [IoniconName, IoniconName]> = {
  * the bottom edge, with a soft highlight that springs smoothly to the active
  * tab. Mirrors the current tabs (icons + labels), just re-laid-out.
  */
-export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
+export function FloatingTabBar({ state, descriptors, emitter, navigateToTab }: TabBarProps) {
   const { colors, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -201,8 +201,8 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
               const [activeIcon, inactiveIcon] = ICONS[route.name] ?? ['ellipse', 'ellipse-outline'];
 
               const onPress = () => {
-                const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+                const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                if (!focused && !event.defaultPrevented) navigateToTab(route.key);
               };
 
               return [

@@ -1134,7 +1134,7 @@ export default function ReceiptReviewScreen() {
                   ))}
                 </View>
               </View>
-            ) : null
+            ) : undefined
           }
         />
 

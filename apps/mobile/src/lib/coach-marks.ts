@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useRef, useState, type RefObject } from 'react';
-import type { View } from 'react-native';
+import { useEffect, useRef, useState, type ComponentRef, type RefObject } from 'react';
+import { View } from 'react-native';
 
 /**
  * Coach marks — the tips that teach Korb's gestures, shown once each, in place.
@@ -134,7 +134,7 @@ export function useCoachMark(
    * share one target — the Pantry teaches both the swipe and the tap on its
    * first row — and a ref can only be attached to an element once.
    */
-  ref: RefObject<View | null>,
+  ref: RefObject<ComponentRef<typeof View> | null>,
 ) {
   const [rect, setRect] = useState<TargetRect | null>(null);
   const [visible, setVisible] = useState(false);

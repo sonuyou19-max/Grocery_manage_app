@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -82,7 +82,7 @@ export function QuickAddSheet({
   const [selected, setSelected] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const sheetY = useSharedValue(screenH);
   // Native keyboard height, driven per-frame by the platform (not JS `Keyboard`
   // events, which are unreliable inside a Modal's own window on Android — the
